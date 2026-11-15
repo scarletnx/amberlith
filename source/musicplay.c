@@ -38,8 +38,16 @@ static void Render(uint32_t slot) {
     __atomic_add_fetch(&g_stream.queued, MUSIC_STREAM_CHUNK, __ATOMIC_RELEASE);
 }
 
-bool MusicStreamOpen(MusicTrack track, unsigned mix, float gain, bool barrier_first,
-                     char *error, size_t error_size) {
+uint32_t MusicSeedNow(void) {
+    if (!MusicInteractive()) {
+        return MUSIC_SEED_FIXED;
+    }
+    const uint64_t tick = armGetSystemTick();
+    return (uint32_t)(tick ^ (tick >> 32));
+}
+
+bool MusicStreamOpen(MusicTrack track, uint32_t seed, unsigned mix, float gain,
+                     bool barrier_first, char *error, size_t error_size) {
     if (!MusicMayPlay()) {
         snprintf(error, error_size,
                  "the music plays only in the interactive mode or the music family's cases, and "
@@ -67,9 +75,9 @@ bool MusicStreamOpen(MusicTrack track, unsigned mix, float gain, bool barrier_fi
         }
     }
     if (barrier_first) {
-        MusicStartAfterBarrier(&g_stream.player, track);
+        MusicStartAfterBarrier(&g_stream.player, track, seed);
     } else {
-        MusicStart(&g_stream.player, track);
+        MusicStart(&g_stream.player, track, seed);
     }
     g_stream.mix = mix;
     g_stream.gain = gain;
@@ -108,9 +116,9 @@ void MusicStreamFeed(void) {
     }
 }
 
-void MusicStreamSwitch(MusicTrack track) {
+void MusicStreamSwitch(MusicTrack track, uint32_t seed) {
     if (g_stream.on) {
-        MusicSwitch(&g_stream.player, track);
+        MusicSwitch(&g_stream.player, track, seed);
     }
 }
 
@@ -166,7 +174,7 @@ static void PlayMain(void *argument) {
         const uint32_t next =
             __atomic_exchange_n(&g_play.next, MUSIC_TRACKS + 1u, __ATOMIC_ACQ_REL);
         if (next <= MUSIC_TRACKS) {
-            MusicStreamSwitch((MusicTrack)next);
+            MusicStreamSwitch((MusicTrack)next, MusicSeedNow());
             ++g_play.switches;
         }
         MusicStreamFeed();
@@ -175,7 +183,7 @@ static void PlayMain(void *argument) {
         }
     }
     // Faded out, and stepped until the silence after the fade is what the voices play.
-    MusicStreamSwitch(MUSIC_TRACKS);
+    MusicStreamSwitch(MUSIC_TRACKS, MUSIC_SEED_FIXED);
     const uint64_t start = AudioNowMs();
     uint32_t until = 0;
     while (AudioNowMs() - start < STOP_LIMIT_MS) {
@@ -232,7 +240,7 @@ bool MusicPlayStartInto(const char *name, unsigned mix, float gain, char *error,
         snprintf(error, error_size, "the audio renderer: %s", why);
         return false;
     }
-    if (!MusicStreamOpen(track, mix, gain, false, error, error_size)) {
+    if (!MusicStreamOpen(track, MusicSeedNow(), mix, gain, false, error, error_size)) {
         AudioClose();
         return false;
     }

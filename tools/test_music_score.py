@@ -14,85 +14,109 @@ SPEC.loader.exec_module(music_score)
 
 SCORE = open(os.path.join(ROOT, "source", "musicscore.txt"), encoding="utf-8").read()
 
-# A small track that keeps every rule, to break one rule at a time.
-SMALL = """pattern bass b R---------------
-pattern drums d K...............
-pattern drums dfill K.......S.......
-pattern hats d h.h.h.h.h.h.h.h.
-pattern comp c X---------------
-pattern arp a ................
-track t
-demo a demo
+# A small track that keeps every rule, to break one rule at a time; the score holds four of them.
+SMALL = """demo a demo
 key C ionian
-tempo 120
-steps 16
-swing 0
+tempo 120 6
 gain 32
-voices bass=slap chords=epiano lead=brass counter=flute arp=pluck
-form intro A
-chords intro | C |
-chords A | C | F |
-lead A | C5:8 E5:8 | F5:16 |
-parts intro bass=b drums=d chords=c arp=a
-parts A bass=b drums=d fill chords=c arp=a
+channels drums bass pad pad pad lead echo arp crash
+voices kick=kick snare=snare hat=hat crash=crash riser=riser bass=sub pad=strings lead=horn,flute arp=bell
+range bass C2 C3
+range pad C3 C4
+range lead C4 C5
+range arp C3 C4
+echo 3 8
+glide 12
+form IAB
+home 1 4 5 1
+lift 4 5 6 5
+drop 6 4 1 5
+groove K.h.S.h.K.K.S.h.
+breakbeat h.h.H.h.h.h.H.h.
+bass R-R-O-R-R-R-O-O-
+breakbass R---------------
+pad x---------------
+arp 5-4-5-3-5-4-5-3-
+rhythm x---x---x---x---x-------x---....
+rhythm x-x-x---x---x---x-x-x---x-------
 """
 
 
-class Generated(unittest.TestCase):
-    def test_the_tables_are_what_the_score_makes(self):
-        want = music_score.generate(*music_score.parse(SCORE))
+def score(small=SMALL):
+    return "".join(f"track {name}\n{small}\n" for name in music_score.TRACKS)
+
+
+def refused(text):
+    try:
+        music_score.check(music_score.parse(text))
+    except music_score.ScoreError as e:
+        return str(e)
+    return None
+
+
+class MusicScoreTest(unittest.TestCase):
+    def test_generated_file_is_current(self):
+        made = music_score.generate(music_score.check(music_score.parse(SCORE)))
         have = open(os.path.join(ROOT, "source", "musicscore.c"), encoding="utf-8").read()
-        self.assertEqual(have, want, "source/musicscore.c is stale: run tools/music-score.py")
+        self.assertEqual(have, made, "source/musicscore.c is not what tools/music-score.py makes of the score")
 
-    def test_four_tracks_in_the_players_order(self):
-        tracks, _ = music_score.parse(SCORE)
+    def test_the_four_tracks_in_order(self):
+        tracks = music_score.check(music_score.parse(SCORE))
         self.assertEqual([t["name"] for t in tracks], ["menu", "wimsy", "fractal", "fluid"])
+        for t in tracks:
+            self.assertEqual(len(t["roles"]), 9)
+            self.assertGreaterEqual(len(t["pools"]["form"]), 2, f"{t['name']}: a seed needs forms to pick from")
+            self.assertGreaterEqual(len(t["pools"]["rhythm"]), 2)
 
-    def test_notes_and_chords(self):
-        self.assertEqual(music_score.note("A4:4", "x"), (69, 4, 0))
-        self.assertEqual(music_score.note("Bb4:2~", "x"), (70, 2, 1))
-        self.assertEqual(music_score.note("C#5:1", "x"), (73, 1, 0))
-        self.assertEqual(music_score.note("r:6", "x"), (0, 6, 0))
-        self.assertEqual(music_score.chord("Bb", "x"), (10, 0))
-        self.assertEqual(music_score.chord("F#m", "x"), (6, 1))
+    def test_small_track_passes(self):
+        self.assertIsNone(refused(score()))
 
-    def test_a_small_score_parses(self):
-        tracks, _ = music_score.parse(SMALL)
-        self.assertEqual(tracks[0]["sections"]["A"]["lead"], [[(72, 8, 0), (76, 8, 0)], [(77, 16, 0)]])
+    def test_note_and_key(self):
+        tracks = music_score.check(music_score.parse(score()))
+        self.assertEqual(tracks[0]["tonic"], 0)
+        self.assertEqual(tracks[0]["range"]["bass"], (36, 48))
+        self.assertEqual(music_score.note("A4", "x"), 69)
+        self.assertEqual(music_score.note("F#2", "x"), 42)
 
+    def test_refuses_a_diminished_degree(self):
+        why = refused(score(SMALL.replace("home 1 4 5 1", "home 1 4 7 1")))
+        self.assertIn("degree 7 is a diminished triad in ionian", why)
 
-class Refused(unittest.TestCase):
-    def refused(self, old, new, says):
-        with self.assertRaises(music_score.ScoreError) as caught:
-            music_score.parse(SMALL.replace(old, new))
-        self.assertIn(says, str(caught.exception))
+    def test_refuses_a_pattern_of_the_wrong_length(self):
+        why = refused(score(SMALL.replace("groove K.h.S.h.K.K.S.h.", "groove K.h.S.h.K.K.S.h")))
+        self.assertIn("is 15 long, where 16", why)
 
-    def test_a_short_bar(self):
-        self.refused("| F5:16 |", "| F5:12 |", "lead bar 2 lasts 12 steps, where 16")
+    def test_refuses_a_mark_the_pattern_has_not(self):
+        why = refused(score(SMALL.replace("bass R-R-O-R-R-R-O-O-", "bass R-R-O-R-R-R-O-X-")))
+        self.assertIn("has 'X'", why)
 
-    def test_a_note_that_is_none(self):
-        self.refused("E5:8", "H5:8", "'H5:8' is no note")
+    def test_refuses_too_many_of_a_part(self):
+        why = refused(score(SMALL.replace("drums bass pad pad pad", "drums bass pad pad bass")))
+        self.assertIn("2 channels play bass, at most 1", why)
 
-    def test_a_chord_that_is_none(self):
-        self.refused("| C | F |", "| C | Fmaj7 |", "'Fmaj7' is no chord")
+    def test_refuses_an_echo_with_no_lead(self):
+        why = refused(score(SMALL.replace("pad lead echo", "pad pad echo").replace("pad pad pad pad", "pad pad pad bass")))
+        self.assertIsNotNone(why)
 
-    def test_a_missing_fill(self):
-        self.refused("pattern drums dfill K.......S.......\n", "", "no drums pattern dfill")
+    def test_refuses_a_form_without_an_a_or_with_a_late_intro(self):
+        self.assertIn("has no A section", refused(score(SMALL.replace("form IAB", "form IBR"))))
+        self.assertIn("an intro past its start", refused(score(SMALL.replace("form IAB", "form AIB"))))
 
-    def test_a_pattern_of_the_wrong_length(self):
-        self.refused("pattern comp c X---------------", "pattern comp c X-------", "is 8 steps, the bar 16")
+    def test_refuses_a_range_under_an_octave(self):
+        why = refused(score(SMALL.replace("range lead C4 C5", "range lead C4 G4")))
+        self.assertIn("less than the octave", why)
 
-    def test_a_grid_mark_its_lane_lacks(self):
-        self.refused("pattern hats d h.h.h.h.h.h.h.h.", "pattern hats d h.h.K.h.h.h.h.h.", "holds 'K'")
+    def test_refuses_a_missing_voice_and_an_unknown_field(self):
+        self.assertIn("no patch for arp", refused(score(SMALL.replace(" arp=bell", ""))))
+        self.assertIn("is no field", refused(score(SMALL.replace("glide 12", "glide 12\nswing 3"))))
 
-    def test_a_form_that_plays_an_unwritten_section(self):
-        self.refused("form intro A", "form intro A B", "the form plays B")
+    def test_refuses_numbers_out_of_range(self):
+        self.assertIn("tempo 300 is outside 60 to 200", refused(score(SMALL.replace("tempo 120 6", "tempo 300 6"))))
+        self.assertIn("echo rows 9 is outside 1 to 8", refused(score(SMALL.replace("echo 3 8", "echo 9 8"))))
 
-    def test_a_mode_that_is_none(self):
-        self.refused("key C ionian", "key C major", "its mode none of")
-
-    def test_a_tempo_out_of_range(self):
-        self.refused("tempo 120", "tempo 400", "tempo 400, where 40 to 240")
+    def test_refuses_tracks_out_of_order(self):
+        text = score().replace("track menu", "track first").replace("track wimsy", "track menu")
+        self.assertIn("in that order", refused(text))
 
 
 if __name__ == "__main__":

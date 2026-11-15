@@ -11,23 +11,24 @@
 #include "../report.h"
 #include "tests.h"
 
-// The music family's first cases, the ones that need no renderer: each track rendered whole on
-// this machine and held to the samples the host build renders, and a switch between two tracks
-// held to the tracks rendered alone. The host build runs them too, so the hashes below are the
-// host's own and a change to the synthesizer or the scores moves them here, in the same commit.
+// The music family's first cases, the ones that need no renderer: the first pass the fixed seed
+// composes of each track rendered on this machine and held to the samples the host build renders,
+// and a switch between two tracks held to the tracks rendered alone. The host build runs them too,
+// so the hashes below are the host's own and a change to the synthesizer, the composer or the
+// scores moves them here, in the same commit.
 
 static const char *const SUITE = "music";
 
-/// One pass of each track, its intro and its form, as the host renders it: its frames and the
-/// FNV-1a of its samples, left then right, each low byte first.
+/// The first pass MUSIC_SEED_FIXED composes of each track, its intro and its form, as the host
+/// renders it: its frames and the FNV-1a of its samples, left then right, each low byte first.
 static const struct {
     uint64_t frames;
     uint64_t hash;
 } RENDERED[MUSIC_TRACKS] = {
-    [MUSIC_TRACK_MENU] = { 3916800u, 0x87756d82aa00e3c2ull },
-    [MUSIC_TRACK_WIMSY] = { 2967272u, 0xf10d38142733c45eull },
-    [MUSIC_TRACK_FRACTAL] = { 4937142u, 0x639183ef4797b8c1ull },
-    [MUSIC_TRACK_FLUID] = { 3264000u, 0xaa0d7442d30ca5fbull },
+    [MUSIC_TRACK_MENU] = { 3490909u, 0xf09fd7ac33f485dfull },
+    [MUSIC_TRACK_WIMSY] = { 3686400u, 0x28c2655d502e13d9ull },
+    [MUSIC_TRACK_FRACTAL] = { 4937142u, 0x9e98b08b4555590bull },
+    [MUSIC_TRACK_FLUID] = { 4459354u, 0x3e545585ce748db2ull },
 };
 
 // A chunk at a time, so the longest track needs no buffer of its own: 0.1 s.
@@ -42,12 +43,13 @@ static void RenderTrack(MusicTrack track) {
     const MusicScore *score = MusicScoreOf(track);
     char name[96];
     snprintf(name, sizeof(name),
-             "the %s track, its intro and its form, renders to the host's samples", score->name);
+             "the %s track, its first pass from the fixed seed, renders to the host's samples",
+             score->name);
     if (!ReportStart(SUITE, name)) {
         return;
     }
-    MusicStart(&player, track);
-    const uint64_t frames = MusicFormFrames(&player.song);
+    MusicStart(&player, track, MUSIC_SEED_FIXED);
+    const uint64_t frames = MusicPassFrames(track, MUSIC_SEED_FIXED);
     uint64_t hash = MUSIC_HASH_START;
     uint32_t peak = 0;
     for (uint64_t done = 0; done < frames;) {
@@ -111,11 +113,11 @@ static void RenderSwitch(void) {
         return;
     }
     const uint64_t before = MUSIC_RATE / 2u;
-    MusicStart(&player, MUSIC_TRACK_MENU);
-    MusicStart(&alone, MUSIC_TRACK_MENU);
+    MusicStart(&player, MUSIC_TRACK_MENU, MUSIC_SEED_FIXED);
+    MusicStart(&alone, MUSIC_TRACK_MENU, MUSIC_SEED_FIXED);
     uint64_t at = 0;
     const uint64_t lead_in = Compare(before, false, 0, &at);
-    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
     uint64_t fade_at = 0;
     const uint64_t faded = Compare(MUSIC_FADE_FRAMES, true, MUSIC_FADE_FRAMES, &fade_at);
     uint64_t silent = 0;
@@ -133,12 +135,12 @@ static void RenderSwitch(void) {
         }
         done += n;
     }
-    MusicStart(&alone, MUSIC_TRACK_WIMSY);
+    MusicStart(&alone, MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
     uint64_t next_at = 0;
     const uint64_t next = Compare(MUSIC_RATE / 2u, false, 0, &next_at);
     CHECK_TRUE(SUITE, NAME, CHECK_EXACT,
                lead_in == 0u && faded == 0u && silent == MUSIC_BARRIER_FRAMES && next == 0u &&
-                   player.song.track == MUSIC_TRACK_WIMSY,
+                   player.track == MUSIC_TRACK_WIMSY,
                "%llu frames of the first track before the switch differ from it alone (the "
                "first at %llu); %llu of the %u faded frames from its faded self (the first at "
                "%llu); %llu of %u barrier frames silent (the first loud one %llu); %llu of the "
@@ -159,12 +161,12 @@ static void RenderBarrierSwitch(void) {
         return;
     }
     const uint64_t into = 1000u;
-    MusicStart(&player, MUSIC_TRACK_MENU);
+    MusicStart(&player, MUSIC_TRACK_MENU, MUSIC_SEED_FIXED);
     MusicRender(&player, chunk, CHUNK);
-    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
     MusicRender(&player, chunk, MUSIC_FADE_FRAMES);
     MusicRender(&player, chunk, (size_t)into);
-    MusicSwitch(&player, MUSIC_TRACK_FLUID);
+    MusicSwitch(&player, MUSIC_TRACK_FLUID, MUSIC_SEED_FIXED);
     uint64_t loud = 0;
     for (uint64_t done = into; done < MUSIC_BARRIER_FRAMES;) {
         const size_t n = (size_t)(MUSIC_BARRIER_FRAMES - done < CHUNK ? MUSIC_BARRIER_FRAMES - done
@@ -175,17 +177,17 @@ static void RenderBarrierSwitch(void) {
         }
         done += n;
     }
-    MusicStart(&alone, MUSIC_TRACK_FLUID);
+    MusicStart(&alone, MUSIC_TRACK_FLUID, MUSIC_SEED_FIXED);
     uint64_t next_at = 0;
     const uint64_t next = Compare(MUSIC_RATE / 4u, false, 0, &next_at);
-    const MusicTrack newer = player.song.track;
+    const MusicTrack newer = player.track;
 
-    MusicStart(&player, MUSIC_TRACK_MENU);
+    MusicStart(&player, MUSIC_TRACK_MENU, MUSIC_SEED_FIXED);
     MusicRender(&player, chunk, CHUNK);
-    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
     MusicRender(&player, chunk, MUSIC_FADE_FRAMES);
     MusicRender(&player, chunk, (size_t)into);
-    MusicSwitch(&player, MUSIC_TRACKS);
+    MusicSwitch(&player, MUSIC_TRACKS, MUSIC_SEED_FIXED);
     uint64_t after_stop = 0;
     for (uint64_t done = 0; done < MUSIC_RATE + MUSIC_BARRIER_FRAMES;) {
         MusicRender(&player, chunk, CHUNK);

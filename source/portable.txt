@@ -56,6 +56,7 @@ source/serviceref.c
 source/gameref.c
 source/demo_fluidref.c
 source/music.c
+source/musiccompose.c
 source/musicscore.c
 source/tex8kref.c
 source/wimsymesh.c

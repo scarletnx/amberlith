@@ -117,11 +117,12 @@ static void SceneMusicStep(void) {
     }
     const bool want = scene_music.wanted();
     if (want && !MusicStreamOn()) {
-        scene_music.refused = !MusicStreamOpen(scene_music.track, AUDIO_FINAL_MIX, MUSIC_PLAY_GAIN,
-                                               true, scene_music.why, sizeof(scene_music.why));
+        scene_music.refused =
+            !MusicStreamOpen(scene_music.track, MusicSeedNow(), AUDIO_FINAL_MIX, MUSIC_PLAY_GAIN,
+                             true, scene_music.why, sizeof(scene_music.why));
         scene_music.playing = !scene_music.refused;
     } else if (MusicStreamOn() && want != scene_music.playing) {
-        MusicStreamSwitch(want ? scene_music.track : MUSIC_TRACKS);
+        MusicStreamSwitch(want ? scene_music.track : MUSIC_TRACKS, MusicSeedNow());
         scene_music.playing = want;
     }
     MusicStreamFeed();
