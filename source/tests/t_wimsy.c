@@ -8,6 +8,7 @@
 #include <switch.h>
 
 #include "../check.h"
+#include "../coherref.h"
 #include "../coverageref.h"
 #include "../gameref.h"
 #include "../gpu.h"
@@ -52,7 +53,17 @@ static const char *const SUITE = "wimsy";
 #define IMAGE_COMPUTE (IMAGE_TEXTURES + WIMSY_TEXTURES)
 #define IMAGE_CHAIN (IMAGE_COMPUTE + WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS)
 #define IMAGE_STORE (IMAGE_CHAIN + WIMSY_CHAINS * WIMSY_CHAIN_STEPS)
-#define IMAGE_DESCRIPTORS (IMAGE_STORE + WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS)
+#define IMAGE_LOAD (IMAGE_STORE + WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS)
+#define IMAGE_DESCRIPTORS (IMAGE_LOAD + WIMSY_LOADS)
+// The textures a run loads, two a frame, each an image of its own up to this many: twenty
+// seconds' worth, after which the oldest are written again.
+#define LOAD_RING 1200u
+#define LOAD_BYTES (WIMSY_LOAD_BLOCKS * WIMSY_LOAD_BLOCKS * 16u)
+// A 512 by 512 texture of 8 by 8 blocks is 64 rows of 1024 bytes: blocks of 8 gobs.
+#define LOAD_TILE 3u
+// The worker threads: one a load, two that share the models' uniform buffers.
+#define WORKERS 4u
+#define WORKER_PRIORITY 0x2C
 #define FILLS (WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS)
 #define SQUARES (WIMSY_CHAINS * WIMSY_CHAIN_STEPS)
 // A draw's uniform buffer starts where the graphics unit lets one start.
@@ -120,7 +131,13 @@ static DkImage swap_images[SWAP_IMAGES];
 static DkImageLayout swap_layouts[SWAP_IMAGES];
 static DkSwapchain swapchain;
 static DkSwapchainMaker swap_maker;
-static DkGpuAddr image_set;
+static DkGpuAddr image_set[SLOTS];
+static DkImageDescriptor *image_descriptors[SLOTS];
+static DkImage load_images[LOAD_RING];
+static uint8_t *load_memory[LOAD_RING];
+static uint32_t load_ring;
+static uint8_t *peek_cpu[SLOTS];
+static DkGpuAddr peek_gpu[SLOTS];
 static DkGpuAddr sampler_set;
 static DkGpuAddr shown_quad;
 static DkGpuAddr model_vertices;
@@ -157,6 +174,13 @@ static WimsyInstance instances[WIMSY_INSTANCES_MAX];
 static Thread render_thread;
 static Semaphore frame_go;
 static Semaphore slot_free;
+static Thread workers[WORKERS];
+static Semaphore work_go[WORKERS];
+static Semaphore work_done;
+static bool work_over;
+static uint32_t work_frame;
+static uint32_t work_slot;
+static uint32_t work_models[WORKERS];
 
 // What the render thread saw, read by the main thread once it is joined.
 static struct {
@@ -164,6 +188,12 @@ static struct {
     uint32_t copied;
     /// The longest a judged frame's copy took, which falls after its present.
     uint32_t copy_longest;
+    /// What the processor read back of each frame's compute work: how many frames, how many of
+    /// them another value, and the first of those with what it read.
+    uint32_t peeked;
+    uint32_t peek_wrong;
+    uint32_t peek_wrong_at;
+    uint8_t peek_got[4];
 } render;
 
 static uint32_t Microseconds(uint64_t ticks) {
@@ -177,9 +207,10 @@ static GpuVertex Corner(float x, float y, float u, float v) {
 }
 
 /// Six vertices over the pixels from (@p x, @p y), @p side each way, of a target @p width by
-/// @p height, in @p colour: pixel corners, which clip space holds exactly.
+/// @p height, in @p colour: pixel corners, which clip space holds exactly. The texture
+/// coordinates run from nought to @p extent across it.
 static void PixelSquare(GpuVertex out[6], uint32_t x, uint32_t y, uint32_t side, uint32_t width,
-                        uint32_t height, const uint8_t colour[4]) {
+                        uint32_t height, const uint8_t colour[4], float extent) {
     const float left = (float)x / (float)(width / 2u) - 1.0f;
     const float right = (float)(x + side) / (float)(width / 2u) - 1.0f;
     const float top = 1.0f - (float)y / (float)(height / 2u);
@@ -190,8 +221,8 @@ static void PixelSquare(GpuVertex out[6], uint32_t x, uint32_t y, uint32_t side,
         const GpuVertex vertex = { u[i] != 0.0f ? right : left,
                                    v[i] != 0.0f ? bottom : top,
                                    0.0f,
-                                   u[i],
-                                   v[i],
+                                   u[i] * extent,
+                                   v[i] * extent,
                                    (float)colour[0] / 255.0f,
                                    (float)colour[1] / 255.0f,
                                    (float)colour[2] / 255.0f,
@@ -216,6 +247,8 @@ static void Rectangle(GpuVertex out[6], float x0, float y0, float x1, float y1, 
     out[5] = bottom_left;
 }
 
+static void RunWorkers(uint32_t slot, uint32_t k);
+
 /// Everything frame @p k reads from the processor, into @p slot: level 0's batch of sprites,
 /// stepped with the world, or a higher level's uniform buffers, a draw each.
 static void WriteSlot(uint32_t slot, uint32_t k) {
@@ -239,14 +272,20 @@ static void WriteSlot(uint32_t slot, uint32_t k) {
         }
         return;
     }
-    instance_count[slot] = WimsyInstancesOf(level, k, frames, instances);
-    for (uint32_t i = 0; i < instance_count[slot]; ++i) {
-        memcpy(instance_cpu[slot] + (size_t)i * INSTANCE_STRIDE, &instances[i],
-               sizeof(instances[i]));
-    }
     WimsyViewOf(level, k, frames, view_cpu[slot]);
     if (level < 3u) {
+        instance_count[slot] = WimsyInstancesOf(level, k, frames, instances);
+        for (uint32_t i = 0; i < instance_count[slot]; ++i) {
+            memcpy(instance_cpu[slot] + (size_t)i * INSTANCE_STRIDE, &instances[i],
+                   sizeof(instances[i]));
+        }
         return;
+    }
+    // A heavy frame's models and loads are the workers', done before the frame is handed over.
+    RunWorkers(slot, k);
+    instance_count[slot] = 0;
+    for (uint32_t w = WIMSY_LOADS; w < WORKERS; ++w) {
+        instance_count[slot] += work_models[w];
     }
     // A heavy frame's dispatches read the frame from a uniform buffer each, and its chains'
     // squares are where this frame puts them.
@@ -259,7 +298,63 @@ static void WriteSlot(uint32_t slot, uint32_t k) {
         WimsyChainSquare square;
         WimsyChainSquareOf(s / WIMSY_CHAIN_STEPS, s % WIMSY_CHAIN_STEPS, k, &square);
         PixelSquare(square_cpu[slot] + s * 6u, square.x, square.y, WIMSY_CHAIN_SQUARE,
-                    WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, square.colour);
+                    WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, square.colour, 1.0f);
+    }
+    // The frame's loads are images no frame before it drew with: their descriptors are written
+    // where the frame's set has them.
+    for (uint32_t l = 0; l < WIMSY_LOADS; ++l) {
+        DkImageView view;
+        dkImageViewDefaults(&view, &load_images[(k * WIMSY_LOADS + l) % load_ring]);
+        dkImageDescriptorInitialize(&image_descriptors[slot][IMAGE_LOAD + l], &view, false, false);
+    }
+}
+
+/// A worker's share of frame work_frame, into slot work_slot: a load's blocks, written straight
+/// into the memory the graphics unit samples, or half the models' uniform buffers.
+static void WorkerMain(void *argument) {
+    const uint32_t worker = (uint32_t)(uintptr_t)argument;
+    for (;;) {
+        semaphoreWait(&work_go[worker]);
+        if (__atomic_load_n(&work_over, __ATOMIC_ACQUIRE)) {
+            return;
+        }
+        const uint32_t k = work_frame, slot = work_slot;
+        if (worker < WIMSY_LOADS) {
+            const uint32_t load = k * WIMSY_LOADS + worker;
+            uint8_t *const memory = load_memory[load % load_ring];
+            for (uint32_t by = 0; by < WIMSY_LOAD_BLOCKS; ++by) {
+                for (uint32_t bx = 0; bx < WIMSY_LOAD_BLOCKS; ++bx) {
+                    // A block is one 16 byte run of a gob, so its bytes stay together.
+                    WimsyLoadBlock(load, bx, by,
+                                   memory + CohBlockLinearOffset(bx * 16u, by, WIMSY_LOAD_BLOCKS * 16u,
+                                                                 1u << LOAD_TILE));
+                }
+            }
+        } else {
+            static WimsyInstance share[WORKERS][WIMSY_INSTANCES_MAX];
+            const uint32_t half = (WIMSY_INSTANCES_MAX + 1u) / 2u;
+            const uint32_t first = (worker - WIMSY_LOADS) * half;
+            const uint32_t count = WimsyInstancesFrom(level, k, frames, first, half, share[worker]);
+            work_models[worker] = count;
+            for (uint32_t i = 0; i < count; ++i) {
+                memcpy(instance_cpu[slot] + (size_t)(first + i) * INSTANCE_STRIDE, &share[worker][i],
+                       sizeof(share[worker][i]));
+            }
+        }
+        semaphoreSignal(&work_done);
+    }
+}
+
+/// Hands frame @p k's work for @p slot to the workers and waits for them all, as a game's frame
+/// waits for its jobs before it is drawn.
+static void RunWorkers(uint32_t slot, uint32_t k) {
+    work_frame = k;
+    work_slot = slot;
+    for (uint32_t w = 0; w < WORKERS; ++w) {
+        semaphoreSignal(&work_go[w]);
+    }
+    for (uint32_t w = 0; w < WORKERS; ++w) {
+        semaphoreWait(&work_done);
     }
 }
 
@@ -306,8 +401,17 @@ static void RecordFills(uint32_t slot) {
         dkCmdBufBindImage(gpu.cmdbuf, DkStage_Compute, 0, dkMakeImageHandle(IMAGE_STORE + f));
         dkCmdBufDispatchCompute(gpu.cmdbuf, (side + 7u) / 8u, (side + 7u) / 8u, 1);
     }
-    // What the dispatches stored is sampled later in the list.
+    // What the dispatches stored is sampled later in the list, and one texel of it copied out
+    // for the processor to read once the frame is drawn, as a game reads back a result.
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image | DkInvalidateFlags_L2Cache);
+    DkImageView view;
+    dkImageViewDefaults(&view, &compute_textures[WIMSY_PEEK_TEXTURE]);
+    view.mipLevelOffset = (uint8_t)WIMSY_PEEK_LEVEL;
+    view.mipLevelCount = 1;
+    const DkImageRect texel = { 0, 0, 0, 1, 1, 1 };
+    const DkCopyBuf out = { peek_gpu[slot], 0, 0 };
+    dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &texel, &out, 0);
+    dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
 }
 
 /// A heavy frame's small targets: sixteen chains of eleven, each target a pass of its own, drawn
@@ -350,8 +454,11 @@ static void RecordPanels(void) {
                     panel_count * 6u * (uint32_t)sizeof(GpuVertex));
     for (uint32_t i = 0; i < panel_count; ++i) {
         const uint32_t image =
-            panels[i].chain ? IMAGE_CHAIN + panels[i].index * WIMSY_CHAIN_STEPS + WIMSY_CHAIN_STEPS - 1u
-                            : IMAGE_COMPUTE + panels[i].index * WIMSY_COMPUTE_LEVELS + panels[i].mip;
+            panels[i].kind == WIMSY_PANEL_CHAIN
+                ? IMAGE_CHAIN + panels[i].index * WIMSY_CHAIN_STEPS + WIMSY_CHAIN_STEPS - 1u
+                : panels[i].kind == WIMSY_PANEL_LOAD
+                      ? IMAGE_LOAD + panels[i].index
+                      : IMAGE_COMPUTE + panels[i].index * WIMSY_COMPUTE_LEVELS + panels[i].mip;
         dkCmdBufBindTexture(gpu.cmdbuf, DkStage_Fragment, 0, dkMakeTextureHandle(image, 0));
         dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, 6, 1, i * 6u, 0);
     }
@@ -499,7 +606,7 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
     // unit caches in its level two cache: what the previous frame left there is dropped. The
     // previous frame's wait for idle wrote everything it drew back first.
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_None, DkInvalidateFlags_L2Cache);
-    dkCmdBufBindImageDescriptorSet(gpu.cmdbuf, image_set, IMAGE_DESCRIPTORS);
+    dkCmdBufBindImageDescriptorSet(gpu.cmdbuf, image_set[slot], IMAGE_DESCRIPTORS);
     dkCmdBufBindSamplerDescriptorSet(gpu.cmdbuf, sampler_set, 2);
     if (level == 0u) {
         RecordSprites(slot);
@@ -528,6 +635,16 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
         return worked;
     }
     ++render.presented;
+    if (level >= 3u) {
+        // The queue stood idle: the texel the list copied out is in memory the processor reads.
+        uint8_t want[4];
+        WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL, k, 0u, 0u, want);
+        ++render.peeked;
+        if (memcmp(peek_cpu[slot], want, 4u) != 0 && render.peek_wrong++ == 0u) {
+            render.peek_wrong_at = k;
+            memcpy(render.peek_got, peek_cpu[slot], 4u);
+        }
+    }
 
     const uint32_t j = JudgedAt(k);
     if (j < WIMSY_JUDGED && kept[j] != NULL) {
@@ -646,6 +763,9 @@ static bool BringUp(char *why, size_t why_size) {
     // A heavy frame's fifteen hundred draws, its dispatches and its passes, a few words each.
     spec.command_size = (level >= 3u ? 8192u : 512u) * 1024u;
     spec.compute = level >= 3u;
+    // A heavy level's loads, each an image of its own the processor writes.
+    load_ring = frames * WIMSY_LOADS < LOAD_RING ? frames * WIMSY_LOADS : LOAD_RING;
+    spec.cpu_image_size = level >= 3u ? load_ring * LOAD_BYTES + 1024u * 1024u : 0u;
     if (!GpuOpenSpec(&gpu, &spec)) {
         snprintf(why, why_size, "the graphics device: %s", gpu.failure);
         return false;
@@ -706,6 +826,18 @@ static bool BringUp(char *why, size_t why_size) {
         images = GpuCreateRenderImage(&gpu, &chain_targets[s], &layout, DkImageFormat_RGBA8_Unorm,
                                       WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, DkMsMode_1x);
     }
+    for (uint32_t l = 0; l < load_ring && images && level >= 3u; ++l) {
+        DkImageLayout layout;
+        images = GpuCreateImage(&gpu, &load_images[l], &layout, DkImageFormat_RGBA_ASTC_8x8,
+                                WIMSY_LOAD_SIDE, WIMSY_LOAD_SIDE, DkImageFlags_CustomTileSize,
+                                LOAD_TILE, &load_memory[l]);
+        if (images && dkImageLayoutGetSize(&layout) != LOAD_BYTES) {
+            snprintf(why, why_size,
+                     "the library laid a load out in %llu bytes, the block linear rule says %u",
+                     (unsigned long long)dkImageLayoutGetSize(&layout), (unsigned)LOAD_BYTES);
+            return false;
+        }
+    }
     for (uint32_t i = 0; i < SWAP_IMAGES && images; ++i) {
         images = GpuCreateImage(&gpu, &swap_images[i], &swap_layouts[i],
                                 DkImageFormat_RGBA8_Unorm, WIMSY_WIDTH, WIMSY_HEIGHT,
@@ -737,6 +869,14 @@ static bool BringUp(char *why, size_t why_size) {
         if (fill_cpu[s] != NULL) {
             memset(fill_cpu[s], 0, FILLS * DK_UNIFORM_BUF_ALIGNMENT);
         }
+        image_descriptors[s] = (DkImageDescriptor *)Scratch(
+            IMAGE_DESCRIPTORS * (uint32_t)sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT,
+            &image_set[s], "the image descriptors", why, why_size);
+        peek_cpu[s] = (uint8_t *)Scratch(DK_UNIFORM_BUF_ALIGNMENT, DK_UNIFORM_BUF_ALIGNMENT,
+                                         &peek_gpu[s], "the texel read back", why, why_size);
+        if (peek_cpu[s] != NULL) {
+            memset(peek_cpu[s], 0, DK_UNIFORM_BUF_ALIGNMENT);
+        }
     }
     GpuVertex *const panel_vertices = (GpuVertex *)Scratch(
         WIMSY_PANELS * 6u * (uint32_t)sizeof(GpuVertex), 256u, &panel_quads, "the panels", why,
@@ -757,9 +897,8 @@ static bool BringUp(char *why, size_t why_size) {
     WimsyLight *const light = (WimsyLight *)Scratch(DK_UNIFORM_BUF_ALIGNMENT,
                                                     DK_UNIFORM_BUF_ALIGNMENT, &light_block,
                                                     "the light", why, why_size);
-    DkImageDescriptor *const image_descriptors = (DkImageDescriptor *)Scratch(
-        IMAGE_DESCRIPTORS * (uint32_t)sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT,
-        &image_set, "the image descriptors", why, why_size);
+    // The descriptors no frame changes, made once and copied into each slot's set.
+    static DkImageDescriptor described[IMAGE_DESCRIPTORS];
     DkSamplerDescriptor *const sampler_descriptor = (DkSamplerDescriptor *)Scratch(
         2u * (uint32_t)sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT, &sampler_set,
         "the sampler descriptors", why, why_size);
@@ -771,10 +910,15 @@ static bool BringUp(char *why, size_t why_size) {
     static const uint8_t WHITE[4] = { 255, 255, 255, 255 };
     panel_count = WimsyPanelsOf(level, panels);
     for (uint32_t i = 0; i < panel_count; ++i) {
+        // A load's panel shows its first 64 by 64 texels of 512, the others their whole texture.
         PixelSquare(panel_vertices + i * 6u, panels[i].x, panels[i].y, panels[i].side, WIMSY_WIDTH,
-                    WIMSY_HEIGHT, WHITE);
+                    WIMSY_HEIGHT, WHITE,
+                    panels[i].kind == WIMSY_PANEL_LOAD
+                        ? (float)WIMSY_LOAD_SHOWN / (float)WIMSY_LOAD_SIDE
+                        : 1.0f);
     }
-    PixelSquare(chain_vertices, 0u, 0u, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, WHITE);
+    PixelSquare(chain_vertices, 0u, 0u, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, WHITE,
+                1.0f);
 
     Rectangle(shown, -1.0f, 1.0f, 1.0f, -1.0f, 0.0f, 1.0f);
     for (uint32_t v = 0; v < WIMSY_MESH_VERTICES; ++v) {
@@ -795,9 +939,9 @@ static bool BringUp(char *why, size_t why_size) {
 
     DkImageView view;
     dkImageViewDefaults(&view, &sprite_texture);
-    dkImageDescriptorInitialize(&image_descriptors[0], &view, false, false);
+    dkImageDescriptorInitialize(&described[0], &view, false, false);
     dkImageViewDefaults(&view, &gpu.image);
-    dkImageDescriptorInitialize(&image_descriptors[1], &view, false, false);
+    dkImageDescriptorInitialize(&described[1], &view, false, false);
     DkSampler sampler;
     dkSamplerDefaults(&sampler);
     sampler.minFilter = DkFilter_Nearest;
@@ -820,7 +964,7 @@ static bool BringUp(char *why, size_t why_size) {
     for (uint32_t t = 0; t < WIMSY_TEXTURES; ++t) {
         // A texture the level has not gets the sprite in its place, which nothing reads.
         dkImageViewDefaults(&view, LevelHas((WimsyTexture)t) ? &level_textures[t] : &sprite_texture);
-        dkImageDescriptorInitialize(&image_descriptors[IMAGE_TEXTURES + t], &view, false, false);
+        dkImageDescriptorInitialize(&described[IMAGE_TEXTURES + t], &view, false, false);
     }
     for (uint32_t f = 0; f < FILLS; ++f) {
         // A level of a compute texture twice: to sample, and to store into. Under level 3 the
@@ -831,12 +975,20 @@ static bool BringUp(char *why, size_t why_size) {
             view.mipLevelOffset = (uint8_t)(f % WIMSY_COMPUTE_LEVELS);
             view.mipLevelCount = 1;
         }
-        dkImageDescriptorInitialize(&image_descriptors[IMAGE_COMPUTE + f], &view, false, false);
-        dkImageDescriptorInitialize(&image_descriptors[IMAGE_STORE + f], &view, level >= 3u, false);
+        dkImageDescriptorInitialize(&described[IMAGE_COMPUTE + f], &view, false, false);
+        dkImageDescriptorInitialize(&described[IMAGE_STORE + f], &view, level >= 3u, false);
     }
     for (uint32_t s = 0; s < SQUARES; ++s) {
         dkImageViewDefaults(&view, level >= 3u ? &chain_targets[s] : &sprite_texture);
-        dkImageDescriptorInitialize(&image_descriptors[IMAGE_CHAIN + s], &view, false, false);
+        dkImageDescriptorInitialize(&described[IMAGE_CHAIN + s], &view, false, false);
+    }
+    for (uint32_t l = 0; l < WIMSY_LOADS; ++l) {
+        // A frame's loads are written into its slot's set each frame (WriteSlot).
+        dkImageViewDefaults(&view, &sprite_texture);
+        dkImageDescriptorInitialize(&described[IMAGE_LOAD + l], &view, false, false);
+    }
+    for (uint32_t s = 0; s < SLOTS; ++s) {
+        memcpy(image_descriptors[s], described, sizeof(described));
     }
 
     static uint8_t texels[WIMSY_SPRITE_BYTES];
@@ -905,15 +1057,45 @@ static bool RunFrames(char *why, size_t why_size) {
     const bool pinned = R_SUCCEEDED(svcGetThreadCoreMask(&ideal, &mask, CUR_THREAD_HANDLE)) &&
                         R_SUCCEEDED(svcSetThreadCoreMask(CUR_THREAD_HANDLE, MAIN_CORE,
                                                          1u << MAIN_CORE));
+    // A heavy level's workers: the loads' on the core the main and render threads leave free,
+    // the models' one there and one beside the main thread.
+    static const int WORKER_CORE[WORKERS] = { 2, 2, MAIN_CORE, 2 };
+    uint32_t started = 0;
+    __atomic_store_n(&work_over, false, __ATOMIC_RELEASE);
+    semaphoreInit(&work_done, 0);
+    for (uint32_t w = 0; w < WORKERS && level >= 3u; ++w) {
+        semaphoreInit(&work_go[w], 0);
+        if (R_FAILED(threadCreate(&workers[w], WorkerMain, (void *)(uintptr_t)w, NULL, STACK_SIZE,
+                                  WORKER_PRIORITY, WORKER_CORE[w])) ||
+            R_FAILED(threadStart(&workers[w]))) {
+            break;
+        }
+        ++started;
+    }
+    const bool staffed = level < 3u || started == WORKERS;
     GameWorldStart(&world);
-    for (uint32_t k = 0; k < frames; ++k) {
+    for (uint32_t k = 0; k < frames && staffed; ++k) {
         semaphoreWait(&slot_free);
         const uint64_t began = armGetSystemTick();
         WriteSlot(k % SLOTS, k);
         main_us[k] = Microseconds(armGetSystemTick() - began);
         semaphoreSignal(&frame_go);
     }
+    if (!staffed) {
+        // The render thread waits for frames nobody makes: it is let through them, drawing none.
+        gpu.ready = false;
+        snprintf(gpu.failure, sizeof(gpu.failure), "only %u of the %u worker threads started",
+                 (unsigned)started, (unsigned)WORKERS);
+        for (uint32_t k = 0; k < frames; ++k) {
+            semaphoreSignal(&frame_go);
+        }
+    }
     Finish(&render_thread);
+    __atomic_store_n(&work_over, true, __ATOMIC_RELEASE);
+    for (uint32_t w = 0; w < started; ++w) {
+        semaphoreSignal(&work_go[w]);
+        Finish(&workers[w]);
+    }
     if (pinned && R_FAILED(svcSetThreadCoreMask(CUR_THREAD_HANDLE, ideal, (u32)mask))) {
         ReportNote("wimsy: the main thread could not be put back on core %d, mask 0x%llx, so it "
                    "stays on core %d alone",
@@ -987,6 +1169,10 @@ static void RunLevel(void) {
     static char bring_up[96];
     static char frames_name[96];
     static char judged_names[WIMSY_JUDGED][96];
+    static char peek_name[112];
+    snprintf(peek_name, sizeof(peek_name),
+             "level %u: the processor reads what a compute program stored, on each of %u frames",
+             (unsigned)level, (unsigned)frames);
     snprintf(bring_up, sizeof(bring_up),
              "level %u, %s: a graphics device and a way to the display come up", (unsigned)level,
              WimsyLevelName(level));
@@ -999,11 +1185,14 @@ static void RunLevel(void) {
                  (unsigned)judged[j], (unsigned)frames);
     }
     NameTimes();
-    const char *after[1u + WIMSY_JUDGED + GAME_TIME_CASES];
+    const char *after[2u + WIMSY_JUDGED + GAME_TIME_CASES];
     size_t after_count = 0;
     after[after_count++] = frames_name;
     for (uint32_t j = 0; j < judged_count; ++j) {
         after[after_count++] = judged_names[j];
+    }
+    if (level >= 3u) {
+        after[after_count++] = peek_name;
     }
     for (uint32_t i = 0; timing && i < GAME_TIME_CASES; ++i) {
         after[after_count++] = time_names[i];
@@ -1060,6 +1249,20 @@ static void RunLevel(void) {
         if (whole) {
             for (uint32_t j = 0; j < judged_count; ++j) {
                 JudgeFrame(judged_names[j], j);
+            }
+            if (level >= 3u && ReportStart(SUITE, peek_name)) {
+                uint8_t want[4];
+                WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL, render.peek_wrong_at, 0u, 0u,
+                                  want);
+                CHECK_TRUE(SUITE, peek_name, CHECK_EXACT,
+                           render.peeked == frames && render.peek_wrong == 0u,
+                           "%u of %u frames read back, %u of them another texel; the first, frame "
+                           "%u, read %02x %02x %02x %02x where the program stored %02x %02x %02x "
+                           "%02x",
+                           (unsigned)render.peeked, (unsigned)frames, (unsigned)render.peek_wrong,
+                           (unsigned)render.peek_wrong_at, render.peek_got[0], render.peek_got[1],
+                           render.peek_got[2], render.peek_got[3], want[0], want[1], want[2],
+                           want[3]);
             }
             if (timing) {
                 Times();

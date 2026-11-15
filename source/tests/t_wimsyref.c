@@ -625,15 +625,17 @@ static void CheckPanels(void) {
     static WimsyPanel panels[WIMSY_PANELS];
     Expect(&t, WimsyPanelsOf(2u, panels) == 0u, "level 2 has no panel");
     const uint32_t count = WimsyPanelsOf(3u, panels);
-    Expect(&t, count == 16u * 8u + 16u && WimsyPanelsOf(4u, panels) == count,
-           "128 levels of compute textures and 16 chains at levels 3 and 4");
+    Expect(&t, count == 16u * 8u + 16u + 2u && count == WIMSY_PANELS &&
+                   WimsyPanelsOf(4u, panels) == count,
+           "128 levels of compute textures, 16 chains and 2 loads at levels 3 and 4");
     // No panel hangs off the target or over another, and each compute texture's levels halve.
     bool apart = true, inside = true, halving = true;
     for (uint32_t i = 0; i < count; ++i) {
         inside = inside && panels[i].x + panels[i].side <= WIMSY_WIDTH &&
                  panels[i].y + panels[i].side <= WIMSY_HEIGHT && panels[i].side >= 1u;
-        halving = halving && (panels[i].chain ? panels[i].side == WIMSY_CHAIN_SIDE
-                                              : panels[i].side == WIMSY_COMPUTE_SIDE >> panels[i].mip);
+        halving = halving && (panels[i].kind == WIMSY_PANEL_COMPUTE
+                                  ? panels[i].side == WIMSY_COMPUTE_SIDE >> panels[i].mip
+                                  : panels[i].side == 64u);
         for (uint32_t j = 0; j < i; ++j) {
             apart = apart && (panels[i].x + panels[i].side <= panels[j].x ||
                               panels[j].x + panels[j].side <= panels[i].x ||
@@ -643,7 +645,7 @@ static void CheckPanels(void) {
     }
     Expect(&t, inside, "every panel inside the target");
     Expect(&t, apart, "no panel over another");
-    Expect(&t, halving, "a compute texture's level l is 128 >> l a side, a chain's panel 64");
+    Expect(&t, halving, "a compute texture's level l is 128 >> l a side, a chain's or a load's 64");
     Expect(&t, panels[0].x == 64u && panels[0].y == 8u && panels[1].x == 192u && panels[1].y == 8u &&
                    panels[2].y == 72u && panels[8].x == 256u && panels[12u * 8u].y == 536u &&
                    panels[128].x == 768u && panels[128].y == 536u && panels[136].y == 600u,
@@ -688,6 +690,24 @@ static void CheckPanels(void) {
            "a pixel in a panel, one outside, and none at level 2");
     WimsyPanelPixel(3u, 0u, 768u + 2u, 536u + 13u, texel);
     Expect(&t, memcmp(texel, last.colour, 4u) == 0, "the first chain's panel shows its last target");
+    // A load: the frame's two differ, a block is one colour and a void extent the suite's decoder
+    // gives back, and its panel's ranges take what BC7 makes of it and no more.
+    uint8_t other[4], same[4], block[16];
+    WimsyLoadTexel(600u, 9u, 20u, texel);
+    WimsyLoadTexel(601u, 9u, 20u, other);
+    WimsyLoadTexel(600u, 15u, 23u, same);
+    Expect(&t, texel[0] == (uint8_t)(29u + 4200u) && texel[1] == (uint8_t)(62u + 1800u) &&
+                   memcmp(texel, same, 4u) == 0 && memcmp(texel, other, 4u) != 0,
+           "a load's block is one colour, from its place and the load's number");
+    WimsyLoadBlock(600u, 1u, 2u, block);
+    uint16_t decoded[ASTC_MAX_TEXELS][4];
+    Expect(&t, AstcDecodeBlock(block, 8u, 8u, decoded) == ASTC_BLOCK_CONSTANT &&
+                   decoded[63][0] == texel[0] * 257u && decoded[0][2] == texel[2] * 257u,
+           "a load's block decodes to its colour");
+    Expect(&t, panels[144].kind == WIMSY_PANEL_LOAD && panels[144].x == 0u && panels[144].y == 8u &&
+                   panels[145].y == 144u && WimsyPanelPixel(3u, 300u, 9u, 8u + 20u, other) &&
+                   memcmp(other, texel, 4u) == 0,
+           "the loads' panels in the left margin, frame 300's first load number 600");
     // The machine as asked is the panels' bytes; one whose compute and chains are a frame late is
     // refused all over them.
     const WimsyMachine right = WimsyMachineRight(3u);
@@ -701,8 +721,25 @@ static void CheckPanels(void) {
     verdict = Verdict(3u, 300u, 600u, &late);
     Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200000u,
            "panels a frame late are refused, every texel of them");
-    Report("wimsy: the heavy levels' panels: what a compute program stores and a chain of targets "
-           "comes to, a texel a pixel",
+    // A load's panel three codes off is refused and two is not: the bound BC7 is given.
+    WimsyRender(3u, 300u, 600u, &right, frame);
+    frame[((size_t)28 * WIMSY_WIDTH + 9u) * 4u] = (uint8_t)(texel[0] + 2u);
+    WimsyJudge(3u, 300u, 600u, frame, NULL, verdicts, &verdict);
+    Expect(&t, WimsyVerdictPasses(&verdict), "a load's texel two codes off passes");
+    frame[((size_t)28 * WIMSY_WIDTH + 9u) * 4u] = (uint8_t)(texel[0] + 3u);
+    WimsyJudge(3u, 300u, 600u, frame, NULL, verdicts, &verdict);
+    Expect(&t, verdict.wrong == 1u, "a load's texel three codes off is refused");
+    // A thread's share of the models is the same models.
+    static WimsyInstance whole[WIMSY_INSTANCES_MAX], part[WIMSY_INSTANCES_MAX];
+    const uint32_t models = WimsyInstancesOf(3u, 77u, 600u, whole);
+    const uint32_t first_half = WimsyInstancesFrom(3u, 77u, 600u, 0u, 84u, part);
+    const uint32_t second_half = WimsyInstancesFrom(3u, 77u, 600u, 84u, 200u, part + 84u);
+    Expect(&t, models == 167u && first_half == 84u && second_half == 83u &&
+                   memcmp(whole, part, sizeof(WimsyInstance) * 167u) == 0 &&
+                   WimsyInstancesFrom(3u, 77u, 600u, 167u, 5u, part) == 0u,
+           "the models in two shares are the models");
+    Report("wimsy: the heavy levels' panels: what a compute program stores, a chain of targets "
+           "comes to and the processor loads, a texel a pixel",
            &t);
 }
 

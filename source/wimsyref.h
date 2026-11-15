@@ -110,6 +110,11 @@ typedef struct {
 /// The models frame @p frame of a run of @p frames draws at @p level, in order. Returns how many.
 uint32_t WimsyInstancesOf(uint32_t level, uint32_t frame, uint32_t frames, WimsyInstance *out);
 
+/// The same for the models from @p first on, @p count of them at most, into @p out from its
+/// start: a thread's share of a frame. Returns how many it wrote.
+uint32_t WimsyInstancesFrom(uint32_t level, uint32_t frame, uint32_t frames, uint32_t first,
+                            uint32_t count, WimsyInstance *out);
+
 /// The light of @p level.
 void WimsyLightOf(uint32_t level, WimsyLight *out);
 
@@ -234,17 +239,43 @@ void WimsyChainSquareOf(uint32_t chain, uint32_t step, uint32_t frame, WimsyChai
 /// Texel (@p x, @p y) of chain @p chain's last target on frame @p frame.
 void WimsyChainTexel(uint32_t chain, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]);
 
-/// A panel's square on the target: where its top left pixel is, its side, and what it shows, a
-/// level of a compute texture or a chain's last target.
+/// Two textures a frame that no frame before it had, as a game streams its textures in: ASTC in
+/// blocks of 8 by 8, 512 texels a side, written whole by the processor straight into memory the
+/// graphics unit samples, in the frame that first draws with them. Load n is frame n / 2's, the
+/// first or the second by n's last bit. Every block is a void extent whose colour follows from
+/// its place and the load's number, so a texel of one is that colour whatever decodes it. A
+/// panel shows a load's first 64 by 64 texels, eight blocks a side.
+#define WIMSY_LOADS 2u
+#define WIMSY_LOAD_SIDE 512u
+#define WIMSY_LOAD_BLOCKS (WIMSY_LOAD_SIDE / 8u)
+#define WIMSY_LOAD_SHOWN 64u
+void WimsyLoadTexel(uint32_t load, uint32_t x, uint32_t y, uint8_t out[4]);
+void WimsyLoadBlock(uint32_t load, uint32_t bx, uint32_t by, uint8_t out[16]);
+
+/// What a panel shows: a level of a compute texture, a chain's last target, or one of the
+/// frame's loads.
+typedef enum {
+    WIMSY_PANEL_COMPUTE,
+    WIMSY_PANEL_CHAIN,
+    WIMSY_PANEL_LOAD,
+} WimsyPanelKind;
+
+/// A panel's square on the target: where its top left pixel is, its side, and what it shows.
 typedef struct {
     uint32_t x;
     uint32_t y;
     uint32_t side;
-    bool chain;
+    WimsyPanelKind kind;
     uint32_t index;
     uint32_t mip;
 } WimsyPanel;
-#define WIMSY_PANELS (WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS + WIMSY_CHAINS)
+#define WIMSY_PANELS \
+    (WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS + WIMSY_CHAINS + WIMSY_LOADS)
+
+/// What the processor reads back of each frame's compute work: the one texel of the first
+/// texture's last level.
+#define WIMSY_PEEK_TEXTURE 0u
+#define WIMSY_PEEK_LEVEL (WIMSY_COMPUTE_LEVELS - 1u)
 
 /// The panels of @p level, in the order they are drawn. Returns how many: none under level 3.
 uint32_t WimsyPanelsOf(uint32_t level, WimsyPanel *out);
