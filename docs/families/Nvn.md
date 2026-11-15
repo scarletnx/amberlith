@@ -12,6 +12,9 @@ The graphics questions asked through NVN, the API a game draws with, so that a r
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
 row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, seventeen cases.
 
+[NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
+ones no case calls yet.
+
 ## Why a layer
 
 A homebrew program has no NVN: each game carries its own driver. `nvnlayer/` is one, a module of its own
