@@ -10,11 +10,17 @@
 #include <nvnlayer.h>
 
 #include "../check.h"
-#include "../gpu.h"
 #include "../picture.h"
 #include "../report.h"
-#include "../viewer.h"
 #include "tests.h"
+
+// What the suite takes from the console's frontend, which the Switch 2's has none of: deko3d's
+// abort turned into a return, the program's screen that may hold the window, and the scene's
+// deko3d way.
+#if NVN_LAYER_API < 231
+#include "../gpu.h"
+#include "../viewer.h"
+#endif
 
 // The nvn family: the clear suite's question asked through NVN, as a game asks it, with the
 // layer of nvnlayer/ as the driver. On the console and in Eden the layer records deko3d
@@ -592,9 +598,11 @@ static void LayerCases(void) {
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
+#if NVN_LAYER_API < 231
     // deko3d ends the program when it cannot make an object; under gpu.c's guard a bring-up
     // that fails in the layer is a false result with its reason, which a case reports.
     NvnLayerSetGuard(AbortGuarded);
+#endif
     NvnLayerClearError();
     if (!ReportStart(SUITE, RESOLVE)) {
         return;
@@ -687,7 +695,12 @@ static void LayerCases(void) {
         }
     }
 
-    if (ViewerScreenUp()) {
+#if NVN_LAYER_API < 231
+    const bool screen_up = ViewerScreenUp();
+#else
+    const bool screen_up = false;    // the Switch 2's frontend has no screen of its own
+#endif
+    if (screen_up) {
         // The program's own screen holds the default window, and a swapchain made on it after
         // the screen is what Eden never came back from (the game suite says the same). The start
         // screen leaves it up to the run's end, noprogress or not; a quick run from the mode file
@@ -704,6 +717,7 @@ static void LayerCases(void) {
 }
 
 void RunNvn(void) {
+#if NVN_LAYER_API < 231
     // Before the first lookup: a runtime that runs a game's NVN itself takes each function at
     // the address its name resolves to, the layer's own from then on with it.
     NvnSceneFirst();
@@ -711,4 +725,9 @@ void RunNvn(void) {
     // With the suite's own device down, whatever the cases above came to: the scene's way
     // makes its own.
     NvnSceneLast();
+#else
+    // The scene is a Switch program's: its shaders are the Switch's code and two of its three
+    // ways are deko3d's.
+    LayerCases();
+#endif
 }

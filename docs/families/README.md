@@ -14,6 +14,8 @@ points at. A case that ends the program costs that case, not the rest of the run
 - **[Pad](./Pad.md)** - a controller in a person's hands, and the touch screen ([touch](./Touch.md))
 - **[Graphics](./Graphics.md)** - the forty three drawing suites, clear to copy ([blit2d](./Blit2d.md)), and tex8k
 - **[nvn](./Nvn.md)** - the clear suite's question through the program's NVN, which ScarletNX takes as a game's
+- **[nvn2](./Nvn2.md)** - what a Switch 2 program asks of NVN: programs of its own shader code assembled by hand, a
+  compute dispatch, and a Mandelbrot whose bars a mesh program draws; only the Switch 2 build runs it
 - **[fs](./Fs.md)** - reads through the file system service
 - **[Kernel](./Kernel.md)** - the scheduler: priority inheritance, preemption and migration; and the kernel's
   answers to waits, events, handles and memory calls ([svc](./Kernel.md#svc))

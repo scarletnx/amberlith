@@ -668,6 +668,11 @@ typedef enum {
     NVN_SHADER_STAGE_TESS_CONTROL = 0x3,
     NVN_SHADER_STAGE_TESS_EVALUATION = 0x4,
     NVN_SHADER_STAGE_COMPUTE = 0x5,
+#if NVN_LAYER_API >= 231
+    /* the Ounce's two, as ScarletNX's docs/platforms/nx/ounce.md numbers them */
+    NVN_SHADER_STAGE_TASK = 0x6,
+    NVN_SHADER_STAGE_MESH = 0x7,
+#endif
 
     NVN_SHADER_STAGE_LARGE = 0x7FFFFFFF
 } NVNshaderStage;
@@ -680,6 +685,12 @@ typedef enum {
     NVN_SHADER_STAGE_TESS_EVALUATION_BIT = 0x10,
     NVN_SHADER_STAGE_COMPUTE_BIT = 0x20,
     NVN_SHADER_STAGE_ALL_GRAPHICS_BITS = 31,
+#if NVN_LAYER_API >= 231
+    NVN_SHADER_STAGE_TASK_BIT = 0x40,
+    NVN_SHADER_STAGE_MESH_BIT = 0x80,
+    /* what an Ounce game binds a program of mesh and fragment stages with */
+    NVN_SHADER_STAGE_ALL_BITS_231 = 0xFF,
+#endif
 
     NVN_SHADER_STAGE_BITS_LARGE = 0x7FFFFFFF
 } NVNshaderStageBits;

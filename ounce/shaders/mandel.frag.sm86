@@ -1,0 +1,13 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; A bar's colour from its count, which every vertex of its rectangle carries: red count / 17, which eight bits
+; hold as 15 * count with nothing near a half to round either way, green a quarter, blue none.
+.stage fragment
+.in generic0.x
+        IPA R0, a[0x80]
+        FMUL.FTZ R0, R0, 0.05882353f
+        MOV R1, 0.25f
+        MOV R2, RZ
+        MOV R3, 1.0f
+        EXIT

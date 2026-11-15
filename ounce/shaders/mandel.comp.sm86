@@ -1,0 +1,38 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; The Mandelbrot set over a grid of 32 columns by one row a block: for each cell, how many of sixteen steps of
+; z = z * z + c keep z within the circle of radius 2. Integers alone, in fixed point with twelve fraction bits, and
+; no branch: a cell that left stops counting and stops moving, so nothing overflows and the processor's answer is
+; exact on every machine (ounce/t_nvn2.c, MandelCount). The count goes to word row * 32 + column of storage
+; buffer 0.
+.stage compute
+.local 32 1 1
+        S2R R0, SR_TID.X                        ; the column
+        S2R R1, SR_CTAID.Y                      ; the row
+        IMAD R6, R0, 384, RZ                    ; c's real part: -2.25 + column * 3 / 32
+        IADD3 R6, R6, -9216, RZ
+        IMAD R7, R1, 439, RZ                    ; its imaginary part: -1.5 + row * 439 / 4096
+        IADD3 R7, R7, -6144, RZ
+        MOV R4, RZ                              ; z's real part
+        MOV R5, RZ                              ; its imaginary part
+        MOV R8, RZ                              ; the count
+        ISETP.EQ.U32.AND P0, PT, R8, 0, PT      ; P0: still within the circle
+.repeat 16
+        IMAD R9, R4, R4, RZ                     ; x * x, twenty-four fraction bits
+        IMAD R10, R5, R5, RZ                    ; y * y
+        IADD3 R11, R9, R10, RZ
+        ISETP.LE.S32.AND P0, PT, R11, 0x4000000, P0     ; |z| squared at most 4
+        @P0 IADD3 R8, R8, 1, RZ
+        IMAD R12, R4, R5, RZ                    ; x * y
+        IADD3 R9, R9, -R10, RZ
+        SHF.R.S32.HI R9, RZ, 12, R9             ; x * x - y * y, back to twelve bits
+        SHF.R.S32.HI R12, RZ, 11, R12           ; 2 * x * y
+        @P0 IADD3 R4, R9, R6, RZ
+        @P0 IADD3 R5, R12, R7, RZ
+.end
+        IMAD R2, R1, 32, R0                     ; the cell's word
+        SHF.L.U32 R2, R2, 2, RZ
+        ULDC.64 UR4, c[0][0x310]                ; storage buffer 0's address, from the driver's table
+        STG.E [R2 + UR4], R8
+        EXIT
