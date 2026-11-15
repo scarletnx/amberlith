@@ -9,13 +9,13 @@ make
 
 `edenprobe.nro` runs unchanged on a console and in an emulator; two reports compare only when the NRO is the same.
 
-One shader, the bindless suite's four sample fetch, is built by uam with Mesa's f9d385d77716 on it: the toolchain's
-uam 1.1.0 puts a multisample fetch's sample in the register the console reads the handle from. `tools/uam.sh` builds
-that uam into `build/uam` the first time make needs it (and after `make clean`): it clones scarletnx/uam at the commit
-it names, the toolchain's uam with the fix of a uniform block's vector read by a component worked out at run time
-(which uam 1.1.0 reads from the vector's first word), applies `tools/uam/*.patch`, and builds it with meson, so it
-needs the network then, git, meson, ninja, bison, flex, Python 3 with mako, and a C and a C++ compiler for the
-machine. `tools/dksh-handles.py
+One shader, the bindless suite's four sample fetch, is built by uam with Mesa's f9d385d77716 on it: the toolchain's uam
+1.1.0 puts a multisample fetch's sample in the register the console reads the handle from. `tools/uam.sh` builds that
+uam into `build/uam` the first time make needs it (and after `make clean`): it clones scarletnx/uam at the commit it
+names (a clone already there, the toolchain's from before, is pointed at it and fetched), the toolchain's uam with the
+fix of a uniform block's vector read by a component worked out at run time (which uam 1.1.0 reads from the vector's
+first word), applies `tools/uam/*.patch`, and builds it with meson, so it needs the network then, git, meson, ninja,
+bison, flex, Python 3 with mako, and a C and a C++ compiler for the machine. `tools/dksh-handles.py
 build/shaders/*.dksh` says where each multisample fetch reads its handle; the CI runs it after every build.
 
 ## The Switch 2 ExeFS

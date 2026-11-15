@@ -7,9 +7,10 @@
 # (tools/uam/0001-*.patch), and reads a uniform block's vector indexed by a component worked out at run time from the
 # vector's first word (the fork's commits); the shaders that do either are built by this one (Makefile, UAM_FIXED).
 #
-# The first run clones the source, which needs the network, and it needs git, meson, ninja, bison, flex, Python 3 with
-# mako, and a C and a C++ compiler for this machine. A run that finds DIR/uam built from this commit, these patches and
-# this script only marks it current, so make does not ask again.
+# The first run clones the source (tools/uam-source.sh, which also moves an older clone to this commit), which needs the
+# network, and it needs git, meson, ninja, bison, flex, Python 3 with mako, and a C and a C++ compiler for this machine.
+# A run that finds DIR/uam built from this commit, these patches and this script only marks it current, so make does not
+# ask again.
 set -eu
 [ $# -eq 1 ] || { echo "usage: tools/uam.sh DIR" >&2; exit 2; }
 dir=$1
@@ -23,8 +24,7 @@ if [ -x "$dir/uam" ] && [ "$(cat "$dir/uam.stamp" 2>/dev/null)" = "$stamp" ]; th
 fi
 mkdir -p "$dir"
 src=$dir/src
-[ -d "$src/.git" ] || git clone --quiet "$repo" "$src"
-git -C "$src" checkout --quiet --force --detach "$commit"
+sh "$here/uam-source.sh" "$src" "$repo" "$commit"
 for patch in "$here"/uam/*.patch; do
     git -C "$src" apply "$patch"
 done
