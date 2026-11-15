@@ -98,8 +98,27 @@ const char *DrawPathFailure(const DrawPath *path);
 int DrawPathProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
                     const void *fragment_dksh, uint32_t fragment_bytes);
 
-/// A 2D RGBA8 texture of @p width by @p height holding @p texels, tightly packed, sampled with
-/// one filter both ways and clamped to its edge. Its number for DrawPathBindTexture, or -1.
+/// What a texture does with a coordinate past its edges.
+typedef enum {
+    DRAW_WRAP_CLAMP_TO_EDGE = 0,
+    DRAW_WRAP_REPEAT = 1,
+    DRAW_WRAP_MIRRORED_REPEAT = 2,
+    DRAW_WRAP_CLAMP_TO_BORDER = 3,
+} DrawWrap;
+
+/// How a texture is sampled: one filter both ways, one wrap mode on every axis, and the colour
+/// DRAW_WRAP_CLAMP_TO_BORDER shows past the edges.
+typedef struct {
+    bool linear;
+    DrawWrap wrap;
+    float border[4];
+} DrawSampler;
+
+/// A 2D RGBA8 texture of @p width by @p height holding @p texels, tightly packed, sampled as
+/// @p sampler says. Its number for DrawPathBindTexture, or -1.
+int DrawPathTextureSampled(DrawPath *path, uint32_t width, uint32_t height,
+                           const uint8_t *texels, const DrawSampler *sampler);
+/// DrawPathTextureSampled with one filter both ways, clamped to its edge.
 int DrawPathTexture(DrawPath *path, uint32_t width, uint32_t height, const uint8_t *texels,
                     bool linear);
 

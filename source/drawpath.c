@@ -59,9 +59,15 @@ int DrawPathProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_byt
     return path->way->program(path, vertex_dksh, vertex_bytes, fragment_dksh, fragment_bytes);
 }
 
+int DrawPathTextureSampled(DrawPath *path, uint32_t width, uint32_t height,
+                           const uint8_t *texels, const DrawSampler *sampler) {
+    return path->way->texture(path, width, height, texels, sampler);
+}
+
 int DrawPathTexture(DrawPath *path, uint32_t width, uint32_t height, const uint8_t *texels,
                     bool linear) {
-    return path->way->texture(path, width, height, texels, linear);
+    const DrawSampler sampler = { linear, DRAW_WRAP_CLAMP_TO_EDGE, { 0.0f, 0.0f, 0.0f, 0.0f } };
+    return path->way->texture(path, width, height, texels, &sampler);
 }
 
 bool DrawPathAlloc(DrawPath *path, uint32_t bytes, DrawBuffer *out) {
@@ -177,7 +183,7 @@ static int DkProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
 }
 
 static int DkTexture(DrawPath *path, uint32_t width, uint32_t height, const uint8_t *texels,
-                     bool linear) {
+                     const DrawSampler *how) {
     Deko3dPath *const dk = Dk(path);
     const uint32_t index = dk->textures;
     if (index >= path->spec.textures) {
@@ -197,10 +203,15 @@ static int DkTexture(DrawPath *path, uint32_t width, uint32_t height, const uint
     dkImageDescriptorInitialize(&dk->image_set[index], &view, false, false);
     DkSampler sampler;
     dkSamplerDefaults(&sampler);
-    sampler.minFilter = linear ? DkFilter_Linear : DkFilter_Nearest;
+    static const DkWrapMode WRAPS[] = { DkWrapMode_ClampToEdge, DkWrapMode_Repeat,
+                                        DkWrapMode_MirroredRepeat, DkWrapMode_ClampToBorder };
+    sampler.minFilter = how->linear ? DkFilter_Linear : DkFilter_Nearest;
     sampler.magFilter = sampler.minFilter;
     sampler.mipFilter = DkMipFilter_None;
-    sampler.wrapMode[0] = sampler.wrapMode[1] = sampler.wrapMode[2] = DkWrapMode_ClampToEdge;
+    sampler.wrapMode[0] = sampler.wrapMode[1] = sampler.wrapMode[2] = WRAPS[how->wrap];
+    for (int i = 0; i < 4; ++i) {
+        sampler.borderColor[i].value_f = how->border[i];
+    }
     dkSamplerDescriptorInitialize(&dk->sampler_set[index], &sampler);
     return (int)dk->textures++;
 }

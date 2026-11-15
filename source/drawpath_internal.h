@@ -11,7 +11,7 @@ typedef struct {
     int (*program)(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
                    const void *fragment_dksh, uint32_t fragment_bytes);
     int (*texture)(DrawPath *path, uint32_t width, uint32_t height, const uint8_t *texels,
-                   bool linear);
+                   const DrawSampler *sampler);
     bool (*alloc)(DrawPath *path, uint32_t bytes, DrawBuffer *out);
     void (*begin)(DrawPath *path);
     void (*clear)(DrawPath *path, const float rgba[4]);

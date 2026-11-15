@@ -162,8 +162,163 @@ static bool Draw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
-/// One way's case: the scene drawn down @p kind and every pixel judged.
-static void SceneCase(DrawPathKind kind, const char *name) {
+// ---- a texture past its edges
+
+// The second scene: one 4 by 4 texture drawn in each quarter of the target over coordinates
+// from -1 to 3, so four of it across and down, two pixels a texel, every pixel centre a
+// quarter of a texel from a texel's edge. Each quarter samples it nearest through a sampler of
+// its own wrap mode: it repeats (top left), repeats mirrored (top right), holds its edge
+// (bottom left) and shows its border colour (bottom right). No filter weighs anything, so each
+// pixel is one texel's bytes or the border's.
+
+#define WRAP_TEXTURE_SIZE 4u
+#define WRAP_QUADS 4u
+/// Opaque green, which no texel of the scene's texture is.
+static const uint8_t WRAP_BORDER[4] = { 0x00, 0xff, 0x00, 0xff };
+static const DrawWrap WRAPS[WRAP_QUADS] = { DRAW_WRAP_REPEAT, DRAW_WRAP_MIRRORED_REPEAT,
+                                            DRAW_WRAP_CLAMP_TO_EDGE, DRAW_WRAP_CLAMP_TO_BORDER };
+
+/// The texel of the 4 by 4 texture a coordinate @p at texels from its first lands on under
+/// @p wrap, or -1 for the border.
+static int WrapTexel(DrawWrap wrap, int at) {
+    const int size = (int)WRAP_TEXTURE_SIZE;
+    const int tile = at >= 0 ? at / size : -((size - 1 - at) / size);
+    const int within = at - tile * size;
+    switch (wrap) {
+    case DRAW_WRAP_REPEAT:
+        return within;
+    case DRAW_WRAP_MIRRORED_REPEAT:
+        return (tile & 1) != 0 ? size - 1 - within : within;
+    case DRAW_WRAP_CLAMP_TO_EDGE:
+        return at < 0 ? 0 : at >= size ? size - 1 : at;
+    default:
+        return at < 0 || at >= size ? -1 : at;
+    }
+}
+
+/// The four bytes pixel @p x, @p y of the wrap scene holds, the top row first.
+static void WrapExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t quad = (y / SCENE_QUARTER) * 2u + x / SCENE_QUARTER;
+    // Two pixels a texel, the quarter's first pixel four texels before the texture's first.
+    const int u = WrapTexel(WRAPS[quad], (int)(x % SCENE_QUARTER) / 2 - (int)WRAP_TEXTURE_SIZE);
+    const int v = WrapTexel(WRAPS[quad], (int)(y % SCENE_QUARTER) / 2 - (int)WRAP_TEXTURE_SIZE);
+    if (u < 0 || v < 0) {
+        memcpy(out, WRAP_BORDER, 4);
+    } else {
+        SceneTexel((uint32_t)u, (uint32_t)v, out);
+    }
+}
+
+static const char *WrapLooksLike(const uint8_t pixel[4]) {
+    if (memcmp(pixel, WRAP_BORDER, 4) == 0) {
+        return "the border colour";
+    }
+    if (memcmp(pixel, SCENE_CLEAR, 4) == 0) {
+        return "the clear colour: nothing drawn";
+    }
+    for (uint32_t y = 0; y < WRAP_TEXTURE_SIZE; ++y) {
+        for (uint32_t x = 0; x < WRAP_TEXTURE_SIZE; ++x) {
+            uint8_t texel[4];
+            SceneTexel(x, y, texel);
+            if (memcmp(pixel, texel, 4) == 0) {
+                return "another texel of the texture: another wrap mode";
+            }
+        }
+    }
+    return "nothing the scene draws";
+}
+
+/// Builds the wrap scene on @p path and draws it; false with the step that failed in @p why.
+static bool WrapDraw(DrawPath *path, char *why, size_t why_size) {
+    const int program = DrawPathProgram(path, ShaderData(SHADER_SCENE_VERT),
+                                        ShaderSize(SHADER_SCENE_VERT),
+                                        ShaderData(SHADER_SCENE_FRAG),
+                                        ShaderSize(SHADER_SCENE_FRAG));
+    uint8_t texels[WRAP_TEXTURE_SIZE * WRAP_TEXTURE_SIZE * 4u];
+    for (uint32_t y = 0; y < WRAP_TEXTURE_SIZE; ++y) {
+        for (uint32_t x = 0; x < WRAP_TEXTURE_SIZE; ++x) {
+            SceneTexel(x, y, texels + (y * WRAP_TEXTURE_SIZE + x) * 4u);
+        }
+    }
+    int textures[WRAP_QUADS];
+    bool ok = program >= 0;
+    for (uint32_t i = 0; i < WRAP_QUADS; ++i) {
+        const DrawSampler sampler = { false,
+                                      WRAPS[i],
+                                      { (float)WRAP_BORDER[0] / 255.0f,
+                                        (float)WRAP_BORDER[1] / 255.0f,
+                                        (float)WRAP_BORDER[2] / 255.0f,
+                                        (float)WRAP_BORDER[3] / 255.0f } };
+        textures[i] = DrawPathTextureSampled(path, WRAP_TEXTURE_SIZE, WRAP_TEXTURE_SIZE, texels,
+                                             &sampler);
+        ok = ok && textures[i] >= 0;
+    }
+    DrawBuffer vertices, move, paint;
+    ok = ok && DrawPathAlloc(path, WRAP_QUADS * 6u * (uint32_t)sizeof(GpuVertex), &vertices) &&
+         DrawPathAlloc(path, (uint32_t)sizeof(Move), &move) &&
+         DrawPathAlloc(path, (uint32_t)sizeof(Paint), &paint);
+    if (!ok) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    GpuVertex quads[WRAP_QUADS * 6u];
+    static const uint8_t white[4] = { 0xff, 0xff, 0xff, 0xff };
+    for (uint32_t i = 0; i < WRAP_QUADS; ++i) {
+        const uint32_t x0 = (i % 2u) * SCENE_QUARTER, y0 = (i / 2u) * SCENE_QUARTER;
+        Quad(quads + i * 6u, x0, y0, x0 + SCENE_QUARTER, y0 + SCENE_QUARTER, 0.5f, white);
+        // Quad lays the whole texture over its pixels: these run a texture's width before it
+        // and two past it instead.
+        for (uint32_t k = 0; k < 6u; ++k) {
+            quads[i * 6u + k].u = quads[i * 6u + k].u * 4.0f - 1.0f;
+            quads[i * 6u + k].v = quads[i * 6u + k].v * 4.0f - 1.0f;
+        }
+    }
+    memcpy(vertices.bytes, quads, sizeof(quads));
+    const Move still = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+    const Paint sampled = { { 1.0f, 1.0f, 1.0f, 1.0f }, { PAINT_TEXTURE, 0, 0, 0 } };
+    memcpy(move.bytes, &still, sizeof(still));
+    memcpy(paint.bytes, &sampled, sizeof(sampled));
+
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathUseProgram(path, program);
+    DrawPathVertices(path, &vertices, sizeof(quads));
+    DrawPathUniform(path, DRAW_STAGE_VERTEX, 0, &move, sizeof(Move));
+    DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
+    for (uint32_t i = 0; i < WRAP_QUADS; ++i) {
+        // The shader reads slot 1; slot 0 holds the texture under another wrap mode.
+        DrawPathBindTexture(path, DRAW_STAGE_FRAGMENT, 0, textures[(i + 1u) % WRAP_QUADS]);
+        DrawPathBindTexture(path, DRAW_STAGE_FRAGMENT, 1, textures[i]);
+        DrawPathDraw(path, i * 6u, 6);
+    }
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
+/// A scene the suite draws down each way: what it asks of a way, how it draws, and what each of
+/// its pixels has to hold.
+typedef struct {
+    bool depth;
+    uint32_t textures;
+    uint32_t texture_bytes;
+    bool (*draw)(DrawPath *path, char *why, size_t why_size);
+    void (*expected)(uint32_t x, uint32_t y, uint8_t out[4]);
+    const char *(*looks_like)(const uint8_t pixel[4]);
+} Scene;
+
+static const Scene FIVE_DRAWS = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
+                                  Draw, SceneExpected, SceneLooksLike };
+static const Scene WRAPPED = { false, WRAP_QUADS,
+                               WRAP_QUADS * WRAP_TEXTURE_SIZE * WRAP_TEXTURE_SIZE * 4u, WrapDraw,
+                               WrapExpected, WrapLooksLike };
+
+/// One way's case: @p scene drawn down @p kind and every pixel judged.
+static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
     if (!ReportStart(SUITE, name)) {
         return;
     }
@@ -171,11 +326,11 @@ static void SceneCase(DrawPathKind kind, const char *name) {
     memset(&spec, 0, sizeof(spec));
     spec.width = SCENE_SIZE;
     spec.height = SCENE_SIZE;
-    spec.depth = true;
+    spec.depth = scene->depth;
     spec.programs = 1;
-    spec.textures = 2;
+    spec.textures = scene->textures;
     spec.data_bytes = 0x4000u;
-    spec.texture_bytes = 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u;
+    spec.texture_bytes = scene->texture_bytes;
     spec.command_bytes = 0x10000u;
     char why[320] = "";
     DrawPath *const path = DrawPathOpen(kind, &spec, why, sizeof(why));
@@ -186,7 +341,8 @@ static void SceneCase(DrawPathKind kind, const char *name) {
         ReportCase(SUITE, name, CHECK_NONE, false, detail);
         return;
     }
-    const uint8_t *const pixels = Draw(path, why, sizeof(why)) ? DrawPathRead(path) : NULL;
+    const uint8_t *const pixels =
+        scene->draw(path, why, sizeof(why)) ? DrawPathRead(path) : NULL;
     if (pixels == NULL) {
         char detail[400];
         snprintf(detail, sizeof(detail), "%s",
@@ -205,7 +361,7 @@ static void SceneCase(DrawPathKind kind, const char *name) {
     for (uint32_t y = 0; y < SCENE_SIZE; ++y) {
         for (uint32_t x = 0; x < SCENE_SIZE; ++x) {
             uint8_t want[4];
-            SceneExpected(x, y, want);
+            scene->expected(x, y, want);
             const uint8_t *const pixel = GpuPixel(pixels, SCENE_SIZE, x, y);
             const bool right = memcmp(pixel, want, 4) == 0;
             PictureSet(picture, x, y, want, right ? PICTURE_MATCHED : PICTURE_WRONG);
@@ -226,20 +382,29 @@ static void SceneCase(DrawPathKind kind, const char *name) {
                "%02x%02x%02x%02x: it holds %s",
                (unsigned)wrong, (unsigned)(SCENE_SIZE * SCENE_SIZE), (unsigned)first_x,
                (unsigned)first_y, first[0], first[1], first[2], first[3], first_want[0],
-               first_want[1], first_want[2], first_want[3], SceneLooksLike(first));
+               first_want[1], first_want[2], first_want[3], scene->looks_like(first));
     DrawPathClose(path);
 }
 
 void NvnSceneFirst(void) {
-    SceneCase(DRAW_PATH_DEKO3D,
+    SceneCase(DRAW_PATH_DEKO3D, &FIVE_DRAWS,
               "a scene of five draws through deko3d holds what the processor works out");
-    SceneCase(DRAW_PATH_LAYER,
+    SceneCase(DRAW_PATH_LAYER, &FIVE_DRAWS,
               "the same scene through the layer's own NVN functions holds what the processor "
               "works out");
+    SceneCase(DRAW_PATH_DEKO3D, &WRAPPED,
+              "a texture drawn past its edges through deko3d repeats, mirrors, holds its edge "
+              "and shows its border");
+    SceneCase(DRAW_PATH_LAYER, &WRAPPED,
+              "the same texture past its edges through the layer's own NVN functions does the "
+              "same");
 }
 
 void NvnSceneLast(void) {
-    SceneCase(DRAW_PATH_NVN,
+    SceneCase(DRAW_PATH_NVN, &FIVE_DRAWS,
               "the same scene through the NVN the program looks up holds what the processor "
               "works out");
+    SceneCase(DRAW_PATH_NVN, &WRAPPED,
+              "the same texture past its edges through the NVN the program looks up does the "
+              "same");
 }

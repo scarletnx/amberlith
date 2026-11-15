@@ -155,7 +155,7 @@ void Nvnl_nvnCommandBufferBindProgram(NVNcommandBuffer *cmd, const NVNprogram *p
 void Nvnl_nvnSamplerBuilderSetDefaults(NVNsamplerBuilder *builder) {
     // The device stays, as NVN's own builder keeps it. The filters and the wrap modes start at
     // nearest and clamp to edge here; a program sets the ones it relies on, as it cannot ask
-    // what a driver's defaults are.
+    // what a driver's defaults are. The levels are all of them and nothing is compared.
     LayerSamplerBuilder *const record = Record(builder, "nvnSamplerBuilderSetDefaults");
     if (record == NULL) {
         return;
@@ -163,9 +163,16 @@ void Nvnl_nvnSamplerBuilderSetDefaults(NVNsamplerBuilder *builder) {
     NVNdevice *const device = record->device;
     memset(builder, 0, sizeof(*builder));
     record->device = device;
-    record->min = NVN_MIN_FILTER_NEAREST;
-    record->mag = NVN_MAG_FILTER_NEAREST;
-    record->wrap[0] = record->wrap[1] = record->wrap[2] = NVN_WRAP_MODE_CLAMP_TO_EDGE;
+    record->state.min = NVN_MIN_FILTER_NEAREST;
+    record->state.mag = NVN_MAG_FILTER_NEAREST;
+    record->state.wrap[0] = record->state.wrap[1] = record->state.wrap[2] =
+        NVN_WRAP_MODE_CLAMP_TO_EDGE;
+    record->state.compare_mode = NVN_COMPARE_MODE_NONE;
+    record->state.compare_func = NVN_COMPARE_FUNC_LESS;
+    record->state.reduction = NVN_SAMPLER_REDUCTION_AVERAGE;
+    record->state.lod_min = 0.0f;
+    record->state.lod_max = 1000.0f;
+    record->state.anisotropy = 1.0f;
 }
 
 void Nvnl_nvnSamplerBuilderSetDevice(NVNsamplerBuilder *builder, NVNdevice *device) {
@@ -175,23 +182,185 @@ void Nvnl_nvnSamplerBuilderSetDevice(NVNsamplerBuilder *builder, NVNdevice *devi
     }
 }
 
+NVNdevice *Nvnl_nvnSamplerBuilderGetDevice(const NVNsamplerBuilder *builder) {
+    const LayerSamplerBuilder *const record = Record(builder, "nvnSamplerBuilderGetDevice");
+    return record != NULL ? record->device : NULL;
+}
+
+/// A builder's state, to set, or NULL with a complaint.
+static LayerSamplerState *BuilderState(NVNsamplerBuilder *builder, const char *what) {
+    LayerSamplerBuilder *const record = Record(builder, what);
+    return record != NULL ? &record->state : NULL;
+}
+
+/// The state a builder holds, or a sampler was made with: NULL with a complaint.
+static const LayerSamplerState *StateOfBuilder(const NVNsamplerBuilder *builder,
+                                               const char *what) {
+    const LayerSamplerBuilder *const record = Record(builder, what);
+    return record != NULL ? &record->state : NULL;
+}
+
+static const LayerSamplerState *StateOfSampler(const NVNsampler *sampler, const char *what) {
+    const LayerSampler *const record = Record(sampler, what);
+    if (record != NULL && record->magic != MAGIC_SAMPLER) {
+        LayerComplain("%s: the sampler was not initialized", what);
+        return NULL;
+    }
+    return record != NULL ? &record->state : NULL;
+}
+
 void Nvnl_nvnSamplerBuilderSetMinMagFilter(NVNsamplerBuilder *builder, NVNminFilter min,
                                            NVNmagFilter mag) {
-    LayerSamplerBuilder *const record = Record(builder, "nvnSamplerBuilderSetMinMagFilter");
-    if (record != NULL) {
-        record->min = (uint8_t)min;
-        record->mag = (uint8_t)mag;
+    LayerSamplerState *const state = BuilderState(builder, "nvnSamplerBuilderSetMinMagFilter");
+    if (state != NULL) {
+        state->min = (uint8_t)min;
+        state->mag = (uint8_t)mag;
     }
 }
 
 void Nvnl_nvnSamplerBuilderSetWrapMode(NVNsamplerBuilder *builder, NVNwrapMode s, NVNwrapMode t,
                                        NVNwrapMode r) {
-    LayerSamplerBuilder *const record = Record(builder, "nvnSamplerBuilderSetWrapMode");
-    if (record != NULL) {
-        record->wrap[0] = (uint8_t)s;
-        record->wrap[1] = (uint8_t)t;
-        record->wrap[2] = (uint8_t)r;
+    LayerSamplerState *const state = BuilderState(builder, "nvnSamplerBuilderSetWrapMode");
+    if (state != NULL) {
+        state->wrap[0] = (uint8_t)s;
+        state->wrap[1] = (uint8_t)t;
+        state->wrap[2] = (uint8_t)r;
     }
+}
+
+void Nvnl_nvnSamplerBuilderSetCompare(NVNsamplerBuilder *builder, NVNcompareMode mode,
+                                      NVNcompareFunc func) {
+    LayerSamplerState *const state = BuilderState(builder, "nvnSamplerBuilderSetCompare");
+    if (state != NULL) {
+        state->compare_mode = (uint8_t)mode;
+        state->compare_func = (uint8_t)func;
+    }
+}
+
+void Nvnl_nvnSamplerBuilderSetReductionFilter(NVNsamplerBuilder *builder,
+                                              NVNsamplerReduction filter) {
+    LayerSamplerState *const state = BuilderState(builder, "nvnSamplerBuilderSetReductionFilter");
+    if (state != NULL) {
+        state->reduction = (uint8_t)filter;
+    }
+}
+
+void Nvnl_nvnSamplerBuilderSetLodClamp(NVNsamplerBuilder *builder, float min, float max) {
+    LayerSamplerState *const state = BuilderState(builder, "nvnSamplerBuilderSetLodClamp");
+    if (state != NULL) {
+        state->lod_min = min;
+        state->lod_max = max;
+    }
+}
+
+#define SAMPLER_FLOAT(name, field)                                                                \
+    void Nvnl_nvnSamplerBuilderSet##name(NVNsamplerBuilder *builder, float value) {               \
+        LayerSamplerState *const state = BuilderState(builder, "nvnSamplerBuilderSet" #name);     \
+        if (state != NULL) {                                                                      \
+            state->field = value;                                                                 \
+        }                                                                                         \
+    }                                                                                             \
+    float Nvnl_nvnSamplerBuilderGet##name(const NVNsamplerBuilder *builder) {                     \
+        const LayerSamplerState *const state =                                                    \
+            StateOfBuilder(builder, "nvnSamplerBuilderGet" #name);                                \
+        return state != NULL ? state->field : 0.0f;                                               \
+    }
+SAMPLER_FLOAT(LodBias, lod_bias)
+SAMPLER_FLOAT(LodSnap, lod_snap)
+SAMPLER_FLOAT(MaxAnisotropy, anisotropy)
+#undef SAMPLER_FLOAT
+
+// A border colour is four words, whichever of the three kinds set them, as the graphics unit's
+// sampler has it: a getter of another kind gives the same words.
+#define SAMPLER_BORDER(suffix, type)                                                              \
+    void Nvnl_nvnSamplerBuilderSetBorderColor##suffix(NVNsamplerBuilder *builder,                 \
+                                                      const type *color) {                        \
+        LayerSamplerState *const state =                                                          \
+            BuilderState(builder, "nvnSamplerBuilderSetBorderColor" #suffix);                     \
+        if (state != NULL) {                                                                      \
+            memcpy(state->border, color, sizeof(state->border));                                  \
+        }                                                                                         \
+    }                                                                                             \
+    void Nvnl_nvnSamplerBuilderGetBorderColor##suffix(const NVNsamplerBuilder *builder,           \
+                                                      type *color) {                              \
+        const LayerSamplerState *const state =                                                    \
+            StateOfBuilder(builder, "nvnSamplerBuilderGetBorderColor" #suffix);                   \
+        if (state != NULL) {                                                                      \
+            memcpy(color, state->border, sizeof(state->border));                                  \
+        }                                                                                         \
+    }                                                                                             \
+    void Nvnl_nvnSamplerGetBorderColor##suffix(const NVNsampler *sampler, type *color) {          \
+        const LayerSamplerState *const state =                                                    \
+            StateOfSampler(sampler, "nvnSamplerGetBorderColor" #suffix);                          \
+        if (state != NULL) {                                                                      \
+            memcpy(color, state->border, sizeof(state->border));                                  \
+        }                                                                                         \
+    }
+SAMPLER_BORDER(, float)
+SAMPLER_BORDER(i, int)
+SAMPLER_BORDER(ui, uint32_t)
+#undef SAMPLER_BORDER
+
+// What a builder holds and what a sampler was made with, by the same getters.
+#define SAMPLER_GETTERS(object, type, state_of)                                                   \
+    void Nvnl_nvn##object##GetMinMagFilter(const type *from, NVNminFilter *min,                   \
+                                           NVNmagFilter *mag) {                                   \
+        const LayerSamplerState *const state = state_of(from, "nvn" #object "GetMinMagFilter");   \
+        if (state != NULL) {                                                                      \
+            *min = (NVNminFilter)state->min;                                                      \
+            *mag = (NVNmagFilter)state->mag;                                                      \
+        }                                                                                         \
+    }                                                                                             \
+    void Nvnl_nvn##object##GetWrapMode(const type *from, NVNwrapMode *s, NVNwrapMode *t,          \
+                                       NVNwrapMode *r) {                                          \
+        const LayerSamplerState *const state = state_of(from, "nvn" #object "GetWrapMode");       \
+        if (state != NULL) {                                                                      \
+            *s = (NVNwrapMode)state->wrap[0];                                                     \
+            *t = (NVNwrapMode)state->wrap[1];                                                     \
+            *r = (NVNwrapMode)state->wrap[2];                                                     \
+        }                                                                                         \
+    }                                                                                             \
+    void Nvnl_nvn##object##GetCompare(const type *from, NVNcompareMode *mode,                     \
+                                      NVNcompareFunc *func) {                                     \
+        const LayerSamplerState *const state = state_of(from, "nvn" #object "GetCompare");        \
+        if (state != NULL) {                                                                      \
+            *mode = (NVNcompareMode)state->compare_mode;                                          \
+            *func = (NVNcompareFunc)state->compare_func;                                          \
+        }                                                                                         \
+    }                                                                                             \
+    void Nvnl_nvn##object##GetLodClamp(const type *from, float *min, float *max) {                \
+        const LayerSamplerState *const state = state_of(from, "nvn" #object "GetLodClamp");       \
+        if (state != NULL) {                                                                      \
+            *min = state->lod_min;                                                                \
+            *max = state->lod_max;                                                                \
+        }                                                                                         \
+    }                                                                                             \
+    NVNsamplerReduction Nvnl_nvn##object##GetReductionFilter(const type *from) {                  \
+        const LayerSamplerState *const state =                                                    \
+            state_of(from, "nvn" #object "GetReductionFilter");                                   \
+        return state != NULL ? (NVNsamplerReduction)state->reduction                              \
+                             : NVN_SAMPLER_REDUCTION_AVERAGE;                                     \
+    }
+SAMPLER_GETTERS(SamplerBuilder, NVNsamplerBuilder, StateOfBuilder)
+SAMPLER_GETTERS(Sampler, NVNsampler, StateOfSampler)
+#undef SAMPLER_GETTERS
+
+float Nvnl_nvnSamplerGetLodBias(const NVNsampler *sampler) {
+    const LayerSamplerState *const state = StateOfSampler(sampler, "nvnSamplerGetLodBias");
+    return state != NULL ? state->lod_bias : 0.0f;
+}
+
+float Nvnl_nvnSamplerGetMaxAnisotropy(const NVNsampler *sampler) {
+    const LayerSamplerState *const state = StateOfSampler(sampler, "nvnSamplerGetMaxAnisotropy");
+    return state != NULL ? state->anisotropy : 0.0f;
+}
+
+NVNboolean Nvnl_nvnSamplerCompare(const NVNsampler *a, const NVNsampler *b) {
+    const LayerSamplerState *const x = StateOfSampler(a, "nvnSamplerCompare");
+    const LayerSamplerState *const y = StateOfSampler(b, "nvnSamplerCompare");
+    // The state's bytes are all set by name (the builder's defaults clear the rest), so two
+    // samplers of one state hold the same bytes.
+    return x != NULL && y != NULL && memcmp(x, y, sizeof(*x)) == 0;
 }
 
 /// deko3d's wrap mode for NVN's, or false for a number that is none.
@@ -226,11 +395,11 @@ static bool WrapOf(uint8_t mode, DkWrapMode *wrap) {
     }
 }
 
-/// deko3d's sampler for the filters and wrap modes a sampler record holds; false with a
-/// complaint naming the number that is none of NVN's.
-static bool SamplerOf(const LayerSampler *record, DkSampler *sampler, const char *what) {
+/// deko3d's sampler for @p state; false with a complaint naming the number that is none of
+/// NVN's.
+static bool SamplerOf(const LayerSamplerState *state, DkSampler *sampler, const char *what) {
     dkSamplerDefaults(sampler);
-    switch (record->min) {
+    switch (state->min) {
     case NVN_MIN_FILTER_NEAREST:
     case NVN_MIN_FILTER_NEAREST_MIPMAP_NEAREST:
     case NVN_MIN_FILTER_NEAREST_MIPMAP_LINEAR:
@@ -242,10 +411,10 @@ static bool SamplerOf(const LayerSampler *record, DkSampler *sampler, const char
         sampler->minFilter = DkFilter_Linear;
         break;
     default:
-        LayerComplain("%s: min filter %u is none of NVN's", what, (unsigned)record->min);
+        LayerComplain("%s: min filter %u is none of NVN's", what, (unsigned)state->min);
         return false;
     }
-    switch (record->min) {
+    switch (state->min) {
     case NVN_MIN_FILTER_NEAREST_MIPMAP_NEAREST:
     case NVN_MIN_FILTER_LINEAR_MIPMAP_NEAREST:
         sampler->mipFilter = DkMipFilter_Nearest;
@@ -258,16 +427,38 @@ static bool SamplerOf(const LayerSampler *record, DkSampler *sampler, const char
         sampler->mipFilter = DkMipFilter_None;
         break;
     }
-    if (record->mag != NVN_MAG_FILTER_NEAREST && record->mag != NVN_MAG_FILTER_LINEAR) {
-        LayerComplain("%s: mag filter %u is none of NVN's", what, (unsigned)record->mag);
+    if (state->mag != NVN_MAG_FILTER_NEAREST && state->mag != NVN_MAG_FILTER_LINEAR) {
+        LayerComplain("%s: mag filter %u is none of NVN's", what, (unsigned)state->mag);
         return false;
     }
-    sampler->magFilter = record->mag == NVN_MAG_FILTER_LINEAR ? DkFilter_Linear : DkFilter_Nearest;
+    sampler->magFilter = state->mag == NVN_MAG_FILTER_LINEAR ? DkFilter_Linear : DkFilter_Nearest;
     for (int i = 0; i < 3; ++i) {
-        if (!WrapOf(record->wrap[i], &sampler->wrapMode[i])) {
-            LayerComplain("%s: wrap mode %u is none of NVN's", what, (unsigned)record->wrap[i]);
+        if (!WrapOf(state->wrap[i], &sampler->wrapMode[i])) {
+            LayerComplain("%s: wrap mode %u is none of NVN's", what, (unsigned)state->wrap[i]);
             return false;
         }
+    }
+    if (state->compare_mode > NVN_COMPARE_MODE_COMPARE_R_TO_TEXTURE ||
+        state->compare_func < NVN_COMPARE_FUNC_NEVER ||
+        state->compare_func > NVN_COMPARE_FUNC_ALWAYS ||
+        state->reduction > NVN_SAMPLER_REDUCTION_MAX) {
+        LayerComplain("%s: compare mode %u with function %u and reduction filter %u, of which "
+                      "one is none of NVN's",
+                      what, (unsigned)state->compare_mode, (unsigned)state->compare_func,
+                      (unsigned)state->reduction);
+        return false;
+    }
+    // NVN's compare functions and reduction filters have deko3d's numbers.
+    sampler->compareEnable = state->compare_mode == NVN_COMPARE_MODE_COMPARE_R_TO_TEXTURE;
+    sampler->compareOp = (DkCompareOp)state->compare_func;
+    sampler->reductionMode = (DkSamplerReduction)state->reduction;
+    sampler->lodClampMin = state->lod_min;
+    sampler->lodClampMax = state->lod_max;
+    sampler->lodBias = state->lod_bias;
+    sampler->lodSnap = state->lod_snap;
+    sampler->maxAnisotropy = state->anisotropy;
+    for (int i = 0; i < 4; ++i) {
+        sampler->borderColor[i].value_ui = state->border[i];
     }
     return true;
 }
@@ -279,14 +470,12 @@ NVNboolean Nvnl_nvnSamplerInitialize(NVNsampler *sampler, const NVNsamplerBuilde
         DeviceOf(from->device, "nvnSamplerInitialize") == NULL) {
         return 0;
     }
-    memset(sampler, 0, sizeof(*sampler));
-    record->min = from->min;
-    record->mag = from->mag;
-    memcpy(record->wrap, from->wrap, sizeof(record->wrap));
     DkSampler probe;
-    if (!SamplerOf(record, &probe, "nvnSamplerInitialize")) {
+    if (!SamplerOf(&from->state, &probe, "nvnSamplerInitialize")) {
         return 0;
     }
+    memset(sampler, 0, sizeof(*sampler));
+    record->state = from->state;
     record->magic = MAGIC_SAMPLER;
     return 1;
 }
@@ -325,6 +514,7 @@ static NVNboolean DescriptorPool(void *pool, uint32_t magic, const NVNmemoryPool
     record->count = count;
     record->block = from->block;
     record->offset = (uint32_t)offset;
+    record->memory = memory;
     return 1;
 }
 
@@ -409,10 +599,47 @@ void Nvnl_nvnSamplerPoolRegisterSampler(const NVNsamplerPool *pool, int id,
     }
     DkSamplerDescriptor *const descriptor = Descriptor(record, id, WHAT);
     DkSampler made;
-    if (descriptor != NULL && SamplerOf(from, &made, WHAT)) {
+    if (descriptor != NULL && SamplerOf(&from->state, &made, WHAT)) {
         dkSamplerDescriptorInitialize(descriptor, &made);
     }
 }
+
+void Nvnl_nvnSamplerPoolRegisterSamplerBuilder(const NVNsamplerPool *pool, int id,
+                                               const NVNsamplerBuilder *builder) {
+    // The descriptor a sampler made from the builder would get, with no sampler made.
+    static const char *const WHAT = "nvnSamplerPoolRegisterSamplerBuilder";
+    const LayerDescriptorPool *const record = DescriptorPoolOf(pool, MAGIC_SMPPOOL, WHAT);
+    const LayerSamplerBuilder *const from = Record(builder, WHAT);
+    if (record == NULL || from == NULL) {
+        return;
+    }
+    DkSamplerDescriptor *const descriptor = Descriptor(record, id, WHAT);
+    DkSampler made;
+    if (descriptor != NULL && SamplerOf(&from->state, &made, WHAT)) {
+        dkSamplerDescriptorInitialize(descriptor, &made);
+    }
+}
+
+// Where a descriptor pool is and how many descriptors it holds, as it was made.
+#define POOL_GETTERS(object, type, magic)                                                         \
+    int Nvnl_nvn##object##GetSize(const type *pool) {                                             \
+        const LayerDescriptorPool *const record =                                                 \
+            DescriptorPoolOf(pool, magic, "nvn" #object "GetSize");                               \
+        return record != NULL ? record->count : 0;                                                \
+    }                                                                                             \
+    const NVNmemoryPool *Nvnl_nvn##object##GetMemoryPool(const type *pool) {                      \
+        const LayerDescriptorPool *const record =                                                 \
+            DescriptorPoolOf(pool, magic, "nvn" #object "GetMemoryPool");                         \
+        return record != NULL ? record->memory : NULL;                                            \
+    }                                                                                             \
+    ptrdiff_t Nvnl_nvn##object##GetMemoryOffset(const type *pool) {                               \
+        const LayerDescriptorPool *const record =                                                 \
+            DescriptorPoolOf(pool, magic, "nvn" #object "GetMemoryOffset");                       \
+        return record != NULL ? (ptrdiff_t)record->offset : 0;                                    \
+    }
+POOL_GETTERS(TexturePool, NVNtexturePool, MAGIC_TEXPOOL)
+POOL_GETTERS(SamplerPool, NVNsamplerPool, MAGIC_SMPPOOL)
+#undef POOL_GETTERS
 
 void Nvnl_nvnCommandBufferSetTexturePool(NVNcommandBuffer *cmd, const NVNtexturePool *pool) {
     static const char *const WHAT = "nvnCommandBufferSetTexturePool";

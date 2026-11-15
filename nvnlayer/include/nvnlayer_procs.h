@@ -13,8 +13,8 @@
 /// lookup itself, which every build has whole.
 ///
 /// Three lists, by what each build of the layer does with them:
-/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL and
-///   NVN_LAYER_PROCS_SYNC, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
+///   NVN_LAYER_PROCS_SYNC and NVN_LAYER_PROCS_SAMPLER, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231: the functions only the API 231 build has, compute's among them, which
@@ -113,6 +113,62 @@
     X(NVNboolean, nvnQueueBuilderGetCommandFlushThreshold,                                        \
       (const NVNqueueBuilder *builder, int *size))
 
+// The rest of a sampler: its compare, its levels, its border colour, what it and its builder
+// answer of themselves, and what the texture and sampler pools do.
+#define NVN_LAYER_PROCS_SAMPLER(X)                                                                \
+    X(void, nvnSamplerBuilderSetCompare,                                                          \
+      (NVNsamplerBuilder * builder, NVNcompareMode mode, NVNcompareFunc func))                    \
+    X(void, nvnSamplerBuilderSetReductionFilter,                                                  \
+      (NVNsamplerBuilder * builder, NVNsamplerReduction filter))                                  \
+    X(void, nvnSamplerBuilderSetLodClamp, (NVNsamplerBuilder * builder, float min, float max))    \
+    X(void, nvnSamplerBuilderSetLodBias, (NVNsamplerBuilder * builder, float bias))               \
+    X(void, nvnSamplerBuilderSetLodSnap, (NVNsamplerBuilder * builder, float snap))               \
+    X(void, nvnSamplerBuilderSetMaxAnisotropy, (NVNsamplerBuilder * builder, float anisotropy))   \
+    X(void, nvnSamplerBuilderSetBorderColor, (NVNsamplerBuilder * builder, const float *color))   \
+    X(void, nvnSamplerBuilderSetBorderColori, (NVNsamplerBuilder * builder, const int *color))    \
+    X(void, nvnSamplerBuilderSetBorderColorui,                                                    \
+      (NVNsamplerBuilder * builder, const uint32_t *color))                                       \
+    X(NVNdevice *, nvnSamplerBuilderGetDevice, (const NVNsamplerBuilder *builder))                \
+    X(void, nvnSamplerBuilderGetMinMagFilter,                                                     \
+      (const NVNsamplerBuilder *builder, NVNminFilter *min, NVNmagFilter *mag))                   \
+    X(void, nvnSamplerBuilderGetWrapMode,                                                         \
+      (const NVNsamplerBuilder *builder, NVNwrapMode *s, NVNwrapMode *t, NVNwrapMode *r))         \
+    X(void, nvnSamplerBuilderGetCompare,                                                          \
+      (const NVNsamplerBuilder *builder, NVNcompareMode *mode, NVNcompareFunc *func))             \
+    X(NVNsamplerReduction, nvnSamplerBuilderGetReductionFilter,                                   \
+      (const NVNsamplerBuilder *builder))                                                         \
+    X(void, nvnSamplerBuilderGetLodClamp,                                                         \
+      (const NVNsamplerBuilder *builder, float *min, float *max))                                 \
+    X(float, nvnSamplerBuilderGetLodBias, (const NVNsamplerBuilder *builder))                     \
+    X(float, nvnSamplerBuilderGetLodSnap, (const NVNsamplerBuilder *builder))                     \
+    X(float, nvnSamplerBuilderGetMaxAnisotropy, (const NVNsamplerBuilder *builder))               \
+    X(void, nvnSamplerBuilderGetBorderColor, (const NVNsamplerBuilder *builder, float *color))    \
+    X(void, nvnSamplerBuilderGetBorderColori, (const NVNsamplerBuilder *builder, int *color))     \
+    X(void, nvnSamplerBuilderGetBorderColorui,                                                    \
+      (const NVNsamplerBuilder *builder, uint32_t *color))                                        \
+    X(void, nvnSamplerGetMinMagFilter,                                                            \
+      (const NVNsampler *sampler, NVNminFilter *min, NVNmagFilter *mag))                          \
+    X(void, nvnSamplerGetWrapMode,                                                                \
+      (const NVNsampler *sampler, NVNwrapMode *s, NVNwrapMode *t, NVNwrapMode *r))                \
+    X(void, nvnSamplerGetCompare,                                                                 \
+      (const NVNsampler *sampler, NVNcompareMode *mode, NVNcompareFunc *func))                    \
+    X(NVNsamplerReduction, nvnSamplerGetReductionFilter, (const NVNsampler *sampler))             \
+    X(void, nvnSamplerGetLodClamp, (const NVNsampler *sampler, float *min, float *max))           \
+    X(float, nvnSamplerGetLodBias, (const NVNsampler *sampler))                                   \
+    X(float, nvnSamplerGetMaxAnisotropy, (const NVNsampler *sampler))                             \
+    X(void, nvnSamplerGetBorderColor, (const NVNsampler *sampler, float *color))                  \
+    X(void, nvnSamplerGetBorderColori, (const NVNsampler *sampler, int *color))                   \
+    X(void, nvnSamplerGetBorderColorui, (const NVNsampler *sampler, uint32_t *color))             \
+    X(NVNboolean, nvnSamplerCompare, (const NVNsampler *a, const NVNsampler *b))                  \
+    X(void, nvnSamplerPoolRegisterSamplerBuilder,                                                 \
+      (const NVNsamplerPool *pool, int id, const NVNsamplerBuilder *builder))                     \
+    X(int, nvnSamplerPoolGetSize, (const NVNsamplerPool *pool))                                   \
+    X(const NVNmemoryPool *, nvnSamplerPoolGetMemoryPool, (const NVNsamplerPool *pool))           \
+    X(ptrdiff_t, nvnSamplerPoolGetMemoryOffset, (const NVNsamplerPool *pool))                     \
+    X(int, nvnTexturePoolGetSize, (const NVNtexturePool *pool))                                   \
+    X(const NVNmemoryPool *, nvnTexturePoolGetMemoryPool, (const NVNtexturePool *pool))           \
+    X(ptrdiff_t, nvnTexturePoolGetMemoryOffset, (const NVNtexturePool *pool))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -198,7 +254,8 @@
     X(void, nvnWindowFinalize, (NVNwindow * window))                                              \
     NVN_LAYER_PROCS_TEXTURE(X)                                                                    \
     NVN_LAYER_PROCS_POOL(X)                                                                       \
-    NVN_LAYER_PROCS_SYNC(X)
+    NVN_LAYER_PROCS_SYNC(X)                                                                       \
+    NVN_LAYER_PROCS_SAMPLER(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

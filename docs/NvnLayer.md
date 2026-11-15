@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-A hundred and eighty functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and nineteen functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -160,7 +160,12 @@ A hundred and eighty functions, each recording the deko3d commands that do what 
   blit, colour formats only) and a row stride, and through a view of levels,
   whose first level is the one copied; a view with another part set is refused in a copy;
 - **programs** of the graphics stages, from DKSH modules (below);
-- **samplers** (the filters and the wrap modes), the **texture pool** and the **sampler pool**;
+- **samplers**: the filters, the wrap modes, the border colour (its four words, whichever of the float, signed
+  and unsigned setters gave them), the compare mode and function, the level clamp, bias and snap, the greatest
+  anisotropy and the reduction filter, each deko3d's own sampler field; the getters of a builder and of a sampler,
+  and `nvnSamplerCompare`, which holds for two samplers of one state;
+- the **texture pool** and the **sampler pool**, with where each is and how many descriptors it holds, and
+  `nvnSamplerPoolRegisterSamplerBuilder`, the descriptor a sampler made from the builder would get;
 - **the state objects**: blend, channel mask, colour, depth and stencil (the depth test, write and function),
   multisample, polygon (the cull face and the front face), vertex attributes (float formats of one to four
   components, and RGBA8) and vertex streams (the stride);
@@ -242,7 +247,7 @@ code as written, so a slot chosen at run time reads slot 2 k for both of its pai
   command memory.
 - **Orders.** Every order bit of `nvnCommandBufferBarrier` is deko3d's full barrier.
 - **Defaults.** The builders' and state objects' defaults are the layer's guess where nothing public says what a
-  driver's are (a sampler: nearest, clamped to its edge; depth: no test, written, less; polygons: nothing culled,
+  driver's are (a sampler: nearest, clamped to its edge, every level, nothing compared; depth: no test, written, less; polygons: nothing culled,
   counterclockwise in front). A program sets every state it relies on, which is also what makes it mean the same
   under ScarletNX.
 - **Storage.** A texture's storage size and alignment, a pool's page and the command memory a call takes are

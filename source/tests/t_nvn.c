@@ -1273,6 +1273,243 @@ static void EventCase(const char *name) {
                why[0] != '\0' ? why : NvnLayerError());
 }
 
+// ---- what a sampler and its builder answer of themselves, and the two descriptor pools
+
+// A game keeps one sampler for each state it draws with and finds it again by asking: the
+// getters and nvnSamplerCompare are how. The numbers set here are all exact in a float, so what
+// comes back is compared bit for bit, and none is the default of anything.
+
+/// A sampler builder on the suite's device with every setter called, @p bias its level bias.
+static void SamplerBuilder(NVNsamplerBuilder *builder, float bias) {
+    static const float border[4] = { 0.25f, 0.5f, 0.75f, 1.0f };
+    memset(builder, 0, sizeof(*builder));
+    nvn.nvn.nvnSamplerBuilderSetDevice(builder, &nvn.device);
+    nvn.nvn.nvnSamplerBuilderSetDefaults(builder);
+    nvn.nvn.nvnSamplerBuilderSetMinMagFilter(builder, NVN_MIN_FILTER_LINEAR_MIPMAP_NEAREST,
+                                             NVN_MAG_FILTER_LINEAR);
+    nvn.nvn.nvnSamplerBuilderSetWrapMode(builder, NVN_WRAP_MODE_REPEAT,
+                                         NVN_WRAP_MODE_MIRRORED_REPEAT,
+                                         NVN_WRAP_MODE_CLAMP_TO_BORDER);
+    nvn.nvn.nvnSamplerBuilderSetCompare(builder, NVN_COMPARE_MODE_COMPARE_R_TO_TEXTURE,
+                                        NVN_COMPARE_FUNC_GEQUAL);
+    nvn.nvn.nvnSamplerBuilderSetReductionFilter(builder, NVN_SAMPLER_REDUCTION_MAX);
+    nvn.nvn.nvnSamplerBuilderSetLodClamp(builder, 1.5f, 6.25f);
+    nvn.nvn.nvnSamplerBuilderSetLodBias(builder, bias);
+    nvn.nvn.nvnSamplerBuilderSetLodSnap(builder, 0.25f);
+    nvn.nvn.nvnSamplerBuilderSetMaxAnisotropy(builder, 4.0f);
+    nvn.nvn.nvnSamplerBuilderSetBorderColor(builder, border);
+}
+
+/// A float's bits, for Gives: the numbers here are exact, so the bits are the comparison.
+static long long Bits(float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+/// What SamplerBuilder set, as the getters of a builder (@p sampler NULL) or of a sampler give
+/// it.
+static void SamplerGives(char *why, size_t why_size, const NVNsamplerBuilder *builder,
+                         const NVNsampler *sampler, float bias) {
+    NVNminFilter min = NVN_MIN_FILTER_NEAREST;
+    NVNmagFilter mag = NVN_MAG_FILTER_NEAREST;
+    NVNwrapMode s = NVN_WRAP_MODE_CLAMP, t = NVN_WRAP_MODE_CLAMP, r = NVN_WRAP_MODE_CLAMP;
+    NVNcompareMode mode = NVN_COMPARE_MODE_NONE;
+    NVNcompareFunc func = NVN_COMPARE_FUNC_NEVER;
+    float low = -1.0f, high = -1.0f, got_bias, anisotropy;
+    float border[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
+    NVNsamplerReduction reduction;
+    if (sampler == NULL) {
+        nvn.nvn.nvnSamplerBuilderGetMinMagFilter(builder, &min, &mag);
+        nvn.nvn.nvnSamplerBuilderGetWrapMode(builder, &s, &t, &r);
+        nvn.nvn.nvnSamplerBuilderGetCompare(builder, &mode, &func);
+        nvn.nvn.nvnSamplerBuilderGetLodClamp(builder, &low, &high);
+        nvn.nvn.nvnSamplerBuilderGetBorderColor(builder, border);
+        reduction = nvn.nvn.nvnSamplerBuilderGetReductionFilter(builder);
+        got_bias = nvn.nvn.nvnSamplerBuilderGetLodBias(builder);
+        anisotropy = nvn.nvn.nvnSamplerBuilderGetMaxAnisotropy(builder);
+    } else {
+        nvn.nvn.nvnSamplerGetMinMagFilter(sampler, &min, &mag);
+        nvn.nvn.nvnSamplerGetWrapMode(sampler, &s, &t, &r);
+        nvn.nvn.nvnSamplerGetCompare(sampler, &mode, &func);
+        nvn.nvn.nvnSamplerGetLodClamp(sampler, &low, &high);
+        nvn.nvn.nvnSamplerGetBorderColor(sampler, border);
+        reduction = nvn.nvn.nvnSamplerGetReductionFilter(sampler);
+        got_bias = nvn.nvn.nvnSamplerGetLodBias(sampler);
+        anisotropy = nvn.nvn.nvnSamplerGetMaxAnisotropy(sampler);
+    }
+    Gives(why, why_size, "the min filter", min, NVN_MIN_FILTER_LINEAR_MIPMAP_NEAREST);
+    Gives(why, why_size, "the mag filter", mag, NVN_MAG_FILTER_LINEAR);
+    Gives(why, why_size, "the wrap mode of s", s, NVN_WRAP_MODE_REPEAT);
+    Gives(why, why_size, "the wrap mode of t", t, NVN_WRAP_MODE_MIRRORED_REPEAT);
+    Gives(why, why_size, "the wrap mode of r", r, NVN_WRAP_MODE_CLAMP_TO_BORDER);
+    Gives(why, why_size, "the compare mode", mode, NVN_COMPARE_MODE_COMPARE_R_TO_TEXTURE);
+    Gives(why, why_size, "the compare function", func, NVN_COMPARE_FUNC_GEQUAL);
+    Gives(why, why_size, "the reduction filter", reduction, NVN_SAMPLER_REDUCTION_MAX);
+    Gives(why, why_size, "the bits of the least level (1.5)", Bits(low), Bits(1.5f));
+    Gives(why, why_size, "the bits of the greatest level (6.25)", Bits(high), Bits(6.25f));
+    Gives(why, why_size, "the bits of the level bias", Bits(got_bias), Bits(bias));
+    Gives(why, why_size, "the bits of the greatest anisotropy (4)", Bits(anisotropy), Bits(4.0f));
+    Gives(why, why_size, "the bits of the border colour's red (0.25)", Bits(border[0]),
+          Bits(0.25f));
+    Gives(why, why_size, "the bits of the border colour's green (0.5)", Bits(border[1]),
+          Bits(0.5f));
+    Gives(why, why_size, "the bits of the border colour's blue (0.75)", Bits(border[2]),
+          Bits(0.75f));
+    Gives(why, why_size, "the bits of the border colour's alpha (1)", Bits(border[3]), Bits(1.0f));
+}
+
+/// Every setter of a sampler builder and what its getters then say, the level snap and the
+/// integer border colours among them, which only a builder gives back.
+static void SamplerBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNsamplerBuilder builder;
+    SamplerBuilder(&builder, -0.75f);
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnSamplerBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    SamplerGives(why, sizeof(why), &builder, NULL, -0.75f);
+    Gives(why, sizeof(why), "the bits of the builder's level snap (0.25)",
+          Bits(nvn.nvn.nvnSamplerBuilderGetLodSnap(&builder)), Bits(0.25f));
+    static const int signed_border[4] = { -1, 2, -3, 0x7fffffff };
+    int signed_back[4] = { 0, 0, 0, 0 };
+    nvn.nvn.nvnSamplerBuilderSetBorderColori(&builder, signed_border);
+    nvn.nvn.nvnSamplerBuilderGetBorderColori(&builder, signed_back);
+    static const uint32_t unsigned_border[4] = { 0xfffffffeu, 5u, 0x80000000u, 7u };
+    uint32_t unsigned_back[4] = { 0, 0, 0, 0 };
+    nvn.nvn.nvnSamplerBuilderSetBorderColorui(&builder, unsigned_border);
+    nvn.nvn.nvnSamplerBuilderGetBorderColorui(&builder, unsigned_back);
+    for (int i = 0; i < 4; ++i) {
+        Gives(why, sizeof(why), "a channel of the signed border colour", signed_back[i],
+              signed_border[i]);
+        Gives(why, sizeof(why), "a channel of the unsigned border colour", unsigned_back[i],
+              unsigned_border[i]);
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// A sampler says what its builder had, the integer border colours as the words of the float
+/// one; two samplers of one state compare equal, and one with another level bias does not.
+static void SamplerCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNsamplerBuilder builder;
+    static _Alignas(8) NVNsampler sampler, same, other;
+    SamplerBuilder(&builder, -0.75f);
+    const bool made = nvn.nvn.nvnSamplerInitialize(&sampler, &builder) &&
+                      nvn.nvn.nvnSamplerInitialize(&same, &builder);
+    SamplerBuilder(&builder, 0.5f);
+    if (!made || !nvn.nvn.nvnSamplerInitialize(&other, &builder)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnSamplerInitialize answered false"));
+        return;
+    }
+    SamplerGives(why, sizeof(why), NULL, &sampler, -0.75f);
+    int signed_back[4] = { 0, 0, 0, 0 };
+    uint32_t unsigned_back[4] = { 0, 0, 0, 0 };
+    nvn.nvn.nvnSamplerGetBorderColori(&sampler, signed_back);
+    nvn.nvn.nvnSamplerGetBorderColorui(&sampler, unsigned_back);
+    Gives(why, sizeof(why), "the border colour's red (0.25) read as a signed word", signed_back[0],
+          Bits(0.25f));
+    Gives(why, sizeof(why), "the border colour's alpha (1) read as an unsigned word",
+          unsigned_back[3], Bits(1.0f));
+    Gives(why, sizeof(why), "whether two samplers of one state are the same",
+          nvn.nvn.nvnSamplerCompare(&sampler, &same), 1);
+    Gives(why, sizeof(why), "whether samplers with level biases of -0.75 and 0.5 are the same",
+          nvn.nvn.nvnSamplerCompare(&sampler, &other), 0);
+    nvn.nvn.nvnSamplerFinalize(&sampler);
+    nvn.nvn.nvnSamplerFinalize(&same);
+    nvn.nvn.nvnSamplerFinalize(&other);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// A texture pool and a sampler pool in the readback pool's memory: where each says it is and
+/// how many descriptors it holds, and a sampler registered straight from its builder, whose
+/// descriptor has to be the bytes a sampler made from that builder gets.
+static void DescriptorPoolsCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNtexturePool textures;
+    static _Alignas(8) NVNsamplerPool samplers;
+    static _Alignas(8) NVNsampler sampler;
+    const ptrdiff_t texture_offset = (ptrdiff_t)POOL_PAGE, sampler_offset = 3 * (ptrdiff_t)POOL_PAGE;
+    const int texture_count = 96, sampler_count = 64;
+    uint8_t *const bytes = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    if (bytes == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    memset(bytes, 0, READ_POOL_BYTES);
+    const bool textures_up =
+        nvn.nvn.nvnTexturePoolInitialize(&textures, &nvn.read_pool, texture_offset, texture_count);
+    const bool samplers_up = textures_up && nvn.nvn.nvnSamplerPoolInitialize(
+                                                &samplers, &nvn.read_pool, sampler_offset,
+                                                sampler_count);
+    _Alignas(8) NVNsamplerBuilder builder;
+    SamplerBuilder(&builder, -0.75f);
+    const bool sampler_up = samplers_up && nvn.nvn.nvnSamplerInitialize(&sampler, &builder);
+    if (!sampler_up) {
+        if (samplers_up) {
+            nvn.nvn.nvnSamplerPoolFinalize(&samplers);
+        }
+        if (textures_up) {
+            nvn.nvn.nvnTexturePoolFinalize(&textures);
+        }
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("a texture pool, a sampler pool or a sampler did not initialize"));
+        return;
+    }
+    Gives(why, sizeof(why), "the texture pool's size", nvn.nvn.nvnTexturePoolGetSize(&textures),
+          texture_count);
+    Gives(why, sizeof(why), "the texture pool's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnTexturePoolGetMemoryPool(&textures),
+          (long long)(uintptr_t)&nvn.read_pool);
+    Gives(why, sizeof(why), "the texture pool's memory offset",
+          (long long)nvn.nvn.nvnTexturePoolGetMemoryOffset(&textures), (long long)texture_offset);
+    Gives(why, sizeof(why), "the sampler pool's size", nvn.nvn.nvnSamplerPoolGetSize(&samplers),
+          sampler_count);
+    Gives(why, sizeof(why), "the sampler pool's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnSamplerPoolGetMemoryPool(&samplers),
+          (long long)(uintptr_t)&nvn.read_pool);
+    Gives(why, sizeof(why), "the sampler pool's memory offset",
+          (long long)nvn.nvn.nvnSamplerPoolGetMemoryOffset(&samplers), (long long)sampler_offset);
+    // Descriptors 40 and 41, 32 bytes each: the sampler's, and the builder's with no sampler.
+    nvn.nvn.nvnSamplerPoolRegisterSampler(&samplers, 40, &sampler);
+    nvn.nvn.nvnSamplerPoolRegisterSamplerBuilder(&samplers, 41, &builder);
+    const uint8_t *const from_sampler = bytes + sampler_offset + 40 * 32;
+    const uint8_t *const from_builder = bytes + sampler_offset + 41 * 32;
+    uint32_t differ = 32, set = 0;
+    for (uint32_t i = 32; i-- > 0u;) {
+        if (from_sampler[i] != from_builder[i]) {
+            differ = i;
+        }
+        set += from_sampler[i] != 0u;
+    }
+    if (why[0] == '\0' && (differ != 32u || set == 0u)) {
+        snprintf(why, sizeof(why), "the descriptor registered from the builder differs from the "
+                 "sampler's at byte %u of 32 (32 is none): 0x%02x against 0x%02x; %u bytes of "
+                 "the sampler's are not nought, where a registered sampler leaves some",
+                 (unsigned)differ, differ < 32u ? from_builder[differ] : 0u,
+                 differ < 32u ? from_sampler[differ] : 0u, (unsigned)set);
+    }
+    nvn.nvn.nvnSamplerFinalize(&sampler);
+    nvn.nvn.nvnSamplerPoolFinalize(&samplers);
+    nvn.nvn.nvnTexturePoolFinalize(&textures);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 /// The cases on the suite's own device, from the lookup to the window.
 static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
@@ -1314,11 +1551,18 @@ static void LayerCases(void) {
                                              "which of its sizes were set";
     static const char *const EVENT = "an event keeps what the processor signals: a write, an "
                                      "add and an add that wraps";
+    static const char *const SAMPLER_BUILDER = "a sampler builder gives back each number it "
+                                               "was set";
+    static const char *const SAMPLER = "a sampler says what its builder had, and is the same "
+                                       "as another of that state alone";
+    static const char *const DESCRIPTOR_POOLS = "the texture and sampler pools say where they "
+                                                "are, and a builder registers as its sampler";
     const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
-                                         UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT, WINDOW };
+                                         UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT,
+                                         SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS, WINDOW };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
@@ -1455,6 +1699,9 @@ static void LayerCases(void) {
     QueueErrorCase(QUEUE_ERROR);
     QueueBuilderCase(QUEUE_BUILDER);
     EventCase(EVENT);
+    SamplerBuilderCase(SAMPLER_BUILDER);
+    SamplerCase(SAMPLER);
+    DescriptorPoolsCase(DESCRIPTOR_POOLS);
 
 #if NVN_LAYER_API < 231
     const bool screen_up = ViewerScreenUp();
