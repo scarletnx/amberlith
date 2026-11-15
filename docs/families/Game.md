@@ -269,7 +269,8 @@ out from its place, its texture, its level and the frame (`WimsyComputeTexel`), 
 normalised value that byte is, and a chain's last target is its clear and eleven squares, the
 later over the earlier (`WimsyChainTexel`). One more case a heavy level reads them back: a texel
 each frame, and on the five judged frames every level of every compute texture and every chain's
-last target whole, each texel held to those bytes. A texture a frame old, a level never stored,
+last target whole, each texel held to those bytes; the copies are a list of their own after the
+frame's present, in no frame's time. A texture a frame old, a level never stored,
 a target a pass never reached or a store the copy does not see is that case's. In the frame a
 screen's pixel is held to the texels under it, a 32nd of a pixel to spare, so a wall seen from
 the lane holds a compute texture to two or three texels a pixel and a screen a frame old is
