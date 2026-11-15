@@ -234,6 +234,14 @@ class Programs(unittest.TestCase):
         self.assertEqual(one("SEL R1, R2, R3, !P4"), alu(0x007, 1, 1, 2, b32_8=3, b87_3=4, b90_1=1))
         self.assertEqual(one("LDC R6, c[1][R1 + 0x10]"), fix(0xB82, b16_8=6, b24_8=1, b38_16=0x10, b54_5=1, b73_3=4))
 
+    def test_a_repeat_writes_its_lines_out(self):
+        head = ".stage compute\n.local 1 1 1\n"
+        body = "IADD3 R1, R1, R1, RZ\nFADD R2, R2, R1\n"
+        looped, _, _ = asm.assemble(head + "MOV R1, 1\n.repeat 3\n" + body + ".end\nEXIT\n")
+        written, _, _ = asm.assemble(head + "MOV R1, 1\n" + body * 3 + "EXIT\n")
+        self.assertEqual(looped, written)
+        self.assertEqual(len(words(looped, False)), 1 + 2 * 3 + 2)
+
     def test_constants_follow_the_code_on_a_0x100_boundary(self):
         code, control, _ = asm.assemble(".stage compute\n.local 1 1 1\n.const 0x11223344 1.0f\nEXIT\n")
         self.assertEqual(len(code), 0x200)
@@ -291,6 +299,11 @@ class Refusals(unittest.TestCase):
         self.refused("MOV R1, R2 ! 200:4=1\nEXIT\n", "the field 200:4 is past the instruction's 128 bits")
         self.refused("MOV R1, R2\n", "the program ends on MOV, where its last instruction has to be an EXIT or a BRA")
         self.refused("x:\nx:\nEXIT\n", "line 4: the label x is there twice")
+        self.refused(".repeat 2\nx: NOP\n.end\nEXIT\n", "line 4: the label x is there twice")
+        self.refused(".repeat 0\nNOP\n.end\nEXIT\n", "line 3: .repeat takes a count from 1 to 256, and has 0")
+        self.refused(".repeat 2\n.repeat 2\nNOP\n.end\n.end\nEXIT\n", "line 4: .repeat inside the .repeat of line 3")
+        self.refused("NOP\n.end\nEXIT\n", "line 4: .end with no .repeat before it")
+        self.refused(".repeat 2\nNOP\nEXIT\n", "line 3: .repeat with no .end after it")
         self.refused("EXIT\n", "the source names no .stage", head="")
         self.refused("EXIT\n", ".stage takes one of vertex, fragment, compute, task, mesh", head=".stage geometry\n")
         self.refused("EXIT\n", "a compute program needs .local X Y Z", head=".stage compute\n")
