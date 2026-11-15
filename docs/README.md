@@ -31,6 +31,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[fs](./families/Fs.md)**, **[kernel](./families/Kernel.md)** and **[display](./families/Display.md)**
   - **[Video](./families/Video.md)** - the VIC, and **[nvdec](./families/Nvdec.md)**, VP9 through the decode engine
   - **[Audio](./families/Audio.md)**, **[service](./families/Service.md)** and **[net](./families/Net.md)**
-  - **[Game](./families/Game.md)** - one scene that runs everything at once, as a game does
+  - **[Game](./families/Game.md)** - one scene that runs everything at once, as a game does, and the levels that
+    draw Wimsy as a game draws a character
   - **[libc](./families/Libc.md)** - the C library under every frontend
 - **[Credits](./Credits.md)**

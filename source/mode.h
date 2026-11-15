@@ -78,7 +78,10 @@ extern "C" {
 ///             program has, and times its frames. It runs only when named until a console has
 ///             run it.
 ///
-/// Seven that are not words. `vram=<MiB>`, the graphics memory the machine has, as its runner read
+/// Eight that are not words. `level=<n>`, a level of the game family's Wimsy scene (wimsyref.h),
+/// a whole number from 0 to WIMSY_LEVELS - 1, one word a level: the run draws each level named
+/// and none without one; anything else is refused and said in the mode line with the levels in
+/// effect. `vram=<MiB>`, the graphics memory the machine has, as its runner read
 /// it, a whole number of MiB from 1 to MODE_VRAM_MAX: with less than TEX8K_VRAM_MIB (tex8kref.h)
 /// the tex8k suite's textures are not tried, each device's case skipped as unavailable; without
 /// the word they run, as on the console; anything else is refused and said in the mode line with
@@ -179,10 +182,10 @@ typedef enum {
 #define MODE_FOLDER_MAX (MODE_HASH_MAX + 1u + MODE_LABEL_MAX)
 
 /// Room for every word ModeKey writes with all of them on, `frames=` and `vram=` at their widest,
-/// `machine=` with a name and a version as long as they may be and MODE_SKIPS_MAX `skip=` words at
-/// their longest, 320 characters: the support suite holds the widest to it, and the journal's
-/// fields are sized from it (journal.h, JOURNAL_MODE_MAX).
-#define MODE_KEY_MAX 328u
+/// `machine=` with a name and a version as long as they may be, MODE_SKIPS_MAX `skip=` words at
+/// their longest and five `level=` words, 360 characters: the support suite holds the widest to
+/// it, and the journal's fields are sized from it (journal.h, JOURNAL_MODE_MAX).
+#define MODE_KEY_MAX 368u
 
 /// How many `skip=<suite>` words a mode file may have, and the longest suite name one takes: every
 /// suite edenprobe has fits, the longest today twelve characters.
@@ -208,6 +211,8 @@ typedef struct {
 #define MODE_FRAMES_DEFAULT 600u
 #define MODE_FRAMES_MAX 36000u
 #define MODE_FRAMES_QUOTED 16u
+/// How much of a refused `level=` value the mode line quotes.
+#define MODE_LEVEL_QUOTED 8u
 /// The most `vram=` takes, a TiB in MiB, and how much of a refused value the mode line quotes.
 #define MODE_VRAM_MAX 1048576u
 #define MODE_VRAM_QUOTED 16u
@@ -304,6 +309,13 @@ typedef struct {
     bool frames_was_refused;
     char frames_refused[MODE_FRAMES_QUOTED + 1u];
     bool frames_refused_cut;
+    /// `level=<n>`: the Wimsy scene's levels the file names, bit n for level n.
+    uint32_t levels;
+    /// The last `level=` refused, as written and cut to fit, for the mode line. A refusal leaves
+    /// the levels named alone.
+    bool level_was_refused;
+    char level_refused[MODE_LEVEL_QUOTED + 1u];
+    bool level_refused_cut;
     /// `vram=<MiB>`: the machine's graphics memory when the file has a good one, the last of
     /// several, and nought when it has none, which holds no texture back.
     uint32_t vram;

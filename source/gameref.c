@@ -284,19 +284,24 @@ static void AppendMeasure(char *out, size_t out_size, const char *what,
 }
 
 size_t GameDescribeFrames(char *out, size_t out_size, const GameTimes *times) {
+    return GameDescribeFramesOf(out, out_size, "game", times);
+}
+
+size_t GameDescribeFramesOf(char *out, size_t out_size, const char *scene,
+                            const GameTimes *times) {
     if (out == NULL || out_size == 0u) {
         return 0;
     }
     out[0] = '\0';
-    if (times == NULL) {
+    if (times == NULL || scene == NULL) {
         return 0;
     }
     const GameFrameStats *const present = &times->present;
     const uint64_t total = present->total + times->warmup_present;
     Append(out, out_size,
-           "game: %u frame%s in %.2f s; frame 0, the warm-up, left out of the times (%u us "
+           "%s: %u frame%s in %.2f s; frame 0, the warm-up, left out of the times (%u us "
            "present to present, %u us the main thread's part, %u us the render thread's)",
-           (unsigned)times->frames, times->frames == 1u ? "" : "s", (double)total / 1e6,
+           scene, (unsigned)times->frames, times->frames == 1u ? "" : "s", (double)total / 1e6,
            (unsigned)times->warmup_present, (unsigned)times->warmup_main,
            (unsigned)times->warmup_render);
     if (present->frames == 0u) {
@@ -323,21 +328,29 @@ size_t GameDescribeFrames(char *out, size_t out_size, const GameTimes *times) {
     return strlen(out);
 }
 
-size_t GameDescribeWork(char *out, size_t out_size, const GameTimes *times) {
+size_t GameDescribePartsOf(char *out, size_t out_size, const char *scene,
+                           const GameTimes *times) {
     if (out == NULL || out_size == 0u) {
         return 0;
     }
     out[0] = '\0';
-    if (times == NULL) {
+    if (times == NULL || scene == NULL) {
         return 0;
     }
-    Append(out, out_size, "game: past the warm-up");
+    Append(out, out_size, "%s: past the warm-up", scene);
     if (times->present.frames == 0u) {
         Append(out, out_size, ", no frame to time");
     } else {
         AppendMeasure(out, out_size, "the main thread's part", &times->main_part);
         AppendMeasure(out, out_size, "the render thread's part, the graphics unit's in it",
                       &times->render_part);
+    }
+    return strlen(out);
+}
+
+size_t GameDescribeWork(char *out, size_t out_size, const GameTimes *times) {
+    if (GameDescribePartsOf(out, out_size, "game", times) == 0u) {
+        return 0;
     }
     const GameThreadTimes *const threads = &times->threads;
     Append(out, out_size,
