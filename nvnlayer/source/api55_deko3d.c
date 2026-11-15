@@ -549,6 +549,8 @@ void Nvnl_nvnTextureBuilderSetDefaults(NVNtextureBuilder *builder) {
     record->format = NVN_FORMAT_NONE;
     record->width = 1;
     record->height = 1;
+    record->depth = 1;
+    record->levels = 1;
 }
 
 void Nvnl_nvnTextureBuilderSetDevice(NVNtextureBuilder *builder, NVNdevice *device) {
@@ -596,6 +598,40 @@ void Nvnl_nvnTextureBuilderSetStorage(NVNtextureBuilder *builder, NVNmemoryPool 
     }
 }
 
+// A builder keeps whatever number it is given, as NVN's does: what the layer cannot make of it
+// is said when a size is asked or the texture is made (LayoutOf), with the number.
+#define BUILDER_SET(name, type, field)                                                            \
+    void Nvnl_nvnTextureBuilderSet##name(NVNtextureBuilder *builder, type value) {                \
+        LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSet" #name);        \
+        if (record != NULL) {                                                                     \
+            record->field = value;                                                                \
+        }                                                                                         \
+    }
+BUILDER_SET(Width, int, width)
+BUILDER_SET(Height, int, height)
+BUILDER_SET(Depth, int, depth)
+BUILDER_SET(Levels, int, levels)
+BUILDER_SET(Samples, int, samples)
+#undef BUILDER_SET
+
+#define BUILDER_GET(name, type, field, none)                                                      \
+    type Nvnl_nvnTextureBuilderGet##name(const NVNtextureBuilder *builder) {                      \
+        const LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderGet" #name);  \
+        return record != NULL ? (type)record->field : (none);                                     \
+    }
+BUILDER_GET(Device, NVNdevice *, device, NULL)
+BUILDER_GET(Flags, NVNtextureFlags, flags, 0)
+BUILDER_GET(Target, NVNtextureTarget, target, 0)
+BUILDER_GET(Format, NVNformat, format, NVN_FORMAT_NONE)
+BUILDER_GET(Width, int, width, 0)
+BUILDER_GET(Height, int, height, 0)
+BUILDER_GET(Depth, int, depth, 0)
+BUILDER_GET(Levels, int, levels, 0)
+BUILDER_GET(Samples, int, samples, 0)
+BUILDER_GET(MemoryPool, NVNmemoryPool *, pool, NULL)
+BUILDER_GET(MemoryOffset, ptrdiff_t, offset, 0)
+#undef BUILDER_GET
+
 /// The deko3d format of an NVN one, or DkImageFormat_None for one the layer has not mapped.
 static DkImageFormat FormatOf(NVNformat format) {
     switch (format) {
@@ -640,6 +676,24 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
         LayerComplain("%s: a %dx%d texture", what, builder->width, builder->height);
         return false;
     }
+    // The levels a texture of this size can have: one, and one more for each halving of its
+    // longer side down to a texel.
+    int most = 1;
+    for (int side = builder->width > builder->height ? builder->width : builder->height; side > 1;
+         side >>= 1) {
+        ++most;
+    }
+    if (builder->levels < 1 || builder->levels > most) {
+        LayerComplain("%s: %d levels for a %dx%d texture, which has 1 to %d", what,
+                      builder->levels, builder->width, builder->height, most);
+        return false;
+    }
+    if (builder->depth != 1 || builder->samples > 1 || builder->samples < 0) {
+        LayerComplain("%s: a depth of %d and %d samples, and the layer takes a depth of 1 and no "
+                      "multisampling (0 or 1 samples) yet",
+                      what, builder->depth, builder->samples);
+        return false;
+    }
     DkImageLayoutMaker maker;
     dkImageLayoutMakerDefaults(&maker, DeviceUse(device));
     maker.type = DkImageType_2D;
@@ -658,6 +712,7 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
     }
     maker.dimensions[0] = (uint32_t)builder->width;
     maker.dimensions[1] = (uint32_t)builder->height;
+    maker.mipLevels = (uint32_t)builder->levels;
     dkImageLayoutInitialize(layout, &maker);
     return true;
 }
@@ -703,14 +758,139 @@ NVNboolean Nvnl_nvnTextureInitialize(NVNtexture *texture,
     memset(texture, 0, sizeof(*texture));
     dkImageInitialize(&record->image, &layout, pool->block, (uint32_t)from->offset);
     record->magic = MAGIC_TEXTURE;
+    record->flags = from->flags;
+    record->target = from->target;
+    record->format = from->format;
+    record->width = from->width;
+    record->height = from->height;
+    record->depth = from->depth;
+    record->levels = from->levels;
+    record->samples = from->samples;
+    record->pool = from->pool;
+    record->offset = from->offset;
     return 1;
 }
+
+#define TEXTURE_GET(name, type, field, none)                                                      \
+    type Nvnl_nvnTextureGet##name(const NVNtexture *texture) {                                    \
+        const LayerTexture *const record = TextureOf(texture, "nvnTextureGet" #name);             \
+        return record != NULL ? (type)record->field : (none);                                     \
+    }
+TEXTURE_GET(Flags, NVNtextureFlags, flags, 0)
+TEXTURE_GET(Target, NVNtextureTarget, target, 0)
+TEXTURE_GET(Format, NVNformat, format, NVN_FORMAT_NONE)
+TEXTURE_GET(Width, int, width, 0)
+TEXTURE_GET(Height, int, height, 0)
+TEXTURE_GET(Depth, int, depth, 0)
+TEXTURE_GET(Levels, int, levels, 0)
+TEXTURE_GET(Samples, int, samples, 0)
+TEXTURE_GET(MemoryPool, NVNmemoryPool *, pool, NULL)
+TEXTURE_GET(MemoryOffset, ptrdiff_t, offset, 0)
+#undef TEXTURE_GET
 
 void Nvnl_nvnTextureFinalize(NVNtexture *texture) {
     LayerTexture *const record = TextureOf(texture, "nvnTextureFinalize");
     if (record != NULL) {
         record->magic = 0;
     }
+}
+
+// ---- texture views
+
+// A view is a few numbers the program owns, with no device behind it: each part is either set
+// or left to the texture, and a getter says which with its result.
+
+void Nvnl_nvnTextureViewSetDefaults(NVNtextureView *view) {
+    if (Record(view, "nvnTextureViewSetDefaults") != NULL) {
+        memset(view, 0, sizeof(*view));
+    }
+}
+
+void Nvnl_nvnTextureViewSetLevels(NVNtextureView *view, int base, int count) {
+    LayerView *const record = Record(view, "nvnTextureViewSetLevels");
+    if (record != NULL) {
+        record->set |= VIEW_LEVELS;
+        record->base_level = base;
+        record->levels = count;
+    }
+}
+
+void Nvnl_nvnTextureViewSetLayers(NVNtextureView *view, int first, int count) {
+    LayerView *const record = Record(view, "nvnTextureViewSetLayers");
+    if (record != NULL) {
+        record->set |= VIEW_LAYERS;
+        record->first_layer = first;
+        record->layers = count;
+    }
+}
+
+void Nvnl_nvnTextureViewSetFormat(NVNtextureView *view, NVNformat format) {
+    LayerView *const record = Record(view, "nvnTextureViewSetFormat");
+    if (record != NULL) {
+        record->set |= VIEW_FORMAT;
+        record->format = format;
+    }
+}
+
+void Nvnl_nvnTextureViewSetTarget(NVNtextureView *view, NVNtextureTarget target) {
+    LayerView *const record = Record(view, "nvnTextureViewSetTarget");
+    if (record != NULL) {
+        record->set |= VIEW_TARGET;
+        record->target = target;
+    }
+}
+
+NVNboolean Nvnl_nvnTextureViewGetLevels(const NVNtextureView *view, int *base, int *count) {
+    const LayerView *const record = Record(view, "nvnTextureViewGetLevels");
+    if (record == NULL) {
+        return 0;
+    }
+    *base = record->base_level;
+    *count = record->levels;
+    return (record->set & VIEW_LEVELS) != 0;
+}
+
+NVNboolean Nvnl_nvnTextureViewGetLayers(const NVNtextureView *view, int *first, int *count) {
+    const LayerView *const record = Record(view, "nvnTextureViewGetLayers");
+    if (record == NULL) {
+        return 0;
+    }
+    *first = record->first_layer;
+    *count = record->layers;
+    return (record->set & VIEW_LAYERS) != 0;
+}
+
+NVNboolean Nvnl_nvnTextureViewGetFormat(const NVNtextureView *view, NVNformat *format) {
+    const LayerView *const record = Record(view, "nvnTextureViewGetFormat");
+    if (record == NULL) {
+        return 0;
+    }
+    *format = record->format;
+    return (record->set & VIEW_FORMAT) != 0;
+}
+
+NVNboolean Nvnl_nvnTextureViewGetTarget(const NVNtextureView *view, NVNtextureTarget *target) {
+    const LayerView *const record = Record(view, "nvnTextureViewGetTarget");
+    if (record == NULL) {
+        return 0;
+    }
+    *target = record->target;
+    return (record->set & VIEW_TARGET) != 0;
+}
+
+NVNboolean Nvnl_nvnTextureViewCompare(const NVNtextureView *a, const NVNtextureView *b) {
+    const LayerView *const x = Record(a, "nvnTextureViewCompare");
+    const LayerView *const y = Record(b, "nvnTextureViewCompare");
+    if (x == NULL || y == NULL || x->set != y->set) {
+        return 0;
+    }
+    // The same view: the same parts set, and each part set the same.
+    return ((x->set & VIEW_LEVELS) == 0 ||
+            (x->base_level == y->base_level && x->levels == y->levels)) &&
+           ((x->set & VIEW_LAYERS) == 0 ||
+            (x->first_layer == y->first_layer && x->layers == y->layers)) &&
+           ((x->set & VIEW_FORMAT) == 0 || x->format == y->format) &&
+           ((x->set & VIEW_TARGET) == 0 || x->target == y->target);
 }
 
 // ---- command buffers
@@ -921,15 +1101,45 @@ static DkImageRect RectOf(const NVNcopyRegion *region) {
     return rect;
 }
 
+/// deko3d's view of @p texture as @p view sees it in a copy, a NULL one being the whole texture:
+/// false with a complaint for a part the layer does not take there yet. Of a view's parts a
+/// copy here takes its levels, and copies the first of them.
+static bool CopyView(const char *what, const LayerTexture *texture, const NVNtextureView *view,
+                     DkImageView *out) {
+    dkImageViewDefaults(out, &texture->image);
+    if (view == NULL) {
+        return true;
+    }
+    const LayerView *const record = Record(view, what);
+    if (record == NULL) {
+        return false;
+    }
+    if ((record->set & ~VIEW_LEVELS) != 0) {
+        LayerComplain("%s: a view with parts 0x%x set, and of a view the layer takes its levels "
+                      "(0x%x) in a copy",
+                      what, (unsigned)record->set, (unsigned)VIEW_LEVELS);
+        return false;
+    }
+    if ((record->set & VIEW_LEVELS) != 0) {
+        if (record->base_level < 0 || record->levels < 1 ||
+            record->base_level + record->levels > texture->levels) {
+            LayerComplain("%s: a view of %d levels from level %d, of a texture that has %d", what,
+                          record->levels, record->base_level, texture->levels);
+            return false;
+        }
+        out->mipLevelOffset = (uint8_t)record->base_level;
+        out->mipLevelCount = (uint8_t)record->levels;
+    }
+    return true;
+}
+
 /// deko3d's flags for NVN's copy @p flags, of which @p mirrors are the mirror bits the copy can
-/// take: false with a complaint for a view, or a flag the layer does not take there yet.
-static bool CopyFlags(const char *what, const NVNtextureView *view, int flags, int mirrors,
-                      uint32_t *blit) {
+/// take: false with a complaint for a flag the layer does not take there yet.
+static bool CopyFlags(const char *what, int flags, int mirrors, uint32_t *blit) {
     *blit = 0;
-    if (view != NULL || (flags & ~mirrors) != 0) {
-        LayerComplain("%s: %s view and copy flags 0x%x, and the layer takes no view and of the "
-                      "flags only 0x%x here",
-                      what, view != NULL ? "a" : "no", (unsigned)flags, (unsigned)mirrors);
+    if ((flags & ~mirrors) != 0) {
+        LayerComplain("%s: copy flags 0x%x, and of the flags the layer takes only 0x%x here", what,
+                      (unsigned)flags, (unsigned)mirrors);
         return false;
     }
     if ((flags & NVN_COPY_FLAGS_MIRROR_X_BIT) != 0) {
@@ -954,12 +1164,12 @@ void Nvnl_nvnCommandBufferCopyTextureToBuffer(NVNcommandBuffer *cmd,
     // deko3d mirrors a copy to a buffer in y alone (the copy engine stepping backwards); x is
     // the 2D engine's, between images.
     uint32_t blit = 0;
-    if (!CopyFlags("nvnCommandBufferCopyTextureToBuffer", view, flags, NVN_COPY_FLAGS_MIRROR_Y_BIT,
-                   &blit)) {
+    DkImageView from;
+    if (!CopyFlags("nvnCommandBufferCopyTextureToBuffer", flags, NVN_COPY_FLAGS_MIRROR_Y_BIT,
+                   &blit) ||
+        !CopyView("nvnCommandBufferCopyTextureToBuffer", source, view, &from)) {
         return;
     }
-    DkImageView from;
-    dkImageViewDefaults(&from, &source->image);
     const DkImageRect rect = RectOf(region);
     const DkCopyBuf to = { buffer, record->copy_row_stride, 0 };
     dkCmdBufCopyImageToBuffer(record->cmdbuf, &from, &rect, &to, blit);
@@ -972,13 +1182,13 @@ void Nvnl_nvnCommandBufferCopyBufferToTexture(NVNcommandBuffer *cmd, NVNbufferAd
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferCopyBufferToTexture");
     const LayerTexture *const target = TextureOf(texture, "nvnCommandBufferCopyBufferToTexture");
     uint32_t blit = 0;
+    DkImageView to;
     if (record == NULL || target == NULL ||
-        !CopyFlags("nvnCommandBufferCopyBufferToTexture", view, flags,
-                   NVN_COPY_FLAGS_MIRROR_X_BIT | NVN_COPY_FLAGS_MIRROR_Y_BIT, &blit)) {
+        !CopyFlags("nvnCommandBufferCopyBufferToTexture", flags,
+                   NVN_COPY_FLAGS_MIRROR_X_BIT | NVN_COPY_FLAGS_MIRROR_Y_BIT, &blit) ||
+        !CopyView("nvnCommandBufferCopyBufferToTexture", target, view, &to)) {
         return;
     }
-    DkImageView to;
-    dkImageViewDefaults(&to, &target->image);
     const DkImageRect rect = RectOf(region);
     const DkCopyBuf from = { buffer, record->copy_row_stride, 0 };
     dkCmdBufCopyBufferToImage(record->cmdbuf, &from, &to, &rect, blit);
@@ -993,9 +1203,11 @@ void Nvnl_nvnCommandBufferCopyTextureToTexture(
     const LayerTexture *const from = TextureOf(source, WHAT);
     const LayerTexture *const to = TextureOf(destination, WHAT);
     uint32_t blit = 0;
+    DkImageView src, dst;
     if (record == NULL || from == NULL || to == NULL ||
-        !CopyFlags(WHAT, source_view != NULL ? source_view : destination_view, flags,
-                   NVN_COPY_FLAGS_MIRROR_X_BIT | NVN_COPY_FLAGS_MIRROR_Y_BIT, &blit)) {
+        !CopyFlags(WHAT, flags, NVN_COPY_FLAGS_MIRROR_X_BIT | NVN_COPY_FLAGS_MIRROR_Y_BIT,
+                   &blit) ||
+        !CopyView(WHAT, from, source_view, &src) || !CopyView(WHAT, to, destination_view, &dst)) {
         return;
     }
     if (source_region->width != destination_region->width ||
@@ -1008,9 +1220,6 @@ void Nvnl_nvnCommandBufferCopyTextureToTexture(
                       destination_region->depth);
         return;
     }
-    DkImageView src, dst;
-    dkImageViewDefaults(&src, &from->image);
-    dkImageViewDefaults(&dst, &to->image);
     const DkImageRect src_rect = RectOf(source_region);
     const DkImageRect dst_rect = RectOf(destination_region);
     dkCmdBufCopyImage(record->cmdbuf, &src, &src_rect, &dst, &dst_rect, blit);
