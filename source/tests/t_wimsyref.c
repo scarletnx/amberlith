@@ -402,6 +402,136 @@ static void CheckModelMachines(void) {
            &t);
 }
 
+static void CheckScene(void) {
+    Tally t = { 0, NULL };
+    static WimsyWorldVertex vertices[WIMSY_WORLD_VERTICES_MAX];
+    WimsyWorldDraw draws[WIMSY_WORLD_DRAWS_MAX];
+    uint32_t count = 0;
+    Expect(&t, WimsyWorldOf(1u, vertices, &count, draws) == 0u && count == 0u,
+           "level 1 has no world");
+    // 34 rows of six floor quads and a lane's, four standing quads and four marks.
+    const uint32_t made = WimsyWorldOf(2u, vertices, &count, draws);
+    Expect(&t, made == 4u && count == (34u * 6u + 34u + 4u + 4u) * 6u &&
+                   count <= WIMSY_WORLD_VERTICES_MAX && draws[0].material == WIMSY_MATERIAL_FLOOR &&
+                   draws[0].first == 0u && draws[0].count == 34u * 36u &&
+                   draws[1].material == WIMSY_MATERIAL_LANE && draws[1].count == 34u * 6u &&
+                   draws[2].material == WIMSY_MATERIAL_FLAT && draws[2].count == 24u &&
+                   draws[3].material == WIMSY_MATERIAL_MARK && draws[3].count == 24u &&
+                   draws[3].first + draws[3].count == count,
+           "the floor, the lane, the walls with their signs and the marks, in that order");
+    // The lane fills the floor's gap: its first quad runs from x -1 to 1 at the floor's near edge.
+    Expect(&t, vertices[draws[1].first].x == -1.0f && vertices[draws[1].first + 1u].x == 1.0f &&
+                   vertices[draws[1].first].z == 2.0f && vertices[draws[1].first].y == 0.0f &&
+                   vertices[draws[1].first + 1u].u == 1.0f,
+           "the lane between x -1 and 1, its texture once across");
+    // On the left the sign is drawn before its wall, on the right after: 5/256 in front both ways.
+    const WimsyWorldVertex *const flat = vertices + draws[2].first;
+    Expect(&t, flat[0].z == -40.0f + 0.01953125f && flat[6].z == -40.0f && flat[12].z == -40.0f &&
+                   flat[18].z == flat[0].z && flat[0].x < 0.0f && flat[18].x > 0.0f,
+           "the signs 5/256 of a unit in front of their walls, drawn first on the left");
+    // Nothing of the scene is nearer the eye than it sees, or farther, on any judged frame of a
+    // run, and the camera ends 36 units from the first model, 6.625 up.
+    float view[16];
+    uint32_t judged[WIMSY_JUDGED];
+    bool inside = true;
+    const uint32_t frames_judged = WimsyJudgedFrames(600u, judged);
+    for (uint32_t j = 0; j < frames_judged; ++j) {
+        WimsyViewOf(2u, judged[j], 600u, view);
+        for (uint32_t i = 0; i < count; ++i) {
+            const float w = view[3] * vertices[i].x + view[7] * vertices[i].y +
+                            view[11] * vertices[i].z + view[15];
+            inside = inside && w > 0.5f && w < 1024.0f;
+        }
+    }
+    Expect(&t, inside, "every corner of the world between the near and the far distance");
+    WimsyViewOf(2u, 599u, 600u, view);
+    // The eye is where the transform's w and x, y rows are all nought but for its own distance:
+    // at the model's place (0, 1.125, 0) the w is the distance along the camera's look.
+    const float w_model = view[7] * 1.125f + view[15];
+    Expect(&t, w_model > 35.0f && w_model < 37.0f, "the first model 36 away on the last frame");
+    WimsyInstance models[WIMSY_INSTANCES_MAX];
+    Expect(&t, WimsyInstancesOf(2u, 0u, 600u, models) == 7u, "seven models");
+    WimsyViewOf(2u, 0u, 600u, view);
+    // A model's transform is the view's after its own place: its middle goes where the view
+    // puts (-3.25, 1.125, 0).
+    const float middle_w = view[3] * -3.25f + view[7] * 1.125f + view[15];
+    Expect(&t, fabsf(models[0].to_clip[15] - middle_w) < 1e-4f && models[1].to_clip[15] > middle_w,
+           "the first model at the view's (-3.25, 1.125, 0), the second farther");
+    // The textures: the lane's levels each one colour, far from the next; the floor's stones
+    // 128 texels wide, nearer their mean a level at a time, and the mean from level 5.
+    uint8_t a[4], b[4];
+    bool apart = true;
+    for (uint32_t at = 0; at + 1u < WimsyTextureLevels(WIMSY_TEXTURE_LANE); ++at) {
+        WimsyTexel(WIMSY_TEXTURE_LANE, at, 0u, 0u, a);
+        WimsyTexel(WIMSY_TEXTURE_LANE, at + 1u, 3u, 1u, b);
+        uint32_t far = 0;
+        for (uint32_t k = 0; k < 3u; ++k) {
+            const uint32_t d = a[k] > b[k] ? (uint32_t)(a[k] - b[k]) : (uint32_t)(b[k] - a[k]);
+            far = d > far ? d : far;
+        }
+        apart = apart && far >= 60u && a[3] == 255u;
+    }
+    Expect(&t, apart && WimsyTextureSide(WIMSY_TEXTURE_LANE) == 1024u &&
+                   WimsyTextureLevels(WIMSY_TEXTURE_LANE) == 11u,
+           "the lane's eleven levels, each 60 codes from the next in some channel");
+    WimsyTexel(WIMSY_TEXTURE_FLOOR, 0u, 5u, 9u, a);
+    WimsyTexel(WIMSY_TEXTURE_FLOOR, 0u, 127u, 127u, b);
+    Expect(&t, memcmp(a, b, 4u) == 0, "a stone is one colour over 128 texels");
+    WimsyTexel(WIMSY_TEXTURE_FLOOR, 2u, 1u, 2u, b);
+    Expect(&t, b[0] == (a[0] * 3u + 110u * 2u + 2u) / 5u && b[2] == (a[2] * 3u + 110u * 2u + 2u) / 5u,
+           "level 2 of it two fifths nearer the mean");
+    WimsyTexel(WIMSY_TEXTURE_FLOOR, 5u, 7u, 7u, b);
+    Expect(&t, b[0] == 110u && b[1] == 110u && b[2] == 110u && WimsyTextureLevels(WIMSY_TEXTURE_FLOOR) == 12u,
+           "level 5 the mean");
+    Report("wimsy: level 2's world, view and textures are where and what worked out by hand", &t);
+}
+
+static void CheckSceneFrames(void) {
+    Tally t = { 0, NULL };
+    const WimsyMachine right = WimsyMachineRight(2u);
+    WimsyVerdict verdict = Verdict(2u, 0u, 600u, &right);
+    Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 600000u, "the first frame as asked");
+    // The lane at the bottom of the first frame is its level 3 going on 2: yellow, with no blue.
+    const uint8_t *const lane = Pixel(640u, 600u);
+    Expect(&t, lane[0] > 200u && lane[1] > 150u && lane[2] < 80u, "the lane's nearest part yellow");
+    verdict = Verdict(2u, 599u, 600u, &right);
+    Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 900000u, "the last frame as asked");
+    // Half way, each machine wrong in one way the scene is there to show.
+    const uint32_t at = 299u, frames = 600u;
+    WimsyMachine wrong = right;
+    wrong.between_levels = false;
+    verdict = Verdict(2u, at, frames, &wrong);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 1000u,
+           "the nearer level of detail alone is refused");
+    wrong = right;
+    wrong.coarser = 1u;
+    verdict = Verdict(2u, at, frames, &wrong);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 1000u,
+           "a level of detail too coarse is refused");
+    wrong = right;
+    wrong.bias = false;
+    verdict = Verdict(2u, at, frames, &wrong);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 500u,
+           "marks with no depth bias are refused");
+    wrong = right;
+    wrong.depth = false;
+    verdict = Verdict(2u, at, frames, &wrong);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 500u, "no depth test is refused");
+    // A depth buffer of 16 bits cannot tell a sign from its wall from the camera's last place,
+    // and one of 24 can.
+    wrong = right;
+    wrong.depth_bits = 16u;
+    verdict = Verdict(2u, 599u, frames, &wrong);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 100u,
+           "16 bits of depth are refused on the last frame");
+    wrong.depth_bits = 24u;
+    verdict = Verdict(2u, 599u, frames, &wrong);
+    Expect(&t, WimsyVerdictPasses(&verdict), "24 bits of depth pass on the last frame");
+    Report("wimsy: level 2 as asked passes near and far, and the wrong level of detail, no depth "
+           "bias, no depth test or 16 bits of depth are refused",
+           &t);
+}
+
 static void CheckSaid(void) {
     Tally t = { 0, NULL };
     char said[400];
@@ -415,8 +545,8 @@ static void CheckSaid(void) {
     verdict.held = 900000u;
     verdict.edge = 21600u;
     WimsyDescribeVerdict(said, sizeof(said), &verdict);
-    Expect(&t, strcmp(said, "900000 pixels within their colour's range, 21600 on an edge within "
-                            "the colours beside it") == 0,
+    Expect(&t, strcmp(said, "900000 pixels held to a colour, 21600 to a wider range, on an edge "
+                            "or between levels of detail") == 0,
            "within the ranges");
     verdict.edge = 21000u;
     verdict.wrong = 600u;
@@ -437,6 +567,7 @@ static void CheckSaid(void) {
            "cut to the room there is");
     Expect(&t, strcmp(WimsyLevelName(0u), "sprites") == 0 &&
                    strcmp(WimsyLevelName(1u), "one lit model") == 0 &&
+                   strcmp(WimsyLevelName(2u), "a scene near and far") == 0 &&
                    strcmp(WimsyLevelName(WIMSY_LEVELS), "no level") == 0,
            "the levels' names");
     Report("wimsy: what a line says of a verdict", &t);
@@ -451,5 +582,7 @@ void RunReferenceWimsy(void) {
     CheckTransform();
     CheckModelFrames();
     CheckModelMachines();
+    CheckScene();
+    CheckSceneFrames();
     CheckSaid();
 }

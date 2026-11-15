@@ -50,6 +50,10 @@ static const char *const SUITE = "wimsy";
 _Static_assert(sizeof(WimsyInstance) <= INSTANCE_STRIDE, "an instance fits a uniform buffer's step");
 _Static_assert(sizeof(WimsyInstance) == 128u && sizeof(WimsyLight) == 32u,
                "the blocks are laid out as the shaders read them");
+_Static_assert(sizeof(WimsyWorldVertex) == sizeof(GpuVertex) &&
+                   offsetof(WimsyWorldVertex, u) == offsetof(GpuVertex, u) &&
+                   offsetof(WimsyWorldVertex, r) == offsetof(GpuVertex, r),
+               "a world vertex is laid out as the drawing suites' vertex");
 
 /// The model's vertex as the vertex buffer holds it.
 typedef struct {
@@ -81,6 +85,14 @@ static DkShader common_vs;
 static DkShader texture_fs;
 static DkShader model_vs;
 static DkShader lit_fs;
+static DkShader world_vs;
+static DkShader flat_fs;
+static DkImage level_textures[WIMSY_TEXTURES];
+static DkImageLayout level_texture_layouts[WIMSY_TEXTURES];
+static DkGpuAddr world_vertices;
+static uint32_t world_vertex_count;
+static WimsyWorldDraw world_draws[WIMSY_WORLD_DRAWS_MAX];
+static uint32_t world_draw_count;
 static DkImage sprite_texture;
 static DkImageLayout sprite_layout;
 static DkImage colour_samples;
@@ -104,6 +116,8 @@ static DkGpuAddr batch_gpu[SLOTS];
 static uint8_t *instance_cpu[SLOTS];
 static DkGpuAddr instance_gpu[SLOTS];
 static uint32_t instance_count[SLOTS];
+static float *view_cpu[SLOTS];
+static DkGpuAddr view_gpu[SLOTS];
 
 // What the frames left: their times, and the judged ones' images.
 static uint32_t frame_us[MODE_FRAMES_MAX];
@@ -185,6 +199,7 @@ static void WriteSlot(uint32_t slot, uint32_t k) {
         memcpy(instance_cpu[slot] + (size_t)i * INSTANCE_STRIDE, &instances[i],
                sizeof(instances[i]));
     }
+    WimsyViewOf(level, k, frames, view_cpu[slot]);
 }
 
 static void BindBlend(bool on) {
@@ -215,6 +230,40 @@ static void RecordSprites(uint32_t slot) {
                     BATCH_VERTICES * (uint32_t)sizeof(GpuVertex));
     dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, BATCH_VERTICES, 1, 0, 0);
     BindBlend(false);
+}
+
+/// The world's draws, after the models, into the same target: none culled, the floor and the
+/// lane through their textures, every level of detail of them, and the marks with their bias.
+static void RecordWorld(uint32_t slot) {
+    if (world_draw_count == 0u) {
+        return;
+    }
+    DkRasterizerState rasterizer;
+    dkRasterizerStateDefaults(&rasterizer);
+    rasterizer.cullMode = DkFace_None;
+    dkCmdBufBindRasterizerState(gpu.cmdbuf, &rasterizer);
+    for (uint32_t d = 0; d < world_draw_count; ++d) {
+        const WimsyWorldDraw *const draw = &world_draws[d];
+        const bool textured =
+            draw->material == WIMSY_MATERIAL_FLOOR || draw->material == WIMSY_MATERIAL_LANE;
+        if (textured) {
+            // The descriptor after the sprite's and the target's, with the second sampler.
+            const uint32_t image = draw->material == WIMSY_MATERIAL_FLOOR ? 2u : 3u;
+            dkCmdBufBindTexture(gpu.cmdbuf, DkStage_Fragment, 0, dkMakeTextureHandle(image, 1));
+        }
+        GpuBindVertices(&gpu, &world_vs, textured ? &texture_fs : &flat_fs, world_vertices,
+                        world_vertex_count * (uint32_t)sizeof(GpuVertex));
+        dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Vertex, 0, view_gpu[slot],
+                                  DK_UNIFORM_BUF_ALIGNMENT);
+        const bool biased = draw->material == WIMSY_MATERIAL_MARK;
+        rasterizer.depthBiasEnableMask = biased ? DkPolygonFlag_Fill : 0u;
+        dkCmdBufBindRasterizerState(gpu.cmdbuf, &rasterizer);
+        dkCmdBufSetDepthBias(gpu.cmdbuf, biased ? WIMSY_MARK_BIAS_UNITS : 0.0f, 0.0f,
+                             biased ? WIMSY_MARK_BIAS_SLOPE : 0.0f);
+        dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, draw->count, 1, draw->first, 0);
+    }
+    rasterizer.depthBiasEnableMask = 0u;
+    dkCmdBufBindRasterizerState(gpu.cmdbuf, &rasterizer);
 }
 
 /// A higher level's frame: the models into a target of four samples behind a depth buffer, the
@@ -271,6 +320,7 @@ static void RecordModels(uint32_t slot) {
                                   INSTANCE_STRIDE);
         dkCmdBufDrawIndexed(gpu.cmdbuf, DkPrimitive_Triangles, WIMSY_MESH_INDICES, 1, 0, 0, 0);
     }
+    RecordWorld(slot);
 
     // The resolve runs on the 2D engine, which the 3D pipeline's own barriers do not order.
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, 0);
@@ -309,8 +359,8 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
     // unit caches in its level two cache: what the previous frame left there is dropped. The
     // previous frame's wait for idle wrote everything it drew back first.
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_None, DkInvalidateFlags_L2Cache);
-    dkCmdBufBindImageDescriptorSet(gpu.cmdbuf, image_set, 2);
-    dkCmdBufBindSamplerDescriptorSet(gpu.cmdbuf, sampler_set, 1);
+    dkCmdBufBindImageDescriptorSet(gpu.cmdbuf, image_set, 2u + WIMSY_TEXTURES);
+    dkCmdBufBindSamplerDescriptorSet(gpu.cmdbuf, sampler_set, 2);
     if (level == 0u) {
         RecordSprites(slot);
     } else {
@@ -381,15 +431,51 @@ static void *Scratch(uint32_t size, uint32_t alignment, DkGpuAddr *address, cons
     return bytes;
 }
 
+/// Fills every level of @p image with @p texture's texels, a level a copy from staging the
+/// processor fills, the one block of it for them all.
+static bool UploadLevels(const DkImage *image, WimsyTexture texture, uint8_t *staging,
+                         DkGpuAddr staging_gpu, char *why, size_t why_size) {
+    for (uint32_t at = 0; at < WimsyTextureLevels(texture); ++at) {
+        const uint32_t side = WimsyTextureSide(texture) >> at;
+        // The copy engine wants a row's pitch aligned, which a level under eight texels is not.
+        const uint32_t pitch = (side * 4u + DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1u) &
+                               ~(DK_IMAGE_LINEAR_STRIDE_ALIGNMENT - 1u);
+        for (uint32_t y = 0; y < side; ++y) {
+            for (uint32_t x = 0; x < side; ++x) {
+                WimsyTexel(texture, at, x, y, staging + (size_t)y * pitch + (size_t)x * 4u);
+            }
+        }
+        GpuBeginList(&gpu);
+        // The staging was rewritten since the last level's copy read it.
+        dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_L2Cache);
+        DkImageView view;
+        dkImageViewDefaults(&view, image);
+        view.mipLevelOffset = (uint8_t)at;
+        const DkImageRect rect = { 0, 0, 0, side, side, 1 };
+        const DkCopyBuf source = { staging_gpu, pitch, 0 };
+        dkCmdBufCopyBufferToImage(gpu.cmdbuf, &source, &view, &rect, 0);
+        GpuSubmit(&gpu);
+        if (!gpu.ready) {
+            snprintf(why, why_size, "the upload of level %u of a texture: %s", (unsigned)at,
+                     gpu.failure);
+            return false;
+        }
+    }
+    return true;
+}
+
 /// The device, the shaders, the images and everything a frame of this level reads that no frame
 /// changes. False with the reason.
 static bool BringUp(char *why, size_t why_size) {
     GpuSpec spec;
     GpuSpecDefaults(&spec, WIMSY_WIDTH, WIMSY_HEIGHT);
     spec.code_size = 64u * 1024u;
-    spec.data_size = 4u * 1024u * 1024u;
-    // The presented images, the sprite, and the two targets of four samples a higher level has.
-    spec.image_size = 64u * 1024u * 1024u;
+    // The scratch every frame reads, and at level 2 the staging its textures' levels go through,
+    // as large as the floor's level nought.
+    spec.data_size = (level == 2u ? 24u : 4u) * 1024u * 1024u;
+    // The presented images, the sprite, the two targets of four samples a higher level has, and
+    // level 2's two textures with their levels.
+    spec.image_size = (level == 2u ? 96u : 64u) * 1024u * 1024u;
     spec.command_size = 512u * 1024u;
     if (!GpuOpenSpec(&gpu, &spec)) {
         snprintf(why, why_size, "the graphics device: %s", gpu.failure);
@@ -403,7 +489,10 @@ static bool BringUp(char *why, size_t why_size) {
         GpuLoadShader(&gpu, &model_vs, ShaderData(SHADER_WIMSY_VERT),
                       ShaderSize(SHADER_WIMSY_VERT)) &&
         GpuLoadShader(&gpu, &lit_fs, ShaderData(SHADER_WIMSY_LIT_FRAG),
-                      ShaderSize(SHADER_WIMSY_LIT_FRAG));
+                      ShaderSize(SHADER_WIMSY_LIT_FRAG)) &&
+        GpuLoadShader(&gpu, &world_vs, ShaderData(SHADER_WIMSY_WORLD_VERT),
+                      ShaderSize(SHADER_WIMSY_WORLD_VERT)) &&
+        GpuLoadShader(&gpu, &flat_fs, ShaderData(SHADER_FLAT_FRAG), ShaderSize(SHADER_FLAT_FRAG));
     if (!loaded) {
         snprintf(why, why_size, "the shaders: %s", gpu.failure);
         return false;
@@ -416,6 +505,12 @@ static bool BringUp(char *why, size_t why_size) {
                                       DkMsMode_4x) &&
                  GpuCreateRenderImage(&gpu, &depth_samples, &depth_samples_layout,
                                       DkImageFormat_Z24S8, WIMSY_WIDTH, WIMSY_HEIGHT, DkMsMode_4x);
+    }
+    for (uint32_t t = 0; t < WIMSY_TEXTURES && images && level == 2u; ++t) {
+        images = GpuCreateMipTexture(&gpu, &level_textures[t], &level_texture_layouts[t],
+                                     DkImageFormat_RGBA8_Unorm, WimsyTextureSide((WimsyTexture)t),
+                                     WimsyTextureSide((WimsyTexture)t),
+                                     WimsyTextureLevels((WimsyTexture)t));
     }
     for (uint32_t i = 0; i < SWAP_IMAGES && images; ++i) {
         images = GpuCreateImage(&gpu, &swap_images[i], &swap_layouts[i],
@@ -438,7 +533,12 @@ static bool BringUp(char *why, size_t why_size) {
                                              DK_UNIFORM_BUF_ALIGNMENT, &instance_gpu[s],
                                              "the uniform buffers", why, why_size);
         instance_count[s] = 0;
+        view_cpu[s] = (float *)Scratch(DK_UNIFORM_BUF_ALIGNMENT, DK_UNIFORM_BUF_ALIGNMENT,
+                                       &view_gpu[s], "the view", why, why_size);
     }
+    GpuVertex *const world = (GpuVertex *)Scratch(
+        WIMSY_WORLD_VERTICES_MAX * (uint32_t)sizeof(GpuVertex), 256u, &world_vertices,
+        "the world's vertices", why, why_size);
     GpuVertex *const shown = (GpuVertex *)Scratch(6u * (uint32_t)sizeof(GpuVertex), 256u,
                                                   &shown_quad, "the quad shown", why, why_size);
     ModelVertex *const vertices = (ModelVertex *)Scratch(
@@ -451,14 +551,16 @@ static bool BringUp(char *why, size_t why_size) {
                                                     DK_UNIFORM_BUF_ALIGNMENT, &light_block,
                                                     "the light", why, why_size);
     DkImageDescriptor *const image_descriptors = (DkImageDescriptor *)Scratch(
-        2u * (uint32_t)sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT, &image_set,
-        "the image descriptors", why, why_size);
+        (2u + WIMSY_TEXTURES) * (uint32_t)sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT,
+        &image_set, "the image descriptors", why, why_size);
     DkSamplerDescriptor *const sampler_descriptor = (DkSamplerDescriptor *)Scratch(
-        (uint32_t)sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT, &sampler_set,
-        "the sampler descriptor", why, why_size);
+        2u * (uint32_t)sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT, &sampler_set,
+        "the sampler descriptors", why, why_size);
     if (why[0] != '\0') {
         return false;
     }
+    world_draw_count = WimsyWorldOf(level, (WimsyWorldVertex *)world, &world_vertex_count,
+                                    world_draws);
 
     Rectangle(shown, -1.0f, 1.0f, 1.0f, -1.0f, 0.0f, 1.0f);
     for (uint32_t v = 0; v < WIMSY_MESH_VERTICES; ++v) {
@@ -490,7 +592,22 @@ static bool BringUp(char *why, size_t why_size) {
     sampler.wrapMode[0] = DkWrapMode_ClampToEdge;
     sampler.wrapMode[1] = DkWrapMode_ClampToEdge;
     sampler.wrapMode[2] = DkWrapMode_ClampToEdge;
-    dkSamplerDescriptorInitialize(sampler_descriptor, &sampler);
+    dkSamplerDescriptorInitialize(&sampler_descriptor[0], &sampler);
+    // The world's: every level of detail, a level between two weighed, around the edges.
+    dkSamplerDefaults(&sampler);
+    sampler.minFilter = DkFilter_Linear;
+    sampler.magFilter = DkFilter_Linear;
+    sampler.mipFilter = DkMipFilter_Linear;
+    sampler.wrapMode[0] = DkWrapMode_Repeat;
+    sampler.wrapMode[1] = DkWrapMode_Repeat;
+    sampler.wrapMode[2] = DkWrapMode_Repeat;
+    sampler.maxAnisotropy = 1.0f;
+    dkSamplerDescriptorInitialize(&sampler_descriptor[1], &sampler);
+    for (uint32_t t = 0; t < WIMSY_TEXTURES; ++t) {
+        // A level with no world binds the sprite in their place, which nothing reads.
+        dkImageViewDefaults(&view, level == 2u ? &level_textures[t] : &sprite_texture);
+        dkImageDescriptorInitialize(&image_descriptors[2u + t], &view, false, false);
+    }
 
     static uint8_t texels[WIMSY_SPRITE_BYTES];
     WimsySpriteTexels(texels);
@@ -498,6 +615,24 @@ static bool BringUp(char *why, size_t why_size) {
                           WIMSY_SPRITE, texels)) {
         snprintf(why, why_size, "the sprite's upload: %s", gpu.failure);
         return false;
+    }
+
+    if (level == 2u) {
+        // As large as the floor's level nought, the largest there is.
+        DkGpuAddr staging_gpu = 0;
+        const uint32_t largest = WimsyTextureSide(WIMSY_TEXTURE_FLOOR);
+        uint8_t *const staging = (uint8_t *)Scratch(largest * largest * 4u, DK_MEMBLOCK_ALIGNMENT,
+                                                    &staging_gpu, "the textures' staging", why,
+                                                    why_size);
+        if (staging == NULL) {
+            return false;
+        }
+        for (uint32_t t = 0; t < WIMSY_TEXTURES; ++t) {
+            if (!UploadLevels(&level_textures[t], (WimsyTexture)t, staging, staging_gpu, why,
+                              why_size)) {
+                return false;
+            }
+        }
     }
 
     const DkImage *const presented[SWAP_IMAGES] = { &swap_images[0], &swap_images[1] };
