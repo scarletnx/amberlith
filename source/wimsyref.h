@@ -174,25 +174,48 @@ uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vert
 /// hills meet the floor, and past the field.
 int32_t WimsyHillHeight(uint32_t side, uint32_t column, uint32_t row);
 
-/// A blade of grass of a heavy level, as the instance buffer holds it: a triangle standing on
-/// the floor across the lane's way, its foot WIMSY_BLADE_HALF_WIDTH either side of (x, z), its
-/// tip `height` up and `lean` aside.
+/// A blade of grass, as the instance buffer holds it: a triangle standing on the floor across
+/// the lane's way, its foot WIMSY_BLADE_HALF_WIDTH either side of (x, z), its tip `height` up
+/// and `lean` aside when the wind is still.
 typedef struct {
     float x, z, height, lean;
     uint8_t colour[4];
 } WimsyBlade;
 
-#define WIMSY_BLADES 2048u
+/// How thick the grass is, from none to a field: a density is this many blades, the first of
+/// the next density's, so a thicker field is the thinner one with blades between.
+#define WIMSY_GRASS_DENSITIES 5u
+#define WIMSY_BLADES_MAX 262144u
 #define WIMSY_BLADE_HALF_WIDTH 0.0625f
+/// How far a blade's tip sways either side in the wind, and how many frames a sway takes.
+#define WIMSY_BLADE_SWAY 0.09375f
+#define WIMSY_WIND_FRAMES 96u
 
-/// The grass of @p level into @p out, the same on every frame and every run: where each blade
-/// stands, how tall, how far it leans and its green, all from one seed. Returns how many; none
-/// below the heavy levels. One draw of three vertices and that many instances draws them.
-uint32_t WimsyBladesOf(uint32_t level, WimsyBlade *out);
+/// The blades of @p density: none, 2,048, 16,384, 65,536 and 262,144. None past the last.
+uint32_t WimsyBladeCount(uint32_t density);
 
-/// Where corner @p corner of @p blade is in the world: its left foot, its right foot, its tip.
-/// The arithmetic the vertex program does on the same floats, a term of each sum nought.
-void WimsyBladeCorner(const WimsyBlade *blade, uint32_t corner, float out[3]);
+/// The density @p level's grass has: what WimsyGrassAsk asked for, or the level's own, none
+/// below the heavy levels, 3 at level 3 and 4 at level 4.
+uint32_t WimsyGrassOf(uint32_t level);
+
+/// Asks for @p density at every level that has grass, until asked otherwise;
+/// WIMSY_GRASS_DENSITIES gives each level its own again.
+void WimsyGrassAsk(uint32_t density);
+
+/// Blades @p first to @p first + @p count of the field into @p out, the same on every run:
+/// where each stands, how tall, how far it leans and its green, all from one seed. Returns how
+/// many it wrote, fewer past the thickest density's last. One draw of three vertices and an
+/// instance a blade draws a density.
+uint32_t WimsyBladesOf(uint32_t first, uint32_t count, WimsyBlade *out);
+
+/// The wind of frame @p frame: where in its sway the field is, from 0 to 1, the same for the
+/// same frame on every run.
+float WimsyWindOf(uint32_t frame);
+
+/// Where corner @p corner of @p blade is in the world in wind @p wind: its left foot, its right
+/// foot, its tip, which sways by where the blade stands. The arithmetic the vertex program does
+/// on the same floats.
+void WimsyBladeCorner(const WimsyBlade *blade, float wind, uint32_t corner, float out[3]);
 
 /// The transform from the world to clip space on frame @p frame of @p frames at @p level, column
 /// by column, which the world's draws read from their uniform buffer.
@@ -353,6 +376,8 @@ typedef struct {
     /// The world's draws it leaves out, a bit a draw in the world's order, the grass the bit
     /// after the last: nought draws them all.
     uint32_t left_out;
+    /// The wind. Off, the grass stands as frame nought has it.
+    bool wind;
 } WimsyMachine;
 
 /// The machine that draws a level as the level asks.

@@ -567,34 +567,61 @@ uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vert
     return draw;
 }
 
-uint32_t WimsyBladesOf(uint32_t level, WimsyBlade *out) {
+uint32_t WimsyBladeCount(uint32_t density) {
+    static const uint32_t COUNT[WIMSY_GRASS_DENSITIES] = { 0u, 2048u, 16384u, 65536u,
+                                                           WIMSY_BLADES_MAX };
+    return density < WIMSY_GRASS_DENSITIES ? COUNT[density] : 0u;
+}
+
+/// The density asked for at every level, or WIMSY_GRASS_DENSITIES for each level's own.
+static uint32_t grass_asked = WIMSY_GRASS_DENSITIES;
+
+void WimsyGrassAsk(uint32_t density) {
+    grass_asked = density < WIMSY_GRASS_DENSITIES ? density : WIMSY_GRASS_DENSITIES;
+}
+
+uint32_t WimsyGrassOf(uint32_t level) {
     if (level < 3u || level >= WIMSY_LEVELS) {
         return 0;
     }
-    for (uint32_t i = 0; i < WIMSY_BLADES; ++i) {
+    return grass_asked < WIMSY_GRASS_DENSITIES ? grass_asked : level;
+}
+
+uint32_t WimsyBladesOf(uint32_t first, uint32_t count, WimsyBlade *out) {
+    uint32_t made = 0;
+    for (uint32_t i = first; i < WIMSY_BLADES_MAX && made < count; ++i) {
         const uint32_t chance = Chance(i ^ GRASS_SEED);
-        const uint32_t other = Chance((i + WIMSY_BLADES) ^ GRASS_SEED);
-        WimsyBlade *const blade = &out[i];
+        const uint32_t other = Chance((i + WIMSY_BLADES_MAX) ^ GRASS_SEED);
+        WimsyBlade *const blade = &out[made++];
         // Either side of the lane and its marks, from 4.25 to 17.75 out, down the floor's 200
         // units; three eighths to thirteen sixteenths of a unit tall, its tip up to 15/64 aside.
-        const float out_x = 4.25f + (float)(chance & 0xFFu) * (13.5f / 256.0f);
+        const float out_x = 4.25f + (float)(chance & 0xFFFFu) * (13.5f / 65536.0f);
         blade->x = (i & 1u) == 0u ? -out_x : out_x;
-        blade->z = 1.0f - (float)(chance >> 8 & 0xFFFu) * (200.0f / 4096.0f);
-        blade->height = 0.375f + (float)(chance >> 20 & 7u) * 0.0625f;
-        blade->lean = ((float)(chance >> 24 & 15u) - 7.5f) * 0.03125f;
-        const uint32_t green = other & 3u;
+        blade->z = 1.0f - (float)(other & 0xFFFFu) * (200.0f / 65536.0f);
+        blade->height = 0.375f + (float)(chance >> 16 & 7u) * 0.0625f;
+        blade->lean = ((float)(chance >> 19 & 15u) - 7.5f) * 0.03125f;
+        const uint32_t green = other >> 16 & 3u;
         blade->colour[0] = (uint8_t)(40u + 8u * green);
         blade->colour[1] = (uint8_t)(150u + 12u * green);
         blade->colour[2] = 50u;
         blade->colour[3] = 255u;
     }
-    return WIMSY_BLADES;
+    return made;
 }
 
-void WimsyBladeCorner(const WimsyBlade *blade, uint32_t corner, float out[3]) {
+float WimsyWindOf(uint32_t frame) {
+    return (float)(frame % WIMSY_WIND_FRAMES) / (float)WIMSY_WIND_FRAMES;
+}
+
+void WimsyBladeCorner(const WimsyBlade *blade, float wind, uint32_t corner, float out[3]) {
     static const float UNIT[3][2] = { { -1.0f, 0.0f }, { 1.0f, 0.0f }, { 0.0f, 1.0f } };
     const float *const unit = UNIT[corner % 3u];
-    out[0] = blade->x + unit[0] * WIMSY_BLADE_HALF_WIDTH + unit[1] * blade->lean;
+    // Where the blade is in its sway: the wind, later the farther right and down the floor it
+    // stands, back and forth at an even pace.
+    float phase = wind + blade->x * 0.125f + blade->z * 0.0625f;
+    phase -= floorf(phase);
+    const float sway = (fabsf(phase * 2.0f - 1.0f) - 0.5f) * (2.0f * WIMSY_BLADE_SWAY);
+    out[0] = blade->x + unit[0] * WIMSY_BLADE_HALF_WIDTH + unit[1] * (blade->lean + sway);
     out[1] = unit[1] * blade->height;
     out[2] = blade->z;
 }
@@ -834,7 +861,7 @@ bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uin
 
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
-        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false, 0u
+        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false, 0u, true
     };
     return machine;
 }
@@ -908,11 +935,13 @@ static Drawn drawn[TILE * TILE * SAMPLES_MAX];
 static uint8_t tile_low[TILE * TILE][4];
 static uint8_t tile_high[TILE * TILE][4];
 static WimsyInstance scene_instance[WIMSY_INSTANCES_MAX];
-// The world's vertices and draws, and after them the grass, a triangle a blade and one draw.
-static WimsyWorldVertex world_vertices[WIMSY_WORLD_VERTICES_MAX + WIMSY_BLADES * 3u];
-static WimsyWorldDraw world_draws[WIMSY_WORLD_DRAWS_MAX + 1u];
-static Corner world_corners[WIMSY_WORLD_VERTICES_MAX + WIMSY_BLADES * 3u];
-static WimsyBlade scene_blades[WIMSY_BLADES];
+static WimsyWorldVertex world_vertices[WIMSY_WORLD_VERTICES_MAX];
+static WimsyWorldDraw world_draws[WIMSY_WORLD_DRAWS_MAX];
+static Corner world_corners[WIMSY_WORLD_VERTICES_MAX];
+// The grass, and the tiles each blade may reach, first and last across and down: a field is too
+// many triangles to try each against every tile.
+static WimsyBlade scene_blades[WIMSY_BLADES_MAX];
+static uint8_t blade_tiles[WIMSY_BLADES_MAX][4];
 static uint8_t sprite_texels[WIMSY_SPRITE_BYTES];
 static bool sprite_made;
 static GameWorld sprite_world;
@@ -925,6 +954,10 @@ typedef struct {
     uint32_t instances;
     uint32_t world_count;
     uint32_t draws;
+    /// The grass: how many blades, the wind they stand in, and the matrix they are seen through.
+    uint32_t blades;
+    float wind;
+    float view[16];
     /// The judge's frame, whose colours are ranges, or a machine's, whose colours are its own.
     bool judging;
     /// The frame whose buffers the machine reads: this one, or an earlier one's when it is late.
@@ -1330,6 +1363,31 @@ static bool PixelOutside(const Triangle *t, double x, double y) {
 }
 
 /// For every triangle of every instance that reaches the tile, @p each.
+/// Where the world's place @p position lands on the target through @p view, into @p corner.
+static void Project(const float view[16], const float position[3], Corner *corner) {
+    double clip[4];
+    for (uint32_t row = 0; row < 4u; ++row) {
+        clip[row] = (double)view[12u + row];
+        for (uint32_t k = 0; k < 3u; ++k) {
+            clip[row] += (double)view[k * 4u + row] * (double)position[k];
+        }
+    }
+    memset(corner, 0, sizeof(*corner));
+    corner->over_w = 1.0 / clip[3];
+    corner->x = (clip[0] * corner->over_w + 1.0) * 0.5 * (double)WIMSY_WIDTH;
+    corner->y = (1.0 - clip[1] * corner->over_w) * 0.5 * (double)WIMSY_HEIGHT;
+    corner->z = clip[2] * corner->over_w;
+}
+
+/// The three corners of blade @p index as the scene's frame sees them.
+static void BladeCorners(const Scene *scene, uint32_t index, Corner corner[3]) {
+    for (uint32_t k = 0; k < 3u; ++k) {
+        float at[3];
+        WimsyBladeCorner(&scene_blades[index], scene->wind, k, at);
+        Project(scene->view, at, &corner[k]);
+    }
+}
+
 typedef void (*EachTriangle)(const Scene *scene, const Triangle *t, uint32_t x0, uint32_t y0);
 
 static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) {
@@ -1371,6 +1429,27 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
             if (SetUp(scene, v, colour, draw->material, (double)x0, (double)y0, &triangle)) {
                 each(scene, &triangle, x0, y0);
             }
+        }
+    }
+    // The grass, as its instanced draw leaves it: a triangle a blade, its instance's colour.
+    if ((scene->machine.left_out >> scene->draws & 1u) != 0u) {
+        return;
+    }
+    const uint32_t across = x0 / TILE, down = y0 / TILE;
+    for (uint32_t b = 0; b < scene->blades; ++b) {
+        const uint8_t *const tiles = blade_tiles[b];
+        if (across < tiles[0] || across > tiles[2] || down < tiles[1] || down > tiles[3]) {
+            continue;
+        }
+        Corner corner[3];
+        BladeCorners(scene, b, corner);
+        const Corner *const v[3] = { &corner[0], &corner[1], &corner[2] };
+        const uint8_t *const bytes = scene_blades[b].colour;
+        const double colour[3] = { (double)((float)bytes[0] / 255.0f),
+                                   (double)((float)bytes[1] / 255.0f),
+                                   (double)((float)bytes[2] / 255.0f) };
+        if (SetUp(scene, v, colour, WIMSY_MATERIAL_FLAT, (double)x0, (double)y0, &triangle)) {
+            each(scene, &triangle, x0, y0);
         }
     }
 }
@@ -1541,43 +1620,40 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
     }
     WimsyLightOf(level, &scene->light);
     scene->draws = WimsyWorldOf(level, world_vertices, &scene->world_count, world_draws);
-    const uint32_t blades = WimsyBladesOf(level, scene_blades);
-    if (blades != 0u) {
-        // The grass as the instanced draw leaves it: a triangle a blade, its instance's colour.
-        WimsyWorldDraw *const draw = &world_draws[scene->draws++];
-        draw->first = scene->world_count;
-        draw->count = blades * 3u;
-        draw->material = WIMSY_MATERIAL_FLAT;
-        for (uint32_t b = 0; b < blades; ++b) {
-            for (uint32_t corner = 0; corner < 3u; ++corner) {
-                float at[3];
-                WimsyBladeCorner(&scene_blades[b], corner, at);
-                world_vertices[scene->world_count++] =
-                    WorldCorner(at[0], at[1], at[2], 0.0f, 0.0f, scene_blades[b].colour);
-            }
-        }
-    }
-    float view[16];
-    WimsyViewOf(level, shown, frames, view);
+    WimsyViewOf(level, shown, frames, scene->view);
     for (uint32_t i = 0; i < scene->world_count; ++i) {
         // The floats the vertex buffer holds, through the matrix the uniform buffer holds.
         const WimsyWorldVertex *const vertex = &world_vertices[i];
-        const double position[3] = { (double)vertex->x, (double)vertex->y, (double)vertex->z };
-        double clip[4];
-        for (uint32_t row = 0; row < 4u; ++row) {
-            clip[row] = (double)view[12u + row];
-            for (uint32_t k = 0; k < 3u; ++k) {
-                clip[row] += (double)view[k * 4u + row] * position[k];
-            }
-        }
+        const float position[3] = { vertex->x, vertex->y, vertex->z };
         Corner *const corner = &world_corners[i];
-        memset(corner, 0, sizeof(*corner));
-        corner->over_w = 1.0 / clip[3];
-        corner->x = (clip[0] * corner->over_w + 1.0) * 0.5 * (double)WIMSY_WIDTH;
-        corner->y = (1.0 - clip[1] * corner->over_w) * 0.5 * (double)WIMSY_HEIGHT;
-        corner->z = clip[2] * corner->over_w;
+        Project(scene->view, position, corner);
         corner->u = (double)vertex->u;
         corner->v = (double)vertex->v;
+    }
+    scene->blades = WimsyBladesOf(0u, WimsyBladeCount(WimsyGrassOf(level)), scene_blades);
+    scene->wind = WimsyWindOf(machine->wind ? shown : 0u);
+    for (uint32_t b = 0; b < scene->blades; ++b) {
+        // The tiles a blade's corners span, a pixel to spare each way; first past last for a
+        // blade off the target.
+        Corner corner[3];
+        BladeCorners(scene, b, corner);
+        const double left = Least(corner[0].x, corner[1].x, corner[2].x) - 1.0;
+        const double right = Most(corner[0].x, corner[1].x, corner[2].x) + 1.0;
+        const double top = Least(corner[0].y, corner[1].y, corner[2].y) - 1.0;
+        const double bottom = Most(corner[0].y, corner[1].y, corner[2].y) + 1.0;
+        uint8_t *const tiles = blade_tiles[b];
+        if (right < 0.0 || left >= (double)WIMSY_WIDTH || bottom < 0.0 ||
+            top >= (double)WIMSY_HEIGHT) {
+            tiles[0] = tiles[1] = 1u;
+            tiles[2] = tiles[3] = 0u;
+            continue;
+        }
+        tiles[0] = (uint8_t)((left < 0.0 ? 0.0 : left) / (double)TILE);
+        tiles[1] = (uint8_t)((top < 0.0 ? 0.0 : top) / (double)TILE);
+        tiles[2] = (uint8_t)((right >= (double)WIMSY_WIDTH ? (double)(WIMSY_WIDTH - 1u) : right) /
+                             (double)TILE);
+        tiles[3] = (uint8_t)((bottom >= (double)WIMSY_HEIGHT ? (double)(WIMSY_HEIGHT - 1u) : bottom) /
+                             (double)TILE);
     }
 }
 

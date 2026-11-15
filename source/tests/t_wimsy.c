@@ -293,6 +293,9 @@ static void WriteSlot(uint32_t slot, uint32_t k) {
         return;
     }
     WimsyViewOf(level, k, frames, view_cpu[slot]);
+    // After the matrix, the frame's wind, which the grass's vertex program reads.
+    view_cpu[slot][16] = WimsyWindOf(k);
+    view_cpu[slot][17] = view_cpu[slot][18] = view_cpu[slot][19] = 0.0f;
     if (level < 3u) {
         instance_count[slot] = WimsyInstancesOf(level, k, frames, instances);
         for (uint32_t i = 0; i < instance_count[slot]; ++i) {
@@ -870,7 +873,8 @@ static bool BringUp(char *why, size_t why_size) {
     spec.code_size = 64u * 1024u;
     // The scratch every frame reads, and at level 2 the staging its textures' levels go through,
     // as large as the floor's level nought.
-    spec.data_size = (level >= 2u ? 24u : 4u) * 1024u * 1024u;
+    // A heavy level's grass too, a field's 262,144 blades of 20 bytes.
+    spec.data_size = (level >= 3u ? 32u : level == 2u ? 24u : 4u) * 1024u * 1024u;
     // The presented images, the sprite, the two targets of four samples a higher level has, and
     // level 2's two textures with their levels.
     spec.image_size = (level >= 3u ? 160u : level == 2u ? 96u : 64u) * 1024u * 1024u;
@@ -1012,9 +1016,10 @@ static bool BringUp(char *why, size_t why_size) {
                                                   &shown_quad, "the quad shown", why, why_size);
     float *const unit = (float *)Scratch(6u * (uint32_t)sizeof(float), 256u, &blade_unit,
                                          "a blade's corners", why, why_size);
+    const uint32_t grass = WimsyBladeCount(WimsyGrassOf(level));
     WimsyBlade *const blades = (WimsyBlade *)Scratch(
-        WIMSY_BLADES * (uint32_t)sizeof(WimsyBlade), 256u, &blade_instances, "the grass", why,
-        why_size);
+        (grass != 0u ? grass : 1u) * (uint32_t)sizeof(WimsyBlade), 256u, &blade_instances,
+        "the grass", why, why_size);
     ModelVertex *vertices[WIMSY_MESH_VARIANTS];
     for (uint32_t variant = 0; variant < WIMSY_MESH_VARIANTS; ++variant) {
         vertices[variant] = (ModelVertex *)Scratch(
@@ -1040,7 +1045,7 @@ static bool BringUp(char *why, size_t why_size) {
     // The corners WimsyBladeCorner places: the two feet and the tip.
     static const float UNIT[6] = { -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f };
     memcpy(unit, UNIT, sizeof(UNIT));
-    blade_count = WimsyBladesOf(level, blades);
+    blade_count = WimsyBladesOf(0u, grass, blades);
     static const uint8_t WHITE[4] = { 255, 255, 255, 255 };
     panel_count = WimsyPanelsOf(level, panels);
     for (uint32_t i = 0; i < panel_count; ++i) {
