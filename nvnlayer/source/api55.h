@@ -34,6 +34,7 @@ NVN_LAYER_PROCS(NVN_LAYER_DECLARE)
 #define MAGIC_SMPPOOL 0x4e4c5053u // "SPLN"
 #define MAGIC_SYNC 0x4e4c4e53u    // "SNLN"
 #define MAGIC_EVENT 0x4e4c5645u   // "EVLN"
+#define MAGIC_BUFFER 0x4e4c4642u  // "BFLN"
 
 // NVN's windows take two to four textures (nvnDeviceGetInteger's MIN and MAX_TEXTURES_PER_WINDOW).
 #define WINDOW_TEXTURES_MAX 4
@@ -105,6 +106,21 @@ typedef struct {
     int flags;
     size_t size;
 } LayerPool;
+
+typedef struct {
+    NVNdevice *device;
+    NVNmemoryPool *pool;
+    ptrdiff_t offset;
+    size_t size;
+} LayerBufferBuilder;
+
+/// A buffer is a range of its pool, and keeps where.
+typedef struct {
+    uint32_t magic;
+    NVNmemoryPool *pool;
+    ptrdiff_t offset;
+    size_t size;
+} LayerBuffer;
 
 typedef struct {
     NVNdevice *device;
@@ -290,6 +306,8 @@ _Static_assert(sizeof(LayerEventBuilder) <= sizeof(NVNeventBuilder), "fits the b
 _Static_assert(sizeof(LayerEvent) <= sizeof(NVNevent), "fits NVNevent");
 _Static_assert(sizeof(LayerPoolBuilder) <= sizeof(NVNmemoryPoolBuilder), "fits the builder");
 _Static_assert(sizeof(LayerPool) <= sizeof(NVNmemoryPool), "fits NVNmemoryPool");
+_Static_assert(sizeof(LayerBufferBuilder) <= sizeof(NVNbufferBuilder), "fits the builder");
+_Static_assert(sizeof(LayerBuffer) <= sizeof(NVNbuffer), "fits NVNbuffer");
 _Static_assert(sizeof(LayerTextureBuilder) <= sizeof(NVNtextureBuilder), "fits the builder");
 _Static_assert(sizeof(LayerTexture) <= sizeof(NVNtexture), "fits NVNtexture");
 _Static_assert(sizeof(LayerView) <= sizeof(NVNtextureView), "fits NVNtextureView");

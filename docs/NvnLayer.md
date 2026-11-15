@@ -130,13 +130,15 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and nineteen functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and thirty five functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
   mode, until the first object is made from the device. A mode set after that is refused, saying so.
 - **queues**, **memory pools** (shader code pools among them), **2D textures** of RGBA8, BGRA8, 32-bit float
   depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**;
+- **buffers**: a range of a memory pool, with the range's own address and mapping, what the buffer and its
+  builder say of it, and the two cache calls, each deko3d's one call over the buffer's part of the pool;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

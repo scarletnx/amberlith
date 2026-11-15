@@ -11,7 +11,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, thirty six cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, thirty eight cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -55,7 +55,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and nineteen.
+  and thirty five.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -143,6 +143,14 @@ The reference is the graphics unit running what the layer recorded, never the of
   pool and a sampler pool in the readback pool's memory give back their memory pool, offset and number of
   descriptors; `nvnSamplerPoolRegisterSamplerBuilder` writes the 32 bytes `nvnSamplerPoolRegisterSampler` writes
   for a sampler made from that builder, read through the pool's mapping.
+- **a buffer is a range of its pool: its address, its mapping, and what it and its builder say** (exact): a
+  buffer of 0x800 bytes at 0x400 of the cached pool: the builder's device, pool, offset and size, the buffer's
+  pool, offset and size, and `nvnBufferGetAddress` and `nvnBufferMap`, which are the pool's address and mapping
+  moved by the offset.
+- **bytes flushed from one buffer and copied to another are there after an invalidate** (exact): two buffers of
+  that pool, the first written through `nvnBufferMap` and flushed (`nvnBufferFlushMappedRange`), a copy by the
+  graphics unit between their addresses, and the second read through its mapping after
+  `nvnBufferInvalidateMappedRange`. Every byte of the pool is judged, the ones around the buffers too.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
