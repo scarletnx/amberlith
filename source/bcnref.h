@@ -65,11 +65,18 @@ typedef enum {
     BCN_RULE_NVIDIA,
     /// The exact thirds, halves, sevenths and fifths of the eight bit ends, rounded to nearest.
     BCN_RULE_ROUNDED,
-    /// The same, cut toward nought: Pillow's decoder, which the reference suite holds blocks to.
+    /// The same, cut toward nought: Pillow's decoder, which the reference suite holds blocks to, and
+    /// Mesa's; lavapipe lands between this and the rounded one on every texel of the pictures.
     BCN_RULE_TRUNCATED,
     /// The weights BPTC's two and three bit indices take (21 and 43 of 64 for the thirds, 9 to 55
     /// for the sevenths, 13 to 51 for the fifths), rounded: what RADV on an RX 6700 XT gives.
     BCN_RULE_SIXTYFOURTHS,
+    /// Mesa's llvmpipe, which lavapipe samples with (26.2.6): BC1 to BC3's thirds as the first end
+    /// and the difference times 85 or 170 of 256, cut toward minus infinity, and the midpoint
+    /// rounded, which every colour channel of the bcnimage suite's BC1, BC2 and BC3 pictures and
+    /// the bcn suite's blocks read; alphas and BC4 as BCN_RULE_TRUNCATED, since lavapipe's land
+    /// between the cut and the rounded fractions on every texel of the pictures.
+    BCN_RULE_LLVMPIPE,
     BCN_RULES,
 } BcnRule;
 

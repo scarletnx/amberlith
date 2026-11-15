@@ -23,5 +23,5 @@ A case's tier is a claim about the hardware, and the case states it.
   own: tex8k's ASTC textures on an emulator whose host samples no ASTC and encodes them again as BC7. The bound is
   that format's loss measured on the same texels. And for texels a format lets a machine round its own way: the
   bcnimage suite's BC1 to BC5 textures on a host GPU whose interpolants are not the console's, the bound the span
-  of the decodes known GPUs give. A case that came back exact says exact, so this tier on a pass says the texels
+  of the decodes known GPUs and decoders give. A case that came back exact says exact, so this tier on a pass says the texels
   moved, and by how much is in its detail.

@@ -961,12 +961,16 @@ one. BC6H and BC7 decode one way, and a texel either is its decode or is wrong. 
 the precision of an interpolated value to the implementation, and here the suite parts from the
 bcn suite: a texel that reads NVIDIA's interpolants, the console's texture unit's, is exact; one
 that reads another GPU's is off the console's but within the format's freedom, which the suite
-takes as anything between the lowest and the highest of three decodes: NVIDIA's, the
-specification's exact fractions rounded, and BPTC's weights in sixty-fourths (21 and 43 for the
-thirds, 9 to 55 for the sevenths, 13 to 51 for the fifths), which is what RADV on an RX 6700 XT
-reads, every interpolant the bcn suite asks for included. A picture with no texel wrong passes;
-one with a texel off says how many and how far, under the [bound](../Design.md#the-tiers) tier,
-as tex8k's ASTC texels within BC7's loss do; a texel outside all three fails, with how many, how
+takes as anything between the lowest and the highest of five decodes: NVIDIA's; the
+specification's exact fractions rounded, and cut toward nought (Pillow's); BPTC's weights in
+sixty-fourths (21 and 43 for the thirds, 9 to 55 for the sevenths, 13 to 51 for the fifths),
+which is what RADV on an RX 6700 XT reads, every interpolant the bcn suite asks for included;
+and Mesa's llvmpipe, lavapipe's, whose thirds are the first end and the difference times 85 or
+170 of 256 cut toward minus infinity, on every colour channel of the BC1, BC2 and BC3 pictures,
+and whose alphas land between the cut and the rounded fractions. A picture with no texel wrong
+passes; one with a texel off says how many and how far, under the
+[bound](../Design.md#the-tiers) tier, as tex8k's ASTC texels within BC7's loss do; a texel
+outside all five fails, with how many, how
 far, the PSNR over the picture and over each region, and the first one. A value that lies
 between two bytes may land on either, as the conversion to an eight bit target allows (Vulkan
 1.3, 3.9.2, as OpenGL): an sRGB texel's red, green and blue beside its code turned linear, as an
@@ -975,8 +979,14 @@ RADV hands a fragment's colour to an eight bit target through a half cut toward 
 writes the lower byte for some of BC4's and BC5's.
 
 ```json
-{"type":"case","suite":"bcnimage","name":"a picture in BC1 blocks decodes as the console's, every texel","tier":"bound","result":"pass","detail":"BC1 every texel: 0 of 16384 texels wrong, worst channel 0 away; PSNR exact (gradients exact, edges exact, noise exact, alpha exact); 1961 texels on another GPU's interpolants and not the console's, by at most 2"}
+{"type":"case","suite":"bcnimage","name":"the picture as BC1 decodes as the console's, every texel","tier":"bound","result":"pass","detail":"BC1 every texel: 0 of 16384 texels wrong, worst channel 0 away; PSNR exact (gradients exact, edges exact, noise exact, alpha exact); 7618 texels on another GPU's interpolants and not the console's, by at most 3","us":191}
 ```
+
+That is ScarletNX 3e9ad88 on RADV, an RX 6700 XT, where every picture passes: BC6H and BC7, in
+every mode and in sRGB, exact; BC1 to BC5 bound, BC1's texels by at most 3 codes and BC4's by 1.
+On lavapipe (Mesa 26.2.6) every picture passes too, BC1 to BC5 and their sRGB pictures as
+bound. A host that turned the endpoints of an sRGB
+block linear before it interpolates would land outside; neither does.
 
 In an emulator a failure points at its BCn decoder, or at the format it maps each BCn format to:
 the sRGB formats and BC1's RGB one to a host format of the same kind, BC6H's unsigned to an

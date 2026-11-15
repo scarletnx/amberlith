@@ -142,10 +142,20 @@ static void Rules(void) {
     PutWord64(bc1, 0xE4ull << 32 | 0x001Full << 16 | 0xF800u);
     right = right && Texel3(BCN_BC1, BCN_RULE_NVIDIA, bc1, 2, 170, 0, 85, seen, sizeof(seen)) &&
             Texel3(BCN_BC1, BCN_RULE_SIXTYFOURTHS, bc1, 2, 171, 0, 84, seen, sizeof(seen));
+    right = right && Texel3(BCN_BC1, BCN_RULE_LLVMPIPE, bc1, 2, 170, 0, 84, seen, sizeof(seen));
     PutWord64(bc1, 0xE4ull << 32 | 0xF800ull << 16 | 0x001Fu);
     right = right && Texel3(BCN_BC1, BCN_RULE_NVIDIA, bc1, 2, 127, 0, 127, seen, sizeof(seen)) &&
             Texel3(BCN_BC1, BCN_RULE_SIXTYFOURTHS, bc1, 2, 128, 0, 128, seen, sizeof(seen)) &&
+            Texel3(BCN_BC1, BCN_RULE_LLVMPIPE, bc1, 2, 128, 0, 128, seen, sizeof(seen)) &&
             Channel(BCN_BC1, BCN_RULE_ROUNDED, bc1, 3, 3) == 0u;
+    // llvmpipe's from lavapipe: 31 9 2 to 2 0 31 is 175 24 95, and blues 123 and 132 (codes 15 and
+    // 16) a third along 125, where every other rule says 126 (378 / 3).
+    PutWord64(bc1, 0xE4ull << 32 | 0x101Full << 16 | 0xF922u);
+    right = right && Texel3(BCN_BC1, BCN_RULE_LLVMPIPE, bc1, 2, 175, 24, 95, seen, sizeof(seen));
+    PutWord64(bc1, 0xE4ull << 32 | 0x0010ull << 16 | 0xF80Fu);
+    right = right && Texel3(BCN_BC1, BCN_RULE_LLVMPIPE, bc1, 2, 170, 0, 125, seen, sizeof(seen)) &&
+            Texel3(BCN_BC1, BCN_RULE_TRUNCATED, bc1, 2, 170, 0, 126, seen, sizeof(seen)) &&
+            Texel3(BCN_BC1, BCN_RULE_NVIDIA, bc1, 2, 170, 0, 126, seen, sizeof(seen));
     CHECK_TRUE(SUITE, "each rule's BC1 thirds and midpoints are its own numbers", CHECK_NONE, right,
                "%s", seen);
     // BC3's alpha: six values from 0 to 255, index 2 is NVIDIA's 48, sixty-fourths' 52, a fifth
@@ -212,6 +222,8 @@ static void Rules(void) {
 typedef enum {
     MACHINE_CONSOLE,      ///< the console's decode
     MACHINE_ROUNDED,      ///< the exact fractions rounded
+    MACHINE_TRUNCATED,    ///< the exact fractions cut, as Pillow and Mesa
+    MACHINE_LLVMPIPE,     ///< llvmpipe's thirds, as lavapipe
     MACHINE_SIXTYFOURTHS, ///< BPTC's weights
     MACHINE_RADV,         ///< BPTC's weights, the colour through a half cut toward nought, as RADV
     MACHINE_COLUMNS,      ///< a block read down its columns: texel (x, y) is the decode's (y, x)
@@ -255,6 +267,7 @@ static uint8_t HalfTowardNought8(double f) {
 static void MachineTexel(Machine machine, const BcnImage *image, uint32_t x, uint32_t y,
                          uint8_t out[4]) {
     static const BcnRule RULE[MACHINES] = { BCN_RULE_NVIDIA,       BCN_RULE_ROUNDED,
+                                            BCN_RULE_TRUNCATED,    BCN_RULE_LLVMPIPE,
                                             BCN_RULE_SIXTYFOURTHS, BCN_RULE_SIXTYFOURTHS,
                                             BCN_RULE_NVIDIA,       BCN_RULE_NVIDIA };
     const uint32_t bx = machine == MACHINE_ASIDE ? (x + 4u) % BCN_IMAGE_SIZE : x;
@@ -277,13 +290,14 @@ static void MachineTexel(Machine machine, const BcnImage *image, uint32_t x, uin
 }
 
 /// The bcnimage suite's judge on machines made to order, every picture: the console's decode is
-/// exact; the rounded fractions and BPTC's sixty-fourths are off but within the bound, on BC1 to
-/// BC5 only, and RADV's, the sixty-fourths through a half cut toward nought, wrong nowhere; a
+/// exact; the rounded and cut fractions, llvmpipe's thirds and BPTC's sixty-fourths are off but
+/// within the bound, on BC1 to BC5 only, and RADV's, the sixty-fourths through a half cut toward nought, wrong nowhere; a
 /// block read down its columns and a block a place aside are wrong, over an eighth of the picture
 /// at least.
 static void Machines(void) {
     static BcnImageAnswers answers;
     static const char *const NAME[MACHINES] = { "the console's",      "the rounded",
+                                                "the cut",            "llvmpipe's",
                                                 "the sixty-fourths",  "RADV's",
                                                 "a block read down its columns", "a block aside" };
     uint32_t mistakes = 0;
@@ -305,7 +319,8 @@ static void Machines(void) {
                 right = count[BCN_TEXEL_OFF] == 0u && count[BCN_TEXEL_WRONG] == 0u;
             } else if (m == MACHINE_RADV) {
                 right = count[BCN_TEXEL_WRONG] == 0u;
-            } else if (m == MACHINE_ROUNDED || m == MACHINE_SIXTYFOURTHS) {
+            } else if (m == MACHINE_ROUNDED || m == MACHINE_TRUNCATED || m == MACHINE_LLVMPIPE ||
+                       m == MACHINE_SIXTYFOURTHS) {
                 right = count[BCN_TEXEL_WRONG] == 0u &&
                         (BcnHasRules(image->kind) ? count[BCN_TEXEL_OFF] != 0u
                                                   : count[BCN_TEXEL_OFF] == 0u);
