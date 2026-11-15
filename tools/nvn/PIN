@@ -1,0 +1,4 @@
+# The commit of ScarletNX (github.com/scarletnx/ScarletNX) whose src/nx/gpu/nvn/nvn.hook the file beside this one
+# is, byte for byte, and its SHA-256: tools/nvn-coverage.py refuses a copy that is not it.
+commit 3f7d34fadf3f2966b13c214b6203a6333f09e3b2
+sha256 5889c8c57edb0d83a10f39e63104e8f2bb2eb7d31d4318ffdc964944ece8870c

@@ -18,6 +18,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[An older driver](./OlderDriver.md)** - the masquerade layer
 - **[The NVN layer](./NvnLayer.md)** - NVN for a homebrew program, a module of its own: on deko3d for the Switch,
   the names alone for the Switch 2
+- **[NVN coverage](./NvnCoverage.md)** - which NVN functions a case calls, of the ones ScarletNX answers, by group
 - **[The probe as a Switch 2 program](./Ounce.md)** - the ExeFS build ScarletNX runs, and what a pass there says
 - **[Switch 2 shader programs](./Sm86.md)** - `tools/sm86asm.py`, which assembles them from their instructions
 - Reading a run:
