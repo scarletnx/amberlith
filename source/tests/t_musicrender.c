@@ -150,11 +150,68 @@ static void RenderSwitch(void) {
                (unsigned)(MUSIC_RATE / 2u), (unsigned long long)next_at);
 }
 
+/// Inside the barrier a second switch changes only what follows it, and a stop ends it: the
+/// barrier keeps its length and is followed by the newer track, or by silence at once.
+static void RenderBarrierSwitch(void) {
+    static const char NAME[] = "a switch inside the silence keeps it and starts the newer track "
+                               "after it, and a stop there stays silent";
+    if (!ReportStart(SUITE, NAME)) {
+        return;
+    }
+    const uint64_t into = 1000u;
+    MusicStart(&player, MUSIC_TRACK_MENU);
+    MusicRender(&player, chunk, CHUNK);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicRender(&player, chunk, MUSIC_FADE_FRAMES);
+    MusicRender(&player, chunk, (size_t)into);
+    MusicSwitch(&player, MUSIC_TRACK_FLUID);
+    uint64_t loud = 0;
+    for (uint64_t done = into; done < MUSIC_BARRIER_FRAMES;) {
+        const size_t n = (size_t)(MUSIC_BARRIER_FRAMES - done < CHUNK ? MUSIC_BARRIER_FRAMES - done
+                                                                       : CHUNK);
+        MusicRender(&player, chunk, n);
+        for (size_t i = 0; i < 2u * n; ++i) {
+            loud += chunk[i] != 0 ? 1u : 0u;
+        }
+        done += n;
+    }
+    MusicStart(&alone, MUSIC_TRACK_FLUID);
+    uint64_t next_at = 0;
+    const uint64_t next = Compare(MUSIC_RATE / 4u, false, 0, &next_at);
+    const MusicTrack newer = player.song.track;
+
+    MusicStart(&player, MUSIC_TRACK_MENU);
+    MusicRender(&player, chunk, CHUNK);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicRender(&player, chunk, MUSIC_FADE_FRAMES);
+    MusicRender(&player, chunk, (size_t)into);
+    MusicSwitch(&player, MUSIC_TRACKS);
+    uint64_t after_stop = 0;
+    for (uint64_t done = 0; done < MUSIC_RATE + MUSIC_BARRIER_FRAMES;) {
+        MusicRender(&player, chunk, CHUNK);
+        for (size_t i = 0; i < 2u * CHUNK; ++i) {
+            after_stop += chunk[i] != 0 ? 1u : 0u;
+        }
+        done += CHUNK;
+    }
+    CHECK_TRUE(SUITE, NAME, CHECK_EXACT,
+               loud == 0u && next == 0u && newer == MUSIC_TRACK_FLUID && after_stop == 0u &&
+                   player.state == MUSIC_SILENT,
+               "%llu samples sounded in the rest of the barrier; after it track %u, %llu of its "
+               "first %u frames unlike the fluid track alone (the first at %llu); after a stop "
+               "inside it %llu samples sounded over two seconds, the player %s",
+               (unsigned long long)loud, (unsigned)newer, (unsigned long long)next,
+               (unsigned)(MUSIC_RATE / 4u), (unsigned long long)next_at,
+               (unsigned long long)after_stop,
+               player.state == MUSIC_SILENT ? "silent" : "not silent");
+}
+
 void RunMusicRender(void) {
     for (unsigned track = 0; track < MUSIC_TRACKS; ++track) {
         RenderTrack((MusicTrack)track);
     }
     RenderSwitch();
+    RenderBarrierSwitch();
 }
 
 void MusicJudgeOff(const char *suite, const char *where, MusicMade before) {
