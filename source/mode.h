@@ -90,8 +90,8 @@ extern "C" {
 /// it, a whole number of MiB from 1 to MODE_VRAM_MAX: with less than TEX8K_VRAM_MIB (tex8kref.h)
 /// the tex8k suite's textures are not tried, each device's case skipped as unavailable; without
 /// the word they run, as on the console; anything else is refused and said in the mode line with
-/// the number in effect. `frames=<n>`, the frames the game scene runs, a whole number from 1
-/// to MODE_FRAMES_MAX, MODE_FRAMES_DEFAULT without one; anything else is refused and said in the
+/// the number in effect. `frames=<n>`, the frames the game scene and the demos run, a whole
+/// number from 1 to MODE_FRAMES_MAX, MODE_FRAMES_DEFAULT without one; anything else is refused and said in the
 /// mode line with the number in effect. `machine=<name>[@<version>]`, the machine the run is on as
 /// the ban list names machines (BanMachineKnown), and its version when the runner knows it
 /// (BanVersionValid): its lines then hold; a name the list does not know, or a version it cannot
@@ -307,8 +307,8 @@ typedef struct {
     bool skip_refused_full;
     char skip_refused[MODE_SKIP_NAME_MAX + 1u];
     bool skip_refused_cut;
-    /// The game scene's frames: `frames=<n>` when the file has a good one, the last of several,
-    /// MODE_FRAMES_DEFAULT otherwise; and whether the file gave it.
+    /// The game scene's and the demos' frames: `frames=<n>` when the file has a good one, the last
+    /// of several, MODE_FRAMES_DEFAULT otherwise; and whether the file gave it.
     uint32_t frames;
     bool frames_named;
     /// The last `frames=` refused, as written and cut to fit, for the mode line. A refusal leaves

@@ -2489,6 +2489,7 @@ void RunReference(void) {
     RunReferenceService();
     RunReferenceGame();
     RunReferenceWimsy();
+    RunReferenceDemo();
     RunReferenceTex8k();
     RunReferenceFixed();
     RunReferenceCoverage();
