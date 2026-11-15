@@ -71,6 +71,9 @@ typedef struct {
     const UiDemoRow *levels;
     uint32_t level_count;
     uint32_t running;
+    /// The demo streams its track on its own renderer and follows ViewerDemoMusic: the pause
+    /// menu's music row starts and stops no player of the browser's.
+    bool streams;
 } ViewerDemo;
 
 /// What the person asked of a demo while it ran.
@@ -92,6 +95,9 @@ ViewerDemoEnd ViewerDemoFinish(void);
 /// stop; plus brought the pause menu up, and the demo shows its last frame again until it goes.
 bool ViewerDemoStopped(void);
 bool ViewerDemoPaused(void);
+/// Whether the demo's music is on, as the browser's option and the pause menu leave it: what a
+/// demo that streams its track follows.
+bool ViewerDemoMusic(void);
 
 /// The running screen (UiComposeProgress), from the run's first step to its last. It draws into
 /// the program's one framebuffer, which is open when a screen came before the run; @p open opens

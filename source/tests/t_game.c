@@ -14,6 +14,7 @@
 #include "../gpu.h"
 #include "../hooks.h"
 #include "../mode.h"
+#include "../musicplay.h"
 #include "../picture.h"
 #include "../report.h"
 #include "../shaders.h"
@@ -89,6 +90,41 @@ static uint32_t frames_wanted;
 
 void GameSetDemo(const DemoRun *run) {
     demo = run;
+}
+
+// The browser's music for the scene: a track streamed on the scene's own renderer, which the
+// audio thread feeds before each step while wanted() says the person has the music on. Its
+// stream goes to the final mix, past the submix whose aux the tone's case records.
+static struct {
+    MusicTrack track;
+    bool (*wanted)(void);
+    bool playing;
+    bool refused;
+    char why[160];
+} scene_music = { MUSIC_TRACKS, NULL, false, false, "" };
+
+void GameSetMusic(MusicTrack track, bool (*wanted)(void)) {
+    scene_music.track = track;
+    scene_music.wanted = wanted;
+}
+
+/// On the audio thread, before each step: the stream opened the first time the music is wanted,
+/// from the barrier, since the browser's player faded out as the scene began; then switched to
+/// silence and back as the option changes, and fed.
+static void SceneMusicStep(void) {
+    if (scene_music.track == MUSIC_TRACKS || scene_music.wanted == NULL || scene_music.refused) {
+        return;
+    }
+    const bool want = scene_music.wanted();
+    if (want && !MusicStreamOn()) {
+        scene_music.refused = !MusicStreamOpen(scene_music.track, AUDIO_FINAL_MIX, MUSIC_PLAY_GAIN,
+                                               true, scene_music.why, sizeof(scene_music.why));
+        scene_music.playing = !scene_music.refused;
+    } else if (MusicStreamOn() && want != scene_music.playing) {
+        MusicStreamSwitch(want ? scene_music.track : MUSIC_TRACKS);
+        scene_music.playing = want;
+    }
+    MusicStreamFeed();
 }
 
 // The graphics device and everything the frames draw with, made once before the first frame.
@@ -429,6 +465,7 @@ static void AudioMain(void *argument) {
     (void)argument;
     uint64_t previous = 0;
     for (;;) {
+        SceneMusicStep();
         if (!AudioStep()) {
             sound.failed = true;
             return;
@@ -689,6 +726,9 @@ static bool BringUpSound(char *why, size_t why_size) {
     AudioSubmixGain(0.0f);
     AudioCapture(true);
     AudioPlay(0, tone, TONE_LOOP, true, AUDIO_QUALITY_DEFAULT, AUDIO_SUBMIX, 1.0f, 0.0f);
+    scene_music.playing = false;
+    scene_music.refused = false;
+    scene_music.why[0] = '\0';
     return true;
 }
 
@@ -1146,6 +1186,11 @@ static void RunScene(void) {
     GpuClose(&gpu);
     if (sound_open) {
         AudioCapture(false);
+        MusicStreamClose();
+        if (scene_music.refused) {
+            ReportNote("game: the browser's music did not stream on the scene's renderer: %s",
+                       scene_music.why);
+        }
         AudioStop(0);
         AudioStep();
         if (AudioError()[0] != '\0') {

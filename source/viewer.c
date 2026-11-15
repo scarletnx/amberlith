@@ -515,15 +515,21 @@ bool ViewerDemoPaused(void) {
     return __atomic_load_n(&demo.paused, __ATOMIC_ACQUIRE);
 }
 
-/// The music as the pause menu left it: the demo's track, or none. A demo with no track (the game
-/// scene, whose audio thread steps a renderer of its own) plays none either way; the choice holds
+bool ViewerDemoMusic(void) {
+    return __atomic_load_n(&demo.music, __ATOMIC_ACQUIRE);
+}
+
+/// The music as the pause menu left it: the demo's track, or none, through the browser's player;
+/// a demo that streams its own (the game scene) switches it on its own thread. The choice holds
 /// for the demos after it.
 static void DemoMusicTo(bool on) {
     if (on == demo.music) {
         return;
     }
     char error[160];
-    if (!on) {
+    if (demo.asked.streams) {
+        // The demo's own thread switches its stream when it sees the change.
+    } else if (!on) {
         MusicPlayStop();
     } else if (demo.asked.track != NULL &&
                !(MusicPlayOn() ? MusicPlaySwitch(demo.asked.track, error, sizeof(error))
@@ -531,7 +537,7 @@ static void DemoMusicTo(bool on) {
         ReportNote("browser: the music's track %s did not play for %s: %s", demo.asked.track,
                    demo.asked.name, error);
     }
-    demo.music = on;
+    __atomic_store_n(&demo.music, on, __ATOMIC_RELEASE);
     demo.hud.track = on ? demo.asked.track : NULL;
 }
 
