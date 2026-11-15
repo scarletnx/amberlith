@@ -74,6 +74,10 @@ typedef struct {
     /// The demo streams its track on its own renderer and follows ViewerDemoMusic: the pause
     /// menu's music row starts and stops no player of the browser's.
     bool streams;
+    /// The pause menu's rows of the demo's own, and the value each has as it starts.
+    const UiPauseOption *options;
+    uint32_t option_count;
+    uint32_t option_now[UI_PAUSE_OPTIONS];
 } ViewerDemo;
 
 /// What the person asked of a demo while it ran.
@@ -86,6 +90,7 @@ typedef struct {
     uint32_t frames;
     bool music;
     bool hud;
+    uint32_t option[UI_PAUSE_OPTIONS];
 } ViewerDemoEnd;
 
 void ViewerDemoBegin(const ViewerDemo *demo);
@@ -98,6 +103,8 @@ bool ViewerDemoPaused(void);
 /// Whether the demo's music is on, as the browser's option and the pause menu leave it: what a
 /// demo that streams its track follows.
 bool ViewerDemoMusic(void);
+/// What a DemoRun's sticks read: the pad's two sticks as the last frame shown found them.
+void ViewerDemoSticks(DemoSticks *out);
 
 /// The running screen (UiComposeProgress), from the run's first step to its last. It draws into
 /// the program's one framebuffer, which is open when a screen came before the run; @p open opens

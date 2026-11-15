@@ -387,6 +387,9 @@ void WimsySetLevels(uint32_t levels);
 /// level shows its frames through the program's screen, B stops them, and the pause is left out
 /// of their times.
 void WimsySetDemo(const DemoRun *run);
+/// Whether a heavy level's camera is the person's, moved by the demo's sticks, rather than the
+/// level's walk. No frame of such a run is judged: its judged cases are skipped as asked.
+void WimsySetFree(bool on);
 
 /// The demo family's fractal zooms (fractalref.h): a Mandelbrot and a Julia zoom, each frame a
 /// compute pass that counts every pixel's iterations and a fragment pass that colours them, six

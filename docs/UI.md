@@ -91,8 +91,15 @@ the last 160 frame times against 16.7 and 33.3 ms, and its keys. Its boxes are o
 | B | stops it | back to the browser |
 | Y | hides or shows the HUD | |
 | up, down | | the row |
-| left, right | | the level, the frames, the music, the HUD |
-| A | | resume, start the level or the frames chosen, restart, back to the browser |
+| left, right | | the level, the frames, the music, the HUD, a row of the demo's own |
+| A | | resume, start the level, the frames or the demo's own rows chosen, restart, back to the browser |
+| sticks | a demo a person steers reads them | |
+
+A demo may give the menu up to four rows of its own, between the HUD's and Restart (`UiPauseOption`): a name and the
+values left and right walk; A sets the demo off again with them, and they hold for its next run. The heavy Wimsy
+levels give four: Grass and Smoke, the level's own density or one asked for; Legend, the plaques under the walls'
+screens; and Camera, the level's walk or Free, the left stick walking the camera over the floor and the right one
+turning it. With the camera free no frame is the walk's, so the judged frames skip as `asked`.
 
 Paused, the frozen frame is dimmed by drawing every other row of it in the run's page colour, and the time the menu is
 up is left out of the frame times. A demo stopped, or left for another level, ends where it is: the frames' case and
@@ -135,10 +142,12 @@ browser beside the others. The support suite holds every mode file a script writ
 ## Adding a demo
 
 One line in `DEMOS` in `source/main.c` (a `BrowseDemo`, `source/browse.h`), as a step is one line in `STEPS`: its name
-in the list, the suite its lines report under, a sentence or two for the box beside the list, its family and its run.
+in the list, the suite its lines report under, a sentence or two for the box beside the list, its family and its run,
+and for a demo with rows of its own in the pause menu, the rows and where their values are kept.
 Its music is a line in `BrowseMusicOf` (`source/browse.c`): its track, and whether it streams it on a renderer of its
 own. The run takes a `DemoRun` (`source/demo.h`): `interactive`, the `frames` and
-`timing` the options give, `stopped()`, looked at once a frame, and `paused()`, true while the pause menu is up. It
+`timing` the options give, `stopped()`, looked at once a frame, `paused()`, true while the pause menu is up, and
+`sticks()`, the pad's two sticks for a demo a person steers. It
 shows each frame with `ViewerShowImage`, which draws the HUD and brings up the pause menu; paused, it shows its last
 frame again until `paused()` is false, judges nothing, and leaves that time out of its frame times. Demos of one suite
 in consecutive lines are the levels the pause menu walks.

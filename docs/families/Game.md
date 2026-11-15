@@ -283,7 +283,11 @@ grass; along the left wall and its compute textures; round, and along the right 
 and loads; down the lane into the smoke and through it; then up, and round to look back at it
 all. The five judged frames are the scene from its start, a wall each, the smoke from inside and
 the whole scene from its far end. The camera is inside the scene, so the near distance cuts
-what is beside and behind it, and the reference cuts the same triangles the same way.
+what is beside and behind it, and the reference cuts the same triangles the same way. In the
+browser the pause menu has four rows of a heavy level's own ([the UI](../UI.md)): the grass's
+and the smoke's density (`WimsyGrassAsk`, `WimsySmokeAsk`), the plaques (`WimsyLegendAsk`), and
+the camera, the walk or the person's own, moved by the sticks (`WimsyCameraAsk`), whose frames
+are nobody's to judge. A run from the mode file has each level's own, the legend and the walk.
 
 These are the ways a game on the console's one memory shares it between the processor and the
 graphics unit, each every frame: worker threads writing a texture's blocks and a draw's uniform

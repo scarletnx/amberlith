@@ -29,6 +29,11 @@ typedef struct {
     const char *description;
     uint32_t family;
     void (*run)(const DemoRun *run);
+    /// The rows of its own it gives the pause menu, UI_PAUSE_OPTIONS at most, and where the value
+    /// each has is kept from one run of it to the next. None for most.
+    const UiPauseOption *options;
+    uint32_t option_count;
+    uint32_t *option_values;
 } BrowseDemo;
 
 /// The music a demo plays in the browser: its track's name (music.h's MusicTrackNamed), NULL for

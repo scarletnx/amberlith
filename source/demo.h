@@ -17,6 +17,13 @@ extern "C" {
 /// reports. The types and the times are portable, so the host build checks them; the console's
 /// demos are in source/tests.
 
+/// The pad's two sticks as a person holds them, each way from -32767 to 32767: right and up are
+/// more. What a demo whose camera a person moves reads once a frame.
+typedef struct {
+    int32_t left[2];
+    int32_t right[2];
+} DemoSticks;
+
 /// How a demo is run: by a step of the run, from the mode file's words (DemoScriptRun), or by a
 /// person choosing it on the screen. A demo reads nothing else about the run.
 typedef struct {
@@ -33,6 +40,8 @@ typedef struct {
     /// Paused, the demo shows its last frame again and draws no new one, and the time it stays
     /// paused is in no frame's time. NULL for a run nobody pauses.
     bool (*paused)(void);
+    /// The sticks, for a demo a person steers; asked once a frame. NULL for a run nobody steers.
+    void (*sticks)(DemoSticks *out);
 } DemoRun;
 
 /// What a step of the run gives a demo: the mode's `frames=` and whether the run times, set

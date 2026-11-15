@@ -189,6 +189,12 @@ void WimsyWalkAt(float along, float eye[3], float ahead[3]);
 /// and @p pitch, of 65536 a turn upwards: what a person turning a camera gives WimsyViewFrom.
 void WimsyLookAt(uint32_t heading, int32_t pitch, float ahead[3]);
 
+/// Puts a heavy level's camera at @p eye looking along @p ahead, a unit long, until asked
+/// otherwise, in place of its walk: a person's camera. No frame of such a run is the walk's, so
+/// none is judged. WimsyCameraWalk gives the walk back.
+void WimsyCameraAsk(const float eye[3], const float ahead[3]);
+void WimsyCameraWalk(void);
+
 /// The matrix from the world to clip space of a camera at @p eye looking along @p ahead, a unit
 /// long and not straight up or down.
 void WimsyViewFrom(const float eye[3], const float ahead[3], float to_clip[16]);

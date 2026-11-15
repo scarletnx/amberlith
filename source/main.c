@@ -265,12 +265,38 @@ static void DemoGame(const DemoRun *run) {
     GameSetDemo(NULL);
 }
 
+// The rows a heavy level gives the pause menu, and the value each is at: the grass's and the
+// smoke's density, the level's own or one asked for; the plaques; and whose the camera is.
+static const char *const WIMSY_GRASS[] = { "Level's", "None", "2,048", "16,384", "65,536",
+                                           "262,144" };
+static const char *const WIMSY_SMOKE[] = { "Level's", "None", "64", "256", "1,024" };
+static const char *const WIMSY_LEGEND[] = { "On", "Off" };
+static const char *const WIMSY_CAMERA[] = { "Walk", "Free" };
+static const UiPauseOption WIMSY_OPTIONS[UI_PAUSE_OPTIONS] = {
+    { "Grass", WIMSY_GRASS, 6u },
+    { "Smoke", WIMSY_SMOKE, 5u },
+    { "Legend", WIMSY_LEGEND, 2u },
+    { "Camera", WIMSY_CAMERA, 2u },
+};
+static uint32_t wimsy_options[UI_PAUSE_OPTIONS];
+
 static void DemoWimsy(const DemoRun *run, uint32_t level) {
     WimsySetFrames(run->frames);
     WimsySetTiming(run->timing);
     WimsySetLevels(1u << level);
     WimsySetDemo(run);
+    // A person's run takes the pause menu's rows; a step's is each level's own, the legend on
+    // and the camera on its walk.
+    const bool asked = run->interactive && level >= 3u;
+    WimsyGrassAsk(asked && wimsy_options[0] != 0u ? wimsy_options[0] - 1u : WIMSY_GRASS_DENSITIES);
+    WimsySmokeAsk(asked && wimsy_options[1] != 0u ? wimsy_options[1] - 1u : WIMSY_SMOKE_DENSITIES);
+    WimsyLegendAsk(!asked || wimsy_options[2] == 0u);
+    WimsySetFree(asked && wimsy_options[3] == 1u);
     RunWimsy();
+    WimsyGrassAsk(WIMSY_GRASS_DENSITIES);
+    WimsySmokeAsk(WIMSY_SMOKE_DENSITIES);
+    WimsyLegendAsk(true);
+    WimsySetFree(false);
     WimsySetDemo(NULL);
 }
 
@@ -294,37 +320,38 @@ static const BrowseDemo DEMOS[] = {
     { "Game scene", "game",
       "Everything a game asks at once: four threads over three cores, a silent tone, the card and "
       "the services, each frame's image held to what the processor works out.",
-      MODE_FAMILY_GAME, DemoGame },
+      MODE_FAMILY_GAME, DemoGame, NULL, 0u, NULL },
     { "Wimsy level 0", "wimsy",
       "Sprites: Wimsy flat, a sheet of her frames, as a game draws a character in two "
       "dimensions. Five frames are held to the ranges the processor works out.",
-      MODE_FAMILY_GAME, DemoWimsy0 },
+      MODE_FAMILY_GAME, DemoWimsy0, NULL, 0u, NULL },
     { "Wimsy level 1", "wimsy",
       "Her lit model, turning: depth, culling and light, five frames held to the processor's "
       "ranges.",
-      MODE_FAMILY_GAME, DemoWimsy1 },
+      MODE_FAMILY_GAME, DemoWimsy1, NULL, 0u, NULL },
     { "Wimsy level 2", "wimsy",
       "A scene near and far: Wimsy on a mipmapped ground with plants around her.",
-      MODE_FAMILY_GAME, DemoWimsy2 },
+      MODE_FAMILY_GAME, DemoWimsy2, NULL, 0u, NULL },
     { "Wimsy level 3", "wimsy",
       "A game's heavy frame: Wimsy among some fifteen hundred draws, each with its own uniform "
       "buffer, over a 4K ASTC ground.",
-      MODE_FAMILY_GAME, DemoWimsy3 },
-    { "Wimsy level 4", "wimsy", "Level 3 over an 8K ground.", MODE_FAMILY_GAME, DemoWimsy4 },
+      MODE_FAMILY_GAME, DemoWimsy3, WIMSY_OPTIONS, UI_PAUSE_OPTIONS, wimsy_options },
+    { "Wimsy level 4", "wimsy", "Level 3 over an 8K ground, its grass and smoke four times as thick.",
+      MODE_FAMILY_GAME, DemoWimsy4, WIMSY_OPTIONS, UI_PAUSE_OPTIONS, wimsy_options },
     { "Mandelbrot", "mandelbrot",
       "A zoom into the Mandelbrot set: each frame a compute pass counts every pixel's "
       "iterations and a fragment pass colours them; six frames held to the processor's answer.",
-      MODE_FAMILY_DEMO, RunMandelbrotDemo },
-    { "Julia", "julia", "The same zoom over a Julia set.", MODE_FAMILY_DEMO, RunJuliaDemo },
+      MODE_FAMILY_DEMO, RunMandelbrotDemo, NULL, 0u, NULL },
+    { "Julia", "julia", "The same zoom over a Julia set.", MODE_FAMILY_DEMO, RunJuliaDemo, NULL, 0u, NULL },
     { "Fluid", "fluid",
       "A 2D fluid, Stam's stable fluids, in fragment passes in ping-pong between two targets a "
       "field; its early frames held to the processor's simulation, every judged one to the "
       "invariants.",
-      MODE_FAMILY_DEMO, FluidDemo },
+      MODE_FAMILY_DEMO, FluidDemo, NULL, 0u, NULL },
     { "Fluid, aliased", "fluid-alias",
       "The fluid with its targets drawn over their old selves and a compute pass's storage "
       "image over them, as a game's dynamic resolution leaves its pool.",
-      MODE_FAMILY_DEMO, FluidAliasDemo },
+      MODE_FAMILY_DEMO, FluidAliasDemo, NULL, 0u, NULL },
 };
 
 #define DEMO_COUNT (sizeof(DEMOS) / sizeof(DEMOS[0]))
@@ -478,16 +505,26 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
             if (options->music || music.streams) {
                 MusicTo(music.streams ? NULL : music.track);
             }
-            const ViewerDemo shown = {
+            ViewerDemo shown = {
                 demo->name,     music.track,       options->frames, options->hud,
                 options->music, &demo_rows[first], level_count,     next - first,
-                music.streams,
+                music.streams,  NULL,              0u,              { 0u, 0u, 0u, 0u },
             };
+            if (demo->options != NULL && demo->option_values != NULL) {
+                shown.options = demo->options;
+                shown.option_count = demo->option_count;
+                memcpy(shown.option_now, demo->option_values, sizeof(shown.option_now));
+            }
             ViewerDemoBegin(&shown);
-            DemoStep step = { demo, { true, options->frames, timing, DemoStopped, DemoPaused } };
+            DemoStep step = { demo,
+                              { true, options->frames, timing, DemoStopped, DemoPaused,
+                                ViewerDemoSticks } };
             RunnerRunExtra(&runner, ++step_number, demo->suite, RunDemoStep, &step,
                            ViewerProgressStep);
             const ViewerDemoEnd end = ViewerDemoFinish();
+            if (demo->option_values != NULL) {
+                memcpy(demo->option_values, end.option, sizeof(end.option));
+            }
             options->frames = end.frames;
             options->music = end.music;
             options->hud = end.hud;
