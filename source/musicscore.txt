@@ -1,0 +1,165 @@
+# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The demos' four tracks, written note by note for the FM synthesizer in music.c: nine channels in the
+# OPL3's manner, bass, three chord voices, the lead (or the counter-melody, which plays where the lead
+# rests), arpeggio, kick, snare and hats. tools/music-score.py turns this file into source/musicscore.c;
+# tools/test_music_score.py holds the two to each other.
+#
+# A track: its key, tempo (beats a minute; a beat is four steps in 4/4 and six in 12/8), steps a bar,
+# swing (how far the second step of each pair comes late, in 64ths of a step), the instruments of its
+# parts (music.c's patches by name), its gain (in 32nds), its form (sections in the order they play;
+# the loop comes back to the second), each section's chords (one a bar), its lead and counter-melody
+# (NAME OCTAVE:STEPS, r:STEPS a rest; a ~ after the length glides into the note), and the patterns its
+# bass, drums, chords and arpeggio play (by name, `fill` putting each pattern's fill on the last bar).
+#
+# Patterns are grids, a character a step. Bass: R root, 3 third, 5 fifth, 7 seventh, 8 octave, A a step
+# below the next bar's root (glided into), - held, . silent. Drums, two lanes of one name: K kick, S
+# snare, s a soft snare; and hats: h closed, H a loud one, o open. Chords: X struck, - held, . off.
+# Arpeggio: 1 to 6 the chord's notes from the root (root, third, fifth, octave, its third, its fifth),
+# . none.
+
+pattern bass calm        R-----R-5---8-R-
+pattern bass bounce      R-8-R-8-R-8-RR5-
+pattern bass slow        R-------R---5---
+pattern bass drone       R---------------
+pattern bass roll        R---5-8---5-R---5-8---A-
+pattern bass none        ................
+pattern bass none24      ........................
+
+pattern drums straight        K...S...K.K.S...
+pattern drums straightfill    K...S...K.S.SSSS
+pattern hats straight         h.h.H.h.h.h.H.ho
+pattern drums shuffle         K...S.K.K...S...
+pattern drums shufflefill     K...S.K.K.SsSsSS
+pattern hats shuffle          hhHhhhHhhhHhhhHo
+pattern drums half            K.......S.....K.
+pattern drums halffill        K.......S.S.SSSS
+pattern hats half             h...H...h...H...
+pattern drums light           K.......K.......
+pattern drums lightfill       K.......K...s.S.
+pattern hats light            ....h.......h...
+pattern drums sparse          K.......S.K.....
+pattern drums sparsefill      K.......S.K.s.S.
+pattern hats sparse           h.h.h.h.h.h.h.h.
+pattern drums hats            ................
+pattern drums hatsfill        ................
+pattern hats hats             h...h...h...h...
+pattern drums twelve          K.....S...K.K.....S.....
+pattern drums twelvefill      K.....S...K.K.....S.S.S.
+pattern hats twelve           h.h.h.H.h.h.h.h.h.H.h.h.
+pattern drums twelvelight     K...........K...........
+pattern drums twelvelightfill K...........K.....s.S.S.
+pattern hats twelvelight      h.....h.....h.....h.....
+pattern drums none            ................
+pattern drums nonefill        ................
+pattern hats none             ................
+pattern drums none24          ........................
+pattern drums none24fill      ........................
+pattern hats none24           ........................
+
+pattern comp sync        X-----X---..X---
+pattern comp stab        ..X...X...X...X.
+pattern comp pad         X---------------
+pattern comp organ       X---------------
+pattern comp swell       X-----------X-----------
+
+pattern arp up16         1235123512351235
+pattern arp up8          1.2.3.5.4.3.2.1.
+pattern arp bell8        5.4.3.2.5.4.3.6.
+pattern arp bell16       1356135613561356
+pattern arp up12         1.2.3.4.3.2.1.2.3.4.3.2.
+pattern arp none         ................
+pattern arp none24       ........................
+
+track menu
+demo the demo browser
+key C mixolydian
+tempo 100
+steps 16
+swing 0
+gain 50
+voices bass=slap chords=epiano lead=brass counter=flute arp=pluck
+form intro A A2 B A
+chords intro | C | Bb |
+chords A     | C | C | Bb | Bb | F | F | C | C |
+chords A2    | C | Bb | F | C | Am | Bb | F | C |
+chords B     | Am | Am | F | F | Dm | Dm | Gm | Bb |
+lead intro | r:16 | r:12 E5:2 D5:2 |
+lead A  | E5:4 G5:2 A5:2 G5:4 E5:4 | D5:6 E5:2 C5:8 | D5:4 F5:2 G5:2 F5:4 D5:4 | Bb4:6 C5:2 D5:8 | C5:2 F5:2 A5:4 G5:2 F5:2 A5:4 | Bb5:6 A5:2 G5:4 F5:4 | E5:4 G5:4 C6:6 Bb5:2 | G5:12 E5:2 D5:2 |
+lead A2 | E5:4 G5:2 A5:2 G5:4 E5:2 G5:2 | Bb5:6 A5:2 F5:8 | A5:4 G5:2 F5:2 C5:8 | E5:2 F5:2 G5:4 E5:4 C5:4 | C5:4 E5:2 A5:2 G5:4 E5:4 | F5:6 G5:2 F5:4 D5:4 | C5:2 D5:2 F5:4 A5:4 G5:2 F5:2 | E5:4 D5:2 C5:10 |
+lead B  | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 | r:12 E5:2 D5:2 |
+counter B | A5:16 | G5:8 E5:8 | F5:16 | A5:8 C6:8 | D6:12 C6:4 | A5:16 | Bb5:8 A5:4 G5:4 | F5:8 G5:8 |
+parts intro bass=none drums=none chords=pad arp=up16
+parts A     bass=calm drums=straight fill chords=sync arp=none
+parts A2    bass=calm drums=straight fill chords=sync arp=none
+parts B     bass=calm drums=light fill chords=pad arp=up8
+
+track wimsy
+demo Wimsy's levels and the game scene
+key F lydian
+tempo 132
+steps 16
+swing 10
+gain 50
+voices bass=slap chords=epiano lead=chip counter=flute arp=bell
+form intro A A2 B A2
+chords intro | F | G |
+chords A     | F | G | Am | G | F | G | C | C |
+chords A2    | F | G | Am | G | Dm | C | G | F |
+chords B     | Dm | Am | C | G | Dm | Am | Em | G |
+lead intro | r:16 | r:12 A4:2 B4:2 |
+lead A  | C5:2 F5:2 A5:2 C6:2 B5:4 A5:4 | B5:2 A5:2 G5:2 D5:2 G5:4 B5:4 | C6:4 B5:2 A5:2 E5:4 A5:4 | G5:2 A5:2 B5:2 D6:2 C6:4 B5:4 | A5:2 C6:2 A5:2 F5:2 G5:4 A5:4 | B5:6 A5:2 G5:4 D5:4 | E5:2 G5:2 C6:2 E6:2 D6:4 C6:4 | B5:4 G5:4 E5:4 r:4 |
+lead A2 | C5:2 F5:2 A5:2 C6:2 B5:4 A5:4 | B5:2 A5:2 G5:2 D5:2 G5:4 B5:4 | C6:4 B5:2 A5:2 E5:4 A5:4 | G5:2 A5:2 B5:2 D6:2 C6:4 B5:4 | F5:2 A5:2 D6:2 A5:2 F5:4 E5:4 | E5:2 G5:2 C6:2 G5:2 E5:4 D5:4 | D5:2 G5:2 B5:2 D6:2 C6:2 B5:2 A5:2 G5:2 | F5:12 r:4 |
+lead B  | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 |
+counter B | D5:8 F5:4 E5:4 | C5:8 E5:4 A5:4 | G5:8 E5:4 C5:4 | D5:12 B4:4 | F5:8 A5:4 G5:4 | E5:8 A5:4 C6:4 | B5:8 G5:4 E5:4 | D6:8 B5:4 G5:2 A5:2 |
+parts intro bass=none drums=none chords=pad arp=up16
+parts A     bass=bounce drums=shuffle fill chords=stab arp=none
+parts A2    bass=bounce drums=shuffle fill chords=stab arp=none
+parts B     bass=bounce drums=half fill chords=pad arp=up16
+
+track fractal
+demo the Mandelbrot and Julia zooms
+key E phrygian
+tempo 84
+steps 16
+swing 0
+gain 54
+voices bass=deep chords=organ lead=flute counter=flute arp=bell
+form intro A A2 B A2
+chords intro | Em | F | Em | F |
+chords A     | Em | F | Em | F | Am | G | F | F |
+chords A2    | Em | F | Em | Dm | C | Dm | F | Em |
+chords B     | C | Dm | Am | Em | C | Dm | F | F |
+lead intro | r:16 | r:16 | r:16 | r:16 |
+lead A  | B4:8 E5:4 G5:4 | A5:12 G5:2 F5:2 | E5:8 G5:4 B5:4 | C6:12 B5:4 | A5:8 C6:4 E6:4 | D6:8 B5:4 G5:4 | A5:8 G5:4 F5:4 | G5:16 |
+lead A2 | B4:8 E5:4 G5:4 | A5:8 C6:4 A5:4 | G5:8 F5:4 E5:4 | F5:8 D5:4 A4:4 | E5:8 G5:4 C6:4 | D6:8 C6:4 A5:4 | C6:6 B5:2 A5:4 F5:4 | E5:16 |
+lead B  | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 | r:16 |
+counter B | G5:4 C6:4 E6:8 | F6:8 D6:4 A5:4 | E6:8 C6:4 A5:4 | B5:16 | E6:4 D6:4 C6:4 G5:4 | A5:4 C6:4 D6:4 F6:4 | E6:8 D6:4 C6:4 | B5:8 A5:4 G5:4 |
+parts intro bass=drone drums=none chords=organ arp=bell8
+parts A     bass=slow drums=sparse fill chords=organ arp=bell8
+parts A2    bass=slow drums=sparse fill chords=organ arp=bell8
+parts B     bass=drone drums=hats chords=organ arp=bell16
+
+track fluid
+demo the fluid simulation
+key D dorian
+tempo 120
+steps 24
+swing 0
+gain 50
+voices bass=slap chords=epiano lead=saw counter=flute arp=pluck
+form intro A A2 B A
+chords intro | Dm | G |
+chords A     | Dm | G | Dm | G | F | C | Dm | G |
+chords A2    | Dm | G | Am | G | F | C | G | Dm |
+chords B     | F | C | G | Dm | F | Am | G | G |
+lead intro | r:24 | r:18 E5:2 F5:2 G5:2 |
+lead A  | A5:4 F5:2 D5:4 E5:2 F5:4 E5:2 D5:6 | B5:4 A5:2 G5:4 A5:2 B5:6 D6:6~ | C6:4 A5:2 F5:4 A5:2 D6:6 C6:4 A5:2 | B5:4 G5:2 D5:4 G5:2 B5:12 | A5:4 C6:2 A5:4 F5:2 G5:4 A5:2 F5:6 | G5:4 E5:2 C5:4 E5:2 G5:6 C6:6~ | A5:4 F5:2 D5:4 F5:2 A5:6 B5:4 A5:2 | G5:18 r:6 |
+lead A2 | A5:4 F5:2 D5:4 E5:2 F5:4 E5:2 D5:6 | B5:4 A5:2 G5:4 A5:2 B5:6 D6:6~ | C6:4 B5:2 A5:4 E5:2 A5:6 C6:6 | B5:4 A5:2 G5:4 D5:2 G5:12 | F5:4 A5:2 C6:4 A5:2 F5:6 G5:6 | E5:4 G5:2 C6:4 G5:2 E5:6 D5:6 | D5:4 G5:2 B5:4 D6:2 C6:6 B5:6 | D6:18 r:6 |
+lead B  | r:24 | r:24 | r:24 | r:24 | r:24 | r:24 | r:24 | r:24 |
+counter B | F5:12 A5:6 C6:6 | E5:12 G5:6 C6:6 | D5:12 G5:6 B5:6 | A5:18 F5:6 | C6:12 A5:6 F5:6 | E6:12 C6:6 A5:6 | B5:12 D6:6 B5:6 | A5:6 G5:6 F5:6 E5:6 |
+parts intro bass=none24 drums=none24 chords=swell arp=up12
+parts A     bass=roll drums=twelve fill chords=swell arp=none24
+parts A2    bass=roll drums=twelve fill chords=swell arp=none24
+parts B     bass=roll drums=twelvelight fill chords=swell arp=up12
