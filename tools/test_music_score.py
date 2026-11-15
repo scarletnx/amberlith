@@ -102,6 +102,11 @@ class MusicScoreTest(unittest.TestCase):
         self.assertIn("has no A section", refused(score(SMALL.replace("form IAB", "form IBR"))))
         self.assertIn("an intro past its start", refused(score(SMALL.replace("form IAB", "form AIB"))))
 
+    def test_refuses_a_pad_that_lets_go_before_a_glide(self):
+        why = refused(score(SMALL.replace("pad x---------------", "pad x--------------.")))
+        self.assertIn("lets the chord go on its last row, and glide 12", why)
+        self.assertIsNone(refused(score(SMALL.replace("pad x---------------", "pad x--------------.").replace("glide 12", "glide 0"))))
+
     def test_refuses_a_range_under_an_octave(self):
         why = refused(score(SMALL.replace("range lead C4 C5", "range lead C4 G4")))
         self.assertIn("less than the octave", why)
