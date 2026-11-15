@@ -82,13 +82,14 @@ cleanup() {
             log "uninstalled $pkg"
         fi
     fi
-    [ -n "$logcat_pid" ] && kill "$logcat_pid" 2> /dev/null
+    [ -n "$logcat_pid" ] && { kill "$logcat_pid" 2> /dev/null; wait "$logcat_pid" 2> /dev/null; }
 }
 trap cleanup EXIT
 trap 'exit 1' INT TERM
 
-# the log from its last line on: what the device logged before this run stays out of DIR
-adb logcat -v threadtime -T 1 > "$out/logcat.txt" 2>&1 &
+# the log from its last line on: what the device logged before this run stays out of DIR. Not through adb(): $! must be
+# the reader itself, which the cleanup ends, not a subshell that leaves it running
+"${ADB:-adb}" -s "$serial" logcat -v threadtime -T 1 > "$out/logcat.txt" 2>&1 &
 logcat_pid=$!
 log "installing $apk on $serial"
 installed=1
