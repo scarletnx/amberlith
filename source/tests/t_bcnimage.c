@@ -174,13 +174,20 @@ static void Report(const char *name, const BcnImage *image, const char *what, co
     }
     const CheckTier tier =
         BcnHasRules(image->kind) && (j->off != 0u || j->wrong != 0u) ? CHECK_BOUND : CHECK_EXACT;
-    CHECK_TRUE(SUITE, name, tier, j->wrong == 0u,
-               "%s %s: %u of %u texels wrong, worst channel %u away; PSNR %s (%s %s, %s %s, %s %s, "
-               "%s %s)%s%s",
-               image->name, what, (unsigned)j->wrong, (unsigned)(TARGET * TARGET),
-               (unsigned)j->worst, whole, ASTC_IMAGE_REGION[0], region[0], ASTC_IMAGE_REGION[1],
-               region[1], ASTC_IMAGE_REGION[2], region[2], ASTC_IMAGE_REGION[3], region[3], wrong,
-               off);
+    if (j->wrong == 0u && j->off == 0u) {
+        ReportCase(SUITE, name, tier, true, NULL);
+        return;
+    }
+    // A pass within the bound says how far it moved, as a failure says what went wrong.
+    char detail[512];
+    snprintf(detail, sizeof(detail),
+             "%s %s: %u of %u texels wrong, worst channel %u away; PSNR %s (%s %s, %s %s, %s %s, "
+             "%s %s)%s%s",
+             image->name, what, (unsigned)j->wrong, (unsigned)(TARGET * TARGET),
+             (unsigned)j->worst, whole, ASTC_IMAGE_REGION[0], region[0], ASTC_IMAGE_REGION[1],
+             region[1], ASTC_IMAGE_REGION[2], region[2], ASTC_IMAGE_REGION[3], region[3], wrong,
+             off);
+    ReportCase(SUITE, name, tier, j->wrong == 0u, detail);
 }
 
 /// Makes a @p size by @p size texture of @p image's blocks, repeated, written by the processor in
