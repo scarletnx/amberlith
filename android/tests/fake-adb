@@ -20,7 +20,7 @@ case $cmd in
 get-state) echo device ;;
 install) touch "$d/installed"; echo Success ;;
 uninstall) rm -f "$d/installed"; echo Success ;;
-logcat) touch "$d/logcat"; exec tail -n +1 -f "$d/logcat" ;;
+logcat) touch "$d/logcat"; echo $$ > "$d/logcat.pid"; exec tail -n +1 -f "$d/logcat" ;;
 pull) cp "$d/device$1" "$2" ;;
 shell)
     case "$*" in

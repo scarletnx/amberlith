@@ -4,7 +4,7 @@
 # android/tests/test-run-adb.sh: android/tools/run-adb.sh on a fake device (fake-adb): a whole run, a launch that dies,
 # one that hangs (said in the journal as a timeout, on a line of its own after a cut record too), a run that never
 # ends whole, and a device that already has the package. Each leaves the device as it was: the package uninstalled,
-# or never installed.
+# or never installed; and no logcat reader running.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
@@ -23,6 +23,16 @@ scenario() { # NAME SCENARIO [OPTIONS...]: runs it in $tmp/NAME, sets rc
     FAKE_ADB=$tmp/$name/dev FAKE_SCENARIO=$sc FAKE_REPORT=$here/fixtures/report.jsonl ADB=$here/fake-adb \
         "$here/../tools/run-adb.sh" --serial fake --apk "$tmp/app.apk" --out "$tmp/$name/out" "$@" > "$tmp/$name/log" 2>&1
     rc=$?
+    # the fake's logcat reader (its pid, kept as it began) ends with the run
+    [ -s "$tmp/$name/dev/logcat.pid" ] || return 0
+    local reader
+    reader=$(cat "$tmp/$name/dev/logcat.pid")
+    if ps -o args= -p "$reader" 2> /dev/null | grep -qF "$tmp/$name/dev/logcat"; then
+        bad "$name: the logcat reader, pid $reader, outlived the run"
+        kill "$reader" 2> /dev/null
+    else
+        ok "$name: the logcat reader ended with the run"
+    fi
 }
 calls() { grep -c -- "$2" "$tmp/$1/dev/calls"; }
 
