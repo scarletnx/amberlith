@@ -517,37 +517,37 @@ static void RecordFills(uint32_t slot) {
     const DkImageRect texel = { 0, 0, 0, 1, 1, 1 };
     const DkCopyBuf out = { peek_gpu[slot], 0, 0 };
     dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &texel, &out, 0);
-    if (frame_judged) {
-        // A judged frame's compute textures whole, level after level, for the processor to hold
-        // to what it works out itself: the wall's screens only show them.
-        DkGpuAddr at = screens_gpu[slot];
-        for (uint32_t f = 0; f < FILLS; ++f) {
-            const uint32_t side = WIMSY_COMPUTE_SIDE >> (f % WIMSY_COMPUTE_LEVELS);
-            dkImageViewDefaults(&view, &compute_textures[f / WIMSY_COMPUTE_LEVELS]);
-            view.mipLevelOffset = (uint8_t)(f % WIMSY_COMPUTE_LEVELS);
-            view.mipLevelCount = 1;
-            const DkImageRect whole = { 0, 0, 0, side, side, 1 };
-            const DkCopyBuf into = { at, 0, 0 };
-            dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &whole, &into, 0);
-            at += (DkGpuAddr)side * side * 4u;
-        }
-    }
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
 }
 
-/// A judged frame's chains read back: each one's last target, after the compute textures.
-static void RecordChainsBack(uint32_t slot) {
+/// A judged frame's textures read back whole, in a list of its own after the frame was presented,
+/// so the copies are in no frame's time: every level of every compute texture, then each chain's
+/// last target, for the processor to hold to what it works out itself. The wall's screens only
+/// show them. They are the frame's until the next frame's dispatches and passes.
+static void ReadScreensBack(uint32_t slot) {
+    GpuBeginList(&gpu);
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image | DkInvalidateFlags_L2Cache);
-    DkGpuAddr at = screens_gpu[slot] + (DkGpuAddr)WIMSY_COMPUTE_TEXTURES * COMPUTE_TEXELS * 4u;
-    for (uint32_t c = 0; c < WIMSY_CHAINS; ++c) {
+    DkGpuAddr at = screens_gpu[slot];
+    for (uint32_t f = 0; f < FILLS + WIMSY_CHAINS; ++f) {
+        const bool chain = f >= FILLS;
+        const uint32_t side =
+            chain ? WIMSY_CHAIN_SIDE : WIMSY_COMPUTE_SIDE >> (f % WIMSY_COMPUTE_LEVELS);
         DkImageView view;
-        dkImageViewDefaults(&view, &chain_targets[c * WIMSY_CHAIN_STEPS + WIMSY_CHAIN_STEPS - 1u]);
-        const DkImageRect whole = { 0, 0, 0, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, 1 };
+        dkImageViewDefaults(&view,
+                            chain ? &chain_targets[(f - FILLS) * WIMSY_CHAIN_STEPS +
+                                                   WIMSY_CHAIN_STEPS - 1u]
+                                  : &compute_textures[f / WIMSY_COMPUTE_LEVELS]);
+        if (!chain) {
+            view.mipLevelOffset = (uint8_t)(f % WIMSY_COMPUTE_LEVELS);
+            view.mipLevelCount = 1;
+        }
+        const DkImageRect whole = { 0, 0, 0, side, side, 1 };
         const DkCopyBuf into = { at, 0, 0 };
         dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &whole, &into, 0);
-        at += (DkGpuAddr)WIMSY_CHAIN_SIDE * WIMSY_CHAIN_SIDE * 4u;
+        at += (DkGpuAddr)side * side * 4u;
     }
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
+    GpuSubmit(&gpu);
 }
 
 /// Holds what a judged frame read back to what the processor works out for frame @p k: counts
@@ -839,9 +839,6 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
         if (level >= 3u) {
             RecordFills(slot);
             RecordChains(slot);
-            if (frame_judged) {
-                RecordChainsBack(slot);
-            }
             // Back to the whole target's viewport, which the last chain's pass left at its own.
             GpuSetTarget(&gpu, NULL, WIMSY_WIDTH, WIMSY_HEIGHT);
         }
@@ -893,9 +890,6 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
             render.peek_wrong_at = k;
             memcpy(render.peek_got, peek_cpu[slot], 4u);
         }
-        if (frame_judged) {
-            JudgeScreens(k, slot);
-        }
     }
 
     const uint32_t j = JudgedAt(k);
@@ -908,6 +902,10 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
         }
         const uint32_t took = Microseconds(armGetSystemTick() - copy_began);
         render.copy_longest = took > render.copy_longest ? took : render.copy_longest;
+    }
+    if (frame_judged) {
+        ReadScreensBack(slot);
+        JudgeScreens(k, slot);
     }
     return worked;
 }
