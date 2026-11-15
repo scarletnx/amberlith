@@ -3,6 +3,7 @@
 """tools/nvn-coverage.py reads the hook, the layer's lists and the cases, and docs/NvnCoverage.md is what it gives."""
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import os
@@ -383,10 +384,22 @@ class Refusals(unittest.TestCase):
         self.assertIn("source/tests/t_more.c:2 calls nvnQueueFlush", err)
 
     def test_gaps_of_a_group(self):
+        # a function of the hook's that no case can call, in a copy whose pin names the copy
+        path = os.path.join(self.root, tool.HOOK)
+        with open(path, encoding="utf-8") as file:
+            text = file.read()
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(text.replace("family queue\n", "family queue\nhook nvnQueueNeverCalled(NVNqueue* q)\n"))
+        with open(path, "rb") as file:
+            digest = hashlib.sha256(file.read()).hexdigest()
+        with open(os.path.join(self.root, tool.PIN), "w", encoding="ascii") as file:
+            file.write("commit %s\nsha256 %s\n" % ("0" * 40, digest))
         code, out, _ = self.run_tool("--gaps", "queues")
         self.assertEqual(code, 0)
-        self.assertIn("- `nvnQueueGetError` (not in the layer)\n", out)
+        self.assertIn("- `nvnQueueNeverCalled` (not in the layer)\n", out)
+        # one the cases call and the layer has is no gap
         self.assertNotIn("nvnQueueFinish`", out)
+        self.assertNotIn("nvnQueueNeverCalled", self.run_tool("--gaps", "textures")[1])
 
     def test_gaps_of_what_is_no_group(self):
         code, out, err = self.run_tool("--gaps", "queue")
