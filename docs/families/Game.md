@@ -172,7 +172,7 @@ scene's. Five levels:
 | 0, sprites | 96 sprites of her, 128 texels a side, a pixel or four a texel, half of them mirrored, some hanging off the target: one batch of 576 vertices the main thread rewrites every frame as the scene's world moves them, drawn in one draw and blended over the clear colour, as a 2D game's are |
 | 1, one lit model | her model, 1680 triangles, turning a two hundred and fortieth of a turn a frame, while the camera backs away from 3 of her half widths to 48 over the run: a transform in a uniform buffer the main thread rewrites every frame, a normal a vertex and a colour of four normalised bytes, one light worked out a pixel, the faces turned away culled, a Z24S8 depth buffer, and four samples a pixel resolved before the frame is shown |
 | 2, a scene near and far | seven of her down a floor 204 units long, the camera backing away and up from 6 units to 36 from the nearest: the floor, 204 quads through a 2048 by 2048 texture of paving stones with its twelve levels of detail, a level between two weighed; a lane down its middle through a 1024 by 1024 texture whose eleven levels are each one colour; two walls 40 units down, a sign 5/256 of a unit in front of each, drawn before its wall on the left and after it on the right; and four marks painted in the floor's own plane, brought in front of it by a depth bias. Eleven draws |
-| 3, a heavy frame | level 2's scene with a crowd of 160 more of her, twenty rows of eight either side of the lane, each her own shade, and every model drawn as a game draws a character of several materials, a draw a part with its uniform buffer bound again: 1,507 draws a frame, 280,560 triangles of hers, 167 uniform buffers the main thread rewrites. The floor's texture is ASTC in blocks of 8 by 8, 4096 texels a side, thirteen levels |
+| 3, a heavy frame | level 2's scene with a crowd of 160 more of her, twenty rows of eight either side of the lane, each her own shade, and every model drawn as a game draws a character of several materials, a draw a part with its uniform buffer bound again: 1,507 draws a frame, 280,560 triangles of hers, 167 uniform buffers the main thread rewrites. The floor's texture is ASTC in blocks of 8 by 8, 4096 texels a side, thirteen levels. Before the scene, 128 dispatches of a compute program, each storing one level of one of sixteen 128 by 128 textures through a view of that level alone, and 176 passes, sixteen chains of eleven 64 by 64 targets, each target drawn with the one before it and given a square the main thread moves every frame; after it, 144 panels drawn over the frame, a texel a pixel: every level of every compute texture and every chain's last target, all of them this frame's |
 | 4, a heavy frame of 8K | level 3 with the floor's texture 8192 texels a side, fourteen levels, 22 MiB of blocks |
 
 **The model** is `source/wimsymesh.c`, which `tools/wimsy-mesh.py` makes from her drawing,
@@ -258,9 +258,14 @@ it with one sample a pixel, with no depth test, with no light, a frame late, a p
 not at all is refused, as is one that draws level 2 with the nearer level of detail alone, a
 level too coarse, no depth bias or 16 bits of depth.
 
-The heavy levels draw a frame's worth of a game's draws and textures and no more than that:
-no compute work, no target but the one, no texture the processor or the graphics unit rewrites
-while the frames run.
+The heavy levels' panels are held bit for bit inside the frame's other ranges: a compute
+texel is a whole number worked out from its place, its texture, its level and the frame
+(`WimsyComputeTexel`), stored as the normalised value that byte is, and a chain's last target is
+its clear and eleven squares, the later over the earlier (`WimsyChainTexel`). A panel a frame
+old, a level never stored, a target a pass never reached or a store the sampling view does not
+see is every texel of that panel wrong. What an emulator does for them is what a game's shadow
+maps, light probes and blur chains cost it: a dispatch and a pass each a submission's worth of
+state, and memory the graphics unit wrote read through another view in the same frame.
 
 **What is timed** is what the scene times: seven cases a level, named with it
 (`level 1, 600 frames, present to present: the mean`), and two notes. A judged frame's copy is
