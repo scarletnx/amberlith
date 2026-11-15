@@ -388,6 +388,14 @@ static void RecordSprites(uint32_t slot) {
     BindBlend(false);
 }
 
+/// Hands what the list holds so far to the queue and goes on recording, with no wait: a game
+/// submits a frame in some forty pieces, and so does a heavy frame, one a compute texture, one a
+/// chain and one every twenty models.
+static void SubmitPart(void) {
+    dkQueueSubmitCommands(gpu.queue, dkCmdBufFinishList(gpu.cmdbuf));
+    dkQueueFlush(gpu.queue);
+}
+
 /// A heavy frame's compute work: each level of each compute texture written by a dispatch of its
 /// own, through a view of that level alone.
 static void RecordFills(uint32_t slot) {
@@ -400,6 +408,9 @@ static void RecordFills(uint32_t slot) {
                                   DK_UNIFORM_BUF_ALIGNMENT);
         dkCmdBufBindImage(gpu.cmdbuf, DkStage_Compute, 0, dkMakeImageHandle(IMAGE_STORE + f));
         dkCmdBufDispatchCompute(gpu.cmdbuf, (side + 7u) / 8u, (side + 7u) / 8u, 1);
+        if (f % WIMSY_COMPUTE_LEVELS == WIMSY_COMPUTE_LEVELS - 1u) {
+            SubmitPart();
+        }
     }
     // What the dispatches stored is sampled later in the list, and one texel of it copied out
     // for the processor to read once the frame is drawn, as a game reads back a result.
@@ -437,6 +448,9 @@ static void RecordChains(uint32_t slot) {
         GpuBindVertices(&gpu, &common_vs, &flat_fs, square_gpu[slot],
                         SQUARES * 6u * (uint32_t)sizeof(GpuVertex));
         dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, 6, 1, s * 6u, 0);
+        if (s % WIMSY_CHAIN_STEPS == WIMSY_CHAIN_STEPS - 1u) {
+            SubmitPart();
+        }
     }
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
 }
@@ -563,6 +577,9 @@ static void RecordModels(uint32_t slot) {
             dkCmdBufDrawIndexed(gpu.cmdbuf, DkPrimitive_Triangles,
                                 WIMSY_MESH_PART[part].index_count, 1,
                                 WIMSY_MESH_PART[part].first_index, 0, 0);
+        }
+        if (i % 20u == 19u) {
+            SubmitPart();
         }
     }
     RecordWorld(slot);
