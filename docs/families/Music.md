@@ -125,7 +125,8 @@ composer keep are pinned in [the reference suite](Judge.md), with no sample rend
 
 The game family's scene and its levels, and each of the demo family's demos run from a script, end
 on a case that the music made nothing while they ran: no frame rendered, no thread, no voice ([the
-game family](Game.md), [the demo family](Demo.md)).
+game family](Game.md), [the demo family](Demo.md)). Run from the browser with its music on, the
+case skips as `asked`, with what the music made: the person chose it ([the browser](../UI.md#music)).
 
 ## When it plays
 

@@ -218,13 +218,24 @@ void MusicJudgeOff(const char *suite, const char *where, MusicMade before) {
     char name[160];
     snprintf(name, sizeof(name), "the demos' music made nothing %s: no thread, voice or sample",
              where);
-    if (!ReportStart(suite, name)) {
-        return;
-    }
     const MusicMade now = MusicMadeSoFar();
     const uint64_t frames = now.samples - before.samples;
     const uint32_t threads = now.threads - before.threads;
     const uint32_t voices = now.voices - before.voices;
+    if ((frames != 0u || threads != 0u || voices != 0u) && MusicInteractive()) {
+        // The browser played it on purpose: a person began this run and chose the music.
+        char detail[256];
+        snprintf(detail, sizeof(detail),
+                 "the browser's music rendered %llu frames, started %u threads and %u voices %s, "
+                 "on purpose in the interactive mode; a run from the mode file holds them to "
+                 "nought",
+                 (unsigned long long)frames, (unsigned)threads, (unsigned)voices, where);
+        ReportSkip(suite, name, REPORT_REASON_ASKED, detail);
+        return;
+    }
+    if (!ReportStart(suite, name)) {
+        return;
+    }
     CHECK_TRUE(suite, name, CHECK_EXACT, frames == 0u && threads == 0u && voices == 0u,
                "the music rendered %llu frames, started %u threads and %u voices %s, where "
                "nought: it plays only in the interactive mode (%s now) and the music family",
