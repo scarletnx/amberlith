@@ -19,12 +19,13 @@ game scene's are ([game](Game.md)). One of the [demo family](Demo.md)'s demos: o
 leaves it out, and `frames=` sets its length (600 without it). `source/demo_fluidref.c` is every pass on the
 processor, operation for operation, and `source/tests/t_demo_fluid.c` the scene.
 
-- **fluid**, eighteen cases, thirteen with `notime`. One says the scene came up (none tier): a graphics device, the
+- **fluid**, nineteen cases, fourteen with `notime`. One says the scene came up (none tier): a graphics device, the
   fields' targets, the shaders, and a swapchain on the default window or the program's screen. Then the frames run,
   inside the case that holds the early frames to the processor's whole simulation; the ten after it hold every
   judged frame to its passes worked out again and to the invariants, one holds each judged frame's fields to the
-  next's, and the five last carry the frames' times.
-- **fluid-alias**, nineteen cases, fourteen with `notime`: the same demo with its targets drawn over their old
+  next's, and five carry the frames' times. The last holds, whatever the frames did, that the demos' music made
+  nothing while the fluid ran: it plays only in the interactive mode and its own family ([the music family](Music.md)).
+- **fluid-alias**, twenty cases, fifteen with `notime`: the same demo with its targets drawn over their old
   selves and a compute pass's storage image over them ([The aliasing level](#the-aliasing-level)), and a case more
   for the compute pass's words.
 
@@ -104,6 +105,7 @@ took.
 | *j* judged frames, every field a finite number and the dye never below nought | none of the ten copies holds a NaN or an infinity, and no dye is below nought | ulp |
 | *p* pairs of judged frames in a row, the fields one leaves the next starts from, bit for bit | the velocity, pressure and dye a judged frame left are the ones the judged frame after it started from, every bit | exact |
 | *j* judged frames, the compute pass's words in its image over the splat target's bytes (fluid-alias) | every word of the storage image is the one the compute pass stored that frame | exact |
+| the demos' music made nothing while the fluid ran (while the fluid-alias ran): no thread, voice or sample | from the suite's start to its end the music rendered no frame and started no thread and no voice (`MusicMadeSoFar`) | exact |
 
 The passes worked out again from the machine's own inputs are what the judge leans on: no difference between two
 machines carries from one frame to the next there, so every judged frame of a run of any length is held as tightly
