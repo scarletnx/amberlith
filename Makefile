@@ -156,6 +156,10 @@ $(BUILD)/source/volume.o: CFLAGS += -fno-optimize-sibling-calls
 # The fractal reference repeats a compute program's float operations one for one, each fma written
 # out: a product and a sum gcc fused on its own would round once where the program rounds twice.
 $(BUILD)/source/fractalref.o: CFLAGS += -ffp-contract=off
+# The fluid demo's reference rounds a multiply and the add after it apart, as its shaders' order
+# says (demo_fluidref.h): gcc in its GNU mode would fuse them across statements, and the console
+# would answer otherwise than the host build its budgets were measured on.
+$(BUILD)/source/demo_fluidref.o: CFLAGS += -ffp-contract=off
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)

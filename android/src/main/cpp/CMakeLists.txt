@@ -25,4 +25,8 @@ target_compile_definitions(edenprobe PRIVATE EDENPROBE_VERSION="${EDENPROBE_VERS
                            EDENPROBE_BUILD="${EDENPROBE_BUILD}" EDENPROBE_HASH="${EDENPROBE_HASH}")
 # The engine's flags, as host.mk gives them: C11, every warning an error
 target_compile_options(edenprobe PRIVATE -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter)
+# The fluid demo's reference rounds each multiply apart from its add, as the console's Makefile
+# builds it (demo_fluidref.h)
+set_source_files_properties("${root}/source/demo_fluidref.c" PROPERTIES COMPILE_OPTIONS
+                            -ffp-contract=off)
 target_link_libraries(edenprobe PRIVATE EGL GLESv3 log m dl)

@@ -430,6 +430,9 @@ void RunReferenceDemo(void);
 /// computer also the judged frames whole against their pinned hashes, and how far single
 /// precision holds: part of the reference suite.
 void RunReferenceFractal(void);
+/// The fluid demo's script, passes, invariants and judge, on a small grid against answers worked
+/// out by hand and on machines made to order: part of the reference suite.
+void RunReferenceFluid(void);
 
 /// The coverage suite's sample patterns, edges, modulation table entries and modulated bytes,
 /// against answers worked out by hand: part of the reference suite.
