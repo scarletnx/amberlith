@@ -70,6 +70,7 @@ static const char *const SUITE = "wimsy";
 #define INSTANCE_STRIDE DK_UNIFORM_BUF_ALIGNMENT
 _Static_assert(sizeof(WimsyInstance) <= INSTANCE_STRIDE, "an instance fits a uniform buffer's step");
 _Static_assert(sizeof(WimsyBlade) == 20u, "a blade is the instance buffer's step, no gap in it");
+_Static_assert(sizeof(WimsyPuff) == 20u, "a puff is the instance buffer's step, no gap in it");
 _Static_assert(sizeof(WimsyInstance) == 128u && sizeof(WimsyLight) == 32u,
                "the blocks are laid out as the shaders read them");
 _Static_assert(sizeof(WimsyWorldVertex) == sizeof(GpuVertex) &&
@@ -124,6 +125,12 @@ static DkShader lit_fs;
 static DkShader material_fs[MATERIALS - 1u];
 static DkShader world_vs;
 static DkShader grass_vs;
+static DkShader smoke_vs;
+static DkShader smoke_fs;
+static DkGpuAddr puff_unit;
+static WimsyPuff *puff_cpu[SLOTS];
+static DkGpuAddr puff_gpu[SLOTS];
+static uint32_t puff_count;
 static DkGpuAddr blade_unit;
 static DkGpuAddr blade_instances;
 static uint32_t blade_count;
@@ -295,7 +302,10 @@ static void WriteSlot(uint32_t slot, uint32_t k) {
     WimsyViewOf(level, k, frames, view_cpu[slot]);
     // After the matrix, the frame's wind, which the grass's vertex program reads.
     view_cpu[slot][16] = WimsyWindOf(k);
-    view_cpu[slot][17] = view_cpu[slot][18] = view_cpu[slot][19] = 0.0f;
+    WimsyPuffScale(&view_cpu[slot][17]);
+    view_cpu[slot][19] = 0.0f;
+    // The frame's smoke, each puff where the frame's number has it.
+    WimsyPuffsOf(puff_count, k, puff_cpu[slot]);
     if (level < 3u) {
         instance_count[slot] = WimsyInstancesOf(level, k, frames, instances);
         for (uint32_t i = 0; i < instance_count[slot]; ++i) {
@@ -558,6 +568,42 @@ static void RecordWorld(uint32_t slot) {
         dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Vertex, 0, view_gpu[slot],
                                   DK_UNIFORM_BUF_ALIGNMENT);
         dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, 3, blade_count, 0, 0);
+    }
+    if (puff_count != 0u) {
+        // The smoke, last: blended over the frame in the order the buffer has it, behind what
+        // is nearer and leaving the depth buffer as it was. One draw, an instance a puff.
+        DkDepthStencilState depth;
+        dkDepthStencilStateDefaults(&depth);
+        depth.depthTestEnable = 1;
+        depth.depthWriteEnable = 0;
+        depth.depthCompareOp = DkCompareOp_Less;
+        depth.stencilTestEnable = 0;
+        dkCmdBufBindDepthStencilState(gpu.cmdbuf, &depth);
+        BindBlend(true);
+        const DkShader *const shaders[] = { &smoke_vs, &smoke_fs };
+        dkCmdBufBindShaders(gpu.cmdbuf, DkStageFlag_Vertex | DkStageFlag_Fragment, shaders, 2);
+        static const DkVtxAttribState attributes[] = {
+            { .bufferId = 0, .isFixed = 0, .offset = 0, .size = DkVtxAttribSize_2x32,
+              .type = DkVtxAttribType_Float, .isBgra = 0 },
+            { .bufferId = 1, .isFixed = 0, .offset = offsetof(WimsyPuff, x),
+              .size = DkVtxAttribSize_4x32, .type = DkVtxAttribType_Float, .isBgra = 0 },
+            { .bufferId = 1, .isFixed = 0, .offset = offsetof(WimsyPuff, colour),
+              .size = DkVtxAttribSize_4x8, .type = DkVtxAttribType_Unorm, .isBgra = 0 },
+        };
+        static const DkVtxBufferState buffers[] = { { 2u * sizeof(float), 0 },
+                                                    { sizeof(WimsyPuff), 1 } };
+        dkCmdBufBindVtxAttribState(gpu.cmdbuf, attributes,
+                                   sizeof(attributes) / sizeof(attributes[0]));
+        dkCmdBufBindVtxBufferState(gpu.cmdbuf, buffers, 2);
+        dkCmdBufBindVtxBuffer(gpu.cmdbuf, 0, puff_unit, 12u * (uint32_t)sizeof(float));
+        dkCmdBufBindVtxBuffer(gpu.cmdbuf, 1, puff_gpu[slot],
+                              puff_count * (uint32_t)sizeof(WimsyPuff));
+        dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Vertex, 0, view_gpu[slot],
+                                  DK_UNIFORM_BUF_ALIGNMENT);
+        dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, 6, puff_count, 0, 0);
+        BindBlend(false);
+        depth.depthWriteEnable = 1;
+        dkCmdBufBindDepthStencilState(gpu.cmdbuf, &depth);
     }
 }
 
@@ -907,6 +953,10 @@ static bool BringUp(char *why, size_t why_size) {
                       ShaderSize(SHADER_WIMSY_WORLD_VERT)) &&
         GpuLoadShader(&gpu, &grass_vs, ShaderData(SHADER_WIMSY_GRASS_VERT),
                       ShaderSize(SHADER_WIMSY_GRASS_VERT)) &&
+        GpuLoadShader(&gpu, &smoke_vs, ShaderData(SHADER_WIMSY_SMOKE_VERT),
+                      ShaderSize(SHADER_WIMSY_SMOKE_VERT)) &&
+        GpuLoadShader(&gpu, &smoke_fs, ShaderData(SHADER_WIMSY_SMOKE_FRAG),
+                      ShaderSize(SHADER_WIMSY_SMOKE_FRAG)) &&
         GpuLoadShader(&gpu, &flat_fs, ShaderData(SHADER_FLAT_FRAG), ShaderSize(SHADER_FLAT_FRAG)) &&
         GpuLoadShader(&gpu, &fill_cs, ShaderData(SHADER_WIMSY_FILL_COMP),
                       ShaderSize(SHADER_WIMSY_FILL_COMP));
@@ -992,6 +1042,8 @@ static bool BringUp(char *why, size_t why_size) {
                                          why_size);
         square_cpu[s] = (GpuVertex *)Scratch(SQUARES * 6u * (uint32_t)sizeof(GpuVertex), 256u,
                                              &square_gpu[s], "the chains' squares", why, why_size);
+        puff_cpu[s] = (WimsyPuff *)Scratch(WIMSY_PUFFS_MAX * (uint32_t)sizeof(WimsyPuff), 256u,
+                                           &puff_gpu[s], "the smoke", why, why_size);
         if (fill_cpu[s] != NULL) {
             memset(fill_cpu[s], 0, FILLS * DK_UNIFORM_BUF_ALIGNMENT);
         }
@@ -1016,6 +1068,8 @@ static bool BringUp(char *why, size_t why_size) {
                                                   &shown_quad, "the quad shown", why, why_size);
     float *const unit = (float *)Scratch(6u * (uint32_t)sizeof(float), 256u, &blade_unit,
                                          "a blade's corners", why, why_size);
+    float *const square = (float *)Scratch(12u * (uint32_t)sizeof(float), 256u, &puff_unit,
+                                           "a puff's corners", why, why_size);
     const uint32_t grass = WimsyBladeCount(WimsyGrassOf(level));
     WimsyBlade *const blades = (WimsyBlade *)Scratch(
         (grass != 0u ? grass : 1u) * (uint32_t)sizeof(WimsyBlade), 256u, &blade_instances,
@@ -1045,6 +1099,11 @@ static bool BringUp(char *why, size_t why_size) {
     // The corners WimsyBladeCorner places: the two feet and the tip.
     static const float UNIT[6] = { -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f };
     memcpy(unit, UNIT, sizeof(UNIT));
+    // A puff's square, two triangles, from -1 to 1 either way.
+    static const float SQUARE[12] = { -1.0f, -1.0f, 1.0f, -1.0f, 1.0f,  1.0f,
+                                      -1.0f, -1.0f, 1.0f, 1.0f,  -1.0f, 1.0f };
+    memcpy(square, SQUARE, sizeof(SQUARE));
+    puff_count = WimsyPuffCount(WimsySmokeOf(level));
     blade_count = WimsyBladesOf(0u, grass, blades);
     static const uint8_t WHITE[4] = { 255, 255, 255, 255 };
     panel_count = WimsyPanelsOf(level, panels);

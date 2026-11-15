@@ -364,6 +364,7 @@ static WimsyWorldVertex WorldCorner(float x, float y, float z, float u, float v,
 /// The seeds of the hills' heights and of the grass.
 #define HILL_SEED 0x48494C4Cu
 #define GRASS_SEED 0x47524153u
+#define SMOKE_SEED 0x534D4F4Bu
 
 /// What chance gives the hills at a place of a lattice, nought to 255.
 static uint32_t HillChance(uint32_t side, uint32_t column, uint32_t row, uint32_t lattice) {
@@ -607,6 +608,56 @@ uint32_t WimsyBladesOf(uint32_t first, uint32_t count, WimsyBlade *out) {
         blade->colour[3] = 255u;
     }
     return made;
+}
+
+uint32_t WimsyPuffCount(uint32_t density) {
+    static const uint32_t COUNT[WIMSY_SMOKE_DENSITIES] = { 0u, 64u, 256u, WIMSY_PUFFS_MAX };
+    return density < WIMSY_SMOKE_DENSITIES ? COUNT[density] : 0u;
+}
+
+/// The density asked for at every level, or WIMSY_SMOKE_DENSITIES for each level's own.
+static uint32_t smoke_asked = WIMSY_SMOKE_DENSITIES;
+
+void WimsySmokeAsk(uint32_t density) {
+    smoke_asked = density < WIMSY_SMOKE_DENSITIES ? density : WIMSY_SMOKE_DENSITIES;
+}
+
+uint32_t WimsySmokeOf(uint32_t level) {
+    if (level < 3u || level >= WIMSY_LEVELS) {
+        return 0;
+    }
+    return smoke_asked < WIMSY_SMOKE_DENSITIES ? smoke_asked : level - 1u;
+}
+
+uint32_t WimsyPuffsOf(uint32_t count, uint32_t frame, WimsyPuff *out) {
+    uint32_t made = 0;
+    for (uint32_t i = 0; i < WIMSY_PUFFS_MAX && made < count; ++i) {
+        const uint32_t chance = Chance(i ^ SMOKE_SEED);
+        const uint32_t other = Chance((i + WIMSY_PUFFS_MAX) ^ SMOKE_SEED);
+        WimsyPuff *const puff = &out[made++];
+        // Where it starts: across the floor, 50 to 90 units down it, half a unit to four and a
+        // half up; and how far into its 240 frames it is, each puff from a frame of its own.
+        const uint32_t age = (frame + (other >> 16 & 0xFFu)) % WIMSY_PUFF_FRAMES;
+        const float along = (float)age / (float)WIMSY_PUFF_FRAMES;
+        puff->x = -16.0f + (float)(chance & 0xFFFFu) * (32.0f / 65536.0f) + 1.5f * along;
+        puff->y = 0.5f + (float)(chance >> 16 & 0xFFu) * (4.0f / 256.0f) + 3.0f * along;
+        puff->z = -50.0f - (float)(other & 0xFFFFu) * (40.0f / 65536.0f);
+        puff->size = 1.0f + (float)(chance >> 24) * (2.0f / 256.0f);
+        const uint8_t grey = (uint8_t)(176u + (other >> 24 & 63u));
+        puff->colour[0] = puff->colour[1] = grey;
+        puff->colour[2] = (uint8_t)(grey + 8u);
+        // It hides an eighth to a quarter at its thickest, half way through, and nothing at
+        // either end, so none appears or goes all at once.
+        const uint32_t thick = 32u + (other >> 30) * 10u;
+        const uint32_t half = WIMSY_PUFF_FRAMES / 2u;
+        puff->colour[3] = (uint8_t)(thick * (age < half ? age : WIMSY_PUFF_FRAMES - age) / half);
+    }
+    return made;
+}
+
+void WimsyPuffScale(float out[2]) {
+    out[0] = VIEW_FOCAL * (float)WIMSY_HEIGHT / (float)WIMSY_WIDTH;
+    out[1] = VIEW_FOCAL;
 }
 
 float WimsyWindOf(uint32_t frame) {
@@ -861,7 +912,8 @@ bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uin
 
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
-        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false, 0u, true
+        level == 0u ? 1u : 4u, level != 0u, true, true, 0u,   0u,   true,
+        0u,                    true,        0u,   false, 0u,  true, true, true
     };
     return machine;
 }
@@ -941,6 +993,11 @@ static Corner world_corners[WIMSY_WORLD_VERTICES_MAX];
 // The grass, and the tiles each blade may reach, first and last across and down: a field is too
 // many triangles to try each against every tile.
 static WimsyBlade scene_blades[WIMSY_BLADES_MAX];
+// The smoke: the frame's puffs, and each one's middle on the target with its reach across and
+// down in pixels; a reach of nought for a puff the near or the far distance cuts away.
+static WimsyPuff scene_puffs[WIMSY_PUFFS_MAX];
+static Corner puff_middle[WIMSY_PUFFS_MAX];
+static double puff_reach[WIMSY_PUFFS_MAX][2];
 static uint8_t blade_tiles[WIMSY_BLADES_MAX][4];
 static uint8_t sprite_texels[WIMSY_SPRITE_BYTES];
 static bool sprite_made;
@@ -958,6 +1015,7 @@ typedef struct {
     uint32_t blades;
     float wind;
     float view[16];
+    uint32_t puffs;
     /// The judge's frame, whose colours are ranges, or a machine's, whose colours are its own.
     bool judging;
     /// The frame whose buffers the machine reads: this one, or an earlier one's when it is late.
@@ -1630,6 +1688,26 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
         corner->u = (double)vertex->u;
         corner->v = (double)vertex->v;
     }
+    scene->puffs = machine->smoke
+                       ? WimsyPuffsOf(WimsyPuffCount(WimsySmokeOf(level)), shown, scene_puffs)
+                       : 0u;
+    float scale[2];
+    WimsyPuffScale(scale);
+    for (uint32_t i = 0; i < scene->puffs; ++i) {
+        const WimsyPuff *const puff = &scene_puffs[i];
+        const float middle[3] = { puff->x, puff->y, puff->z };
+        Project(scene->view, middle, &puff_middle[i]);
+        // Its four corners share the middle's depth, so the near or the far distance takes the
+        // whole puff or none of it.
+        const bool seen = puff_middle[i].over_w > 0.0 && puff_middle[i].z > 0.0 &&
+                          puff_middle[i].z < 1.0;
+        puff_reach[i][0] = seen ? (double)(puff->size * scale[0]) * puff_middle[i].over_w * 0.5 *
+                                      (double)WIMSY_WIDTH
+                                : 0.0;
+        puff_reach[i][1] = seen ? (double)(puff->size * scale[1]) * puff_middle[i].over_w * 0.5 *
+                                      (double)WIMSY_HEIGHT
+                                : 0.0;
+    }
     scene->blades = WimsyBladesOf(0u, WimsyBladeCount(WimsyGrassOf(level)), scene_blades);
     scene->wind = WimsyWindOf(machine->wind ? shown : 0u);
     for (uint32_t b = 0; b < scene->blades; ++b) {
@@ -1686,6 +1764,126 @@ static void PanelsOver(const Scene *scene, uint32_t x0, uint32_t y0, bool both) 
 }
 
 /// The range each pixel of the tile at (@p x0, @p y0) may hold, into tile_low and tile_high.
+/// How much of what is behind it a puff hides at (@p x, @p y) of the target, of 1 at its
+/// middle: the fall the fragment program works out from where the pixel is in the square.
+static double PuffFall(uint32_t index, double x, double y) {
+    const double u = (x - puff_middle[index].x) / puff_reach[index][0];
+    const double v = (y - puff_middle[index].y) / puff_reach[index][1];
+    const double fall = 1.0 - u * u - v * v;
+    return fall > 0.0 ? fall : 0.0;
+}
+
+/// The smoke over the tile at (@p x0, @p y0), puff by puff in the order they are drawn, each
+/// blended over what the samples hold. A machine's frame: its one colour a sample, where the
+/// sample is inside the square and the puff nearer than what was drawn. The judge's: the range
+/// a sample may hold after it, from how thick the puff may be anywhere in the pixel (a machine
+/// shades a pixel once, at its middle or wherever in it), from whether it is surely nearer or
+/// surely farther than what shows there, and a code either way for the blend's rounding.
+static void SmokeOver(const Scene *scene, uint32_t x0, uint32_t y0) {
+    for (uint32_t i = 0; i < scene->puffs; ++i) {
+        const double reach_x = puff_reach[i][0], reach_y = puff_reach[i][1];
+        const double middle_x = puff_middle[i].x, middle_y = puff_middle[i].y;
+        const uint8_t *const bytes = scene_puffs[i].colour;
+        if (reach_x <= 0.0 || bytes[3] == 0u || middle_x + reach_x + 1.0 < (double)x0 ||
+            middle_x - reach_x - 1.0 > (double)(x0 + TILE) ||
+            middle_y + reach_y + 1.0 < (double)y0 ||
+            middle_y - reach_y - 1.0 > (double)(y0 + TILE)) {
+            continue;
+        }
+        const double depth = puff_middle[i].z;
+        const double thick = (double)((float)bytes[3] / 255.0f);
+        const double colour[3] = { (double)bytes[0], (double)bytes[1], (double)bytes[2] };
+        for (uint32_t py = 0; py < TILE; ++py) {
+            const double top = (double)(y0 + py);
+            if (top + 1.0 < middle_y - reach_y - 1.0 || top > middle_y + reach_y + 1.0) {
+                continue;
+            }
+            for (uint32_t px = 0; px < TILE; ++px) {
+                const double left = (double)(x0 + px);
+                if (left + 1.0 < middle_x - reach_x - 1.0 || left > middle_x + reach_x + 1.0) {
+                    continue;
+                }
+                if (!scene->judging) {
+                    const double alpha = thick * PuffFall(i, left + 0.5, top + 0.5);
+                    for (uint32_t s = 0; s < scene->sample_count; ++s) {
+                        double sx, sy;
+                        SamplePlace(scene, x0 + px, y0 + py, s, &sx, &sy);
+                        Drawn *const at = &drawn[(py * TILE + px) * SAMPLES_MAX + s];
+                        if (fabs(left + sx - middle_x) > reach_x ||
+                            fabs(top + sy - middle_y) > reach_y ||
+                            (scene->machine.smoke_depth && depth >= (double)at->depth)) {
+                            continue;
+                        }
+                        for (uint32_t k = 0; k < 3u; ++k) {
+                            const double mixed =
+                                colour[k] * alpha + (double)at->colour[k] * (1.0 - alpha);
+                            at->colour[k] = (uint8_t)(mixed + 0.5);
+                        }
+                    }
+                    continue;
+                }
+                // The thinnest and the thickest the puff is anywhere in the pixel: at the
+                // corner farthest from its middle and at the place nearest it.
+                const double near_x = middle_x < left ? left : middle_x > left + 1.0 ? left + 1.0 : middle_x;
+                const double near_y = middle_y < top ? top : middle_y > top + 1.0 ? top + 1.0 : middle_y;
+                const double far_x = middle_x < left + 0.5 ? left + 1.0 : left;
+                const double far_y = middle_y < top + 0.5 ? top + 1.0 : top;
+                // A 512th either way for what a machine's own arithmetic makes of the place.
+                const double thickest = thick * PuffFall(i, near_x, near_y);
+                const double thinnest = thick * PuffFall(i, far_x, far_y) - 1.0 / 512.0;
+                if (thickest <= 0.0) {
+                    continue;
+                }
+                const double most = thickest + 1.0 / 512.0 > 1.0 ? 1.0 : thickest + 1.0 / 512.0;
+                const double least = thinnest < 0.0 ? 0.0 : thinnest;
+                for (uint32_t s = 0; s < scene->sample_count; ++s) {
+                    double sx, sy;
+                    SamplePlace(scene, x0 + px, y0 + py, s, &sx, &sy);
+                    Sample *const sample = &samples[(py * TILE + px) * SAMPLES_MAX + s];
+                    // Inside the square at every place the sample may be, or at some, or at none.
+                    uint32_t inside = 0;
+                    float nearest = FLT_MAX;
+                    for (uint32_t place = 0; place < PLACES; ++place) {
+                        const double x = left + sx + PLACE[place][0] * WIMSY_EDGE_MARGIN;
+                        const double y = top + sy + PLACE[place][1] * WIMSY_EDGE_MARGIN;
+                        inside += fabs(x - middle_x) <= reach_x && fabs(y - middle_y) <= reach_y ? 1u : 0u;
+                        nearest = sample->nearest[place] < nearest ? sample->nearest[place] : nearest;
+                    }
+                    // Surely behind what covers the sample: nothing of it shows.
+                    if (inside == 0u ||
+                        (sample->cover != FLT_MAX && depth > (double)sample->cover + WIMSY_DEPTH_MARGIN)) {
+                        continue;
+                    }
+                    const bool surely = inside == PLACES && depth < (double)nearest - WIMSY_DEPTH_MARGIN;
+                    for (uint32_t k = 0; k < 3u; ++k) {
+                        // A blend is even in what is behind and in how thick: its least and
+                        // most are at the ends of both.
+                        const double ends[4] = {
+                            colour[k] * least + (double)sample->low[k] * (1.0 - least),
+                            colour[k] * least + (double)sample->high[k] * (1.0 - least),
+                            colour[k] * most + (double)sample->low[k] * (1.0 - most),
+                            colour[k] * most + (double)sample->high[k] * (1.0 - most),
+                        };
+                        double low = ends[0], high = ends[0];
+                        for (uint32_t e = 1; e < 4u; ++e) {
+                            low = ends[e] < low ? ends[e] : low;
+                            high = ends[e] > high ? ends[e] : high;
+                        }
+                        low = floor(low) - 1.0;
+                        high = ceil(high) + 1.0;
+                        if (!surely) {
+                            low = (double)sample->low[k] < low ? (double)sample->low[k] : low;
+                            high = (double)sample->high[k] > high ? (double)sample->high[k] : high;
+                        }
+                        sample->low[k] = (uint8_t)(low < 0.0 ? 0.0 : low);
+                        sample->high[k] = (uint8_t)(high > 255.0 ? 255.0 : high);
+                    }
+                }
+            }
+        }
+    }
+}
+
 static void TileRanges(Scene *scene, uint32_t x0, uint32_t y0) {
     if (scene->level == 0u) {
         SpritesInto(frame_sprites, WIMSY_SPRITES, sprite_texels, (int32_t)x0, (int32_t)y0, TILE,
@@ -1715,6 +1913,7 @@ static void TileRanges(Scene *scene, uint32_t x0, uint32_t y0) {
         }
     }
     OverTile(scene, x0, y0, PassRange);
+    SmokeOver(scene, x0, y0);
     for (uint32_t p = 0; p < TILE * TILE; ++p) {
         for (uint32_t k = 0; k < 3u; ++k) {
             uint32_t low = 0, high = 0;
@@ -1755,6 +1954,7 @@ void WimsyRender(uint32_t level, uint32_t frame, uint32_t frames, const WimsyMac
                     memcpy(drawn[i].colour, WIMSY_CLEAR, 3u);
                 }
                 OverTile(&scene, x0, y0, PassDraw);
+                SmokeOver(&scene, x0, y0);
                 for (uint32_t p = 0; p < TILE * TILE; ++p) {
                     for (uint32_t k = 0; k < 3u; ++k) {
                         uint32_t sum = 0;

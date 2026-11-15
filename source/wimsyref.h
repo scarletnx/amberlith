@@ -346,6 +346,39 @@ uint32_t WimsyPanelsOf(uint32_t level, WimsyPanel *out);
 /// @p frame.
 bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]);
 
+/// A puff of smoke, as the instance buffer holds it: a square that faces the camera, its middle
+/// in the world and its half side in the world's units, its grey, and in the colour's last byte
+/// how much of what is behind it the middle hides. It thins to nothing at its rim: at (u, v)
+/// from the middle, each from -1 to 1, it hides that much times 1 - u*u - v*v, or nothing.
+typedef struct {
+    float x, y, z, size;
+    uint8_t colour[4];
+} WimsyPuff;
+
+/// How thick the smoke is: none, 64, 256 and 1,024 puffs, a density's the first of the next's.
+#define WIMSY_SMOKE_DENSITIES 4u
+#define WIMSY_PUFFS_MAX 1024u
+/// How many frames a puff takes to rise, thicken and thin away before it starts again.
+#define WIMSY_PUFF_FRAMES 240u
+
+uint32_t WimsyPuffCount(uint32_t density);
+
+/// The density @p level's smoke has: what WimsySmokeAsk asked for, or the level's own, none
+/// below the heavy levels, 2 at level 3 and 3 at level 4.
+uint32_t WimsySmokeOf(uint32_t level);
+
+/// Asks for @p density at every level that has smoke; WIMSY_SMOKE_DENSITIES gives each level
+/// its own again.
+void WimsySmokeAsk(uint32_t density);
+
+/// The first @p count puffs as frame @p frame has them, in the order they are drawn, into
+/// @p out: each rises and drifts from where one seed puts it, by the frame's number alone.
+/// Returns how many it wrote.
+uint32_t WimsyPuffsOf(uint32_t count, uint32_t frame, WimsyPuff *out);
+
+/// What a puff's half side is multiplied by to give its reach in clip space, across and up.
+void WimsyPuffScale(float out[2]);
+
 /// How an imagined machine draws a frame, for WimsyRender: the reference suite's machines, each
 /// wrong in one way a real one can be.
 typedef struct {
@@ -378,6 +411,10 @@ typedef struct {
     uint32_t left_out;
     /// The wind. Off, the grass stands as frame nought has it.
     bool wind;
+    /// The smoke. Off, none is drawn.
+    bool smoke;
+    /// The smoke is behind what is nearer. Off, a puff is drawn over everything.
+    bool smoke_depth;
 } WimsyMachine;
 
 /// The machine that draws a level as the level asks.
