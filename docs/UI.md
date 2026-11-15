@@ -123,8 +123,9 @@ nothing it does lands in a case's time or beside the audio family's own renderer
 browser's player closes before it and the scene streams Wimsy's track on its own renderer (`MusicStreamOpen`,
 `MusicStreamFeed` before each step), into the final mix past the submix its tone's case records, switched to silence and
 back as the pause menu's music row says. A track that does not play is said in the report's next line, with the player's
-reason. A run from the mode file never turns the interactive mode on; in a browser's run where the music played, the
-case that holds the demos' music to nought skips as `asked`, with the frames, threads and voices it made.
+reason. Each start and switch here composes its song from the console's tick (`MusicSeedNow`), so a person hears a
+new one each time. A run from the mode file never turns the interactive mode on; in a browser's run where the music
+played, the case that holds the demos' music to nought skips as `asked`, with the frames, threads and voices it made.
 
 ## A run from the mode file
 
