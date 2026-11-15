@@ -135,6 +135,8 @@ static const RunnerStep STEPS[] = {
     { "julia", RunJulia, MODE_FAMILY_DEMO, false, true },
     // A 2D fluid in ping-pong passes, after the zooms.
     { "fluid", RunFluid, MODE_FAMILY_DEMO, false, true },
+    // Its aliasing level: targets drawn over their old selves and a storage image over them.
+    { "fluid-alias", RunFluidAlias, MODE_FAMILY_DEMO, false, true },
 };
 
 // The console's frontend for the runner: its folder, its build and its steps.

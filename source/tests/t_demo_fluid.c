@@ -35,7 +35,10 @@
 // projection leaves, the dye's mass and no field gone wrong. A frame's fields depend on its
 // number alone, so a machine that runs the frames slowly gets the same verdicts.
 
-static const char *const SUITE = "fluid";
+// The suite the cases go under: fluid, or fluid-alias for the aliasing level.
+static const char *SUITE = "fluid";
+// The aliasing level (demo_fluidref.h, FLUID_ALIAS_*): its pool, and the shifted pair's layout.
+static bool alias;
 
 #define SWAP_WIDTH 1280u
 #define SWAP_HEIGHT 720u
@@ -48,11 +51,12 @@ static const char *const SUITE = "fluid";
 #define RENDER_PRIORITY 0x2B
 #define STACK_SIZE 0x10000
 
-// What this run asks: its frames, whether they are timed, and how a person stops it (the
-// browser's B), NULL when nobody can. ran_frames is how many it ran, frames unless stopped.
+// What this run asks: its frames, whether they are timed, and how a person stops it or pauses it
+// (the browser), NULL when nobody can. ran_frames is how many it ran, frames unless stopped.
 static uint32_t frames = MODE_FRAMES_DEFAULT;
 static bool timing = true;
 static bool (*stop_asked)(void);
+static bool (*pause_asked)(void);
 static uint32_t ran_frames;
 
 static const FluidGrid GRID = { FLUID_W, FLUID_H };
@@ -70,7 +74,14 @@ enum {
     DYE_0,
     DYE_1,
     FIELDS,
+    // The aliasing level's: the splat target and the divergence drawn a shift further on, and the
+    // compute pass's storage image at that shift.
+    DYE_1_SHIFTED = FIELDS,
+    DIVERGENCE_SHIFTED,
+    ALIAS_STORAGE,
+    IMAGES,
 };
+#define STORAGE_BYTES (FLUID_ALIAS_SIDE * FLUID_ALIAS_SIDE * 4u)
 
 // The graphics device and everything the frames draw with, made before the first frame.
 static GpuContext gpu;
@@ -82,8 +93,12 @@ static DkShader jacobi_fs;
 static DkShader gradient_fs;
 static DkShader advect_fs;
 static DkShader display_fs;
-static DkImage field_images[FIELDS];
-static DkImageLayout field_layouts[FIELDS];
+static DkImage field_images[IMAGES];
+static DkImageLayout field_layouts[IMAGES];
+static DkShader alias_cs;
+static DkMemBlock alias_pool;
+// The images a frame's descriptors name: the fields', and the aliasing level's after them.
+static uint32_t images_used;
 static DkImage swap_images[SWAP_IMAGES];
 static DkImageLayout swap_layouts[SWAP_IMAGES];
 static DkSwapchain swapchain;
@@ -112,6 +127,9 @@ typedef struct {
 _Static_assert(sizeof(FluidSplat) == 32u && sizeof(SplatBlock) == 144u,
                "a splat block is laid out as fluid_splat.frag.glsl's std140 block");
 
+// The aliasing level's compute pass: the frame's number, for its words.
+static uint32_t *alias_cpu[SLOTS];
+static DkGpuAddr alias_gpu[SLOTS];
 static SplatBlock *force_cpu[SLOTS];
 static DkGpuAddr force_gpu[SLOTS];
 static SplatBlock *dye_cpu[SLOTS];
@@ -175,15 +193,29 @@ static void AfterPass(void) {
 }
 
 /// Copies field @p index into read @p read of judged frame @p judged_index.
-static void CopyOut(uint32_t index, uint32_t judged_index, FluidRead read) {
-    const bool dye = index == DYE_0 || index == DYE_1;
-    const uint32_t width = dye ? DYE_W : FLUID_W;
-    const uint32_t height = dye ? DYE_H : FLUID_H;
+/// Copies image @p index whole to @p at in the judged frames' memory.
+static void CopyImageOut(uint32_t index, DkGpuAddr at) {
+    const bool dye = index == DYE_0 || index == DYE_1 || index == DYE_1_SHIFTED;
+    const bool storage = index == ALIAS_STORAGE;
+    const uint32_t width = storage ? FLUID_ALIAS_SIDE : dye ? DYE_W : FLUID_W;
+    const uint32_t height = storage ? FLUID_ALIAS_SIDE : dye ? DYE_H : FLUID_H;
     DkImageView view;
     dkImageViewDefaults(&view, &field_images[index]);
     const DkImageRect whole = { 0, 0, 0, width, height, 1 };
-    const DkCopyBuf to = { reads_gpu + judged_index * region_bytes + read_offset[read], 0, 0 };
+    const DkCopyBuf to = { at, 0, 0 };
     dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &whole, &to, 0);
+}
+
+/// Copies field @p index into read @p read of judged frame @p judged_index.
+static void CopyOut(uint32_t index, uint32_t judged_index, FluidRead read) {
+    CopyImageOut(index, reads_gpu + judged_index * region_bytes + read_offset[read]);
+}
+
+/// Where judged frame @p judged_index's copy of the storage image is: after its reads.
+static size_t storage_offset;
+
+static const uint32_t *StorageOf(uint32_t judged_index) {
+    return (const uint32_t *)(reads_cpu + judged_index * region_bytes + storage_offset);
 }
 
 /// The fields' indices at a frame's start: which of each pair holds the velocity, the pressure
@@ -203,14 +235,17 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot, int judged_index) {
     // memory the unit caches in its level two cache: what the frame before last left there is
     // dropped. The last frame's wait for idle wrote every target back first.
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_None, DkInvalidateFlags_L2Cache);
-    dkCmdBufBindImageDescriptorSet(gpu.cmdbuf, image_set, FIELDS);
+    dkCmdBufBindImageDescriptorSet(gpu.cmdbuf, image_set, images_used);
     dkCmdBufBindSamplerDescriptorSet(gpu.cmdbuf, sampler_set, 2);
 
     const uint32_t v_in = VELOCITY_0 + velocity_at;
     const uint32_t v_other = VELOCITY_0 + (velocity_at ^ 1u);
     const uint32_t p_in = PRESSURE_0 + pressure_at;
     const uint32_t d_in = DYE_0 + dye_at;
-    const uint32_t d_other = DYE_0 + (dye_at ^ 1u);
+    // A shift frame of the aliasing level draws the splat target and the divergence a shift on.
+    const bool shifted = alias && FluidAliasShifted(k);
+    const uint32_t d_other = shifted ? DYE_1_SHIFTED : DYE_0 + (dye_at ^ 1u);
+    const uint32_t div = shifted ? DIVERGENCE_SHIFTED : DIVERGENCE;
     const uint32_t j = (uint32_t)judged_index;
     if (judged_index >= 0) {
         CopyOut(v_in, j, FLUID_READ_VELOCITY_IN);
@@ -229,7 +264,7 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot, int judged_index) {
     Pass(&splat_fs, dye_gpu[slot], sizeof(SplatBlock));
     AfterPass();
 
-    Target(DIVERGENCE, FLUID_W, FLUID_H);
+    Target(div, FLUID_W, FLUID_H);
     Texture(0, v_other);
     Pass(&divergence_fs, grid_block, 32u);
     AfterPass();
@@ -240,10 +275,17 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot, int judged_index) {
         const uint32_t p_to = p_from == PRESSURE_0 ? PRESSURE_1 : PRESSURE_0;
         Target(p_to, FLUID_W, FLUID_H);
         Texture(0, p_from);
-        Texture(1, DIVERGENCE);
+        Texture(1, div);
         Pass(&jacobi_fs, n == 0u ? jacobi_first : jacobi_rest, 32u);
         AfterPass();
         p_from = p_to;
+    }
+
+    // The divergence is copied now: on a shift frame of the aliasing level the dye's advection
+    // writes over its last bytes.
+    if (judged_index >= 0) {
+        CopyOut(div, j, FLUID_READ_DIVERGENCE);
+        dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, 0);
     }
 
     // The projection, into the velocity's first target; then both advections along it.
@@ -267,11 +309,25 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot, int judged_index) {
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
     if (judged_index >= 0) {
         CopyOut(d_other, j, FLUID_READ_DYED);
-        CopyOut(DIVERGENCE, j, FLUID_READ_DIVERGENCE);
         CopyOut(p_from, j, FLUID_READ_PRESSURE);
         CopyOut(v_in, j, FLUID_READ_PROJECTED);
         CopyOut(v_other, j, FLUID_READ_VELOCITY);
         CopyOut(d_in, j, FLUID_READ_DYE);
+    }
+    if (alias) {
+        // The aliasing level's compute pass, after the copies: its image lies over the splat
+        // target's bytes, and over the stale ones of that target drawn a shift on.
+        dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, 0);
+        const DkShader *const compute[] = { &alias_cs };
+        dkCmdBufBindShaders(gpu.cmdbuf, DkStageFlag_Compute, compute, 1);
+        dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Compute, 0, alias_gpu[slot],
+                                  DK_UNIFORM_BUF_ALIGNMENT);
+        dkCmdBufBindImage(gpu.cmdbuf, DkStage_Compute, 0, dkMakeImageHandle(ALIAS_STORAGE));
+        dkCmdBufDispatchCompute(gpu.cmdbuf, FLUID_ALIAS_SIDE / 8u, FLUID_ALIAS_SIDE / 8u, 1);
+        dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
+        if (judged_index >= 0) {
+            CopyImageOut(ALIAS_STORAGE, reads_gpu + j * region_bytes + storage_offset);
+        }
     }
 
     // The dye shown: onto the swapchain's image, or the main target the screen is fed from.
@@ -310,8 +366,38 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot, int judged_index) {
     return worked;
 }
 
-// The frame the main thread stopped at: the render thread draws none from it on.
+// The frame the run stopped at, the earliest either thread asked for: none is drawn from it on.
 static uint32_t last_frame;
+
+static void StopAt(uint32_t k) {
+    uint32_t was = __atomic_load_n(&last_frame, __ATOMIC_ACQUIRE);
+    while (k < was && !__atomic_compare_exchange_n(&last_frame, &was, k, false, __ATOMIC_ACQ_REL,
+                                                   __ATOMIC_ACQUIRE)) {
+    }
+}
+
+/// While the person has the demo paused, before frame @p k: the simulation held where it is and
+/// its last frame shown again, the screen pacing it. Hands back how long, and false when the
+/// person stopped the demo meanwhile.
+static bool HoldWhilePaused(uint32_t k, uint64_t *held) {
+    *held = 0;
+    if (pause_asked == NULL || !pause_asked()) {
+        return true;
+    }
+    const uint64_t from = armGetSystemTick();
+    bool going = true;
+    while (going && pause_asked()) {
+        if (stop_asked != NULL && stop_asked()) {
+            going = false;
+        } else if (!on_screen || k == 0u ||
+                   !ViewerShowImage((const uint8_t *)dkMemBlockGetCpuAddr(gpu.read_memory), DYE_W,
+                                    DYE_H)) {
+            svcSleepThread(16000000);
+        }
+    }
+    *held = armGetSystemTick() - from;
+    return going;
+}
 
 static void RenderMain(void *argument) {
     (void)argument;
@@ -322,8 +408,17 @@ static void RenderMain(void *argument) {
         if (k >= __atomic_load_n(&last_frame, __ATOMIC_ACQUIRE)) {
             break;
         }
+        // A pause holds the frame about to be drawn; its time is no frame's.
+        uint64_t held = 0;
+        if (!HoldWhilePaused(k, &held)) {
+            StopAt(k);
+            semaphoreSignal(&slot_free);
+            break;
+        }
         if (k == 0u) {
             previous = armGetSystemTick();
+        } else {
+            previous += held;
         }
         const uint32_t core = svcGetCurrentProcessorNumber();
         if (core != RENDER_CORE && render.wrong_core++ == 0u) {
@@ -376,6 +471,90 @@ static DkGpuAddr Block(uint32_t width, uint32_t height, float k0, float k1, floa
     return address;
 }
 
+/// The aliasing level's pool: the dye's splat target B, the divergence and the dye A one after the
+/// other. B and the divergence drawn FLUID_ALIAS_SHIFT on lie over their old selves and A's first
+/// bytes, and the next frame's B, divergence and A cover them whole, from their first byte on. No
+/// pass reads bytes it writes: the shifted B ends before A begins when the shift is no more than
+/// the divergence's size, which this checks, and the shifted divergence lies over A only between
+/// the splat's read of A and the advection's write of it. The storage image lies at the shift,
+/// inside B and the shifted B both.
+static bool PlaceAliased(char *why, size_t why_size) {
+    const struct {
+        uint32_t index;
+        DkImageFormat format;
+        uint32_t flags;
+        uint32_t width;
+        uint32_t height;
+    } MADE[] = {
+        { DYE_1, DkImageFormat_RGBA32_Float, DkImageFlags_UsageRender, DYE_W, DYE_H },
+        { DIVERGENCE, DkImageFormat_R32_Float, DkImageFlags_UsageRender, FLUID_W, FLUID_H },
+        { DYE_0, DkImageFormat_RGBA32_Float, DkImageFlags_UsageRender, DYE_W, DYE_H },
+        { DYE_1_SHIFTED, DkImageFormat_RGBA32_Float, DkImageFlags_UsageRender, DYE_W, DYE_H },
+        { DIVERGENCE_SHIFTED, DkImageFormat_R32_Float, DkImageFlags_UsageRender, FLUID_W,
+          FLUID_H },
+        { ALIAS_STORAGE, DkImageFormat_R32_Uint, DkImageFlags_UsageLoadStore, FLUID_ALIAS_SIDE,
+          FLUID_ALIAS_SIDE },
+    };
+    uint64_t size[sizeof(MADE) / sizeof(MADE[0])];
+    uint32_t align[sizeof(MADE) / sizeof(MADE[0])];
+    for (size_t i = 0; i < sizeof(MADE) / sizeof(MADE[0]); ++i) {
+        DkImageLayoutMaker maker;
+        dkImageLayoutMakerDefaults(&maker, gpu.device);
+        maker.type = DkImageType_2D;
+        maker.flags = MADE[i].flags;
+        maker.format = MADE[i].format;
+        maker.dimensions[0] = MADE[i].width;
+        maker.dimensions[1] = MADE[i].height;
+        maker.mipLevels = 1;
+        dkImageLayoutInitialize(&field_layouts[MADE[i].index], &maker);
+        size[i] = dkImageLayoutGetSize(&field_layouts[MADE[i].index]);
+        align[i] = dkImageLayoutGetAlignment(&field_layouts[MADE[i].index]);
+    }
+    const uint64_t dye = size[0];
+    const uint64_t divergence = size[1];
+    const uint64_t at[] = { 0, dye, dye + divergence, FLUID_ALIAS_SHIFT, FLUID_ALIAS_SHIFT + dye,
+                            FLUID_ALIAS_SHIFT };
+    if (FLUID_ALIAS_SHIFT > divergence || size[5] > dye) {
+        snprintf(why, why_size,
+                 "the aliasing level's layout: a shift of %u bytes past a divergence of %llu, or a "
+                 "storage image of %llu bytes past a dye target of %llu",
+                 (unsigned)FLUID_ALIAS_SHIFT, (unsigned long long)divergence,
+                 (unsigned long long)size[5], (unsigned long long)dye);
+        return false;
+    }
+    for (size_t i = 0; i < sizeof(MADE) / sizeof(MADE[0]); ++i) {
+        if (align[i] == 0u || at[i] % align[i] != 0u) {
+            snprintf(why, why_size,
+                     "the aliasing level's layout: image %u at %llu, which its alignment %u does "
+                     "not divide",
+                     (unsigned)MADE[i].index, (unsigned long long)at[i], (unsigned)align[i]);
+            return false;
+        }
+    }
+    DkMemBlockMaker block;
+    const uint64_t whole = dye + divergence + dye;
+    dkMemBlockMakerDefaults(&block, gpu.device,
+                            (uint32_t)((whole + DK_MEMBLOCK_ALIGNMENT - 1u) &
+                                       ~(uint64_t)(DK_MEMBLOCK_ALIGNMENT - 1u)));
+    block.flags = DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image;
+    alias_pool = dkMemBlockCreate(&block);
+    if (alias_pool == NULL) {
+        snprintf(why, why_size, "the aliasing level's pool of %llu bytes",
+                 (unsigned long long)whole);
+        return false;
+    }
+    for (size_t i = 0; i < sizeof(MADE) / sizeof(MADE[0]); ++i) {
+        dkImageInitialize(&field_images[MADE[i].index], &field_layouts[MADE[i].index], alias_pool,
+                          (uint32_t)at[i]);
+    }
+    ReportNote("fluid-alias: one pool of %llu bytes: the splat target at 0, the divergence at "
+               "%llu, the dye at %llu; a shift frame's splat target at %u and divergence at %llu, "
+               "the storage image at %u",
+               (unsigned long long)whole, (unsigned long long)at[1], (unsigned long long)at[2],
+               (unsigned)FLUID_ALIAS_SHIFT, (unsigned long long)at[4], (unsigned)FLUID_ALIAS_SHIFT);
+    return true;
+}
+
 /// The graphics side: shaders, the fields' targets cleared to nought, the presented images, the
 /// scratch every frame reads and the memory the judged frames are copied into.
 static bool BringUp(char *why, size_t why_size) {
@@ -384,6 +563,8 @@ static bool BringUp(char *why, size_t why_size) {
         read_offset[r] = at;
         at += FluidReadFloats(&GRID, (FluidRead)r) * sizeof(float);
     }
+    storage_offset = at;
+    at += alias ? STORAGE_BYTES : 0u;
     region_bytes = (at + 255u) & ~(size_t)255u;
 
     GpuSpec spec;
@@ -394,6 +575,7 @@ static bool BringUp(char *why, size_t why_size) {
     // fields' seven targets 1.6 MiB more.
     spec.image_size = 16u * 1024u * 1024u;
     spec.command_size = 512u * 1024u;
+    spec.compute = alias;
     if (!GpuOpenSpec(&gpu, &spec)) {
         snprintf(why, why_size, "the graphics device: %s", gpu.failure);
         return false;
@@ -403,7 +585,8 @@ static bool BringUp(char *why, size_t why_size) {
         ShaderId id;
     } SHADERS[] = {
         { &position_vs, SHADER_POSITION_VERT },     { &common_vs, SHADER_COMMON_VERT },
-        { &splat_fs, SHADER_FLUID_SPLAT_FRAG },     { &divergence_fs, SHADER_FLUID_DIVERGENCE_FRAG },
+        { &splat_fs, SHADER_FLUID_SPLAT_FRAG },
+        { &divergence_fs, SHADER_FLUID_DIVERGENCE_FRAG },
         { &jacobi_fs, SHADER_FLUID_JACOBI_FRAG },   { &gradient_fs, SHADER_FLUID_GRADIENT_FRAG },
         { &advect_fs, SHADER_FLUID_ADVECT_FRAG },   { &display_fs, SHADER_FLUID_DISPLAY_FRAG },
     };
@@ -414,6 +597,11 @@ static bool BringUp(char *why, size_t why_size) {
             return false;
         }
     }
+    if (alias && !GpuLoadShader(&gpu, &alias_cs, ShaderData(SHADER_FLUID_ALIAS_COMP),
+                                ShaderSize(SHADER_FLUID_ALIAS_COMP))) {
+        snprintf(why, why_size, "the aliasing level's compute shader: %s", gpu.failure);
+        return false;
+    }
     static const DkImageFormat FORMATS[FIELDS] = {
         DkImageFormat_RG32_Float, DkImageFormat_RG32_Float, DkImageFormat_R32_Float,
         DkImageFormat_R32_Float,  DkImageFormat_R32_Float,  DkImageFormat_RGBA32_Float,
@@ -422,9 +610,20 @@ static bool BringUp(char *why, size_t why_size) {
     bool images = true;
     for (uint32_t f = 0; f < FIELDS && images; ++f) {
         const bool dye = f == DYE_0 || f == DYE_1;
+        // The aliasing level lays the dye's two targets and the divergence in its pool.
+        if (alias && (dye || f == DIVERGENCE)) {
+            continue;
+        }
         images = GpuCreateRenderImage(&gpu, &field_images[f], &field_layouts[f], FORMATS[f],
                                       dye ? DYE_W : FLUID_W, dye ? DYE_H : FLUID_H,
                                       DkMsMode_1x);
+    }
+    images_used = FIELDS;
+    if (images && alias) {
+        if (!PlaceAliased(why, why_size)) {
+            return false;
+        }
+        images_used = IMAGES;
     }
     for (uint32_t i = 0; i < SWAP_IMAGES && images; ++i) {
         images = GpuCreateImage(&gpu, &swap_images[i], &swap_layouts[i],
@@ -439,6 +638,11 @@ static bool BringUp(char *why, size_t why_size) {
     }
 
     why[0] = '\0';
+    for (uint32_t s = 0; s < SLOTS && alias; ++s) {
+        alias_cpu[s] = (uint32_t *)Scratch(DK_UNIFORM_BUF_ALIGNMENT, DK_UNIFORM_BUF_ALIGNMENT,
+                                           &alias_gpu[s], "the compute pass's frame", why,
+                                           why_size);
+    }
     for (uint32_t s = 0; s < SLOTS; ++s) {
         force_cpu[s] = (SplatBlock *)Scratch(DK_UNIFORM_BUF_ALIGNMENT, DK_UNIFORM_BUF_ALIGNMENT,
                                              &force_gpu[s], "the force splats", why, why_size);
@@ -450,7 +654,7 @@ static bool BringUp(char *why, size_t why_size) {
     GpuVertex *const quad = (GpuVertex *)Scratch(6u * (uint32_t)sizeof(GpuVertex), 256u,
                                                  &shown_quad, "the quad shown", why, why_size);
     DkImageDescriptor *const image_descriptors = (DkImageDescriptor *)Scratch(
-        FIELDS * (uint32_t)sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT,
+        IMAGES * (uint32_t)sizeof(DkImageDescriptor), DK_IMAGE_DESCRIPTOR_ALIGNMENT,
         &image_set, "the image descriptors", why, why_size);
     DkSamplerDescriptor *const sampler_descriptors = (DkSamplerDescriptor *)Scratch(
         2u * (uint32_t)sizeof(DkSamplerDescriptor), DK_SAMPLER_DESCRIPTOR_ALIGNMENT, &sampler_set,
@@ -488,7 +692,7 @@ static bool BringUp(char *why, size_t why_size) {
     memcpy(quad, SHOWN, sizeof(SHOWN));
 
     DkImageView view;
-    for (uint32_t f = 0; f < FIELDS; ++f) {
+    for (uint32_t f = 0; f < images_used; ++f) {
         dkImageViewDefaults(&view, &field_images[f]);
         dkImageDescriptorInitialize(&image_descriptors[f], &view, false, false);
     }
@@ -545,6 +749,10 @@ static void WriteSlot(uint32_t k, uint32_t slot) {
     dye_cpu[slot]->count[0] = count;
     memcpy(force_cpu[slot]->splats, force, count * sizeof(FluidSplat));
     memcpy(dye_cpu[slot]->splats, dye, count * sizeof(FluidSplat));
+    if (alias) {
+        memset(alias_cpu[slot], 0, 16u);
+        alias_cpu[slot][0] = k;
+    }
 }
 
 /// Runs the frames: starts the render thread, drives the loop, and waits for it. False with the
@@ -568,11 +776,13 @@ static bool RunFrames(char *why, size_t why_size) {
                                                          1u << MAIN_CORE));
     for (uint32_t k = 0; k < frames; ++k) {
         semaphoreWait(&slot_free);
-        // Looked at once a frame, before the frame is written: a person who pressed B has the
-        // render thread stop where it is, with what it drew so far.
+        // The render thread stopped in a pause, or a person stopped the demo: looked at once a
+        // frame, before the frame is written, so the render thread stops where it is.
+        if (k >= __atomic_load_n(&last_frame, __ATOMIC_ACQUIRE)) {
+            break;
+        }
         if (stop_asked != NULL && stop_asked()) {
-            ran_frames = k;
-            __atomic_store_n(&last_frame, k, __ATOMIC_RELEASE);
+            StopAt(k);
             semaphoreSignal(&frame_go);
             break;
         }
@@ -583,12 +793,13 @@ static bool RunFrames(char *why, size_t why_size) {
     }
     threadWaitForExit(&render_thread);
     threadClose(&render_thread);
+    ran_frames = __atomic_load_n(&last_frame, __ATOMIC_ACQUIRE);
     if (pinned) {
         const Result back = svcSetThreadCoreMask(CUR_THREAD_HANDLE, ideal, (u32)mask);
         if (R_FAILED(back)) {
-            ReportNote("fluid: the main thread could not be put back on core %d, mask 0x%llx: "
+            ReportNote("%s: the main thread could not be put back on core %d, mask 0x%llx: "
                        "0x%x, so it stays on core %d alone",
-                       (int)ideal, (unsigned long long)mask, (unsigned)back, MAIN_CORE);
+                       SUITE, (int)ideal, (unsigned long long)mask, (unsigned)back, MAIN_CORE);
         }
     }
     return true;
@@ -702,6 +913,11 @@ static void SimulateTo(Fields *sim, uint32_t *done, uint32_t last) {
     }
 }
 
+/// The farthest the early frames came from the whole simulation, and in which frame, for the note
+/// JudgeFrames ends on.
+static float early_farthest;
+static uint32_t early_farthest_frame;
+
 /// The early frames against the whole simulation from frame 0, the dye and the velocity each
 /// leaves; the picture is the first frame off's dye.
 static void JudgeEarly(const char *name, Fields *sim) {
@@ -740,6 +956,8 @@ static void JudgeEarly(const char *name, Fields *sim) {
             }
         }
     }
+    early_farthest = farthest;
+    early_farthest_frame = farthest_frame;
     if (off_frames == 0u) {
         ReportCase(SUITE, name, CHECK_ULP, true, NULL);
         return;
@@ -865,6 +1083,124 @@ static void JudgeFrames(const char *const names[FLUID_CHECKS], Fields *fields) {
         }
         ReportCase(SUITE, names[c], CHECK_ULP, false, detail);
     }
+    // How near the machine came, whatever the verdicts: a pass says nothing of its margin.
+    static const char *const PASSES[7] = { "force splats",  "dye splats",
+                                           "divergence",    "Jacobi passes",
+                                           "gradient",      "velocity advection",
+                                           "dye advection" };
+    char note[REPORT_NOTE_MAX + 1];
+    int used = snprintf(note, sizeof(note),
+                        "%s: the farthest each check found, its frame after it: the early frames "
+                        "from the whole simulation %.3g at %u; worked out again,",
+                        SUITE, (double)early_farthest, (unsigned)early_farthest_frame);
+    for (uint32_t c = 0; c < 7u && used > 0 && (size_t)used < sizeof(note); ++c) {
+        used += snprintf(note + used, sizeof(note) - (size_t)used, " %s %.3g at %u%s", PASSES[c],
+                         tallies[c].worst, (unsigned)tallies[c].worst_frame,
+                         c + 1u < 7u ? "," : ";");
+    }
+    if (used > 0 && (size_t)used < sizeof(note)) {
+        snprintf(note + used, sizeof(note) - (size_t)used,
+                 " the projection left %.3g of the divergence at most, at %u; the dye's mass %.3g "
+                 "off its budget at most, at %u; %u judged frames with a field gone wrong",
+                 tallies[FLUID_CHECK_PROJECTION].worst,
+                 (unsigned)tallies[FLUID_CHECK_PROJECTION].worst_frame,
+                 tallies[FLUID_CHECK_MASS].worst, (unsigned)tallies[FLUID_CHECK_MASS].worst_frame,
+                 (unsigned)tallies[FLUID_CHECK_SANE].frames_off);
+    }
+    ReportNote("%s", note);
+}
+
+/// Each pair of judged frames in a row: the fields the first left are the ones the second started
+/// from, bit for bit, whatever happened to the memory between (the aliasing level's shifts).
+static void JudgeHandOn(const char *name) {
+    uint32_t pairs = 0;
+    uint32_t off = 0;
+    uint32_t first_from = 0;
+    FluidRead first_read = FLUID_READS;
+    uint32_t first_at = 0;
+    float first_left = 0.0f;
+    float first_got = 0.0f;
+    for (uint32_t i = 0; i + 1u < judged_count; ++i) {
+        if (judged[i + 1u] != judged[i] + 1u) {
+            continue;
+        }
+        ++pairs;
+        FluidFrame before;
+        FluidFrame after;
+        for (uint32_t r = 0; r < FLUID_READS; ++r) {
+            before.read[r] = ReadOf(i, (FluidRead)r);
+            after.read[r] = ReadOf(i + 1u, (FluidRead)r);
+        }
+        before.frame = judged[i];
+        after.frame = judged[i + 1u];
+        FluidRead read = FLUID_READS;
+        uint32_t at = 0;
+        if (!FluidHandedOn(&GRID, &before, &after, &read, &at) && off++ == 0u) {
+            first_from = judged[i];
+            first_read = read;
+            first_at = at;
+            const FluidRead left = read == FLUID_READ_VELOCITY_IN   ? FLUID_READ_VELOCITY
+                                   : read == FLUID_READ_PRESSURE_IN ? FLUID_READ_PRESSURE
+                                                                    : FLUID_READ_DYE;
+            first_left = ReadOf(i, left)[at];
+            first_got = ReadOf(i + 1u, read)[at];
+        }
+    }
+    if (pairs == 0u) {
+        ReportSkip(SUITE, name, REPORT_REASON_DEPENDS,
+                   "the run judged no two frames in a row");
+        return;
+    }
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    char where[64] = "";
+    if (off > 0u) {
+        Where(where, sizeof(where), first_at, FluidReadKind(first_read));
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, off == 0u,
+               "%u of %u pairs differ; the first, frame %u to %u: %s at %s, %.9g left and %.9g "
+               "started from",
+               (unsigned)off, (unsigned)pairs, (unsigned)first_from, (unsigned)(first_from + 1u),
+               FluidReadName(first_read), where, (double)first_left, (double)first_got);
+}
+
+/// The aliasing level's compute pass: every judged frame's storage image holds the words it
+/// stored that frame.
+static void JudgeStorage(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    uint32_t off = 0;
+    uint32_t first = 0;
+    uint32_t first_x = 0;
+    uint32_t first_y = 0;
+    uint32_t first_got = 0;
+    for (uint32_t i = 0; i < judged_count; ++i) {
+        const uint32_t *const words = StorageOf(i);
+        bool right = true;
+        for (uint32_t y = 0; y < FLUID_ALIAS_SIDE && right; ++y) {
+            for (uint32_t x = 0; x < FLUID_ALIAS_SIDE && right; ++x) {
+                const uint32_t got = words[y * FLUID_ALIAS_SIDE + x];
+                if (got != FluidAliasWord(judged[i], x, y)) {
+                    right = false;
+                    if (off == 0u) {
+                        first = judged[i];
+                        first_x = x;
+                        first_y = y;
+                        first_got = got;
+                    }
+                }
+            }
+        }
+        off += right ? 0u : 1u;
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, off == 0u,
+               "%u of %u judged frames' images hold other words; the first, frame %u, word (%u, "
+               "%u): 0x%08x where 0x%08x",
+               (unsigned)off, (unsigned)judged_count, (unsigned)first, (unsigned)first_x,
+               (unsigned)first_y, (unsigned)first_got,
+               (unsigned)FluidAliasWord(first, first_x, first_y));
 }
 
 static GameTimeCase time_cases[GAME_TIME_CASES];
@@ -893,9 +1229,9 @@ static void Times(void) {
         }
     }
     char note[REPORT_NOTE_MAX + 1];
-    FluidDescribeFrames(note, sizeof(note), &times);
+    FluidDescribeFrames(note, sizeof(note), SUITE, &times);
     ReportNote("%s", note);
-    FluidDescribeParts(note, sizeof(note), &times);
+    FluidDescribeParts(note, sizeof(note), SUITE, &times);
     ReportNote("%s", note);
 }
 
@@ -913,7 +1249,7 @@ static void SkipFrom(const char *const names[], size_t count, const char *why) {
 static void RunScene(void) {
     static const char BRING_UP[] = "a graphics device, the fields' targets, the shaders and a way "
                                    "to the display come up";
-    judged_count = FluidJudgedFrames(frames, judged);
+    judged_count = FluidJudgedFrames(frames, alias, judged);
     uint32_t early = 0;
     for (uint32_t i = 0; i < judged_count && judged[i] <= FLUID_EARLY_LAST; ++i) {
         early = judged[i];
@@ -923,7 +1259,7 @@ static void RunScene(void) {
              "%u frames, frames 0 to %u's dye and velocity within 2^-10 of the processor's whole "
              "simulation",
              (unsigned)frames, (unsigned)early);
-    static char names[FLUID_CHECKS][128];
+    static char names[FLUID_CHECKS + 2u][128];
     // Each at most 127 characters with the count before it: the report keeps no more of a name.
     static const char *const WHAT[FLUID_CHECKS] = {
         "the force splats worked out again from each one's own velocity",
@@ -938,18 +1274,33 @@ static void RunScene(void) {
         "every field a finite number and the dye never below nought",
     };
     _Static_assert(FLUID_JACOBI == 40u, "the Jacobi case's name says how many passes");
-    const char *all[FLUID_CHECKS + 1u];
+    const char *all[FLUID_CHECKS + 3u];
     all[0] = frames_name;
     for (uint32_t i = 0; i < FLUID_CHECKS; ++i) {
         snprintf(names[i], sizeof(names[i]), "%u judged frames, %s", (unsigned)judged_count,
                  WHAT[i]);
         all[i + 1u] = names[i];
     }
+    uint32_t pairs = 0;
+    for (uint32_t i = 0; i + 1u < judged_count; ++i) {
+        pairs += judged[i + 1u] == judged[i] + 1u ? 1u : 0u;
+    }
+    snprintf(names[FLUID_CHECKS], sizeof(names[0]),
+             "%u pairs of judged frames in a row, the fields one leaves the next starts from, bit "
+             "for bit",
+             (unsigned)pairs);
+    all[FLUID_CHECKS + 1u] = names[FLUID_CHECKS];
+    snprintf(names[FLUID_CHECKS + 1u], sizeof(names[0]),
+             "%u judged frames, the compute pass's words in its image over the splat target's "
+             "bytes",
+             (unsigned)judged_count);
+    all[FLUID_CHECKS + 2u] = names[FLUID_CHECKS + 1u];
+    const size_t all_count = FLUID_CHECKS + 2u + (alias ? 1u : 0u);
     (void)GameTimeCases(NULL, frames, time_cases);
-    const size_t after_count = sizeof(all) / sizeof(all[0]) - 1u;
+    const size_t after_count = all_count - 1u;
 
     if (!ReportStart(SUITE, BRING_UP)) {
-        SkipFrom(all, sizeof(all) / sizeof(all[0]),
+        SkipFrom(all, all_count,
                  "the scene's bring-up did not run, so neither did its frames");
         return;
     }
@@ -960,9 +1311,10 @@ static void RunScene(void) {
         // scene's does.
         on_screen = ViewerScreenUp();
         if (on_screen) {
-            ReportNote("fluid: the program's screen is up, so the frames are shown through it, "
+            ReportNote("%s: the program's screen is up, so the frames are shown through it, "
                        "copied out by the processor, rather than through a swapchain; present to "
-                       "present is that screen's, not a quick run's");
+                       "present is that screen's, not a quick run's",
+                       SUITE);
         } else {
             const DkImage *const presented[SWAP_IMAGES] = { &swap_images[0], &swap_images[1] };
             dkSwapchainMakerDefaults(&swap_maker, gpu.device, nwindowGetDefault(), presented,
@@ -978,7 +1330,7 @@ static void RunScene(void) {
     CHECK_TRUE(SUITE, BRING_UP, CHECK_NONE, up, "%s", why);
 
     if (!up) {
-        SkipFrom(all, sizeof(all) / sizeof(all[0]),
+        SkipFrom(all, all_count,
                  "the scene did not come up, so its frames did not run");
     } else if (ReportStart(SUITE, frames_name)) {
         const bool ran = RunFrames(why, sizeof(why));
@@ -997,9 +1349,9 @@ static void RunScene(void) {
                 snprintf(left + used, sizeof(left) - used, "%s%u", used > 0u ? ", " : "",
                          (unsigned)judged[i]);
             }
-            ReportNote("fluid: stopped at frame %u of %u by the browser's B; the judged frames "
+            ReportNote("%s: stopped at frame %u of %u by the browser's B; the judged frames "
                        "past it are left out: %s",
-                       (unsigned)ran_frames, (unsigned)frames, left);
+                       SUITE, (unsigned)ran_frames, (unsigned)frames, left);
         }
         if (ran && ran_frames == 0u) {
             ReportSkip(SUITE, frames_name, REPORT_REASON_ASKED,
@@ -1025,10 +1377,14 @@ static void RunScene(void) {
         } else {
             JudgeEarly(frames_name, &sim);
             JudgeFrames(all + 1, &work);
+            JudgeHandOn(all[FLUID_CHECKS + 1u]);
+            if (alias) {
+                JudgeStorage(all[FLUID_CHECKS + 2u]);
+            }
             if (render.wrong_core > 0u) {
-                ReportNote("fluid: the render thread ran on core %u in %u of %u frames, the first "
+                ReportNote("%s: the render thread ran on core %u in %u of %u frames, the first "
                            "%u, where it was made on core %d",
-                           (unsigned)render.core_seen, (unsigned)render.wrong_core,
+                           SUITE, (unsigned)render.core_seen, (unsigned)render.wrong_core,
                            (unsigned)ran_frames, (unsigned)render.wrong_core_at, RENDER_CORE);
             }
             if (timing) {
@@ -1047,18 +1403,44 @@ static void RunScene(void) {
         dkSwapchainDestroy(swapchain);
         swapchain = NULL;
     }
+    // The pool is this scene's, not GpuClose's: it goes once the queue is idle, while the device
+    // GpuClose takes down is still there.
+    if (alias_pool != NULL) {
+        if (gpu.queue != NULL) {
+            dkQueueWaitIdle(gpu.queue);
+        }
+        dkMemBlockDestroy(alias_pool);
+        alias_pool = NULL;
+    }
     GpuClose(&gpu);
 }
 
-void FluidDemo(const DemoRun *run) {
+/// The demo at @p level, 0 or the aliasing level 1, as @p run asks.
+static void RunLevel(const DemoRun *run, bool aliasing) {
+    alias = aliasing;
+    SUITE = aliasing ? "fluid-alias" : "fluid";
     frames = run->frames >= 1u && run->frames <= MODE_FRAMES_MAX ? run->frames
                                                                   : MODE_FRAMES_DEFAULT;
     timing = run->timing;
     stop_asked = run->stopped;
+    pause_asked = run->paused;
     RunScene();
+}
+
+void FluidDemo(const DemoRun *run) {
+    RunLevel(run, false);
+}
+
+void FluidAliasDemo(const DemoRun *run) {
+    RunLevel(run, true);
 }
 
 void RunFluid(void) {
     const DemoRun run = DemoScriptRun();
     FluidDemo(&run);
+}
+
+void RunFluidAlias(void) {
+    const DemoRun run = DemoScriptRun();
+    FluidAliasDemo(&run);
 }

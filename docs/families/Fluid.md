@@ -6,6 +6,7 @@
 * [The script](#the-script)
 * [What is judged](#what-is-judged)
 * [Where the budgets come from](#where-the-budgets-come-from)
+* [The aliasing level](#the-aliasing-level)
 * [What is timed](#what-is-timed)
 * [In the browser](#in-the-browser)
 * [What rests on reasoning](#what-rests-on-reasoning)
@@ -18,10 +19,14 @@ game scene's are ([game](Game.md)). One of the [demo family](Demo.md)'s demos: o
 leaves it out, and `frames=` sets its length (600 without it). `source/demo_fluidref.c` is every pass on the
 processor, operation for operation, and `source/tests/t_demo_fluid.c` the scene.
 
-- **fluid**, eighteen cases, eleven with `notime`. One says the scene came up (none tier): a graphics device, the
+- **fluid**, twenty cases, thirteen with `notime`. One says the scene came up (none tier): a graphics device, the
   fields' targets, the shaders, and a swapchain on the default window or the program's screen. Then the frames run,
   inside the case that holds the early frames to the processor's whole simulation; the ten after it hold every
-  judged frame to its passes worked out again and to the invariants, and the seven last carry the frames' times.
+  judged frame to its passes worked out again and to the invariants, one holds each judged frame's fields to the
+  next's, and the seven last carry the frames' times.
+- **fluid-alias**, twenty one cases, fourteen with `notime`: the same demo with its targets drawn over their old
+  selves and a compute pass's storage image over them ([The aliasing level](#the-aliasing-level)), and a case more
+  for the compute pass's words.
 
 ## The passes
 
@@ -97,6 +102,8 @@ took.
 | *j* judged frames, the projection leaving at most half the divergence it was given | the root mean square of the divergence after the gradient is at most half the one before | ulp |
 | *j* judged frames, the dye's mass within 25% of what the splats put in less the dissipation | the sum of the dye's colours is within 25% of the budget | ulp |
 | *j* judged frames, every field a finite number and the dye never below nought | none of the ten copies holds a NaN or an infinity, and no dye is below nought | ulp |
+| *p* pairs of judged frames in a row, the fields one leaves the next starts from, bit for bit | the velocity, pressure and dye a judged frame left are the ones the judged frame after it started from, every bit | exact |
+| *j* judged frames, the compute pass's words in its image over the splat target's bytes (fluid-alias) | every word of the storage image is the one the compute pass stored that frame | exact |
 
 The passes worked out again from the machine's own inputs are what the judge leans on: no difference between two
 machines carries from one frame to the next there, so every judged frame of a run of any length is held as tightly
@@ -106,7 +113,8 @@ The invariants check what every correct machine keeps: the interpolation the adv
 splats only add, so a dye below nought is never a rounding.
 
 A failed dye case's picture is the 128 by 128 window of that frame's dye around its first texel off, what the
-machine left against what it should have, each colour as the screen shows it.
+machine left against what it should have, each colour as the screen shows it. Whatever the verdicts, a note after
+the cases gives the farthest each check found and in which frame, so a pass says how near it came.
 
 ## Where the budgets come from
 
@@ -131,6 +139,30 @@ margin; `fluid-envelope 64 36000` is the longest run's, minutes.
   over 36000 (frame 6026). The less divergence left, the nearer: with no projection the dye falls to 0.04 of its
   budget in 300 frames, with 5 passes it climbs to 1.31.
 
+## The aliasing level
+
+Fuddles asked for the biggest ping-pong stress test "cause it's a good way to test for memory fuckery". A game's
+render targets live in one pool of its memory: when its dynamic resolution steps, a frame's targets land a little
+further on and lie over the last frame's, and a compute pass's storage image at another place of the same memory
+writes over them. A runtime that keeps targets on its own side has to know, then, which pixels memory holds: one
+racing game's shadow layers, drawn a frame 128 KiB further on, were published and written back to memory when a
+2 KB storage image went over the old ones (ScarletNX #2217). `fluid-alias` does that on purpose, on frames whose
+answer the judge knows:
+
+- one memory block holds the dye's splat target B, then the divergence, then the dye A that carries the state, one
+  right after the other;
+- every 40 frames from frame 20, B and the divergence are drawn 32 KiB further on for that frame alone, over their
+  old selves and A's first bytes; the next frame's B, divergence and A cover them whole again, from their first
+  byte on, so the shifted pair is left with pixels no one will read;
+- every frame, after the judged copies, a compute pass writes a 32 by 32 R32_Uint storage image laid at that same
+  32 KiB, over bytes B and the shifted B both cover.
+
+No pass reads bytes it writes: the shifted B ends where A begins, and the shifted divergence lies over A only
+between the splat's read of A and the advection's write of it. So on a console the fluid is the same fluid, frame
+for frame, and every case holds as in `fluid`. The judged frames add the first three shifts', the frame after each
+and the one after that, so the hand-on case sees the fields cross each shift; a runtime that publishes or writes
+back the wrong layer hands the next frame other bytes, or moves a pass's output, and says so there.
+
 ## What is timed
 
 As the game scene: frame 0 is the warm-up, and over the frames past it seven cases carry present to present's mean,
@@ -141,15 +173,20 @@ end the run, `fluid:` where the game scene's say `game:`. `notime` leaves the se
 
 ## In the browser
 
-The browser runs it as a demo (`FluidDemo`): its frames and timing are the browser's options, the dye is shown
-through the program's screen, and the browser's B stops it at the next frame. The judged frames it did not reach are
-left out, and a note says where it stopped and which; the cases keep the names of the frames asked, so a run of a
-length compares with another whatever B did. Stopped before frame 0 ran, every case after the bring-up is a skip,
-`asked`.
+The browser runs it as a demo (`FluidDemo`): its frames and timing are the browser's options and the dye is shown
+through the program's screen. Paused, the simulation holds at the frame it was about to draw and the last frame is
+shown again; the time paused is no frame's, so the frame after it is timed from the end of the pause. Stopped (B, a
+restart, another level), it ends at the next frame: each case is judged on the judged frames the run reached, a note
+says where it stopped and which judged frames it left out, and the cases keep the names of the frames asked, so a run
+of a length compares with another whatever the person did. Stopped before frame 0 drew, every case after the
+bring-up is a skip, `asked`.
 
 ## What rests on reasoning
 
 No console has run the demo. What it expects of one: that a fragment shader's float adds and multiplies round to
 the nearest, each alone or a pair fused (the budgets take either), that a 32-bit float target stores what the
 shader wrote and a texel fetch hands it back unchanged, and that a pass reading a target the pass before it wrote,
-after the barrier above, sees all of it.
+after the barrier above, sees all of it. uam's fragment programs flush denormals where the reference keeps them:
+that moves a value under 1.2e-38, which no budget sees. No shader indexes a vector by a component known only as it
+runs, which uam 1.1.0 reads as the vector's first word. The aliasing level expects that images laid at overlapping
+places of one memory block see each other's bytes, which deko3d's own memory model is.

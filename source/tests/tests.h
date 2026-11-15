@@ -380,6 +380,13 @@ void RunFluid(void);
 /// when it says so, the judged frames it did not reach left out.
 void FluidDemo(const DemoRun *run);
 
+/// The fluid demo's aliasing level, the suite fluid-alias: the dye's splat target and the
+/// divergence drawn over their old selves every so often, and a compute pass's storage image
+/// over them every frame, as a game's dynamic resolution and its compute passes leave its pool;
+/// judged as the demo is, and each frame's fields handed to the next bit for bit.
+void RunFluidAlias(void);
+void FluidAliasDemo(const DemoRun *run);
+
 /// The net family: nifm, dns, bsd, ssl, acc and friend, in that order, against whatever
 /// sdmc:/edenprobe/net says the backend promises. A case that needs a backend the file does not
 /// name, or a service this program cannot open, is skipped with the reason and counted apart.

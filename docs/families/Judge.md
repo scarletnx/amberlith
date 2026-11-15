@@ -43,7 +43,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, five hundred and four cases, no hardware involved either: the other half
+- **reference**, five hundred and five cases, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the
@@ -192,10 +192,11 @@ family reports can be believed without them.
     and how many pixels of its widest and deepest frame double precision, and a machine that
     multiplies and adds apart, count otherwise (see [mandelbrot and
     julia](Demo.md#mandelbrot-and-julia));
-  - seven on the fluid demo's reference and judge, `source/demo_fluidref.c`: the script's jets and
+  - eight on the fluid demo's reference and judge, `source/demo_fluidref.c`: the script's jets and
     bursts against values worked out by hand, each pass on fields made to order, the bits a 16 by 9
     run of 64 frames leaves, pinned so a processor or compiler that rounds otherwise says so here
-    and not in the demo, the frames a run judges, the comparison's budgets and a NaN's, the judge
+    and not in the demo, the frames a run judges on each level, the aliasing level's shifts and
+    words and a frame's fields handed to the next, the comparison's budgets and a NaN's, the judge
     on eleven machines made to order, each wrong in one way, failing the checks that way reaches
     and no other, and the notes (see [The fluid demo](Fluid.md));
   - eleven on the tex8k suite's judge, `source/tex8kref.c`: the graphics memory its textures want
