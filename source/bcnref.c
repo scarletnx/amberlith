@@ -128,6 +128,12 @@ static int32_t Lerp64(int32_t a, int32_t b, int32_t w) {
     return (a * (64 - w) + b * w + 32) >> 6;
 }
 
+/// @p a and the difference to @p b times @p w of 256, cut toward minus infinity.
+static int32_t Lerp256Down(int32_t a, int32_t b, int32_t w) {
+    const int32_t scaled = (b - a) * w;
+    return a + (scaled >= 0 ? scaled / 256 : -((-scaled + 255) / 256));
+}
+
 /// The weights BPTC's indices take, in 64ths, and the fifths BCN_RULE_SIXTYFOURTHS gives BC3's
 /// and BC4's six value blocks.
 static const uint8_t WEIGHTS2[4] = { 0, 21, 43, 64 };
@@ -174,6 +180,10 @@ static void Bc1Block(uint64_t bits, bool three, BcnRule rule, uint16_t out[16][4
         case BCN_RULE_SIXTYFOURTHS:
             c[2][k] = four ? Lerp64(a, b, 21) : Lerp64(a, b, 32);
             c[3][k] = four ? Lerp64(a, b, 43) : 0;
+            break;
+        case BCN_RULE_LLVMPIPE:
+            c[2][k] = four ? Lerp256Down(a, b, 85) : (a + b + 1) / 2;
+            c[3][k] = four ? Lerp256Down(a, b, 170) : 0;
             break;
         default:
             // NVIDIA's: green by 80 of 256 from its eight bit ends (d / 4 rounds toward nought,
@@ -241,7 +251,7 @@ static void Bc4Block(uint64_t bits, bool snorm, BcnRule rule, uint16_t out[16]) 
         } else {
             x = (6 - k) * a0 + (k - 1) * a1, d = 5;
         }
-        if (rule == BCN_RULE_TRUNCATED) {
+        if (rule == BCN_RULE_TRUNCATED || rule == BCN_RULE_LLVMPIPE) {
             // Cut to a whole code, toward nought, before it is widened.
             x /= d;
             d = 1;
@@ -281,6 +291,7 @@ static void Bc3Alpha(uint64_t bits, BcnRule rule, uint16_t out[16][4]) {
             v = Lerp64(a0, a1, n == 7 ? WEIGHTS3[k - 1] : FIFTHS64[k - 1]);
         } else {
             const int32_t sum = n == 7 ? (8 - k) * a0 + (k - 1) * a1 : (6 - k) * a0 + (k - 1) * a1;
+            // BCN_RULE_LLVMPIPE's alpha as BCN_RULE_TRUNCATED's.
             v = rule == BCN_RULE_ROUNDED ? (sum + n / 2) / n : sum / n;
         }
         out[i][3] = (uint16_t)v;

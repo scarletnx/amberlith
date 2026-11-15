@@ -80,8 +80,8 @@ size_t BcnReferenceDecode(BcnKind kind, const uint8_t *blocks, uint32_t width_bl
 /// What each channel of a picture may be read back as on a UNORM8 target: the console's bytes
 /// (lowest and highest: a value between two integers, a BC4 or BC5 one, a half or an sRGB code
 /// turned linear, may be written as either, BcnTarget8),
-/// and the lowest and highest any known GPU's interpolants give (BCN_RULE_NVIDIA,
-/// BCN_RULE_ROUNDED and BCN_RULE_SIXTYFOURTHS for BC1 to BC5; BC6H and BC7 decode one way).
+/// and the lowest and highest any known GPU's interpolants give (every BcnRule for BC1 to BC5;
+/// BC6H and BC7 decode one way).
 /// RGBA a texel, rows of the picture after each other.
 #define BCN_IMAGE_CHANNELS (BCN_IMAGE_SIZE * BCN_IMAGE_SIZE * 4u)
 typedef struct {

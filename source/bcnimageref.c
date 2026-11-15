@@ -76,8 +76,9 @@ static void TargetBytes(const BcnImage *image, uint32_t c, uint16_t value, uint8
 }
 
 void BcnImageAnswer(const BcnImage *image, BcnImageAnswers *out) {
-    static const BcnRule RULES[] = { BCN_RULE_NVIDIA, BCN_RULE_ROUNDED, BCN_RULE_SIXTYFOURTHS };
-    const uint32_t rules = BcnHasRules(image->kind) ? 3u : 1u;
+    static const BcnRule RULES[] = { BCN_RULE_NVIDIA, BCN_RULE_ROUNDED, BCN_RULE_TRUNCATED,
+                                     BCN_RULE_SIXTYFOURTHS, BCN_RULE_LLVMPIPE };
+    const uint32_t rules = BcnHasRules(image->kind) ? 5u : 1u;
     uint16_t texels[16][4];
     for (uint32_t by = 0; by < BCN_IMAGE_SIZE; by += 4u) {
         for (uint32_t bx = 0; bx < BCN_IMAGE_SIZE; bx += 4u) {

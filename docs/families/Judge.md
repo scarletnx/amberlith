@@ -135,7 +135,8 @@ family reports can be believed without them.
     rule's BC1 thirds and midpoints, BC3 alphas and BC4 weights against numbers worked out by hand,
     NVIDIA's the bcn suite's and BPTC's sixty-fourths what RADV read there; the byte a decoded value
     reaches a target as; and the bcnimage judge on machines made to order, every picture: the
-    console's decode exact, the exact fractions rounded and the sixty-fourths bound on BC1 to BC5
+    console's decode exact, the exact fractions rounded and cut, llvmpipe's thirds and the
+    sixty-fourths bound on BC1 to BC5
     and exact on BC6H and BC7, RADV's (the sixty-fourths through a half cut toward nought) wrong
     nowhere, and a block read down its columns and a block a place aside refused;
   - fourteen on the audio family's answers: a tone's level read back from a recording, exact for a
