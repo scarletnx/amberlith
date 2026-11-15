@@ -92,6 +92,7 @@ source/tests/t_baseline.c
 source/tests/t_gameref.c
 source/tests/t_demo_fluidref.c
 source/tests/t_musicref.c
+source/tests/t_musicrender.c
 source/tests/t_tex8kref.c
 source/tests/t_wimsyref.c
 source/tests/t_demoref.c

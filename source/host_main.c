@@ -26,6 +26,9 @@ int main(void) {
     RunLibc();
     RunSystem();
     RunSocket();
+    // The music family's tracks as this machine renders them: the hashes the console's run is
+    // held to are these.
+    RunMusicRender();
 
     ReportSummary();
     ReportClose();

@@ -2,8 +2,8 @@
 
 The families run in this order: the judge, the processor, pad (when a word names it), graphics, nvn (when its word
 names it), fs, then kernel,
-display, video, audio and service (each when a word names it), net, game and demo (each when its word names it); libc,
-on the console, when a word names it. Android's frontend has the judge, libc, graphics, net, jni and framework
+display, video, audio and service (each when a word names it), net, game, demo and music (each when its word names
+it); libc, on the console, when a word names it. Android's frontend has the judge, libc, graphics, net, jni and framework
 ([On Android](../Android.md)). The
 [mode file](../ModeFile.md) says which words name what, and [the roadmap](../Roadmap.md) what a failure in each suite
 points at. A case that ends the program costs that case, not the rest of the run
@@ -27,6 +27,8 @@ points at. A case that ends the program costs that case, not the rest of the run
 - **[Demo](./Demo.md)** - graphics workloads a game runs, drawn for a person to watch, judged and timed,
   among them the [fluid](./Fluid.md), a 2D Navier-Stokes fluid in ping-pong fragment passes
 - **[libc](./Libc.md)** - the C library and what it asks of the system, the same cases on every frontend
+- **[Music](./Music.md)** - the demos' music, a tracker of four channels in the Amiga's manner, each track held to
+  the host's samples and to what the audio renderer plays of it
 
 Every drawing suite draws offscreen and reads its target back, so no case depends on the compositor, the swapchain
 or vertical sync. The game family is the one exception: its scene and its levels present every frame and judge

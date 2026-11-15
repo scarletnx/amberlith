@@ -616,6 +616,7 @@ static const struct {
     { "game", UI_FAMILY_GAME },       { "wimsy", UI_FAMILY_GAME },
     { "mandelbrot", UI_FAMILY_DEMO }, { "julia", UI_FAMILY_DEMO },
     { "fluid", UI_FAMILY_DEMO },       { "fluid-alias", UI_FAMILY_DEMO },
+    { "music", UI_FAMILY_MUSIC },
     { "nvn", UI_FAMILY_NVN },
 };
 
@@ -660,6 +661,8 @@ const char *UiFamilyName(UiFamily family) {
         return "libc";
     case UI_FAMILY_DEMO:
         return "demo";
+    case UI_FAMILY_MUSIC:
+        return "music";
     case UI_FAMILY_OTHER:
     case UI_FAMILY_COUNT:
         break;
