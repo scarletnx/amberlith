@@ -72,7 +72,8 @@ The reference is the graphics unit running what the layer recorded, never the of
   the readback pool judged after it is filled with a byte no texel holds.
 - **a texture copied to a buffer with MIRROR_Y lands upside down**, **a texture copied into another with MIRROR_X
   lands mirrored** (exact): the copy flags a game mirrors with, which the layer gives deko3d as FlipY (the copy
-  engine stepping the buffer backwards, the copy suite's FlipY) and FlipX (the 2D engine).
+  engine stepping the buffer backwards, the copy suite's FlipY) and, between two textures, as a blit with FlipX
+  (the 2D engine): deko3d's copy between images takes no mirror.
 - **a copy to a buffer with a row stride of 288 keeps the bytes between rows** (exact):
   `nvnCommandBufferSetCopyRowStride`, rows 288 bytes apart and the 32 between them untouched.
 
@@ -80,8 +81,10 @@ The reference is the graphics unit running what the layer recorded, never the of
   `vulkan_nvn_compat.inc`) as far as the layer reaches: the same textures, flags and strides through the program's
   NVN, so ScarletNX answers with `nvn_copy.c`, the path a game's copies take, and the console and Eden with what
   deko3d sends the copy and 2D engines for them. ScarletNX 9bef605 passes all seven; Eden 6a9235c22d passes five
-  and fails the two mirrors, the copy suite's FlipY to a buffer (nothing lands) and the 2D engine's FlipX between
-  images (the texels copied unmirrored), where ScarletNX's NVN copy does both.
+  and fails the copy suite's FlipY to a buffer (nothing lands), where ScarletNX's NVN copy mirrors. Its other
+  failure then, the texels copied unmirrored between images, was the layer's own: it asked deko3d's copy for the
+  mirror, which that copy drops. ScarletNX f492ffb showed it once the suite ran on the layer's own functions, and
+  passes it with the blit; Eden has not run it since.
 - **a texture builder gives back each number it was set** (exact): every setter of a builder that keeps a number
   (the flags, the target, the format, the width, the height, the depth, the levels, the samples, the pool and the
   offset), each with a number that is not the default, then the getters; and `nvnTextureBuilderSetSize2D` as the
