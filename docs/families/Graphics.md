@@ -967,9 +967,12 @@ thirds, 9 to 55 for the sevenths, 13 to 51 for the fifths), which is what RADV o
 reads, every interpolant the bcn suite asks for included. A picture with no texel wrong passes;
 one with a texel off says how many and how far, under the [bound](../Design.md#the-tiers) tier,
 as tex8k's ASTC texels within BC7's loss do; a texel outside all three fails, with how many, how
-far, the PSNR over the picture and over each region, and the first one. An sRGB texel's red,
-green and blue may land on either byte beside its code turned linear, as an astcimage one's, and
-a BC6H half on a half step on either byte beside it.
+far, the PSNR over the picture and over each region, and the first one. A value that lies
+between two bytes may land on either, as the conversion to an eight bit target allows (Vulkan
+1.3, 3.9.2, as OpenGL): an sRGB texel's red, green and blue beside its code turned linear, as an
+astcimage one's, a BC4 or BC5 channel beside its 16 bits times 255 over 65535, and a BC6H half.
+RADV hands a fragment's colour to an eight bit target through a half cut toward nought, and
+writes the lower byte for some of BC4's and BC5's.
 
 ```json
 {"type":"case","suite":"bcnimage","name":"a picture in BC1 blocks decodes as the console's, every texel","tier":"bound","result":"pass","detail":"BC1 every texel: 0 of 16384 texels wrong, worst channel 0 away; PSNR exact (gradients exact, edges exact, noise exact, alpha exact); 1961 texels on another GPU's interpolants and not the console's, by at most 2"}

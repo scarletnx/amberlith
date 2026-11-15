@@ -706,39 +706,39 @@ float BcnHalf(uint16_t half) {
     return (half & 0x8000u) != 0u ? -value : value;
 }
 
-uint8_t BcnTarget8(BcnKind kind, uint32_t channel, uint16_t value, bool *ties) {
-    if (ties != NULL) {
-        *ties = false;
-    }
+uint8_t BcnTarget8(BcnKind kind, uint32_t channel, uint16_t value, uint8_t *other) {
+    uint32_t down = value;
+    uint32_t up = value;
+    uint32_t nearest = value;
     switch (kind) {
     case BCN_BC4:
-    case BCN_BC5:
-        if (channel == 3u) {
-            return 255u;
-        }
+    case BCN_BC5: {
+        const uint32_t scaled = (uint32_t)value * 255u;
+        down = scaled / 65535u;
+        up = down + (scaled % 65535u != 0u ? 1u : 0u);
         // 65535 is odd, so no value lands on a half step.
-        return (uint8_t)(((uint32_t)value * 255u + 32767u) / 65535u);
+        nearest = (scaled + 32767u) / 65535u;
+        break;
+    }
     case BCN_BC6H_UF:
     case BCN_BC6H_SF: {
-        if (channel == 3u) {
-            return 255u;
-        }
         const float f = BcnHalf(value);
-        if (!(f > 0.0f)) {
-            return 0u; // nought, negatives and NaN
-        }
-        if (f >= 1.0f) {
-            return 255u;
-        }
         // Exact in a double: a half has eleven bits, times 255 needs eight more.
-        const double scaled = (double)f * 255.0;
-        const double down = floor(scaled);
-        if (ties != NULL && scaled - down == 0.5) {
-            *ties = true;
-        }
-        return (uint8_t)floor(scaled + 0.5);
+        const double scaled = !(f > 0.0f) ? 0.0 : f >= 1.0f ? 255.0 : (double)f * 255.0;
+        down = (uint32_t)floor(scaled);
+        up = (uint32_t)ceil(scaled);
+        nearest = (uint32_t)floor(scaled + 0.5);
+        break;
     }
     default:
-        return (uint8_t)value;
+        break;
     }
+    if (channel == 3u && kind != BCN_BC1 && kind != BCN_BC2 && kind != BCN_BC3 &&
+        kind != BCN_BC7) {
+        down = up = nearest = 255u;
+    }
+    if (other != NULL) {
+        *other = (uint8_t)(nearest == down ? up : down);
+    }
+    return (uint8_t)nearest;
 }

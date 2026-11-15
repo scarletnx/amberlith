@@ -82,11 +82,14 @@ uint32_t BcnBlockBytes(BcnKind kind);
 /// a BC7 block with no mode transparent black.
 void BcnDecodeBlock(BcnKind kind, BcnRule rule, const uint8_t *block, uint16_t texels[16][4]);
 
-/// What a channel @p value of @p kind (as BcnDecodeBlock gives it) reaches a UNORM8 target as:
-/// bytes as they are, 16 bit UNORM over 257 rounded, a half clamped to [0, 1] times 255 rounded.
-/// The alpha of BC4, BC5 and BC6H is the target's 255. @p ties is set when the half lands on a
-/// half step, where either byte beside it is right; NULL for none.
-uint8_t BcnTarget8(BcnKind kind, uint32_t channel, uint16_t value, bool *ties);
+/// What a channel @p value of @p kind (as BcnDecodeBlock gives it) reaches a UNORM8 target as: the
+/// nearest byte, and in @p other (NULL for none) the integer on the other side of the value when
+/// it lies between two, else the same byte: the conversion lets a machine write either (Vulkan
+/// 1.3, 3.9.2; OpenGL's is the same), and RADV, which hands a fragment's colour to an eight bit
+/// target through a half cut toward nought, writes the lower one for some. Bytes as they are,
+/// 16 bit UNORM times 255 over 65535, a half clamped to [0, 1] times 255; the alpha of BC4, BC5
+/// and BC6H is the target's 255.
+uint8_t BcnTarget8(BcnKind kind, uint32_t channel, uint16_t value, uint8_t *other);
 
 /// The float a half's bits stand for.
 float BcnHalf(uint16_t half);
