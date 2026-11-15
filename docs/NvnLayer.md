@@ -130,13 +130,23 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-A hundred and fifty functions, each recording the deko3d commands that do what NVN says it does:
+A hundred and eighty functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
   mode, until the first object is made from the device. A mode set after that is refused, saying so.
 - **queues**, **memory pools** (shader code pools among them), **2D textures** of RGBA8, BGRA8, 32-bit float
   depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**;
+- **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
+  the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
+  then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing
+  fenced, as NVN does; `nvnQueueWaitSync` and `nvnCommandBufferWaitSync` are deko3d's waits. An NVN sync is as
+  large as deko3d's fence, so the layer keeps the fences itself, sixteen at a time;
+- **events** as the processor signals them: a word in a pool the processor reaches, written or added to, with
+  the builder's and the event's getters. A list that signals or waits on one is not there yet;
+- **the queue's error** (`nvnQueueGetError`: none, or NVN's unknown error for a queue deko3d says faulted) and
+  **what a queue builder answers of itself**: the flags, and four sizes each set or left to the driver. A queue is
+  made with no flags, and deko3d's queue keeps its own sizes;
 - **what a memory pool and its builder answer of themselves** (the device, the storage, the size, the flags), and
   the processor's cache of a pool: `nvnMemoryPoolFlushMappedRange` and `nvnMemoryPoolInvalidateMappedRange` are
   both deko3d's one call, which writes the range back and drops it; a range past the pool is refused;

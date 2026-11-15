@@ -280,7 +280,14 @@ NVNboolean Nvnl_nvnQueueInitialize(NVNqueue *queue, const NVNqueueBuilder *build
     if (device == NULL) {
         return 0;
     }
-    // deko3d's defaults: a graphics and compute queue, as every NVN queue is.
+    if (from->flags != NVN_QUEUE_BUILDER_FLAGS_NONE) {
+        LayerComplain("nvnQueueInitialize: queue flags 0x%x, and the layer makes a queue with "
+                      "none (0x%x)",
+                      (unsigned)from->flags, (unsigned)NVN_QUEUE_BUILDER_FLAGS_NONE);
+        return 0;
+    }
+    // deko3d's defaults: a graphics and compute queue, as every NVN queue is. The sizes a
+    // builder was set are NVN's to use; deko3d's queue keeps its own.
     dkQueueMakerDefaults(&pending.queue_maker, DeviceUse(device));
     pending.queue = NULL;
     if (!LayerGuarded(MakeQueue, "nvnQueueInitialize: dkQueueCreate")) {
@@ -329,6 +336,196 @@ void Nvnl_nvnQueueFinish(NVNqueue *queue) {
     if (dkQueueIsInErrorState(record->queue)) {
         LayerComplain("nvnQueueFinish: the queue faulted on the graphics unit");
     }
+}
+
+NVNqueueGetErrorResult Nvnl_nvnQueueGetError(NVNqueue *queue, NVNqueueErrorInfo *info) {
+    // deko3d says that the queue faulted and not how, so a fault is NVN's unknown error and
+    // the info, which NVN fills for an error it can name, stays as it was.
+    (void)info;
+    LayerQueue *const record = QueueOf(queue, "nvnQueueGetError");
+    if (record == NULL) {
+        return NVN_QUEUE_GET_ERROR_RESULT_GPU_ERROR_UNKNOWN;
+    }
+    return dkQueueIsInErrorState(record->queue) ? NVN_QUEUE_GET_ERROR_RESULT_GPU_ERROR_UNKNOWN
+                                                : NVN_QUEUE_GET_ERROR_RESULT_GPU_NO_ERROR;
+}
+
+void Nvnl_nvnQueueBuilderSetFlags(NVNqueueBuilder *builder, int flags) {
+    LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSetFlags");
+    if (record != NULL) {
+        record->flags = flags;
+    }
+}
+
+NVNdevice *Nvnl_nvnQueueBuilderGetDevice(const NVNqueueBuilder *builder) {
+    const LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderGetDevice");
+    return record != NULL ? record->device : NULL;
+}
+
+int Nvnl_nvnQueueBuilderGetFlags(const NVNqueueBuilder *builder) {
+    const LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderGetFlags");
+    return record != NULL ? record->flags : 0;
+}
+
+// A size of a queue builder: set, it is kept and given back with a true; left alone, the getter
+// answers false and a size of nought, the driver choosing.
+#define QUEUE_SIZE(name, which)                                                                   \
+    void Nvnl_nvnQueueBuilderSet##name(NVNqueueBuilder *builder, size_t size) {                   \
+        LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSet" #name);            \
+        if (record != NULL) {                                                                     \
+            record->set |= 1u << (which);                                                         \
+            record->sizes[which] = size;                                                          \
+        }                                                                                         \
+    }                                                                                             \
+    NVNboolean Nvnl_nvnQueueBuilderGet##name(const NVNqueueBuilder *builder, int *size) {         \
+        const LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderGet" #name);      \
+        const bool set = record != NULL && (record->set & 1u << (which)) != 0;                    \
+        *size = set ? (int)record->sizes[which] : 0;                                              \
+        return set;                                                                               \
+    }
+QUEUE_SIZE(CommandMemorySize, QUEUE_SIZE_COMMAND)
+QUEUE_SIZE(ComputeMemorySize, QUEUE_SIZE_COMPUTE)
+QUEUE_SIZE(ControlMemorySize, QUEUE_SIZE_CONTROL)
+QUEUE_SIZE(CommandFlushThreshold, QUEUE_SIZE_FLUSH)
+#undef QUEUE_SIZE
+
+// ---- syncs
+
+// The fences behind the program's syncs. A sync is fenced when a queue or a list was told to
+// signal it; one never fenced has nothing to wait for.
+#define SYNCS_MAX 16
+static struct {
+    bool used;
+    bool fenced;
+    DkFence fence;
+} syncs[SYNCS_MAX];
+
+/// The layer's fence of @p sync, or -1 with a complaint.
+static int SyncOf(const NVNsync *sync, const char *what) {
+    const LayerSync *const record = Record(sync, what);
+    if (record == NULL) {
+        return -1;
+    }
+    if (record->magic != MAGIC_SYNC || record->slot >= SYNCS_MAX || !syncs[record->slot].used) {
+        LayerComplain("%s: the sync was not initialized", what);
+        return -1;
+    }
+    return (int)record->slot;
+}
+
+NVNboolean Nvnl_nvnSyncInitialize(NVNsync *sync, NVNdevice *device) {
+    LayerSync *const record = Record(sync, "nvnSyncInitialize");
+    if (record == NULL || DeviceOf(device, "nvnSyncInitialize") == NULL) {
+        return 0;
+    }
+    for (uint32_t slot = 0; slot < SYNCS_MAX; ++slot) {
+        if (!syncs[slot].used) {
+            memset(&syncs[slot], 0, sizeof(syncs[slot]));
+            syncs[slot].used = true;
+            memset(sync, 0, sizeof(*sync));
+            record->magic = MAGIC_SYNC;
+            record->slot = slot;
+            return 1;
+        }
+    }
+    LayerComplain("nvnSyncInitialize: a sync past the %d the layer keeps at a time", SYNCS_MAX);
+    return 0;
+}
+
+void Nvnl_nvnSyncFinalize(NVNsync *sync) {
+    const int slot = SyncOf(sync, "nvnSyncFinalize");
+    if (slot >= 0) {
+        syncs[slot].used = false;
+        ((LayerSync *)(void *)sync)->magic = 0;
+    }
+}
+
+NVNsyncWaitResult Nvnl_nvnSyncWait(const NVNsync *sync, uint64_t timeout) {
+    const int slot = SyncOf(sync, "nvnSyncWait");
+    if (slot < 0 || !syncs[slot].fenced) {
+        // Nothing will ever signal it: NVN fails the wait whatever the timeout.
+        return NVN_SYNC_WAIT_RESULT_FAILED;
+    }
+    DkResult result = dkFenceWait(&syncs[slot].fence, 0);
+    if (result == DkResult_Success) {
+        return NVN_SYNC_WAIT_RESULT_ALREADY_SIGNALED;
+    }
+    if (result == DkResult_Timeout && timeout != 0u) {
+        // deko3d waits for good on a negative time, which is what a timeout past its range means.
+        result = dkFenceWait(&syncs[slot].fence,
+                             timeout > (uint64_t)INT64_MAX ? -1 : (int64_t)timeout);
+        if (result == DkResult_Success) {
+            return NVN_SYNC_WAIT_RESULT_CONDITION_SATISFIED;
+        }
+    }
+    return result == DkResult_Timeout ? NVN_SYNC_WAIT_RESULT_TIMEOUT_EXPIRED
+                                      : NVN_SYNC_WAIT_RESULT_FAILED;
+}
+
+/// What NVN's fence arguments come to in deko3d, which has the one condition, everything the
+/// queue was given done; false with a complaint for another, or for a flag.
+static bool FenceTaken(NVNsyncCondition condition, int flags, const char *what) {
+    if (condition != NVN_SYNC_CONDITION_ALL_GPU_COMMANDS_COMPLETE || flags != 0) {
+        LayerComplain("%s: sync condition %d with flags 0x%x, and the layer fences for all "
+                      "commands complete (%d) with no flag",
+                      what, (int)condition, (unsigned)flags,
+                      (int)NVN_SYNC_CONDITION_ALL_GPU_COMMANDS_COMPLETE);
+        return false;
+    }
+    return true;
+}
+
+void Nvnl_nvnQueueFenceSync(NVNqueue *queue, NVNsync *sync, NVNsyncCondition condition,
+                            int flags) {
+    LayerQueue *const record = QueueOf(queue, "nvnQueueFenceSync");
+    const int slot = SyncOf(sync, "nvnQueueFenceSync");
+    if (record == NULL || slot < 0 || !FenceTaken(condition, flags, "nvnQueueFenceSync")) {
+        return;
+    }
+    // NVN leaves the flush to the program (nvnQueueFlush), and so does this.
+    dkQueueSignalFence(record->queue, &syncs[slot].fence, false);
+    syncs[slot].fenced = true;
+}
+
+NVNboolean Nvnl_nvnQueueWaitSync(NVNqueue *queue, const NVNsync *sync) {
+    LayerQueue *const record = QueueOf(queue, "nvnQueueWaitSync");
+    const int slot = SyncOf(sync, "nvnQueueWaitSync");
+    if (record == NULL || slot < 0) {
+        return 0;
+    }
+    if (!syncs[slot].fenced) {
+        LayerComplain("nvnQueueWaitSync: a sync nothing fenced, which the queue would wait on "
+                      "for good");
+        return 0;
+    }
+    dkQueueWaitFence(record->queue, &syncs[slot].fence);
+    return 1;
+}
+
+void Nvnl_nvnCommandBufferFenceSync(NVNcommandBuffer *cmd, NVNsync *sync,
+                                    NVNsyncCondition condition, int flags) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferFenceSync");
+    const int slot = SyncOf(sync, "nvnCommandBufferFenceSync");
+    if (record == NULL || slot < 0 ||
+        !FenceTaken(condition, flags, "nvnCommandBufferFenceSync")) {
+        return;
+    }
+    dkCmdBufSignalFence(record->cmdbuf, &syncs[slot].fence, false);
+    syncs[slot].fenced = true;
+}
+
+void Nvnl_nvnCommandBufferWaitSync(NVNcommandBuffer *cmd, const NVNsync *sync) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferWaitSync");
+    const int slot = SyncOf(sync, "nvnCommandBufferWaitSync");
+    if (record == NULL || slot < 0) {
+        return;
+    }
+    if (!syncs[slot].fenced) {
+        LayerComplain("nvnCommandBufferWaitSync: a sync nothing fenced, which the list would "
+                      "wait on for good");
+        return;
+    }
+    dkCmdBufWaitFence(record->cmdbuf, &syncs[slot].fence);
 }
 
 NVNqueueAcquireTextureResult Nvnl_nvnQueueAcquireTexture(NVNqueue *queue,
@@ -585,6 +782,128 @@ size_t Nvnl_nvnMemoryPoolGetSize(const NVNmemoryPool *pool) {
 NVNmemoryPoolFlags Nvnl_nvnMemoryPoolGetFlags(const NVNmemoryPool *pool) {
     const LayerPool *const record = PoolOf(pool, "nvnMemoryPoolGetFlags");
     return record != NULL ? (NVNmemoryPoolFlags)record->flags : 0;
+}
+
+// ---- events
+
+void Nvnl_nvnEventBuilderSetDefaults(NVNeventBuilder *builder) {
+    if (Record(builder, "nvnEventBuilderSetDefaults") != NULL) {
+        memset(builder, 0, sizeof(*builder));
+    }
+}
+
+void Nvnl_nvnEventBuilderSetStorage(NVNeventBuilder *builder, const NVNmemoryPool *pool,
+                                    ptrdiff_t offset) {
+    LayerEventBuilder *const record = Record(builder, "nvnEventBuilderSetStorage");
+    if (record != NULL) {
+        record->pool = pool;
+        record->offset = offset;
+    }
+}
+
+const NVNmemoryPool *Nvnl_nvnEventBuilderGetStorage(const NVNeventBuilder *builder,
+                                                    ptrdiff_t *offset) {
+    const LayerEventBuilder *const record = Record(builder, "nvnEventBuilderGetStorage");
+    if (record == NULL) {
+        return NULL;
+    }
+    *offset = record->offset;
+    return record->pool;
+}
+
+const NVNmemoryPool *Nvnl_nvnEventBuilderGetMemoryPool(const NVNeventBuilder *builder) {
+    const LayerEventBuilder *const record = Record(builder, "nvnEventBuilderGetMemoryPool");
+    return record != NULL ? record->pool : NULL;
+}
+
+ptrdiff_t Nvnl_nvnEventBuilderGetMemoryOffset(const NVNeventBuilder *builder) {
+    const LayerEventBuilder *const record = Record(builder, "nvnEventBuilderGetMemoryOffset");
+    return record != NULL ? record->offset : 0;
+}
+
+/// The word of @p event in its pool's mapping, with the pool's record; NULL with a complaint.
+static uint32_t *EventWord(const NVNevent *event, const LayerPool **pool, const char *what) {
+    const LayerEvent *const record = Record(event, what);
+    if (record == NULL) {
+        return NULL;
+    }
+    if (record->magic != MAGIC_EVENT) {
+        LayerComplain("%s: the event was not initialized", what);
+        return NULL;
+    }
+    *pool = PoolOf(record->pool, what);
+    if (*pool == NULL) {
+        return NULL;
+    }
+    return (uint32_t *)(void *)((uint8_t *)dkMemBlockGetCpuAddr((*pool)->block) + record->offset);
+}
+
+NVNboolean Nvnl_nvnEventInitialize(NVNevent *event, const NVNeventBuilder *builder) {
+    LayerEvent *const record = Record(event, "nvnEventInitialize");
+    const LayerEventBuilder *const from = Record(builder, "nvnEventInitialize");
+    if (record == NULL || from == NULL) {
+        return 0;
+    }
+    const LayerPool *const pool = PoolOf(from->pool, "nvnEventInitialize");
+    if (pool == NULL) {
+        return 0;
+    }
+    if ((pool->flags & NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS) != 0 || (from->offset & 3) != 0 ||
+        !InPool(pool, from->offset, sizeof(uint32_t), "nvnEventInitialize")) {
+        LayerComplain("nvnEventInitialize: an event at offset %lld of a pool with flags 0x%x, "
+                      "where the layer takes a word on a four byte boundary inside a pool the "
+                      "processor reaches",
+                      (long long)from->offset, (unsigned)pool->flags);
+        return 0;
+    }
+    memset(event, 0, sizeof(*event));
+    record->magic = MAGIC_EVENT;
+    record->pool = from->pool;
+    record->offset = from->offset;
+    return 1;
+}
+
+void Nvnl_nvnEventFinalize(NVNevent *event) {
+    LayerEvent *const record = Record(event, "nvnEventFinalize");
+    if (record != NULL) {
+        record->magic = 0;
+    }
+}
+
+uint32_t Nvnl_nvnEventGetValue(const NVNevent *event) {
+    const LayerPool *pool = NULL;
+    const uint32_t *const word = EventWord(event, &pool, "nvnEventGetValue");
+    return word != NULL ? *word : 0u;
+}
+
+void Nvnl_nvnEventSignal(NVNevent *event, NVNeventSignalMode mode, uint32_t value) {
+    const LayerPool *pool = NULL;
+    uint32_t *const word = EventWord(event, &pool, "nvnEventSignal");
+    if (word == NULL) {
+        return;
+    }
+    if (mode != NVN_EVENT_SIGNAL_MODE_WRITE && mode != NVN_EVENT_SIGNAL_MODE_ADD) {
+        LayerComplain("nvnEventSignal: signal mode %d, and the layer takes write (%d) and add "
+                      "(%d)",
+                      (int)mode, (int)NVN_EVENT_SIGNAL_MODE_WRITE, (int)NVN_EVENT_SIGNAL_MODE_ADD);
+        return;
+    }
+    *word = mode == NVN_EVENT_SIGNAL_MODE_ADD ? *word + value : value;
+    if ((pool->flags & NVN_MEMORY_POOL_FLAGS_CPU_CACHED) != 0) {
+        // A list that waits on the event reads the word from the graphics unit's side.
+        const LayerEvent *const record = (const LayerEvent *)(const void *)event;
+        dkMemBlockFlushCpuCache(pool->block, (uint32_t)record->offset, sizeof(uint32_t));
+    }
+}
+
+const NVNmemoryPool *Nvnl_nvnEventGetMemoryPool(const NVNevent *event) {
+    const LayerEvent *const record = Record(event, "nvnEventGetMemoryPool");
+    return record != NULL && record->magic == MAGIC_EVENT ? record->pool : NULL;
+}
+
+ptrdiff_t Nvnl_nvnEventGetMemoryOffset(const NVNevent *event) {
+    const LayerEvent *const record = Record(event, "nvnEventGetMemoryOffset");
+    return record != NULL && record->magic == MAGIC_EVENT ? record->offset : 0;
 }
 
 // ---- textures

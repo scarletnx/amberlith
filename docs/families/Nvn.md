@@ -10,7 +10,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, twenty three cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, thirty cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -54,7 +54,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, a hundred and
-  fifty.
+  eighty.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -109,6 +109,25 @@ The reference is the graphics unit running what the layer recorded, never the of
   a page written through that pool's mapping, `nvnMemoryPoolFlushMappedRange`, a copy of it by the graphics unit
   into the pool's second page, `nvnMemoryPoolInvalidateMappedRange`, and both pages read, every byte. Every other
   pool of the suite is uncached to the processor, where neither call has anything to do.
+- **a sync fenced on the queue behind a clear signals, and the clear is there with no finish**, **a sync fenced
+  inside the list behind a clear signals, and the clear is there with no finish** (exact): the clear cases' list
+  submitted and flushed (`nvnQueueFlush`) and never finished, as a game paces a frame: a sync fenced with
+  `nvnQueueFenceSync` after the submit, or with `nvnCommandBufferFenceSync` as the list's last command, has to
+  answer `nvnSyncWait` within ten seconds as signalled or satisfied, and the readback is judged right then. A line
+  gives the wait's answer and the first pixel wrong.
+- **a queue and a list told to wait for a sync that signalled run their clear** (exact): a sync fenced behind no
+  work and waited for, then `nvnQueueWaitSync` before the submit and `nvnCommandBufferWaitSync` as the list's first
+  command, and the same question of a second sync behind the work.
+- **a wait on a sync nothing fenced fails, with a timeout or without** (exact): `nvnSyncWait` answers failed, not
+  timed out, for a sync no queue and no list was told to signal. ScarletNX says so of the driver it measured; the
+  layer answers the same on the console.
+- **the queue has no error after work that was valid** (exact): `nvnQueueGetError`.
+- **a queue builder gives back its flags and says which of its sizes were set** (exact): the command, compute and
+  control memory sizes and the flush threshold, each unset on a new builder and then given back with what was set;
+  the flags and the device. The builder makes no queue.
+- **an event keeps what the processor signals: a write, an add and an add that wraps** (exact): an event in the
+  last word of the readback pool's first page: where its builder and the event say it is, `nvnEventGetValue` after
+  `nvnEventSignal` with a write, an add and an add of 0xffffffff, and that word read through the pool's mapping.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its

@@ -32,6 +32,8 @@ NVN_LAYER_PROCS(NVN_LAYER_DECLARE)
 #define MAGIC_SAMPLER 0x4e4c4d53u // "SMLN"
 #define MAGIC_TEXPOOL 0x4e4c5054u // "TPLN"
 #define MAGIC_SMPPOOL 0x4e4c5053u // "SPLN"
+#define MAGIC_SYNC 0x4e4c4e53u    // "SNLN"
+#define MAGIC_EVENT 0x4e4c5645u   // "EVLN"
 
 // NVN's windows take two to four textures (nvnDeviceGetInteger's MIN and MAX_TEXTURES_PER_WINDOW).
 #define WINDOW_TEXTURES_MAX 4
@@ -52,9 +54,38 @@ typedef struct {
     int flags;
 } LayerDeviceBuilder;
 
+// The sizes a queue builder keeps, each set or left to the driver.
+#define QUEUE_SIZE_COMMAND 0
+#define QUEUE_SIZE_COMPUTE 1
+#define QUEUE_SIZE_CONTROL 2
+#define QUEUE_SIZE_FLUSH 3
+#define QUEUE_SIZES 4
+
 typedef struct {
     NVNdevice *device;
+    int flags;
+    uint32_t set;
+    size_t sizes[QUEUE_SIZES];
 } LayerQueueBuilder;
+
+/// A sync is as large as deko3d's fence, with no room for the layer's own words beside it: the
+/// object holds which of the layer's fences is its own (api55_deko3d.c keeps them).
+typedef struct {
+    uint32_t magic;
+    uint32_t slot;
+} LayerSync;
+
+typedef struct {
+    const NVNmemoryPool *pool;
+    ptrdiff_t offset;
+} LayerEventBuilder;
+
+/// An event is a word in a pool, which the processor signals through the pool's mapping.
+typedef struct {
+    uint32_t magic;
+    const NVNmemoryPool *pool;
+    ptrdiff_t offset;
+} LayerEvent;
 
 typedef struct {
     uint32_t magic;
@@ -240,6 +271,9 @@ _Static_assert(sizeof(LayerDevice) <= sizeof(NVNdevice), "the device record fits
 _Static_assert(sizeof(LayerDeviceBuilder) <= sizeof(NVNdeviceBuilder), "fits NVNdeviceBuilder");
 _Static_assert(sizeof(LayerQueueBuilder) <= sizeof(NVNqueueBuilder), "fits NVNqueueBuilder");
 _Static_assert(sizeof(LayerQueue) <= sizeof(NVNqueue), "fits NVNqueue");
+_Static_assert(sizeof(LayerSync) <= sizeof(NVNsync), "fits NVNsync");
+_Static_assert(sizeof(LayerEventBuilder) <= sizeof(NVNeventBuilder), "fits the builder");
+_Static_assert(sizeof(LayerEvent) <= sizeof(NVNevent), "fits NVNevent");
 _Static_assert(sizeof(LayerPoolBuilder) <= sizeof(NVNmemoryPoolBuilder), "fits the builder");
 _Static_assert(sizeof(LayerPool) <= sizeof(NVNmemoryPool), "fits NVNmemoryPool");
 _Static_assert(sizeof(LayerTextureBuilder) <= sizeof(NVNtextureBuilder), "fits the builder");

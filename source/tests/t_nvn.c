@@ -1012,6 +1012,267 @@ static void PoolCacheCase(const char *name) {
                CachedByte(first % POOL_PAGE), READ_PRESET);
 }
 
+// ---- syncs, a queue's error and its builder, events
+
+// A game paces itself on syncs: it fences one behind a frame's work, flushes, and waits on it,
+// never finishing the queue. The clear cases' question is asked that way here, the readback
+// read once the sync signals, with the fence put on the queue and inside the list.
+
+/// Ten seconds, in a sync wait's nanoseconds: far past any clear, and an end to a wait on a sync
+/// that never signals.
+#define SYNC_WAIT_NS 10000000000ull
+
+typedef enum {
+    FENCE_QUEUE,
+    FENCE_LIST,
+    FENCE_WAITED,
+} FenceKind;
+
+/// The clear cases' list (a clear of the target to @p rgba, a barrier, a copy to the readback
+/// pool) submitted, flushed and never finished: the answer is read when @p sync signals. The
+/// fence is the queue's after the submit, or the list's last command (FENCE_LIST). For
+/// FENCE_WAITED, @p sync has signalled already and the queue and the list are both told to wait
+/// for it first, with a second sync fenced behind the work.
+static void FenceCase(const char *name, FenceKind kind, const float rgba[4],
+                      const uint8_t expected[4]) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static _Alignas(8) NVNsync sync, before;
+    uint8_t *const pixels = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    if (pixels == NULL || !nvn.nvn.nvnSyncInitialize(&sync, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("nvnMemoryPoolMap gave no address, or nvnSyncInitialize answered false"));
+        return;
+    }
+    bool before_up = false;
+    char why[256] = "";
+    if (kind == FENCE_WAITED) {
+        // A sync that has signalled: fenced behind nothing, flushed, waited for.
+        before_up = nvn.nvn.nvnSyncInitialize(&before, &nvn.device);
+        if (before_up) {
+            nvn.nvn.nvnQueueFenceSync(&nvn.queue, &before,
+                                      NVN_SYNC_CONDITION_ALL_GPU_COMMANDS_COMPLETE, 0);
+            nvn.nvn.nvnQueueFlush(&nvn.queue);
+            const NVNsyncWaitResult first = nvn.nvn.nvnSyncWait(&before, SYNC_WAIT_NS);
+            if (first != NVN_SYNC_WAIT_RESULT_ALREADY_SIGNALED &&
+                first != NVN_SYNC_WAIT_RESULT_CONDITION_SATISFIED) {
+                snprintf(why, sizeof(why), "the sync fenced behind no work answered its wait "
+                         "with %d: %s",
+                         (int)first, Why("neither signalled (0) nor satisfied (1)"));
+            }
+        } else {
+            snprintf(why, sizeof(why), "nvnSyncInitialize of the first sync: %s", Why("false"));
+        }
+    }
+    memset(pixels, READ_PRESET, TARGET_BYTES);
+    NVNsyncWaitResult result = NVN_SYNC_WAIT_RESULT_FAILED;
+    if (why[0] == '\0') {
+        nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+        if (kind == FENCE_WAITED) {
+            nvn.nvn.nvnCommandBufferWaitSync(&nvn.command, &before);
+        }
+        RecordClear(&nvn.target, TARGET_SIZE, TARGET_SIZE, rgba);
+        nvn.nvn.nvnCommandBufferBarrier(&nvn.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
+                                                          NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+        const NVNcopyRegion region = { 0, 0, 0, TARGET_SIZE, TARGET_SIZE, 1 };
+        nvn.nvn.nvnCommandBufferCopyTextureToBuffer(
+            &nvn.command, &nvn.target, NULL, &region,
+            nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.read_pool), NVN_COPY_FLAGS_NONE);
+        if (kind == FENCE_LIST) {
+            nvn.nvn.nvnCommandBufferFenceSync(&nvn.command, &sync,
+                                              NVN_SYNC_CONDITION_ALL_GPU_COMMANDS_COMPLETE, 0);
+        }
+        const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+        if (kind == FENCE_WAITED && !nvn.nvn.nvnQueueWaitSync(&nvn.queue, &before)) {
+            snprintf(why, sizeof(why), "nvnQueueWaitSync on a sync that had signalled: %s",
+                     Why("false"));
+        }
+        nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+        if (kind != FENCE_LIST) {
+            nvn.nvn.nvnQueueFenceSync(&nvn.queue, &sync,
+                                      NVN_SYNC_CONDITION_ALL_GPU_COMMANDS_COMPLETE, 0);
+        }
+        nvn.nvn.nvnQueueFlush(&nvn.queue);
+        result = nvn.nvn.nvnSyncWait(&sync, SYNC_WAIT_NS);
+    }
+    uint32_t wrong = 0;
+    uint8_t first[4] = { 0, 0, 0, 0 };
+    const bool signalled = result == NVN_SYNC_WAIT_RESULT_ALREADY_SIGNALED ||
+                           result == NVN_SYNC_WAIT_RESULT_CONDITION_SATISFIED;
+    if (signalled) {
+        for (uint32_t at = 0; at < TARGET_SIZE * TARGET_SIZE; ++at) {
+            if (memcmp(pixels + (size_t)at * 4u, expected, 4) != 0 && wrong++ == 0u) {
+                memcpy(first, pixels + (size_t)at * 4u, 4);
+            }
+        }
+    }
+    // The queue is left with nothing running, whatever the wait said, before the syncs go.
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnSyncFinalize(&sync);
+    if (before_up) {
+        nvn.nvn.nvnSyncFinalize(&before);
+    }
+    if (why[0] == '\0' && NvnLayerError()[0] != '\0') {
+        snprintf(why, sizeof(why), "%s", NvnLayerError());
+    }
+    if (why[0] != '\0') {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, signalled && wrong == 0u,
+               "nvnSyncWait answered %d after up to 10 s (0 is signalled, 1 satisfied, 2 timed "
+               "out, 3 failed); once it signalled, %u of %u pixels were wrong, the first "
+               "%02x%02x%02x%02x, expected %02x%02x%02x%02x (0x%02x is a byte nothing copied)",
+               (int)result, (unsigned)wrong, (unsigned)(TARGET_SIZE * TARGET_SIZE), first[0],
+               first[1], first[2], first[3], expected[0], expected[1], expected[2], expected[3],
+               READ_PRESET);
+}
+
+/// A sync nothing was told to signal: a wait on it has nothing to wait for and fails, at once
+/// and with a timeout alike, where a wait that only ran out says so.
+static void UnfencedCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static _Alignas(8) NVNsync sync;
+    if (!nvn.nvn.nvnSyncInitialize(&sync, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnSyncInitialize answered false"));
+        return;
+    }
+    const NVNsyncWaitResult poll = nvn.nvn.nvnSyncWait(&sync, 0);
+    // A hundredth of a second: enough to tell a wait that ran out from one that failed.
+    const NVNsyncWaitResult timed = nvn.nvn.nvnSyncWait(&sync, 10000000ull);
+    nvn.nvn.nvnSyncFinalize(&sync);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT,
+               poll == NVN_SYNC_WAIT_RESULT_FAILED && timed == NVN_SYNC_WAIT_RESULT_FAILED,
+               "nvnSyncWait answered %d with no timeout and %d with one of 10 ms, where a sync "
+               "nothing fenced fails both (%d; %d is a wait that ran out)",
+               (int)poll, (int)timed, (int)NVN_SYNC_WAIT_RESULT_FAILED,
+               (int)NVN_SYNC_WAIT_RESULT_TIMEOUT_EXPIRED);
+}
+
+/// The queue's own word on the work the cases above gave it, all of which was valid.
+static void QueueErrorCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    NVNqueueErrorInfo info;
+    memset(&info, 0, sizeof(info));
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    const NVNqueueGetErrorResult error = nvn.nvn.nvnQueueGetError(&nvn.queue, &info);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, error == NVN_QUEUE_GET_ERROR_RESULT_GPU_NO_ERROR,
+               "nvnQueueGetError answered %d, where a queue whose work was valid has no error "
+               "(%d)",
+               (int)error, (int)NVN_QUEUE_GET_ERROR_RESULT_GPU_NO_ERROR);
+}
+
+/// A queue builder's flags and device, and its four sizes, each of which a getter says was set
+/// or not, with the size. The builder makes no queue, so the sizes need not be ones a machine
+/// takes.
+static void QueueBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNqueueBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnQueueBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnQueueBuilderSetDefaults(&builder);
+    int size = -1;
+    Gives(why, sizeof(why), "whether a new builder has a command memory size set",
+          nvn.nvn.nvnQueueBuilderGetCommandMemorySize(&builder, &size), 0);
+    Gives(why, sizeof(why), "whether a new builder has a compute memory size set",
+          nvn.nvn.nvnQueueBuilderGetComputeMemorySize(&builder, &size), 0);
+    Gives(why, sizeof(why), "whether a new builder has a control memory size set",
+          nvn.nvn.nvnQueueBuilderGetControlMemorySize(&builder, &size), 0);
+    Gives(why, sizeof(why), "whether a new builder has a command flush threshold set",
+          nvn.nvn.nvnQueueBuilderGetCommandFlushThreshold(&builder, &size), 0);
+    nvn.nvn.nvnQueueBuilderSetFlags(&builder, NVN_QUEUE_BUILDER_FLAGS_NO_ZCULL);
+    nvn.nvn.nvnQueueBuilderSetCommandMemorySize(&builder, 0x30000);
+    nvn.nvn.nvnQueueBuilderSetComputeMemorySize(&builder, 0x50000);
+    nvn.nvn.nvnQueueBuilderSetControlMemorySize(&builder, 0x7000);
+    nvn.nvn.nvnQueueBuilderSetCommandFlushThreshold(&builder, 0x9000);
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnQueueBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's flags", nvn.nvn.nvnQueueBuilderGetFlags(&builder),
+          NVN_QUEUE_BUILDER_FLAGS_NO_ZCULL);
+    Gives(why, sizeof(why), "whether a command memory size that was set is said to be",
+          nvn.nvn.nvnQueueBuilderGetCommandMemorySize(&builder, &size), 1);
+    Gives(why, sizeof(why), "the builder's command memory size", size, 0x30000);
+    Gives(why, sizeof(why), "whether a compute memory size that was set is said to be",
+          nvn.nvn.nvnQueueBuilderGetComputeMemorySize(&builder, &size), 1);
+    Gives(why, sizeof(why), "the builder's compute memory size", size, 0x50000);
+    Gives(why, sizeof(why), "whether a control memory size that was set is said to be",
+          nvn.nvn.nvnQueueBuilderGetControlMemorySize(&builder, &size), 1);
+    Gives(why, sizeof(why), "the builder's control memory size", size, 0x7000);
+    Gives(why, sizeof(why), "whether a command flush threshold that was set is said to be",
+          nvn.nvn.nvnQueueBuilderGetCommandFlushThreshold(&builder, &size), 1);
+    Gives(why, sizeof(why), "the builder's command flush threshold", size, 0x9000);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// An event is a word in a pool the processor reaches: what its builder and the event say of
+/// where it is, and the word after a write, an add and an add that wraps.
+static void EventCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    // The last word of the readback pool's first page, which this case alone uses here.
+    const ptrdiff_t offset = (ptrdiff_t)(POOL_PAGE - 4u);
+    _Alignas(8) NVNeventBuilder builder;
+    static _Alignas(8) NVNevent event;
+    nvn.nvn.nvnEventBuilderSetDefaults(&builder);
+    nvn.nvn.nvnEventBuilderSetStorage(&builder, &nvn.read_pool, offset);
+    ptrdiff_t given = -1;
+    Gives(why, sizeof(why), "the builder's storage",
+          (long long)(uintptr_t)nvn.nvn.nvnEventBuilderGetStorage(&builder, &given),
+          (long long)(uintptr_t)&nvn.read_pool);
+    Gives(why, sizeof(why), "the offset the builder's storage comes with", (long long)given,
+          (long long)offset);
+    Gives(why, sizeof(why), "the builder's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnEventBuilderGetMemoryPool(&builder),
+          (long long)(uintptr_t)&nvn.read_pool);
+    Gives(why, sizeof(why), "the builder's memory offset",
+          (long long)nvn.nvn.nvnEventBuilderGetMemoryOffset(&builder), (long long)offset);
+    if (!nvn.nvn.nvnEventInitialize(&event, &builder)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnEventInitialize answered false"));
+        return;
+    }
+    Gives(why, sizeof(why), "the event's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnEventGetMemoryPool(&event),
+          (long long)(uintptr_t)&nvn.read_pool);
+    Gives(why, sizeof(why), "the event's memory offset",
+          (long long)nvn.nvn.nvnEventGetMemoryOffset(&event), (long long)offset);
+    nvn.nvn.nvnEventSignal(&event, NVN_EVENT_SIGNAL_MODE_WRITE, 0x12345678u);
+    Gives(why, sizeof(why), "the event's value after a write of 0x12345678",
+          nvn.nvn.nvnEventGetValue(&event), 0x12345678ll);
+    nvn.nvn.nvnEventSignal(&event, NVN_EVENT_SIGNAL_MODE_ADD, 0x11u);
+    Gives(why, sizeof(why), "the event's value after an add of 0x11",
+          nvn.nvn.nvnEventGetValue(&event), 0x12345689ll);
+    nvn.nvn.nvnEventSignal(&event, NVN_EVENT_SIGNAL_MODE_ADD, 0xffffffffu);
+    Gives(why, sizeof(why), "the event's value after an add of 0xffffffff, which wraps",
+          nvn.nvn.nvnEventGetValue(&event), 0x12345688ll);
+    // The event is its word: the pool's mapping shows it where the builder put it.
+    const uint8_t *const bytes = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    uint32_t word = 0;
+    if (bytes != NULL) {
+        memcpy(&word, bytes + offset, sizeof(word));
+    }
+    Gives(why, sizeof(why), "the word of the pool the event is in", word, 0x12345688ll);
+    nvn.nvn.nvnEventFinalize(&event);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 /// The cases on the suite's own device, from the lookup to the window.
 static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
@@ -1040,10 +1301,24 @@ static void LayerCases(void) {
                                     "set, and the pool maps its storage";
     static const char *const POOL_CACHE = "a page flushed from a cached pool is what a copy "
                                           "reads, and the copy is there after an invalidate";
+    static const char *const FENCED = "a sync fenced on the queue behind a clear signals, and "
+                                      "the clear is there with no finish";
+    static const char *const FENCED_LIST = "a sync fenced inside the list behind a clear "
+                                           "signals, and the clear is there with no finish";
+    static const char *const WAITED = "a queue and a list told to wait for a sync that "
+                                      "signalled run their clear";
+    static const char *const UNFENCED = "a wait on a sync nothing fenced fails, with a timeout "
+                                        "or without";
+    static const char *const QUEUE_ERROR = "the queue has no error after work that was valid";
+    static const char *const QUEUE_BUILDER = "a queue builder gives back its flags and says "
+                                             "which of its sizes were set";
+    static const char *const EVENT = "an event keeps what the processor signals: a write, an "
+                                     "add and an add that wraps";
     const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
-                                         POOL, POOL_CACHE, WINDOW };
+                                         POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
+                                         UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT, WINDOW };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
@@ -1165,6 +1440,21 @@ static void LayerCases(void) {
     } else {
         PoolCacheCase(POOL_CACHE);
     }
+
+    // Colours no case before these left in the target or in the readback.
+    static const float green[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
+    static const uint8_t green_bytes[4] = { 0x00, 0xff, 0x00, 0xff };
+    static const float blue[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+    static const uint8_t blue_bytes[4] = { 0x00, 0x00, 0xff, 0xff };
+    static const float yellow[4] = { 1.0f, 1.0f, 0.0f, 1.0f };
+    static const uint8_t yellow_bytes[4] = { 0xff, 0xff, 0x00, 0xff };
+    FenceCase(FENCED, FENCE_QUEUE, green, green_bytes);
+    FenceCase(FENCED_LIST, FENCE_LIST, blue, blue_bytes);
+    FenceCase(WAITED, FENCE_WAITED, yellow, yellow_bytes);
+    UnfencedCase(UNFENCED);
+    QueueErrorCase(QUEUE_ERROR);
+    QueueBuilderCase(QUEUE_BUILDER);
+    EventCase(EVENT);
 
 #if NVN_LAYER_API < 231
     const bool screen_up = ViewerScreenUp();
