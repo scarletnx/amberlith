@@ -293,7 +293,7 @@ static const uint8_t *Fetch(GpuContext *gpu, const DkShader *shaders, const DkIm
 
 static void Fidelity(GpuContext *gpu, const DkShader *shaders, const BcnImage *image) {
     char name[128];
-    snprintf(name, sizeof(name), "a picture in %s blocks decodes as the console's, every texel",
+    snprintf(name, sizeof(name), "the picture as %s decodes as the console's, every texel",
              image->name);
     if (!ReportStart(SUITE, name)) {
         return;
