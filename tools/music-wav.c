@@ -78,10 +78,10 @@ int main(int argc, char **argv) {
         }
         MusicRender(&player, samples, (size_t)frames);
         if (player.clipped != 0u) {
-            fprintf(stderr, "music-wav: %s clipped %llu samples\n", MusicColourOf(t)->name,
+            fprintf(stderr, "music-wav: %s clipped %llu samples\n", MusicTrackName((MusicTrack)t),
                     (unsigned long long)player.clipped);
         }
-        failed |= Write(argv[1], MusicColourOf(t)->name, samples, frames);
+        failed |= Write(argv[1], MusicTrackName((MusicTrack)t), samples, frames);
         free(samples);
     }
     // Eight seconds of the browser's track, a switch, and Wimsy's first eight seconds after the

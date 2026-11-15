@@ -7,52 +7,31 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "musicscore.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/// The demos' music: a tracker of four channels in the Amiga's manner, and a composer that writes
-/// each track's patterns from a seed and the track's tonal colour. Every sample is worked out in
+/// The demos' music: four tracks written note by note (source/musicscore.txt), played by an FM
+/// synthesizer in the manner of the OPL3 an AdLib-era card carried. Every sample is worked out in
 /// integers, so a track renders to the same samples on every machine, the host included, and the
 /// music family holds a machine's samples to the host's (docs/families/Music.md).
 ///
-/// The tracker: four channels, each playing one of the probe's own 8-bit samples (single cycles
-/// of a square, pulses, a triangle, a saw, a sine, an organ; a kick, a snare and a hat), stepped
-/// at the rate the Amiga's sound chip reads a sample at for a period (MUSIC_PAULA_CLOCK over the
-/// period) and held between steps as that chip holds them; channels 0 and 3 to the left and 1 and
-/// 2 to the right, each with three eighths of the other side's, as a player softens the chip's
-/// hard stereo; then the A500's fixed low pass, and for some tracks the filter its power light
-/// switches. Rows of a pattern, ticks of a row, the effects a tracker of that era has (arpeggio,
-/// slides, tone portamento, vibrato, volume, cut, delay, retrigger), and a volume envelope per
-/// instrument.
-///
-/// The composer: each track's colour is a mode on a tonic, a register for each part, timbres, a
-/// voicing for its chords, a tempo and a groove. The form is A A B A, 32 bars: A's progression
-/// twice, the second time closing on the tonic, a bridge on another progression that ends on the
-/// chord leading home, and A again. Channel 0 is the bass on each chord's root, 1 the lead, whose
-/// notes keep to the mode and fall on chord tones on the beats, 2 the chord as an arpeggio in the
-/// track's voicing, and 3 the drums, or an echo of the lead.
+/// The synthesizer: ten channels of two operators each, bass, three chord voices, lead,
+/// counter-melody, arpeggio, kick, snare and hats. An operator is a phase stepped at its note's
+/// frequency times its multiple, read through one of the OPL3's eight waveforms (or noise, for
+/// the drums) in the log domain, a log-sine table and an exponential one as the chip computes,
+/// its attenuation the sum of its envelope (attack, decay to a sustain level, release, at the
+/// chip's sixteen rates), its total level and the tremolo. The modulator's output moves the
+/// carrier's phase (or the two are added), the modulator can feed itself back, and each channel
+/// sits left, right or in the middle. The sum goes through the card's coupling, a high pass near
+/// 10 Hz, and the track's gain.
 
 #define MUSIC_RATE 48000u
-#define MUSIC_CHANNELS 4u
-/// The PAL Amiga's clock for its sound chip: a channel reads its next sample every period ticks.
-#define MUSIC_PAULA_CLOCK 3546895u
-/// The notes a pattern names, three octaves, 1 for the lowest; 0 is no note.
-#define MUSIC_NOTES 36u
-/// A cell's note that releases the channel's envelope.
-#define MUSIC_NOTE_OFF 0x7Fu
-#define MUSIC_ROWS_MAX 96u
-/// Bars in a pattern, and patterns in a track: A's head, A's open and closed tails, the bridge's
-/// head and tail.
-#define MUSIC_PATTERN_BARS 4u
-#define MUSIC_PATTERNS 5u
-/// The positions of the form, A A B A at two patterns each, and its bars.
-#define MUSIC_ORDER 8u
-#define MUSIC_BARS (MUSIC_ORDER * MUSIC_PATTERN_BARS)
-#define MUSIC_INSTRUMENTS 8u
-#define MUSIC_BANK_MAX 10240u
+#define MUSIC_FM_CHANNELS 10u
 /// A switch between tracks: the old one fades out over MUSIC_FADE_FRAMES, then
-/// MUSIC_BARRIER_FRAMES of silence, then the new one from its first row.
+/// MUSIC_BARRIER_FRAMES of silence, then the new one from its first bar.
 #define MUSIC_FADE_FRAMES 2400u
 #define MUSIC_BARRIER_FRAMES 48000u
 
@@ -64,6 +43,7 @@ typedef enum {
     MUSIC_TRACKS,
 } MusicTrack;
 
+/// The modes a score's key names, in musicscore.txt's order.
 typedef enum {
     MUSIC_IONIAN,
     MUSIC_DORIAN,
@@ -74,220 +54,134 @@ typedef enum {
     MUSIC_MODES,
 } MusicMode;
 
-/// The two notes an arpeggio adds to a chord's root.
-typedef enum {
-    /// The third and the fifth.
-    MUSIC_VOICING_TRIAD,
-    /// The third and the seventh: the shell of a seventh chord.
-    MUSIC_VOICING_SHELL,
-    /// The second and the fifth: a suspended chord.
-    MUSIC_VOICING_SUS2,
-    /// The fifth and the ninth: open, no third.
-    MUSIC_VOICING_OPEN,
-} MusicVoicing;
-
-/// The waves the probe makes for its instruments.
-typedef enum {
-    MUSIC_WAVE_SQUARE32,
-    MUSIC_WAVE_PULSE16,
-    MUSIC_WAVE_PULSE32,
-    MUSIC_WAVE_THIN32,
-    MUSIC_WAVE_TRIANGLE32,
-    MUSIC_WAVE_TRIANGLE64,
-    MUSIC_WAVE_SAW16,
-    MUSIC_WAVE_SAW32,
-    MUSIC_WAVE_SINE64,
-    MUSIC_WAVE_ORGAN32,
-    MUSIC_WAVE_SQUARE64,
-    MUSIC_WAVE_KICK,
-    MUSIC_WAVE_SNARE,
-    MUSIC_WAVE_HAT,
-    MUSIC_WAVES,
-} MusicWave;
-
-/// The rhythms each part may take, per bar.
-typedef enum {
-    MUSIC_GROOVE_CALM,
-    MUSIC_GROOVE_BOUNCE,
-    MUSIC_GROOVE_SLOW,
-    MUSIC_GROOVE_FLOW,
-} MusicGroove;
-
-typedef enum {
-    MUSIC_DRUMS_STRAIGHT,
-    MUSIC_DRUMS_SHUFFLE,
-    MUSIC_DRUMS_TWELVE,
-    /// No drums: channel 3 plays the lead again, later and softer.
-    MUSIC_DRUMS_ECHO,
-} MusicDrums;
-
-typedef enum {
-    MUSIC_FILTER_A500,
-    /// The A500's filter and the one its power light switches.
-    MUSIC_FILTER_LED,
-} MusicFilter;
-
-/// One part's sound: a wave, its volume, and its envelope in ticks: rising by @p attack a tick to
-/// 255, falling by @p decay a tick to @p sustain, and by @p release a tick once released.
-typedef struct {
-    uint8_t wave;
-    uint8_t volume;
-    uint8_t attack;
-    uint8_t decay;
-    uint8_t sustain;
-    uint8_t release;
-} MusicVoice;
-
-/// A track's tonal colour: what makes it the track it is before a note is chosen.
-typedef struct {
-    const char *name;
-    /// The demo it accompanies, and the words a person reads about its colour.
-    const char *demo;
-    const char *colour;
-    uint32_t seed;
-    /// The tonic as a pitch class, 0 for C, and the mode on it.
-    uint8_t tonic;
-    uint8_t mode;
-    /// The tracker's tempo (a tick lasts 2.5 / bpm seconds), ticks a row, and the ticks moved from
-    /// the second half of each beat to the first: a shuffle.
-    uint8_t bpm;
-    uint8_t speed;
-    uint8_t swing;
-    uint8_t rows_per_beat;
-    uint8_t beats_per_bar;
-    /// The lowest note each part's register starts from, 0 to 35, and its sound.
-    uint8_t lead_base;
-    uint8_t chord_base;
-    uint8_t bass_base;
-    MusicVoice lead;
-    MusicVoice chord;
-    MusicVoice bass;
-    uint8_t voicing;
-    uint8_t groove;
-    uint8_t drums;
-    uint8_t filter;
-    /// The lead's vibrato on held notes, a tracker's 4xy, and whether it glides into some notes.
-    uint8_t vibrato;
-    bool glide;
-} MusicColour;
-
-const MusicColour *MusicColourOf(MusicTrack track);
-/// The track a name gives, MUSIC_TRACKS for a name no track has.
-MusicTrack MusicTrackNamed(const char *name);
-
-/// A cell of a pattern: one channel's word on one row.
-typedef struct {
-    uint8_t note;
-    uint8_t instrument;
-    uint8_t effect;
-    uint8_t param;
-} MusicCell;
-
-/// The tracker's effects, by the numbers trackers of that era give them.
-enum {
-    MUSIC_FX_ARPEGGIO = 0x0,
-    MUSIC_FX_SLIDE_UP = 0x1,
-    MUSIC_FX_SLIDE_DOWN = 0x2,
-    MUSIC_FX_PORTAMENTO = 0x3,
-    MUSIC_FX_VIBRATO = 0x4,
-    MUSIC_FX_VOLUME_SLIDE = 0xA,
-    MUSIC_FX_VOLUME = 0xC,
-    /// 0xE with the parameter's high nibble: 0x9 retrigger, 0xC cut, 0xD delay.
-    MUSIC_FX_EXTENDED = 0xE,
-};
-
-/// The instruments a song's cells name, 1 to MUSIC_INSTRUMENTS.
-enum {
-    MUSIC_INSTRUMENT_LEAD = 1,
-    MUSIC_INSTRUMENT_CHORD = 2,
-    MUSIC_INSTRUMENT_BASS = 3,
-    MUSIC_INSTRUMENT_KICK = 4,
-    MUSIC_INSTRUMENT_SNARE = 5,
-    MUSIC_INSTRUMENT_HAT = 6,
-    MUSIC_INSTRUMENT_ECHO = 7,
-};
-
-typedef struct {
-    uint32_t offset;
-    uint32_t length;
-    /// A looped wave repeats from loop_start to its end; a one-shot (loop_start == length) stops.
-    uint32_t loop_start;
-    MusicVoice voice;
-} MusicInstrument;
-
-/// A track composed: its patterns and the form's order, what the judge reads of the composition,
-/// and the samples its instruments play.
-typedef struct {
-    MusicTrack track;
-    uint32_t seed;
-    MusicColour colour;
-    uint32_t rows;
-    uint32_t rows_per_bar;
-    MusicCell cells[MUSIC_PATTERNS][MUSIC_ROWS_MAX][MUSIC_CHANNELS];
-    uint8_t order[MUSIC_ORDER];
-    /// 'A' or 'B' for each position.
-    char section[MUSIC_ORDER];
-    /// The scale degree, 0 to 6, each bar's chord stands on, in the form's order of bars, and the
-    /// two semitone offsets its arpeggio adds.
-    uint8_t chord[MUSIC_BARS];
-    uint8_t arp[MUSIC_BARS];
-    /// The pitch classes of the mode on the tonic, low to high from the tonic.
-    uint8_t scale[7];
-    MusicInstrument instruments[MUSIC_INSTRUMENTS + 1u];
-    int8_t bank[MUSIC_BANK_MAX];
-    uint32_t bank_used;
-} MusicSong;
-
-/// Writes @p track's song from @p seed; the colour's own seed is the track as it ships.
-void MusicCompose(MusicSong *song, MusicTrack track, uint32_t seed);
-
-/// The semitones above the tonic of each degree of @p mode.
+/// The semitones above the tonic of each degree of @p mode, and its name.
 const uint8_t *MusicModeSteps(MusicMode mode);
 const char *MusicModeName(MusicMode mode);
 
-/// The period of a note, 1 to MUSIC_NOTES, as the Amiga's tracker tunes it: 856 for the lowest,
-/// each semitone 2 to the -1/12 times the one below, rounded.
-uint32_t MusicPeriod(uint32_t note);
-/// How far a channel steps through its sample each output sample at @p period: the chip's rate
-/// over the output's, in 16.16 fixed point.
-uint32_t MusicStep(uint32_t period);
-/// The frames a tick lasts at @p bpm, 2.5 / bpm seconds, the remainder carried from tick to tick
-/// in @p carry so the tempo holds exactly over a track.
-uint32_t MusicTickFrames(uint32_t bpm, uint32_t *carry);
+/// A track's score, its name, and the track a name gives (MUSIC_TRACKS for none).
+const MusicScore *MusicScoreOf(MusicTrack track);
+const char *MusicTrackName(MusicTrack track);
+MusicTrack MusicTrackNamed(const char *name);
 
-/// One output frame from the four channels' values: the left takes channels 0 and 3 and three
-/// eighths of 1 and 2, the right the other way round. Each value is a sample times its gain, at most
-/// MUSIC_CHANNEL_PEAK in size.
-#define MUSIC_CHANNEL_PEAK 8160
-void MusicPan(const int32_t channels[MUSIC_CHANNELS], int32_t *left, int32_t *right);
+/// The channels, and which side each sits on.
+enum {
+    MUSIC_CH_BASS,
+    MUSIC_CH_CHORD1,
+    MUSIC_CH_CHORD2,
+    MUSIC_CH_CHORD3,
+    MUSIC_CH_LEAD,
+    MUSIC_CH_COUNTER,
+    MUSIC_CH_ARP,
+    MUSIC_CH_KICK,
+    MUSIC_CH_SNARE,
+    MUSIC_CH_HATS,
+};
+enum {
+    MUSIC_LEFT = 1,
+    MUSIC_RIGHT = 2,
+    MUSIC_CENTRE = 3,
+};
+uint32_t MusicPanOf(uint32_t channel);
 
-/// The A500's low pass, one pole near 4.4 kHz, and the power light's, two more near 3.3 kHz, in
-/// 16-bit fixed point: what one step moves a state of @p state toward @p input.
-int32_t MusicFilterStep(int32_t state, int32_t input, uint32_t coefficient);
-#define MUSIC_FILTER_A500_Q16 28790u
-#define MUSIC_FILTER_LED_Q16 22853u
+/// The OPL3's waveforms, 0 to 7, and two noises for the drums: white noise, and noise whose sign
+/// a high square of the operator's own phase flips, as the chip's hats sound.
+enum {
+    MUSIC_WAVE_SINE,
+    MUSIC_WAVE_HALF_SINE,
+    MUSIC_WAVE_ABS_SINE,
+    MUSIC_WAVE_QUARTER_SINE,
+    MUSIC_WAVE_ALT_SINE,
+    MUSIC_WAVE_CAMEL_SINE,
+    MUSIC_WAVE_SQUARE,
+    MUSIC_WAVE_LOG_SAW,
+    MUSIC_WAVE_NOISE,
+    MUSIC_WAVE_METAL,
+    MUSIC_WAVES,
+};
 
-/// A channel of the tracker as it plays.
+/// An operator's settings, the chip's fields: frequency multiple (0 is a half), total level in
+/// 0.75 dB steps, attack, decay and release rates 0 to 15, sustain level in 3 dB steps (15 is
+/// silence), waveform, whether the envelope holds at the sustain level while the key is down,
+/// and the vibrato and tremolo.
 typedef struct {
-    uint32_t instrument;
-    uint32_t note;
-    uint32_t period;
-    uint32_t base_period;
-    uint32_t target_period;
-    uint32_t portamento;
-    uint32_t position;
+    uint8_t mult;
+    uint8_t tl;
+    uint8_t ar;
+    uint8_t dr;
+    uint8_t sl;
+    uint8_t rr;
+    uint8_t wave;
+    uint8_t sustain;
+    uint8_t vib;
+    uint8_t am;
+} MusicOperator;
+
+/// An instrument: its two operators (the modulator first), the modulator's feedback 0 to 7, and
+/// whether the two are added rather than one moving the other. Past the chip: a pitch that falls
+/// from @p drop 256ths of a semitone above the note to it, a 64th of what is left each
+/// @p drop_rate frames (the drums), and the note a drum plays at.
+typedef struct {
+    const char *name;
+    MusicOperator op[2];
+    uint8_t feedback;
+    uint8_t additive;
+    uint16_t drop;
+    uint16_t drop_rate;
+    uint8_t note;
+} MusicPatch;
+
+extern const MusicPatch MUSIC_PATCHES[];
+extern const size_t MUSIC_PATCH_COUNT;
+/// The patch a name gives, NULL for none.
+const MusicPatch *MusicPatchNamed(const char *name);
+
+/// The chip's arithmetic, one piece at a time, for the reference suite.
+///
+/// A note's phase step a frame, in 32-bit fractions of a cycle, for a pitch in 256ths of a
+/// semitone above MIDI note 0 (A4 is 69 * 256).
+uint32_t MusicPitchStep(uint32_t pitch);
+/// An operator's output, -4095 to 4095, for a 10-bit phase, its waveform, its attenuation in 256ths
+/// of an octave (6.02 dB each 256), and the noise generator's bit.
+int32_t MusicWave(uint32_t wave, uint32_t phase, uint32_t attenuation, uint32_t noise);
+/// What a decay at @p rate adds to the attenuation each frame, and what share of the attenuation
+/// an attack at @p rate takes off each frame, in 65536ths; attenuations are in 65536ths of a
+/// 256th of an octave.
+uint32_t MusicDecayStep(uint32_t rate);
+uint32_t MusicAttackShare(uint32_t rate);
+/// The frames an operator's envelope takes, run as it plays, for an attack at @p rate from silence
+/// to its top, or a decay at @p rate from its top to silence (4000000 for a rate that never ends).
+uint32_t MusicEnvelopeFrames(uint32_t rate, bool attack);
+
+/// One operator as it plays.
+typedef struct {
+    uint32_t phase;
     uint32_t step;
-    bool playing;
-    int32_t volume;
-    int32_t envelope;
-    bool released;
-    bool attacking;
-    uint32_t vibrato_position;
-    uint8_t vibrato;
-    MusicCell cell;
-    /// What the last tick's gain was, and this tick's, ramped between over its first samples.
-    int32_t gain_was;
-    int32_t gain;
+    int32_t attenuation;
+    uint8_t stage;
+    int32_t out[2];
+} MusicOperatorState;
+
+/// One channel as it plays.
+typedef struct {
+    const MusicPatch *patch;
+    MusicOperatorState op[2];
+    bool key;
+    bool active;
+    /// Its pitch in 256ths of a semitone, the pitch a glide goes to and its step a frame, the pitch
+    /// drop still to fall and the frames to its next fall, and the extra attenuation of its part
+    /// and accent in 256ths of an octave.
+    int32_t pitch;
+    int32_t target;
+    int32_t glide;
+    int32_t drop;
+    uint32_t drop_left;
+    int32_t level;
+    /// Frames since its key went down, for the vibrato that comes in late on a long note, and the
+    /// frames until its key comes up (nought: it stays down).
+    uint32_t age;
+    uint32_t gate;
+    /// The pitch its operators' steps were worked out for, and those steps.
+    int32_t stepped_pitch;
 } MusicChannel;
 
 typedef enum {
@@ -297,55 +191,68 @@ typedef enum {
     MUSIC_SILENT,
 } MusicState;
 
-/// A tracker playing a track, and what it does next: a switch or a stop.
+/// A track ready to play: its score, and the patches its parts name.
+typedef struct {
+    MusicTrack track;
+    const MusicScore *score;
+    const MusicPatch *patch[MUSIC_SCORE_VOICES];
+} MusicSong;
+
+/// A track playing, and what it does next: a switch or a stop.
 typedef struct {
     MusicSong song;
     MusicState state;
-    MusicChannel channels[MUSIC_CHANNELS];
+    MusicChannel channels[MUSIC_FM_CHANNELS];
+    /// Where the score is: the form's entry, the bar in its section, the step in the bar, and the
+    /// frames the step has left, the remainder of a step's frames carried to the next in 65536ths.
     uint32_t position;
-    uint32_t row;
-    uint32_t tick;
-    uint32_t row_ticks;
-    uint32_t tick_left;
-    uint32_t tick_carry;
+    uint32_t bar;
+    uint32_t step;
+    uint32_t step_left;
+    uint32_t step_carry;
+    bool started;
+    /// The lead's and counter-melody's notes: the next one's index and the steps the one sounding
+    /// has left.
+    uint32_t note_index[2];
+    uint32_t note_left[2];
+    /// The section's patterns: bass, drums, the drums' fill, hats, chords, arpeggio.
+    const char *grid[6];
+    /// The chord sounding: its three voices' notes, the six an arpeggio climbs, and the bass's
+    /// root.
+    int32_t voicing[3];
+    int32_t arpeggio[6];
+    int32_t root;
+    uint32_t lfo;
+    uint32_t noise;
+    int32_t coupling[4];
     uint32_t fade_left;
     uint32_t barrier_left;
-    uint32_t tick_elapsed;
-    /// The track after the barrier, MUSIC_TRACKS for none: the fade ends in silence.
     MusicTrack next;
-    /// The low passes' states, left and right, in 24.8 fixed point: the A500's, and the power
-    /// light's two poles a side.
-    int32_t filter[2];
-    int32_t led[4];
-    /// Frames rendered since the player started, and those of the current track.
     uint64_t frames;
     uint64_t track_frames;
-    /// Samples clamped to 16 bits.
     uint64_t clipped;
 } MusicPlayer;
 
-/// Starts @p track from its first row.
+/// Starts @p track from its first bar, its intro.
 void MusicStart(MusicPlayer *player, MusicTrack track);
-/// The same with a seed of the caller's.
-void MusicStartSeeded(MusicPlayer *player, MusicTrack track, uint32_t seed);
-/// Starts with the silence barrier, then @p track from its first row: what a switch sounds like
+/// Starts with the silence barrier, then @p track from its first bar: what a switch sounds like
 /// after its fade, for a stream that takes over from another one's silence.
 void MusicStartAfterBarrier(MusicPlayer *player, MusicTrack track);
-/// Fades out what plays, then the barrier, then @p track from its first row; from silence, the
-/// barrier is skipped. MUSIC_TRACKS fades out and stays silent.
+/// Fades out what plays, then the barrier, then @p track from its first bar; from silence, the
+/// barrier is skipped. MUSIC_TRACKS fades out and stays silent; inside the barrier it ends it.
 void MusicSwitch(MusicPlayer *player, MusicTrack track);
 /// Writes @p frames stereo frames, left then right, into @p out.
 void MusicRender(MusicPlayer *player, int16_t *out, size_t frames);
-/// The frames one pass of a track's form lasts, from its first row to its last.
+/// The frames of one pass of a track, its intro and its form once.
 uint64_t MusicFormFrames(const MusicSong *song);
 
 /// FNV-1a over 16-bit samples, low byte first: what the music family compares.
 uint64_t MusicHash(uint64_t hash, const int16_t *samples, size_t count);
 #define MUSIC_HASH_START 0xCBF29CE484222325ull
 
-/// What the music made since the program started: samples rendered, threads and voices the
-/// player started. Outside the interactive mode, and outside the music family's cases, each is
-/// nought (the game family's last case holds it to that).
+/// What the music made since the program started: frames rendered, threads and voices the player
+/// started. Outside the interactive mode, and outside the music family's cases, each is nought
+/// (the game and demo families' last cases hold it to that).
 typedef struct {
     uint64_t samples;
     uint32_t threads;
