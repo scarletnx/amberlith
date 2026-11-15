@@ -316,5 +316,5 @@ samples with no copy between, as the coherency family's cases expect of a smalle
 ASTC block of one colour decodes to that colour; and that a copy of a texel to a buffer is
 there for the processor once the queue is idle. The compute program reads its uniform block's
 vector by fixed components alone, and works in whole numbers up to the one division by 255, so
-neither a vector's component picked at run time nor a denormal is in it. ScarletNX 3e9ad88 on a
+neither a vector's component picked at run time nor a denormal is in it. ScarletNX a97e2db on a
 desktop card and on lavapipe is inside every range of the five levels.
