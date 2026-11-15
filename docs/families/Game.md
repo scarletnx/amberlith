@@ -165,12 +165,13 @@ The scene above is one small frame, the same on every run. The `wimsy` suite dra
 ScarletNX's mascot, as a game draws a character, from the lightest frame a game makes upwards, a
 level a scene. A level runs when a word names it, `level=<n>`, one word a level
 ([the mode file](../ModeFile.md)); none runs without one, and `frames=<n>` is theirs as it is the
-scene's. Two levels so far:
+scene's. Three levels so far:
 
 | level | a frame |
 |---|---|
 | 0, sprites | 96 sprites of her, 128 texels a side, a pixel or four a texel, half of them mirrored, some hanging off the target: one batch of 576 vertices the main thread rewrites every frame as the scene's world moves them, drawn in one draw and blended over the clear colour, as a 2D game's are |
 | 1, one lit model | her model, 1680 triangles, turning a two hundred and fortieth of a turn a frame, while the camera backs away from 3 of her half widths to 48 over the run: a transform in a uniform buffer the main thread rewrites every frame, a normal a vertex and a colour of four normalised bytes, one light worked out a pixel, the faces turned away culled, a Z24S8 depth buffer, and four samples a pixel resolved before the frame is shown |
+| 2, a scene near and far | seven of her down a floor 204 units long, the camera backing away and up from 6 units to 36 from the nearest: the floor, 204 quads through a 2048 by 2048 texture of paving stones with its twelve levels of detail, a level between two weighed; a lane down its middle through a 1024 by 1024 texture whose eleven levels are each one colour; two walls 40 units down, a sign 5/256 of a unit in front of each, drawn before its wall on the left and after it on the right; and four marks painted in the floor's own plane, brought in front of it by a depth bias. Eleven draws |
 
 **The model** is `source/wimsymesh.c`, which `tools/wimsy-mesh.py` makes from her drawing,
 `static/wimsy.svg`: each of its five leaves a slab with a white bevel where the drawing strokes
@@ -205,29 +206,49 @@ the uniform buffers held and works out the range each channel of each pixel may 
   of a pixel each way, and what any of those five places would show is allowed: a sample that
   near an edge may fall either side of it. Where all five have a surface the clear colour is
   not allowed, and neither is a surface behind the farthest of them;
-- two surfaces within 2^-18 of each other in depth may each hide the other;
+- two surfaces within 2^-21 of each other in depth, 8 steps of a 24 bit buffer, may each hide
+  the other;
 - a surface's colour is worked out at the pixel's centre and at the sample, and both are
   allowed with what lies between, since a machine may shade a multisampled pixel anywhere in it;
+- a texture's level of detail may be anywhere the specification lets a machine put it (OpenGL
+  4.6, 8.14.1: no less than the larger of the two coordinates' changes over a pixel, no more
+  than their sum), measured anywhere within a pixel of this one and an eighth of a level more
+  either way; the range holds every texel a lookup there can weigh on every level that reaches;
 - a pixel's range is the mean of its samples' ranges and two codes more each way, one for the
   byte a float rounds to and one for the mean's own rounding.
 
+Level 2 is there for what a machine does with the same things near and far, and its frames
+show each. The lane's colour is the level of detail it was drawn at: red, green, blue, yellow,
+magenta, cyan, white, orange and on, a band blending into the next where a level between two is
+weighed, so a machine that picks a coarser or a finer level than the specification allows, or
+takes the nearer level alone, is outside the lane's ranges, which are a few codes wide wherever
+one coordinate's change is much the larger, as it is far down the lane. A sign is 5/256 of a
+unit in front of its wall: from the camera's last place, 76 units off, 28 steps of a 24 bit
+depth buffer apart and a ninth of a step of a 16 bit one, where the reference is sure of two
+surfaces 8 steps apart; a machine that loses depth precision with distance shows the wall
+through the sign. A mark lies in the floor's plane, where only its bias (64 steps and twice the
+depth's steepest change over a pixel) puts it in front: a machine that drops the bias leaves the
+floor over it, near and far.
+
 A pixel inside its range passes. One whose range is no wider than eight codes is held to a
-colour; a wider one is on an edge, held to the colours beside it. This is the position tier, and
+colour; a wider one is on an edge, of a surface or of a stone of the floor, held to the colours
+beside it, or between levels of detail, held to theirs. This is the position tier, and
 a passing frame's note says how many pixels were each:
 
 ```json
-{"type":"note","text":"wimsy: level 1, frame 0: 920128 pixels within their colour's range, 1472 on an edge within the colours beside it"}
+{"type":"note","text":"wimsy: level 1, frame 0: 920130 pixels held to a colour, 1470 to a wider range, on an edge or between levels of detail"}
 ```
 
 A frame with a pixel outside its range fails, saying how many are, by how much at most, and one
 of them with its range. With the word `images` each judged frame leaves its
 [pictures](../FailurePictures.md): what the machine drew, the nearest picture inside the ranges,
-and the verdicts, grey for a pixel held to a colour, blue for one on an edge, red for one outside.
+and the verdicts, grey for a pixel held to a colour, blue for one held to a wider range, red for one outside.
 
 What the ranges refuse is checked by the reference suite on machines made to order
 ([the judge](Judge.md)): one that draws the level as asked passes near and far, and one that draws
 it with one sample a pixel, with no depth test, with no light, a frame late, a pixel aside or
-not at all is refused.
+not at all is refused, as is one that draws level 2 with the nearer level of detail alone, a
+level too coarse, no depth bias or 16 bits of depth.
 
 **What is timed** is what the scene times: seven cases a level, named with it
 (`level 1, 600 frames, present to present: the mean`), and two notes. A judged frame's copy is
@@ -238,7 +259,10 @@ In an emulator a failure at level 0 points at a vertex buffer the processor rewr
 served from what was held before (`buffer_cache/buffer_cache.h`), at blending, or at a sprite a
 texel aside; at level 1, at the uniform buffer in the same way, a normalised byte attribute, the
 face the winding gives through the flipped viewport, a Z24S8 buffer of four samples, the sample
-locations, or the resolve, which the library makes on the 2D engine. A level whose first frame
+locations, or the resolve, which the library makes on the 2D engine; at level 2, at the level
+of detail it picks (a bias a setting adds, anisotropy it forces, a level of a texture it did not
+upload), at the depth format it keeps a Z24S8 buffer in, or at the depth bias and its units in
+that format. A level whose first frame
 passes and whose later ones show the faces turned away points at the shadow RAM: to present a
 compressed image the library writes the window origin with its flip set while the shadow RAM
 passes methods through, and again while it replays them, which puts the tracked value back; a
@@ -256,6 +280,6 @@ mean of each pixel's four, as the msaa suite's resolve case holds it; that a sec
 second swapchain on the default window come up after the first were closed; that the shadow
 RAM's replay puts the window origin back after a present, as Eden's does; and that a channel is
 never more than two codes from what the reference's arithmetic gives. ScarletNX 04befe5 on a
-desktop card and on lavapipe is inside every range of both levels once the presented images are
-not compressed, and with them compressed, as the levels present, draws level 1's faces turned
-away from its second frame on.
+desktop card and on lavapipe is inside every range of the three levels once the presented images
+are not compressed, and with them compressed, as the levels present, draws a model's faces
+turned away from a level's second frame on.

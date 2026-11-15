@@ -1832,21 +1832,21 @@ _Static_assert(JOURNAL_LINE_MAX >= sizeof("run   \t\n") + JOURNAL_SUITE_MAX + JO
                                        JOURNAL_MODE_MAX,
                "a run record with every field at its widest fits a journal line");
 
-_Static_assert(WIMSY_LEVELS == 2u, "the widest mode below names every level there is");
+_Static_assert(WIMSY_LEVELS == 3u, "the widest mode below names every level there is");
 
 /// The widest mode a file can ask for, every word on and `frames=` at its widest: its key is whole
 /// in MODE_KEY_MAX, the run and chosen records hold it, and a launch after a crash goes on with
 /// the run in that mode rather than starting over with an empty key.
 static void CheckWidestMode(void) {
     static const char WIDEST[] = "quick all audio cpu display fatal frames=36000 framework fs game "
-                                 "graphics hang hooks images jni kernel level=1 level=0 libc "
+                                 "graphics hang hooks images jni kernel level=1 level=2 level=0 libc "
                                  "listen "
                                  "machine=scarletnx-android@12345678901234567890123456789012 net "
                                  "notime nvn pad retry service skip=abcdefghijklmnop "
                                  "skip=bcdefghijklmnopq skip=cdefghijklmnopqr "
                                  "skip=defghijklmnopqrs stress unban video vram=1048576";
     static const char KEY[] = "all audio cpu display fatal frames=36000 framework fs game graphics "
-                              "hang hooks images jni kernel level=0 level=1 libc listen "
+                              "hang hooks images jni kernel level=0 level=1 level=2 libc listen "
                               "machine=scarletnx-android@12345678901234567890123456789012 net "
                               "notime nvn pad retry service skip=abcdefghijklmnop "
                               "skip=bcdefghijklmnopq skip=cdefghijklmnopqr skip=defghijklmnopqrs "

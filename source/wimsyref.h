@@ -21,13 +21,16 @@ extern "C" {
 /// Level 0 is two dimensional: sprites of her, moved by the game scene's world (gameref.h), one
 /// batch of vertices the processor rewrites every frame. Level 1 is her model alone, lit by one
 /// light, turning a fixed angle a frame behind a depth buffer with four samples a pixel, while
-/// the camera backs away from near to far over the run.
+/// the camera backs away from near to far over the run. Level 2 is a scene: seven of her down a
+/// floor of two hundred units, textured with every level of detail, with a lane whose levels of
+/// detail are each a colour, signs a quarter of a unit in front of walls and marks painted on
+/// the floor, so a frame shows what a machine does with the same things near and far.
 ///
 /// A level's frame is not held to a hash: two machines that are both right differ in a shaded
 /// frame's last bits and in which way a sample on an edge falls. Each judged frame is held to
 /// bounds a pixel, worked out here (WimsyJudge).
 
-#define WIMSY_LEVELS 2u
+#define WIMSY_LEVELS 3u
 
 /// What a level is called on a line.
 const char *WimsyLevelName(uint32_t level);
@@ -98,13 +101,82 @@ typedef struct {
     float shade[4];
 } WimsyLight;
 
-#define WIMSY_INSTANCES_MAX 1u
+#define WIMSY_INSTANCES_MAX 8u
 
 /// The models frame @p frame of a run of @p frames draws at @p level, in order. Returns how many.
 uint32_t WimsyInstancesOf(uint32_t level, uint32_t frame, uint32_t frames, WimsyInstance *out);
 
 /// The light of @p level.
 void WimsyLightOf(uint32_t level, WimsyLight *out);
+
+/// Level 2's world, beside the models: quads whose corners are in the world, each vertex laid
+/// out as the drawing suites' (gpu.h, GpuVertex): a position, a texture coordinate and a colour.
+typedef struct {
+    float x, y, z;
+    float u, v;
+    float r, g, b, a;
+} WimsyWorldVertex;
+
+/// What a run of the world's vertices is drawn with.
+typedef enum {
+    /// The floor's texture, every level of detail, a level between two weighed.
+    WIMSY_MATERIAL_FLOOR,
+    /// The lane's, whose levels are each one colour.
+    WIMSY_MATERIAL_LANE,
+    /// The vertex's colour.
+    WIMSY_MATERIAL_FLAT,
+    /// The vertex's colour, in the floor's own plane and brought in front of it by a depth bias.
+    WIMSY_MATERIAL_MARK,
+    /// The model's: its vertex's colour in the light. Not a world draw's.
+    WIMSY_MATERIAL_MODEL,
+} WimsyMaterial;
+
+typedef struct {
+    uint32_t first;
+    uint32_t count;
+    WimsyMaterial material;
+} WimsyWorldDraw;
+
+#define WIMSY_WORLD_VERTICES_MAX 1536u
+#define WIMSY_WORLD_DRAWS_MAX 8u
+
+/// The world of @p level, the same on every frame: its vertices, six a quad, into @p vertices
+/// with how many in @p vertex_count, and its draws, in order, into @p draws. Returns how many
+/// draws; none for a level with no world.
+uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vertex_count,
+                      WimsyWorldDraw *draws);
+
+/// The transform from the world to clip space on frame @p frame of @p frames at @p level, column
+/// by column, which the world's draws read from their uniform buffer.
+void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[16]);
+
+/// The bias a mark's draw sets: this many of the depth buffer's steps and this many times the
+/// depth's steepest change over a pixel, both towards the eye.
+#define WIMSY_MARK_BIAS_UNITS -64.0f
+#define WIMSY_MARK_BIAS_SLOPE -2.0f
+
+/// The two textures, square, with every level down to one texel, their texels worked out from
+/// where they are so no machine keeps a copy: the floor's is paving stones of 128 texels in
+/// four greys, each smaller level the stones a fifth nearer their mean and every level from the
+/// fifth that mean; the lane's is one colour a level, so the colour a pixel shows says the level
+/// of detail it was drawn at.
+typedef enum {
+    WIMSY_TEXTURE_FLOOR,
+    WIMSY_TEXTURE_LANE,
+    WIMSY_TEXTURES,
+} WimsyTexture;
+
+/// A side of level nought and how many levels.
+uint32_t WimsyTextureSide(WimsyTexture texture);
+uint32_t WimsyTextureLevels(WimsyTexture texture);
+
+/// Texel (@p x, @p y) of level @p level of @p texture.
+void WimsyTexel(WimsyTexture texture, uint32_t level, uint32_t x, uint32_t y, uint8_t out[4]);
+
+/// How far the level of detail a machine picks may be from the bounds the specification gives
+/// it (OpenGL 4.6, 8.14.1: no less than the larger of the coordinates' changes along an axis,
+/// no more than their sum): an eighth of a level, for the precision it keeps a level in.
+#define WIMSY_LOD_MARGIN 0.125
 
 /// How an imagined machine draws a frame, for WimsyRender: the reference suite's machines, each
 /// wrong in one way a real one can be.
@@ -121,6 +193,14 @@ typedef struct {
     uint32_t frames_late;
     /// How many pixels to the right the picture lands.
     uint32_t shift;
+    /// A level of detail between two weighs them. Off, it takes the nearer one.
+    bool between_levels;
+    /// How many levels of detail too coarse it picks.
+    uint32_t coarser;
+    /// The depth bias. Off, a mark is drawn where the floor is.
+    bool bias;
+    /// The bits its depth buffer keeps, nought for all a float has.
+    uint32_t depth_bits;
 } WimsyMachine;
 
 /// The machine that draws a level as the level asks.
@@ -137,12 +217,12 @@ void WimsyRender(uint32_t level, uint32_t frame, uint32_t frames, const WimsyMac
 /// those places would show. And how far apart, in depth, two surfaces must be before the reference
 /// is sure which one hides the other.
 #define WIMSY_EDGE_MARGIN (1.0 / 32.0)
-#define WIMSY_DEPTH_MARGIN (1.0 / 262144.0)
+#define WIMSY_DEPTH_MARGIN (1.0 / 2097152.0)
 /// How many codes past the range the reference allows a channel may be: one for the byte a float
 /// rounds to, one for the mean of four samples' bytes.
 #define WIMSY_CHANNEL_MARGIN 2u
 /// A pixel whose range is no wider than this in every channel is held to its colour; a wider one
-/// is on an edge, held to the colours beside it.
+/// is on an edge, held to the colours beside it, or between levels of detail, held to theirs.
 #define WIMSY_HELD_WIDTH 8u
 
 /// What the judge made of a frame.

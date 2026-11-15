@@ -13,7 +13,8 @@
 const uint8_t WIMSY_CLEAR[4] = { 27u, 27u, 31u, 255u };
 
 const char *WimsyLevelName(uint32_t level) {
-    static const char *const NAMES[WIMSY_LEVELS] = { "sprites", "one lit model" };
+    static const char *const NAMES[WIMSY_LEVELS] = { "sprites", "one lit model",
+                                                     "a scene near and far" };
     return level < WIMSY_LEVELS ? NAMES[level] : "no level";
 }
 
@@ -167,6 +168,8 @@ void WimsySpritesImage(const WimsySprite *sprites, uint32_t count, const uint8_t
 #define VIEW_FOCAL 2.0f
 #define VIEW_NEAR 0.5f
 #define VIEW_FAR 256.0f
+/// Level 2 sees four times as far.
+#define SCENE_FAR 1024.0f
 /// Level 1: how far the camera is at the path's start and how much farther at its end, the
 /// model's turn a frame (a two hundred and fortieth of a turn) and its lean towards the eye.
 #define ALONE_NEAR 3
@@ -200,7 +203,258 @@ static void InstanceFacing(WimsyInstance *out, const float rows[3][3], float awa
     out->tint[0] = out->tint[1] = out->tint[2] = out->tint[3] = 1.0f;
 }
 
+// Level 2: the camera starts in front of the first model, looking down the lane, and backs
+// away and up over the run, thirty six units from the first model at its end.
+#define SCENE_MODELS 7u
+static const float SCENE_MODEL_Z[SCENE_MODELS] = { 0.0f,   -6.0f,   -14.0f, -30.0f,
+                                                   -60.0f, -110.0f, -180.0f };
+#define SCENE_MODEL_X 3.25f
+#define SCENE_MODEL_Y 1.125f
+/// The floor, from its edge nearest the camera's first place to its far one, in rows this deep.
+#define FLOOR_NEAR 2
+#define FLOOR_ROWS 34u
+#define FLOOR_ROW 6
+/// How many units of the floor one repeat of each texture covers.
+#define FLOOR_REPEAT 8.0f
+#define LANE_REPEAT 2.0f
+#define SIGN_GAP 0.01953125f
+
+void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[16]) {
+    memset(to_clip, 0, 16u * sizeof(float));
+    if (level != 2u) {
+        return;
+    }
+    const float along = (float)WimsyPathAt(frame, frames) / 65536.0f;
+    const float eye[3] = { 0.0f, 1.625f + 5.0f * along * along, 6.0f + 30.0f * along * along };
+    const float target[3] = { 0.0f, 0.75f, -10.0f - 20.0f * along };
+    // The camera's own axes in the world: where it looks, its right and its up.
+    float ahead[3], right[3], up[3];
+    float length = 0.0f;
+    for (uint32_t k = 0; k < 3u; ++k) {
+        ahead[k] = target[k] - eye[k];
+        length += ahead[k] * ahead[k];
+    }
+    length = sqrtf(length);
+    for (uint32_t k = 0; k < 3u; ++k) {
+        ahead[k] /= length;
+    }
+    // It never looks along the world's up, so its right is level: ahead cross (0, 1, 0).
+    const float level_length = sqrtf(ahead[0] * ahead[0] + ahead[2] * ahead[2]);
+    right[0] = -ahead[2] / level_length;
+    right[1] = 0.0f;
+    right[2] = ahead[0] / level_length;
+    up[0] = right[1] * ahead[2] - right[2] * ahead[1];
+    up[1] = right[2] * ahead[0] - right[0] * ahead[2];
+    up[2] = right[0] * ahead[1] - right[1] * ahead[0];
+    const float aspect = (float)WIMSY_WIDTH / (float)WIMSY_HEIGHT;
+    const float deep = SCENE_FAR / (VIEW_NEAR - SCENE_FAR);
+    float behind = 0.0f, aside = 0.0f, above = 0.0f;
+    for (uint32_t k = 0; k < 3u; ++k) {
+        aside += right[k] * eye[k];
+        above += up[k] * eye[k];
+        behind += ahead[k] * eye[k];
+    }
+    for (uint32_t column = 0; column < 3u; ++column) {
+        to_clip[column * 4u + 0u] = VIEW_FOCAL / aspect * right[column];
+        to_clip[column * 4u + 1u] = VIEW_FOCAL * up[column];
+        to_clip[column * 4u + 2u] = -deep * ahead[column];
+        to_clip[column * 4u + 3u] = ahead[column];
+    }
+    to_clip[12u + 0u] = VIEW_FOCAL / aspect * -aside;
+    to_clip[12u + 1u] = VIEW_FOCAL * -above;
+    to_clip[12u + 2u] = deep * behind + VIEW_NEAR * deep;
+    to_clip[12u + 3u] = -behind;
+}
+
+/// Level 2's models: each stands on the floor at its place down the lane, left and right of it by
+/// turns, turning a two hundred and fortieth of a turn a frame from a seventh of a turn apart.
+static uint32_t SceneInstances(uint32_t frame, uint32_t frames, WimsyInstance *out) {
+    float view[16];
+    WimsyViewOf(2u, frame, frames, view);
+    for (uint32_t i = 0; i < SCENE_MODELS; ++i) {
+        int32_t s = 0, c = 0;
+        WimsySinCos(frame * ALONE_TURN + i * 9362u, &s, &c);
+        const float rows[3][4] = {
+            { FromQ30(c), 0.0f, FromQ30(s), i % 2u == 0u ? -SCENE_MODEL_X : SCENE_MODEL_X },
+            { 0.0f, 1.0f, 0.0f, SCENE_MODEL_Y },
+            { -FromQ30(s), 0.0f, FromQ30(c), SCENE_MODEL_Z[i] },
+        };
+        WimsyInstance *const instance = &out[i];
+        memset(instance, 0, sizeof(*instance));
+        for (uint32_t column = 0; column < 4u; ++column) {
+            for (uint32_t row = 0; row < 4u; ++row) {
+                float sum = column == 3u ? view[12u + row] : 0.0f;
+                for (uint32_t k = 0; k < 3u; ++k) {
+                    sum += view[k * 4u + row] * rows[k][column];
+                }
+                instance->to_clip[column * 4u + row] = sum;
+            }
+        }
+        for (uint32_t row = 0; row < 3u; ++row) {
+            for (uint32_t column = 0; column < 3u; ++column) {
+                instance->turn[row][column] = rows[row][column];
+            }
+        }
+        instance->tint[0] = instance->tint[1] = instance->tint[2] = instance->tint[3] = 1.0f;
+    }
+    return SCENE_MODELS;
+}
+
+static WimsyWorldVertex WorldCorner(float x, float y, float z, float u, float v,
+                                    const uint8_t colour[3]) {
+    const WimsyWorldVertex vertex = { x,
+                                      y,
+                                      z,
+                                      u,
+                                      v,
+                                      (float)colour[0] / 255.0f,
+                                      (float)colour[1] / 255.0f,
+                                      (float)colour[2] / 255.0f,
+                                      1.0f };
+    return vertex;
+}
+
+/// Six vertices over four corners given around the quad.
+static void WorldQuad(WimsyWorldVertex *out, uint32_t *count, const WimsyWorldVertex corner[4]) {
+    static const uint32_t ORDER[6] = { 0, 1, 2, 0, 2, 3 };
+    for (uint32_t i = 0; i < 6u; ++i) {
+        out[(*count)++] = corner[ORDER[i]];
+    }
+}
+
+/// A quad lying on the floor from (@p x0, @p z0) to (@p x1, @p z1), its texture coordinates the
+/// place over @p repeat.
+static void FloorQuad(WimsyWorldVertex *out, uint32_t *count, float x0, float z0, float x1,
+                      float z1, float repeat, const uint8_t colour[3]) {
+    const WimsyWorldVertex corner[4] = {
+        WorldCorner(x0, 0.0f, z0, x0 / repeat, -z0 / repeat, colour),
+        WorldCorner(x1, 0.0f, z0, x1 / repeat, -z0 / repeat, colour),
+        WorldCorner(x1, 0.0f, z1, x1 / repeat, -z1 / repeat, colour),
+        WorldCorner(x0, 0.0f, z1, x0 / repeat, -z1 / repeat, colour),
+    };
+    WorldQuad(out, count, corner);
+}
+
+/// A quad standing at @p z, facing the camera, from (@p x0, @p y0) to (@p x1, @p y1).
+static void StandingQuad(WimsyWorldVertex *out, uint32_t *count, float x0, float y0, float x1,
+                         float y1, float z, const uint8_t colour[3]) {
+    const WimsyWorldVertex corner[4] = {
+        WorldCorner(x0, y0, z, 0.0f, 0.0f, colour),
+        WorldCorner(x1, y0, z, 0.0f, 0.0f, colour),
+        WorldCorner(x1, y1, z, 0.0f, 0.0f, colour),
+        WorldCorner(x0, y1, z, 0.0f, 0.0f, colour),
+    };
+    WorldQuad(out, count, corner);
+}
+
+uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vertex_count,
+                      WimsyWorldDraw *draws) {
+    *vertex_count = 0;
+    if (level != 2u) {
+        return 0;
+    }
+    static const uint8_t WHITE[3] = { 255, 255, 255 };
+    static const uint8_t WALL[3] = { 200, 40, 40 };
+    static const uint8_t SIGN[3] = { 40, 200, 80 };
+    static const uint8_t MARK[3] = { 240, 200, 40 };
+    uint32_t count = 0, draw = 0;
+    // The floor either side of the lane, a row at a time from the camera's end.
+    static const float COLUMNS[7] = { -18.0f, -12.0f, -6.0f, -1.0f, 1.0f, 6.0f, 12.0f };
+    static const float WIDTHS[7] = { 6.0f, 6.0f, 5.0f, 2.0f, 5.0f, 6.0f, 6.0f };
+    draws[draw].first = count;
+    for (uint32_t row = 0; row < FLOOR_ROWS; ++row) {
+        const float z0 = (float)(FLOOR_NEAR - (int32_t)row * FLOOR_ROW);
+        for (uint32_t column = 0; column < 7u; ++column) {
+            if (column != 3u) {
+                FloorQuad(vertices, &count, COLUMNS[column], z0, COLUMNS[column] + WIDTHS[column],
+                          z0 - (float)FLOOR_ROW, FLOOR_REPEAT, WHITE);
+            }
+        }
+    }
+    draws[draw].count = count - draws[draw].first;
+    draws[draw++].material = WIMSY_MATERIAL_FLOOR;
+    // The lane between them, its texture once across and once every two units along.
+    draws[draw].first = count;
+    for (uint32_t row = 0; row < FLOOR_ROWS; ++row) {
+        const float z0 = (float)(FLOOR_NEAR - (int32_t)row * FLOOR_ROW);
+        const float z1 = z0 - (float)FLOOR_ROW;
+        const WimsyWorldVertex corner[4] = {
+            WorldCorner(-1.0f, 0.0f, z0, 0.0f, -z0 / LANE_REPEAT, WHITE),
+            WorldCorner(1.0f, 0.0f, z0, 1.0f, -z0 / LANE_REPEAT, WHITE),
+            WorldCorner(1.0f, 0.0f, z1, 1.0f, -z1 / LANE_REPEAT, WHITE),
+            WorldCorner(-1.0f, 0.0f, z1, 0.0f, -z1 / LANE_REPEAT, WHITE),
+        };
+        WorldQuad(vertices, &count, corner);
+    }
+    draws[draw].count = count - draws[draw].first;
+    draws[draw++].material = WIMSY_MATERIAL_LANE;
+    // Two walls forty units down, a sign five two hundred and fifty sixths of a unit in front of
+    // each: from the camera's last place, 76 units off, that is 28 steps of a 24 bit depth
+    // buffer and a ninth of a step of a 16 bit one. On the left the sign is drawn first and on
+    // the right the wall, so the depth test decides both ways round.
+    draws[draw].first = count;
+    StandingQuad(vertices, &count, -8.5f, 0.5f, -4.5f, 3.5f, -40.0f + SIGN_GAP, SIGN);
+    StandingQuad(vertices, &count, -10.0f, 0.0f, -3.0f, 4.5f, -40.0f, WALL);
+    StandingQuad(vertices, &count, 3.0f, 0.0f, 10.0f, 4.5f, -40.0f, WALL);
+    StandingQuad(vertices, &count, 4.5f, 0.5f, 8.5f, 3.5f, -40.0f + SIGN_GAP, SIGN);
+    draws[draw].count = count - draws[draw].first;
+    draws[draw++].material = WIMSY_MATERIAL_FLAT;
+    // Marks painted on the floor, in its plane, nearer and farther.
+    draws[draw].first = count;
+    static const float MARKS[4][2] = { { -2.0f, -5.0f }, { -20.0f, -26.0f }, { -80.0f, -92.0f },
+                                       { -150.0f, -174.0f } };
+    for (uint32_t i = 0; i < 4u; ++i) {
+        FloorQuad(vertices, &count, 2.0f, MARKS[i][0], 4.0f, MARKS[i][1], FLOOR_REPEAT, MARK);
+    }
+    draws[draw].count = count - draws[draw].first;
+    draws[draw++].material = WIMSY_MATERIAL_MARK;
+    *vertex_count = count;
+    return draw;
+}
+
+uint32_t WimsyTextureSide(WimsyTexture texture) {
+    return texture == WIMSY_TEXTURE_FLOOR ? 2048u : 1024u;
+}
+
+uint32_t WimsyTextureLevels(WimsyTexture texture) {
+    return texture == WIMSY_TEXTURE_FLOOR ? 12u : 11u;
+}
+
+void WimsyTexel(WimsyTexture texture, uint32_t level, uint32_t x, uint32_t y, uint8_t out[4]) {
+    // The lane's levels, each far from its neighbours in some channel.
+    static const uint8_t LANE[11][3] = {
+        { 230, 40, 40 },  { 40, 200, 60 },  { 50, 80, 230 },   { 230, 210, 40 },
+        { 220, 60, 210 }, { 40, 210, 220 }, { 240, 240, 240 }, { 240, 130, 30 },
+        { 110, 50, 180 }, { 30, 110, 60 },  { 90, 90, 90 },
+    };
+    static const uint8_t STONE[4][3] = {
+        { 96, 96, 104 }, { 124, 118, 110 }, { 84, 92, 100 }, { 136, 132, 126 }
+    };
+    out[3] = 255u;
+    if (texture == WIMSY_TEXTURE_LANE) {
+        memcpy(out, LANE[level < 11u ? level : 10u], 3u);
+        return;
+    }
+    if (level >= 5u) {
+        // The greys' mean, which smaller levels of a picture come to.
+        out[0] = out[1] = out[2] = 110u;
+        return;
+    }
+    // A stone is 128 texels of level nought. Each level is a fifth nearer the mean, as a level
+    // made by averaging the one before loses its contrast.
+    uint32_t stone = (x >> (7u - level)) * 73856093u ^ (y >> (7u - level)) * 19349663u;
+    stone ^= stone >> 13;
+    stone *= 0x5BD1E995u;
+    stone ^= stone >> 15;
+    for (uint32_t k = 0; k < 3u; ++k) {
+        out[k] = (uint8_t)((STONE[stone & 3u][k] * (5u - level) + 110u * level + 2u) / 5u);
+    }
+}
+
 uint32_t WimsyInstancesOf(uint32_t level, uint32_t frame, uint32_t frames, WimsyInstance *out) {
+    if (level == 2u) {
+        return SceneInstances(frame, frames, out);
+    }
     if (level != 1u) {
         return 0;
     }
@@ -229,7 +483,9 @@ void WimsyLightOf(uint32_t level, WimsyLight *out) {
 }
 
 WimsyMachine WimsyMachineRight(uint32_t level) {
-    const WimsyMachine machine = { level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u };
+    const WimsyMachine machine = {
+        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u
+    };
     return machine;
 }
 
@@ -249,6 +505,8 @@ static const double PLACE[PLACES][2] = {
 typedef struct {
     double x, y, z, over_w;
     double normal[3];
+    /// A world vertex's texture coordinates.
+    double u, v;
 } Corner;
 
 /// A triangle set up for a tile: its three edge functions, positive inside whichever way it is
@@ -268,6 +526,10 @@ typedef struct {
     bool front;
     /// Not facing away by more than a rounding could undo: it may be drawn.
     bool maybe;
+    WimsyMaterial material;
+    /// The texture coordinates over w and one over w, each a plane over the target: at (x, y)
+    /// the coordinate is its plane's value over the last one's.
+    double u_plane[3], v_plane[3], w_plane[3];
 } Triangle;
 
 typedef struct {
@@ -294,6 +556,9 @@ static Drawn drawn[TILE * TILE * SAMPLES_MAX];
 static uint8_t tile_low[TILE * TILE][4];
 static uint8_t tile_high[TILE * TILE][4];
 static WimsyInstance scene_instance[WIMSY_INSTANCES_MAX];
+static WimsyWorldVertex world_vertices[WIMSY_WORLD_VERTICES_MAX];
+static WimsyWorldDraw world_draws[WIMSY_WORLD_DRAWS_MAX];
+static Corner world_corners[WIMSY_WORLD_VERTICES_MAX];
 static uint8_t sprite_texels[WIMSY_SPRITE_BYTES];
 static bool sprite_made;
 static GameWorld sprite_world;
@@ -304,11 +569,17 @@ typedef struct {
     uint32_t level;
     uint32_t sample_count;
     uint32_t instances;
+    uint32_t world_count;
+    uint32_t draws;
+    /// The judge's frame, whose colours are ranges, or a machine's, whose colours are its own.
+    bool judging;
     WimsyLight light;
     WimsyMachine machine;
-    /// Which instance `corners` holds, and the target rectangle its corners span.
+    /// Which instance `corners` holds, and the target rectangle its corners span; and every
+    /// instance's rectangle, left, right, top and bottom, so one that misses a tile is not held.
     uint32_t held;
     double left, right, top, bottom;
+    double span[WIMSY_INSTANCES_MAX][4];
     /// Where each sample is inside a pixel, by the pixel's place in the 2 by 2 grid the sample
     /// locations are programmed over: the standard ones for four samples, the centre for one.
     double place[2][2][SAMPLES_MAX][2];
@@ -382,11 +653,10 @@ static double Most(double a, double b, double c) {
     return most > c ? most : c;
 }
 
-/// Sets up triangle @p t of the instance held. False when it lies outside the tile at
-/// (@p x0, @p y0) or has no area at all.
-static bool SetUp(const Scene *scene, uint32_t t, double x0, double y0, Triangle *out) {
-    const Corner *const v[3] = { &corners[WIMSY_MESH_INDEX[t]], &corners[WIMSY_MESH_INDEX[t + 1u]],
-                                 &corners[WIMSY_MESH_INDEX[t + 2u]] };
+/// Sets up the triangle of corners @p v, drawn with @p material in @p colour. False when it lies
+/// outside the tile at (@p x0, @p y0) or has no area at all.
+static bool SetUp(const Scene *scene, const Corner *const v[3], const double colour[3],
+                  WimsyMaterial material, double x0, double y0, Triangle *out) {
     out->left = Least(v[0]->x, v[1]->x, v[2]->x) - WIMSY_EDGE_MARGIN;
     out->right = Most(v[0]->x, v[1]->x, v[2]->x) + WIMSY_EDGE_MARGIN;
     out->top = Least(v[0]->y, v[1]->y, v[2]->y) - WIMSY_EDGE_MARGIN;
@@ -403,9 +673,15 @@ static bool SetUp(const Scene *scene, uint32_t t, double x0, double y0, Triangle
     if (size < 1e-12) {
         return false;
     }
-    out->front = area < -1e-7;
-    out->maybe = !scene->machine.cull || area < 1e-7;
+    // Only a model's faces are culled; the world's quads are drawn whichever way they face.
+    const bool culled = material == WIMSY_MATERIAL_MODEL && scene->machine.cull;
+    out->front = culled ? area < -1e-7 : size > 1e-7;
+    out->maybe = !culled || area < 1e-7;
+    out->material = material;
     const double sign = area < 0.0 ? -1.0 : 1.0;
+    memset(out->u_plane, 0, sizeof(out->u_plane));
+    memset(out->v_plane, 0, sizeof(out->v_plane));
+    memset(out->w_plane, 0, sizeof(out->w_plane));
     for (uint32_t i = 0; i < 3u; ++i) {
         // Edge i is the one across from corner i, so its function over the area is that corner's
         // weight.
@@ -420,6 +696,12 @@ static bool SetUp(const Scene *scene, uint32_t t, double x0, double y0, Triangle
         out->pixel_reach[i] = (fabs(out->a[i]) + fabs(out->b[i])) * (0.5 + WIMSY_EDGE_MARGIN);
         out->over_w[i] = v[i]->over_w / size;
         memcpy(out->normal[i], v[i]->normal, sizeof(out->normal[i]));
+        const double edge[3] = { out->a[i], out->b[i], out->c[i] };
+        for (uint32_t k = 0; k < 3u; ++k) {
+            out->u_plane[k] += edge[k] * out->over_w[i] * v[i]->u;
+            out->v_plane[k] += edge[k] * out->over_w[i] * v[i]->v;
+            out->w_plane[k] += edge[k] * out->over_w[i];
+        }
     }
     out->depth_x = (out->a[0] * v[0]->z + out->a[1] * v[1]->z + out->a[2] * v[2]->z) / size;
     out->depth_y = (out->b[0] * v[0]->z + out->b[1] * v[1]->z + out->b[2] * v[2]->z) / size;
@@ -427,21 +709,182 @@ static bool SetUp(const Scene *scene, uint32_t t, double x0, double y0, Triangle
     const double steepest = fabs(out->depth_x) > fabs(out->depth_y) ? fabs(out->depth_x)
                                                                     : fabs(out->depth_y);
     out->depth_reach = steepest * WIMSY_EDGE_MARGIN;
-    const uint8_t *const colour = WIMSY_MESH_PALETTE[WIMSY_MESH_VERTEX[WIMSY_MESH_INDEX[t]].colour];
-    const float *const tint = scene_instance[scene->held].tint;
-    for (uint32_t k = 0; k < 3u; ++k) {
-        // The byte as the vertex buffer's normalised attribute gives it, times the tint.
-        out->colour[k] = (double)((float)colour[k] / 255.0f) * (double)tint[k];
+    if (material == WIMSY_MATERIAL_MARK && scene->machine.bias) {
+        // Towards the eye by the bias's slope part, its factor times the steepest change over a
+        // pixel, and its steps of a 24 bit buffer.
+        out->depth_0 += (double)WIMSY_MARK_BIAS_SLOPE * steepest +
+                        (double)WIMSY_MARK_BIAS_UNITS / 16777216.0;
     }
+    memcpy(out->colour, colour, sizeof(out->colour));
     return true;
 }
 
+/// The texel of @p texture's level @p level at (@p x, @p y), which wrap around its sides.
+static void TexelAt(WimsyTexture texture, uint32_t level, int64_t x, int64_t y, double out[3]) {
+    const int64_t side = (int64_t)(WimsyTextureSide(texture) >> level);
+    const int64_t size = side > 0 ? side : 1;
+    uint8_t texel[4];
+    WimsyTexel(texture, level, (uint32_t)(((x % size) + size) % size),
+               (uint32_t)(((y % size) + size) % size), texel);
+    out[0] = (double)texel[0];
+    out[1] = (double)texel[1];
+    out[2] = (double)texel[2];
+}
+
+/// What a lookup of level @p level at (@p u, @p v) gives, the four texels around it weighed.
+static void Bilinear(WimsyTexture texture, uint32_t level, double u, double v, double out[3]) {
+    const double side = (double)(WimsyTextureSide(texture) >> level);
+    const double x = u * (side > 1.0 ? side : 1.0) - 0.5, y = v * (side > 1.0 ? side : 1.0) - 0.5;
+    const double fx = x - floor(x), fy = y - floor(y);
+    double texel[4][3];
+    for (uint32_t i = 0; i < 4u; ++i) {
+        TexelAt(texture, level, (int64_t)floor(x) + (int64_t)(i & 1u),
+                (int64_t)floor(y) + (int64_t)(i >> 1), texel[i]);
+    }
+    for (uint32_t k = 0; k < 3u; ++k) {
+        const double top = texel[0][k] + (texel[1][k] - texel[0][k]) * fx;
+        const double bottom = texel[2][k] + (texel[3][k] - texel[2][k]) * fx;
+        out[k] = top + (bottom - top) * fy;
+    }
+}
+
+/// The range a lookup at (@p u, @p v) may give at any level of detail from @p least to @p most:
+/// every texel a lookup there can weigh, on every level it can reach.
+static void TexelRange(WimsyTexture texture, double u, double v, double least, double most,
+                       double low[3], double high[3]) {
+    const uint32_t last = WimsyTextureLevels(texture) - 1u;
+    const uint32_t from = least <= 0.0 ? 0u : (uint32_t)floor(least);
+    const uint32_t to = most <= 0.0 ? 0u : most >= (double)last ? last : (uint32_t)ceil(most);
+    for (uint32_t k = 0; k < 3u; ++k) {
+        low[k] = 255.0;
+        high[k] = 0.0;
+    }
+    for (uint32_t level = from < last ? from : last; level <= to; ++level) {
+        const double side = (double)(WimsyTextureSide(texture) >> level);
+        const double x = u * (side > 1.0 ? side : 1.0) - 0.5, y = v * (side > 1.0 ? side : 1.0) - 0.5;
+        // A sixteenth of a texel either way, for where a machine's own arithmetic puts the lookup.
+        for (int64_t ty = (int64_t)floor(y - 0.0625); ty <= (int64_t)floor(y + 0.0625) + 1; ++ty) {
+            for (int64_t tx = (int64_t)floor(x - 0.0625); tx <= (int64_t)floor(x + 0.0625) + 1;
+                 ++tx) {
+                double texel[3];
+                TexelAt(texture, level, tx, ty, texel);
+                for (uint32_t k = 0; k < 3u; ++k) {
+                    low[k] = texel[k] < low[k] ? texel[k] : low[k];
+                    high[k] = texel[k] > high[k] ? texel[k] : high[k];
+                }
+            }
+        }
+    }
+}
+
+/// A textured triangle's coordinates at (@p x, @p y) and, in texels of level nought, the larger
+/// of each one's two changes over a pixel. False where the triangle's plane is behind the eye.
+static bool Coordinates(const Triangle *t, WimsyTexture texture, double x, double y, double *u,
+                        double *v, double change[4]) {
+    const double w = t->w_plane[0] * x + t->w_plane[1] * y + t->w_plane[2];
+    if (w <= 0.0) {
+        return false;
+    }
+    *u = (t->u_plane[0] * x + t->u_plane[1] * y + t->u_plane[2]) / w;
+    *v = (t->v_plane[0] * x + t->v_plane[1] * y + t->v_plane[2]) / w;
+    const double side = (double)WimsyTextureSide(texture);
+    change[0] = (t->u_plane[0] - *u * t->w_plane[0]) / w * side;
+    change[1] = (t->u_plane[1] - *u * t->w_plane[1]) / w * side;
+    change[2] = (t->v_plane[0] - *v * t->w_plane[0]) / w * side;
+    change[3] = (t->v_plane[1] - *v * t->w_plane[1]) / w * side;
+    return true;
+}
+
+/// A textured triangle's colour at (@p x, @p y): a machine's own, or for the judge the range of
+/// what any machine the specification allows may give.
+static void ShadeTexture(const Scene *scene, const Triangle *t, double x, double y, double low[3],
+                         double high[3]) {
+    const WimsyTexture texture = t->material == WIMSY_MATERIAL_FLOOR ? WIMSY_TEXTURE_FLOOR
+                                                                    : WIMSY_TEXTURE_LANE;
+    const double last = (double)(WimsyTextureLevels(texture) - 1u);
+    double u = 0.0, v = 0.0, change[4];
+    if (!Coordinates(t, texture, x, y, &u, &v, change)) {
+        for (uint32_t k = 0; k < 3u; ++k) {
+            low[k] = 0.0;
+            high[k] = 255.0;
+        }
+        return;
+    }
+    if (!scene->judging) {
+        // The level of detail the specification's own formula gives: the longer of the two
+        // changes over a pixel, each a length.
+        const double along_x = sqrt(change[0] * change[0] + change[2] * change[2]);
+        const double along_y = sqrt(change[1] * change[1] + change[3] * change[3]);
+        const double longer = along_x > along_y ? along_x : along_y;
+        double level = (longer > 0.0 ? log2(longer) : 0.0) + (double)scene->machine.coarser;
+        level = level < 0.0 ? 0.0 : level > last ? last : level;
+        if (!scene->machine.between_levels) {
+            level = floor(level + 0.5);
+        }
+        double finer[3], coarser[3];
+        Bilinear(texture, (uint32_t)floor(level), u, v, finer);
+        Bilinear(texture, (uint32_t)ceil(level), u, v, coarser);
+        for (uint32_t k = 0; k < 3u; ++k) {
+            low[k] = high[k] = finer[k] + (coarser[k] - finer[k]) * (level - floor(level));
+        }
+        return;
+    }
+    // A machine measures the changes over a block of two by two pixels, so anywhere within a
+    // pixel of this one; and may take any level from the larger of the two coordinates' changes
+    // to their sum (OpenGL 4.6, 8.14.1), an eighth of a level either way.
+    double least = 1e30, most = 0.0;
+    static const double AROUND[5][2] = { { 0, 0 }, { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+    for (uint32_t i = 0; i < 5u; ++i) {
+        double pu = 0.0, pv = 0.0;
+        if (i > 0u && !Coordinates(t, texture, x + AROUND[i][0], y + AROUND[i][1], &pu, &pv, change)) {
+            continue;
+        }
+        const double in_u = fabs(change[0]) > fabs(change[1]) ? fabs(change[0]) : fabs(change[1]);
+        const double in_v = fabs(change[2]) > fabs(change[3]) ? fabs(change[2]) : fabs(change[3]);
+        const double larger = in_u > in_v ? in_u : in_v;
+        least = larger < least ? larger : least;
+        most = in_u + in_v > most ? in_u + in_v : most;
+    }
+    double from = (least > 0.0 ? log2(least) : -64.0) - WIMSY_LOD_MARGIN;
+    double to = (most > 0.0 ? log2(most) : -64.0) + WIMSY_LOD_MARGIN;
+    from = from < 0.0 ? 0.0 : from > last ? last : from;
+    to = to < 0.0 ? 0.0 : to > last ? last : to;
+    if (texture != WIMSY_TEXTURE_LANE) {
+        TexelRange(texture, u, v, from, to, low, high);
+        return;
+    }
+    // The lane's levels are each one colour, so a level between two is that far from one to the
+    // other: the range is over the levels of detail alone, its ends and each whole level between.
+    for (uint32_t k = 0; k < 3u; ++k) {
+        low[k] = 255.0;
+        high[k] = 0.0;
+    }
+    for (double level = from;; level = floor(level) + 1.0 < to ? floor(level) + 1.0 : to) {
+        double finer[3], coarser[3];
+        TexelAt(texture, (uint32_t)floor(level), 0, 0, finer);
+        TexelAt(texture, (uint32_t)ceil(level), 0, 0, coarser);
+        for (uint32_t k = 0; k < 3u; ++k) {
+            const double value = finer[k] + (coarser[k] - finer[k]) * (level - floor(level));
+            low[k] = value < low[k] ? value : low[k];
+            high[k] = value > high[k] ? value : high[k];
+        }
+        if (level >= to) {
+            break;
+        }
+    }
+}
+
 /// The colour triangle @p t has at (@p x, @p y), nought to 255 a channel: its range, since a
-/// point too far outside it to weigh its corners may get any shade of its colour.
+/// point too far outside a model's triangle to weigh its corners may get any shade of its colour,
+/// and a texture's level of detail is a machine's to pick within bounds.
 static void Shade(const Scene *scene, const Triangle *t, double x, double y, double low[3],
                   double high[3]) {
+    if (t->material == WIMSY_MATERIAL_FLOOR || t->material == WIMSY_MATERIAL_LANE) {
+        ShadeTexture(scene, t, x, y, low, high);
+        return;
+    }
     double dark = 1.0, lit = 1.0;
-    if (scene->machine.lit) {
+    if (scene->machine.lit && t->material == WIMSY_MATERIAL_MODEL) {
         const double shade = (double)scene->light.shade[0];
         const double more = (double)scene->light.shade[1];
         double weight[3];
@@ -522,15 +965,37 @@ typedef void (*EachTriangle)(const Scene *scene, const Triangle *t, uint32_t x0,
 static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) {
     static Triangle triangle;
     for (uint32_t i = 0; i < scene->instances; ++i) {
+        if (scene->span[i][1] + 1.0 < (double)x0 || scene->span[i][0] - 1.0 > (double)(x0 + TILE) ||
+            scene->span[i][3] + 1.0 < (double)y0 || scene->span[i][2] - 1.0 > (double)(y0 + TILE)) {
+            continue;
+        }
         if (scene->held != i) {
             HoldInstance(scene, i);
         }
-        if (scene->right + 1.0 < (double)x0 || scene->left - 1.0 > (double)(x0 + TILE) ||
-            scene->bottom + 1.0 < (double)y0 || scene->top - 1.0 > (double)(y0 + TILE)) {
-            continue;
-        }
+        const float *const tint = scene_instance[i].tint;
         for (uint32_t t = 0; t + 2u < WIMSY_MESH_INDICES; t += 3u) {
-            if (SetUp(scene, t, (double)x0, (double)y0, &triangle)) {
+            const Corner *const v[3] = { &corners[WIMSY_MESH_INDEX[t]],
+                                         &corners[WIMSY_MESH_INDEX[t + 1u]],
+                                         &corners[WIMSY_MESH_INDEX[t + 2u]] };
+            const uint8_t *const palette =
+                WIMSY_MESH_PALETTE[WIMSY_MESH_VERTEX[WIMSY_MESH_INDEX[t]].colour];
+            // The byte as the vertex buffer's normalised attribute gives it, times the tint.
+            const double colour[3] = { (double)((float)palette[0] / 255.0f) * (double)tint[0],
+                                       (double)((float)palette[1] / 255.0f) * (double)tint[1],
+                                       (double)((float)palette[2] / 255.0f) * (double)tint[2] };
+            if (SetUp(scene, v, colour, WIMSY_MATERIAL_MODEL, (double)x0, (double)y0, &triangle)) {
+                each(scene, &triangle, x0, y0);
+            }
+        }
+    }
+    for (uint32_t d = 0; d < scene->draws; ++d) {
+        const WimsyWorldDraw *const draw = &world_draws[d];
+        for (uint32_t t = draw->first; t + 2u < draw->first + draw->count; t += 3u) {
+            const Corner *const v[3] = { &world_corners[t], &world_corners[t + 1u],
+                                         &world_corners[t + 2u] };
+            const double colour[3] = { (double)world_vertices[t].r, (double)world_vertices[t].g,
+                                       (double)world_vertices[t].b };
+            if (SetUp(scene, v, colour, draw->material, (double)x0, (double)y0, &triangle)) {
                 each(scene, &triangle, x0, y0);
             }
         }
@@ -646,7 +1111,12 @@ static void PassDraw(const Scene *scene, const Triangle *t, uint32_t x0, uint32_
                     continue;
                 }
                 Drawn *const at = &drawn[(py * TILE + px) * SAMPLES_MAX + s];
-                const float depth = (float)(t->depth_x * x + t->depth_y * y + t->depth_0);
+                float depth = (float)(t->depth_x * x + t->depth_y * y + t->depth_0);
+                if (scene->machine.depth_bits != 0u) {
+                    // A buffer of that many bits keeps the step under the depth.
+                    const double steps = (double)((1u << scene->machine.depth_bits) - 1u);
+                    depth = (float)(floor((double)depth * steps) / steps);
+                }
                 if (scene->machine.depth && depth >= at->depth) {
                     continue;
                 }
@@ -688,7 +1158,37 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
         return;
     }
     scene->instances = WimsyInstancesOf(level, shown, frames, scene_instance);
+    for (uint32_t i = 0; i < scene->instances; ++i) {
+        HoldInstance(scene, i);
+        scene->span[i][0] = scene->left;
+        scene->span[i][1] = scene->right;
+        scene->span[i][2] = scene->top;
+        scene->span[i][3] = scene->bottom;
+    }
     WimsyLightOf(level, &scene->light);
+    scene->draws = WimsyWorldOf(level, world_vertices, &scene->world_count, world_draws);
+    float view[16];
+    WimsyViewOf(level, shown, frames, view);
+    for (uint32_t i = 0; i < scene->world_count; ++i) {
+        // The floats the vertex buffer holds, through the matrix the uniform buffer holds.
+        const WimsyWorldVertex *const vertex = &world_vertices[i];
+        const double position[3] = { (double)vertex->x, (double)vertex->y, (double)vertex->z };
+        double clip[4];
+        for (uint32_t row = 0; row < 4u; ++row) {
+            clip[row] = (double)view[12u + row];
+            for (uint32_t k = 0; k < 3u; ++k) {
+                clip[row] += (double)view[k * 4u + row] * position[k];
+            }
+        }
+        Corner *const corner = &world_corners[i];
+        memset(corner, 0, sizeof(*corner));
+        corner->over_w = 1.0 / clip[3];
+        corner->x = (clip[0] * corner->over_w + 1.0) * 0.5 * (double)WIMSY_WIDTH;
+        corner->y = (1.0 - clip[1] * corner->over_w) * 0.5 * (double)WIMSY_HEIGHT;
+        corner->z = clip[2] * corner->over_w;
+        corner->u = (double)vertex->u;
+        corner->v = (double)vertex->v;
+    }
 }
 
 /// The range each pixel of the tile at (@p x0, @p y0) may hold, into tile_low and tile_high.
@@ -789,6 +1289,7 @@ void WimsyJudge(uint32_t level, uint32_t frame, uint32_t frames, const uint8_t *
     static Scene scene;
     const WimsyMachine right = WimsyMachineRight(level);
     SceneOf(&scene, level, frame, frames, &right);
+    scene.judging = true;
     memset(out, 0, sizeof(*out));
     out->exact = true;
     for (uint32_t y0 = 0; y0 < WIMSY_HEIGHT; y0 += TILE) {
@@ -854,8 +1355,8 @@ size_t WimsyDescribeVerdict(char *out, size_t out_size, const WimsyVerdict *verd
                          (unsigned)verdict->held);
     } else if (verdict->wrong == 0u) {
         wrote = snprintf(out, out_size,
-                         "%u pixels within their colour's range, %u on an edge within the "
-                         "colours beside it",
+                         "%u pixels held to a colour, %u to a wider range, on an edge or "
+                         "between levels of detail",
                          (unsigned)verdict->held, (unsigned)verdict->edge);
     } else {
         wrote = snprintf(out, out_size,
