@@ -43,7 +43,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, five hundred and four cases, no hardware involved either: the other half
+- **reference**, five hundred and twelve cases, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the
@@ -199,6 +199,14 @@ family reports can be believed without them.
     words and a frame's fields handed to the next, the comparison's budgets and a NaN's, the judge
     on eleven machines made to order, each wrong in one way, failing the checks that way reaches
     and no other (see [The fluid demo](Fluid.md));
+    and no other, and the notes (see [The fluid demo](Fluid.md));
+  - eight on the demos' music, `source/music.c`, with no sample rendered: the tracker's periods
+    against equal temperament and its steps through a sample, worked out by hand; its ticks and
+    the remainder they carry; its mix across the stereo and its low passes' corners and step; then
+    what the composer writes for each of the four tracks: every note and arpeggio in its mode and
+    the tracker's three octaves, every chord whole in its mode with its voicing, its root in the
+    bass and the lead on its tones on the beat, the form A A B A with the bridge on chords of its
+    own, one song a seed, and every colour its own (see [The music family](Music.md));
   - eleven on the tex8k suite's judge, `source/tex8kref.c`: the graphics memory its textures want
     of a machine and what it says of one with less, its BC7 mode 6 and BC1 blocks against the
     bytes and texels Pillow 12.3.0 decodes them to, both ways a BC1 code may become eight bits, its
