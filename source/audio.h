@@ -40,6 +40,8 @@ typedef enum {
 /// step failed and with what.
 bool AudioOpen(char *error, size_t error_size);
 void AudioClose(void);
+/// Whether AudioOpen opened it and AudioClose has not closed it since.
+bool AudioIsOpen(void);
 
 /// The renderer revision the update carries, as a number.
 unsigned AudioRevision(void);
@@ -60,6 +62,14 @@ void AudioPlay(unsigned voice, const int16_t *data, size_t samples, bool loop,
 /// table the ratio and the quality pick.
 void AudioPlayAt(unsigned voice, const int16_t *data, size_t samples, bool loop,
                  AudioQuality quality, unsigned mix, float left, float right, uint32_t rate);
+/// Appends @p samples of mono 16-bit audio to what @p voice plays, in the next of its four wave
+/// buffers, to start where the one before it ends: a stream. False, and nothing queued, when four
+/// are still to end.
+bool AudioQueue(unsigned voice, const int16_t *data, size_t samples);
+/// The wave buffers @p voice has ended since it started, and those given to it, the first
+/// included.
+uint32_t AudioVoiceConsumed(unsigned voice);
+uint32_t AudioVoiceQueued(unsigned voice);
 void AudioStop(unsigned voice);
 /// Whether the buffer a voice was started on has ended; a looping one never does.
 bool AudioVoiceDone(unsigned voice);

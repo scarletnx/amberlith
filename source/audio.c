@@ -313,6 +313,7 @@ static struct {
     uint16_t node_counter[AUDIO_VOICES];
     uint64_t played[AUDIO_VOICES];
     uint32_t consumed[AUDIO_VOICES];
+    uint32_t queued[AUDIO_VOICES];
     uint32_t sink_offset[SINKS];
     uint32_t sink_offset_seen[SINKS];
     uint8_t *aux_send;
@@ -672,6 +673,10 @@ bool AudioOpen(char *error, size_t error_size) {
     return true;
 }
 
+bool AudioIsOpen(void) {
+    return r.open;
+}
+
 void AudioClose(void) {
     if (r.hooks) {
         if (r.open) {
@@ -737,11 +742,41 @@ void AudioPlayAt(unsigned voice, const int16_t *data, size_t samples, bool loop,
     resource->in_use = 1;
     r.played[voice] = 0;
     r.consumed[voice] = 0;
+    r.queued[voice] = 1;
+}
+
+bool AudioQueue(unsigned voice, const int16_t *data, size_t samples) {
+    if (voice >= AUDIO_VOICES || r.queued[voice] == 0u ||
+        r.queued[voice] - r.consumed[voice] >= 4u) {
+        return false;
+    }
+    // The renderer plays a voice's buffers in turn round the four, from the first; a slot is
+    // free again once the buffer in it has ended, and is taken while its sent flag is clear.
+    VoiceIn *v = &r.voices[voice];
+    WaveBufferIn *w = &v->wave_buffers[r.queued[voice] % 4u];
+    memset(w, 0, sizeof(*w));
+    w->address = (uint64_t)(uintptr_t)data;
+    w->size = samples * sizeof(int16_t);
+    w->end = (int32_t)samples;
+    w->sent = 0;
+    ++r.queued[voice];
+    v->wave_buffer_count = r.queued[voice] - r.consumed[voice];
+    v->wave_buffer_index = (uint16_t)(r.consumed[voice] % 4u);
+    return true;
+}
+
+uint32_t AudioVoiceConsumed(unsigned voice) {
+    return r.consumed[voice];
+}
+
+uint32_t AudioVoiceQueued(unsigned voice) {
+    return r.queued[voice];
 }
 
 void AudioStop(unsigned voice) {
     r.voices[voice].in_use = 0;
     r.resources[voice].in_use = 0;
+    r.queued[voice] = 0;
 }
 
 bool AudioVoiceDone(unsigned voice) {
@@ -838,6 +873,11 @@ static bool Update(void) {
         if (r.voices[i].in_use) {
             r.played[i] = voices[i].played;
             r.consumed[i] = voices[i].consumed;
+            // What is still queued, from the oldest: a stream's buffers as the renderer has them.
+            if (r.queued[i] > 1u) {
+                r.voices[i].wave_buffer_count = r.queued[i] - r.consumed[i];
+                r.voices[i].wave_buffer_index = (uint16_t)(r.consumed[i] % 4u);
+            }
         }
         r.voices[i].is_new = 0;
         for (unsigned w = 0; w < 4u; ++w) {
