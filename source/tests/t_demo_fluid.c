@@ -1438,11 +1438,15 @@ void FluidAliasDemo(const DemoRun *run) {
 }
 
 void RunFluid(void) {
+    const MusicMade before = MusicMadeSoFar();
     const DemoRun run = DemoScriptRun();
     FluidDemo(&run);
+    MusicJudgeOff(SUITE, "while the fluid ran", before);
 }
 
 void RunFluidAlias(void) {
+    const MusicMade before = MusicMadeSoFar();
     const DemoRun run = DemoScriptRun();
     FluidAliasDemo(&run);
+    MusicJudgeOff(SUITE, "while the fluid-alias ran", before);
 }

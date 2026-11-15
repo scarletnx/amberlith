@@ -1316,10 +1316,14 @@ static void RunLevel(void) {
 }
 
 void RunWimsy(void) {
+    const MusicMade before = MusicMadeSoFar();
     for (level = 0; level < WIMSY_LEVELS; ++level) {
         if ((levels >> level & 1u) != 0u) {
             RunLevel();
         }
+    }
+    if (levels != 0u) {
+        MusicJudgeOff(SUITE, "while the levels ran", before);
     }
     free(expected_pixels);
     free(pixel_verdicts);

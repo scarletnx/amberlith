@@ -19,13 +19,15 @@ seconds at 60 a second. The family's second suite, `wimsy`, is the same question
 game comes in, a level a scene, each run only when a `level=<n>` word names it: see [The
 levels](#the-levels).
 
-- **game**, thirteen cases, six with `notime`. One says the scene came up (none tier): a graphics
+- **game**, fourteen cases, seven with `notime`. One says the scene came up (none tier): a graphics
   device, a way to the display (a swapchain, or the program's screen), the audio renderer and the fs
   family's big file, which the scene writes the first time as the fs suite does. Then the frames
   run, inside the case that judges their images; the four after it judge the sound, the reads, the
-  services and the cores from what the frames left, and the seven last carry the frames' times. If
-  the scene does not come up, its bring-up is skipped (it ended the program before), or its frames
-  do not run, every case after is skipped as `depends`, saying which.
+  services and the cores from what the frames left, and the seven after them carry the frames'
+  times. If the scene does not come up, its bring-up is skipped (it ended the program before), or
+  its frames do not run, every case after is skipped as `depends`, saying which, but the last: that
+  the demos' music made nothing while the scene ran ([the music family](Music.md)), which holds
+  whatever the scene did.
 
 ## The scene
 
@@ -106,6 +108,7 @@ A machine that runs the frames slowly gets the same verdicts as one that keeps u
 | the file thread's *n* reads of 64 KiB hold the file's bytes | every read succeeded, whole, and hashes to the chunk of the pattern the fs family writes (`source/fsref.h`); the reads visit every chunk once in 1024 frames | exact |
 | hid and the steady clock answer on each of *n* frames | hid's supported style set is the same every frame and holds the standard styles the program set; the steady clock never fails, never goes back and keeps one source | exact |
 | the main, render, audio and file threads run on the cores they were given | each thread, asked its core every frame (the audio thread every step), is on its own | exact |
+| the demos' music made nothing while the scene ran: no thread, voice or sample | from the scene's start to its end the music rendered no frame and started no thread and no voice, so none of the frames' time was its: it plays only in the interactive mode and the music family (`MusicMadeSoFar`) | exact |
 
 A frame whose image is wrong fails the case with how many frames were, the first of them and which
 quarters it got wrong, and its picture is that frame: what it drew against what it should have.
@@ -280,7 +283,8 @@ maps, light probes and blur chains cost it: a dispatch and a pass each a submiss
 state, and memory the graphics unit wrote read through another view in the same frame.
 
 **What is timed** is what the scene times: seven cases a level, named with it
-(`level 1, 600 frames, present to present: the mean`), and two notes. A judged frame's copy is
+(`level 1, 600 frames, present to present: the mean`), and two notes. After the last level, one
+case more, as the scene's last: the demos' music made nothing while the levels ran. A judged frame's copy is
 made after its present, so neither part holds it; it falls in the next frame's present to
 present, and the second note says what the longest one took.
 

@@ -51,10 +51,11 @@ a fragment program colours them. **mandelbrot** zooms into the valley between th
 the disc to its left; **julia** zooms into the Julia set of c = -0.835 - 0.2321i at its repelling fixed point,
 where the set is self-similar and spirals in.
 
-Each suite has thirteen cases, eight with `notime`: the bring-up (none tier: a device with a compute queue, the five
+Each suite has fourteen cases, nine with `notime`: the bring-up (none tier: a device with a compute queue, the five
 programs, the counts buffer, the copies of the judged frames, and the way to the display), the frames (none tier:
 every frame the run asked for drawn and presented, or as many as ran before the person stopped them; the frames run
-inside it, so a machine that ends the program there loses that case), six judged frames (exact), and five times.
+inside it, so a machine that ends the program there loses that case), six judged frames (exact), five times, and,
+in a scripted run, that the demos' music made nothing while the zoom ran ([the music family](Music.md)).
 A note after the frames says how far into single precision the deepest frame goes, and one after the times sums them
 up.
 

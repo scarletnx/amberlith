@@ -120,8 +120,9 @@ five seconds: one rendering the tracks and the switch, four of sound through the
 (the last note says which part took what). The rules the tracker and the
 composer keep are pinned in [the reference suite](Judge.md), with no sample rendered there.
 
-The game family's scene and its levels each end on a case that the music made nothing while they
-ran: no frame rendered, no thread, no voice ([the game family](Game.md)).
+The game family's scene and its levels, and each of the demo family's demos run from a script, end
+on a case that the music made nothing while they ran: no frame rendered, no thread, no voice ([the
+game family](Game.md), [the demo family](Demo.md)).
 
 ## When it plays
 

@@ -558,11 +558,15 @@ void RunJuliaDemo(const DemoRun *run) {
 }
 
 void RunMandelbrot(void) {
+    const MusicMade before = MusicMadeSoFar();
     const DemoRun run = DemoScriptRun();
     RunMandelbrotDemo(&run);
+    MusicJudgeOff(FractalSuite(FRACTAL_MANDELBROT), "while the mandelbrot zoom ran", before);
 }
 
 void RunJulia(void) {
+    const MusicMade before = MusicMadeSoFar();
     const DemoRun run = DemoScriptRun();
     RunJuliaDemo(&run);
+    MusicJudgeOff(FractalSuite(FRACTAL_JULIA), "while the julia zoom ran", before);
 }

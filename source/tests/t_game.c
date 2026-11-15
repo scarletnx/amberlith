@@ -987,7 +987,7 @@ static void SkipFrom(const char *const names[], size_t count, const char *why) {
     }
 }
 
-void RunGame(void) {
+static void RunScene(void) {
     static char bring_up[] = "a graphics device, a way to the display, the renderer and the "
                              "card's file come up";
     static char image_name[96];
@@ -1092,4 +1092,10 @@ void RunGame(void) {
     if (card_open) {
         VolumeClose(&card);
     }
+}
+
+void RunGame(void) {
+    const MusicMade before = MusicMadeSoFar();
+    RunScene();
+    MusicJudgeOff(SUITE, "while the scene ran", before);
 }
