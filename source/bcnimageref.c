@@ -69,10 +69,10 @@ static void TargetBytes(const BcnImage *image, uint32_t c, uint16_t value, uint8
         *hi = (uint8_t)ceil(linear);
         return;
     }
-    bool ties = false;
-    const uint8_t near = BcnTarget8(image->kind, c, value, &ties);
-    *lo = ties ? (uint8_t)(near - 1u) : near;
-    *hi = near;
+    uint8_t other = 0;
+    const uint8_t near = BcnTarget8(image->kind, c, value, &other);
+    *lo = near < other ? near : other;
+    *hi = near > other ? near : other;
 }
 
 void BcnImageAnswer(const BcnImage *image, BcnImageAnswers *out) {

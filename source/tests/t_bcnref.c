@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -180,26 +181,31 @@ static void Rules(void) {
                    snorm[0] == 23623u && snorm[1] == 23551u,
                "unsigned %u %u %u, 56355 56319 56173 wanted; signed %u %u, 23623 23551 wanted",
                unorm[0], unorm[1], unorm[2], snorm[0], snorm[1]);
-    // The bytes a target gets: BC4's 16 bits over 257 rounded; a half clamped and times 255, its
-    // half step (0.5, 127.5) either byte beside it; BC6H's alpha the target's 255.
-    bool ties_half = false;
-    bool ties_other = true;
-    const uint8_t half = BcnTarget8(BCN_BC6H_UF, 0, 0x3800u, &ties_half);
-    const uint8_t third = BcnTarget8(BCN_BC6H_UF, 1, 0x3555u, &ties_other);
-    CHECK_TRUE(SUITE, "a decoded value reaches a UNORM8 target rounded, a half step either way",
+    // The bytes a target gets, the nearest and the integer on the value's other side: BC4's 56355
+    // of 65535 is 219.29, 219 then 220, and 65535 itself 255 alone; a half clamped and times 255,
+    // 0.5 is 127.5, 128 then 127, and 0x3555 (0.33325) 84.98, 85 then 84; -1 is 0 and 65504 255
+    // alone; BC6H's alpha the target's 255, BC7's its own byte.
+    uint8_t other[6] = { 0, 0, 0, 0, 0, 0 };
+    const uint8_t near[6] = { BcnTarget8(BCN_BC4, 0, 56355u, &other[0]),
+                              BcnTarget8(BCN_BC4, 0, 65535u, &other[1]),
+                              BcnTarget8(BCN_BC6H_UF, 0, 0x3800u, &other[2]),
+                              BcnTarget8(BCN_BC6H_UF, 1, 0x3555u, &other[3]),
+                              BcnTarget8(BCN_BC6H_SF, 0, 0xBC00u, &other[4]),
+                              BcnTarget8(BCN_BC6H_UF, 0, 0x7BFFu, &other[5]) };
+    CHECK_TRUE(SUITE,
+               "a decoded value reaches a UNORM8 target as the nearest byte or the other one "
+               "beside it",
                CHECK_NONE,
-               BcnTarget8(BCN_BC4, 0, 56355u, NULL) == 219u &&
-                   BcnTarget8(BCN_BC4, 0, 128u, NULL) == 0u &&
-                   BcnTarget8(BCN_BC4, 0, 129u, NULL) == 1u &&
-                   BcnTarget8(BCN_BC4, 3, 0u, NULL) == 255u && half == 128u && ties_half &&
-                   third == 85u && !ties_other &&
-                   BcnTarget8(BCN_BC6H_SF, 0, 0xBC00u, NULL) == 0u &&
-                   BcnTarget8(BCN_BC6H_UF, 0, 0x7BFFu, NULL) == 255u &&
-                   BcnTarget8(BCN_BC6H_UF, 3, 0x3C00u, NULL) == 255u,
-               "56355 is %u, 0.5 is %u (a half step: %s), 0x3555 is %u, -1 is %u, 65504 is %u",
-               BcnTarget8(BCN_BC4, 0, 56355u, NULL), half, ties_half ? "yes" : "no", third,
-               BcnTarget8(BCN_BC6H_SF, 0, 0xBC00u, NULL),
-               BcnTarget8(BCN_BC6H_UF, 0, 0x7BFFu, NULL));
+               near[0] == 219u && other[0] == 220u && near[1] == 255u && other[1] == 255u &&
+                   near[2] == 128u && other[2] == 127u && near[3] == 85u && other[3] == 84u &&
+                   near[4] == 0u && other[4] == 0u && near[5] == 255u && other[5] == 255u &&
+                   BcnTarget8(BCN_BC4, 3, 0u, NULL) == 255u &&
+                   BcnTarget8(BCN_BC6H_UF, 3, 0x3C00u, NULL) == 255u &&
+                   BcnTarget8(BCN_BC7, 3, 17u, NULL) == 17u,
+               "56355 is %u or %u, 65535 %u or %u, 0.5 %u or %u, 0x3555 %u or %u, -1 %u or %u, "
+               "65504 %u or %u",
+               near[0], other[0], near[1], other[1], near[2], other[2], near[3], other[3], near[4],
+               other[4], near[5], other[5]);
 }
 
 /// What a machine made to order reads for texel (@p x, @p y) of @p image.
@@ -207,16 +213,50 @@ typedef enum {
     MACHINE_CONSOLE,      ///< the console's decode
     MACHINE_ROUNDED,      ///< the exact fractions rounded
     MACHINE_SIXTYFOURTHS, ///< BPTC's weights
+    MACHINE_RADV,         ///< BPTC's weights, the colour through a half cut toward nought, as RADV
     MACHINE_COLUMNS,      ///< a block read down its columns: texel (x, y) is the decode's (y, x)
     MACHINE_ASIDE,        ///< the block to the right's texel (the last column's from the first)
     MACHINES,
 } Machine;
 
+/// The float a fragment writes for channel @p c of a texel decoded to @p value, in [0, 1].
+static double TargetFloat(const BcnImage *image, uint32_t c, uint16_t value) {
+    if (image->srgb && c < 3u) {
+        return FormatSrgbDecode((double)value / 255.0);
+    }
+    switch (image->kind) {
+    case BCN_BC4:
+    case BCN_BC5:
+        return c == 3u ? 1.0 : (double)value / 65535.0;
+    case BCN_BC6H_UF:
+    case BCN_BC6H_SF: {
+        const float f = BcnHalf(value);
+        return c == 3u ? 1.0 : !(f > 0.0f) ? 0.0 : f >= 1.0f ? 1.0 : (double)f;
+    }
+    default:
+        return (double)value / 255.0;
+    }
+}
+
+/// @p f taken to a half toward nought, then to the nearest byte: RADV's colour export to an
+/// eight bit target.
+static uint8_t HalfTowardNought8(double f) {
+    if (!(f > 0.0)) {
+        return 0u;
+    }
+    int exponent = 0;
+    (void)frexp(f, &exponent);
+    // A normal half keeps eleven bits from its leading one; below 2^-14 the step is 2^-24.
+    const double step = exponent - 1 >= -14 ? ldexp(1.0, exponent - 11) : ldexp(1.0, -24);
+    const double cut = floor(f / step) * step;
+    return (uint8_t)floor(cut * 255.0 + 0.5);
+}
+
 static void MachineTexel(Machine machine, const BcnImage *image, uint32_t x, uint32_t y,
                          uint8_t out[4]) {
-    static const BcnRule RULE[MACHINES] = { BCN_RULE_NVIDIA, BCN_RULE_ROUNDED,
-                                            BCN_RULE_SIXTYFOURTHS, BCN_RULE_NVIDIA,
-                                            BCN_RULE_NVIDIA };
+    static const BcnRule RULE[MACHINES] = { BCN_RULE_NVIDIA,       BCN_RULE_ROUNDED,
+                                            BCN_RULE_SIXTYFOURTHS, BCN_RULE_SIXTYFOURTHS,
+                                            BCN_RULE_NVIDIA,       BCN_RULE_NVIDIA };
     const uint32_t bx = machine == MACHINE_ASIDE ? (x + 4u) % BCN_IMAGE_SIZE : x;
     uint16_t texels[16][4];
     BcnDecodeBlock(image->kind, RULE[machine], BcnImageBlock(image, bx, y), texels);
@@ -226,6 +266,8 @@ static void MachineTexel(Machine machine, const BcnImage *image, uint32_t x, uin
         // The target's byte: the nearest, the lower one beside an sRGB code's linear value.
         if (c == 3u && !image->alpha) {
             out[c] = 255u;
+        } else if (machine == MACHINE_RADV) {
+            out[c] = HalfTowardNought8(TargetFloat(image, c, texel[c]));
         } else if (image->srgb && c < 3u) {
             out[c] = (uint8_t)(FormatSrgbDecode((double)texel[c] / 255.0) * 255.0);
         } else {
@@ -236,11 +278,13 @@ static void MachineTexel(Machine machine, const BcnImage *image, uint32_t x, uin
 
 /// The bcnimage suite's judge on machines made to order, every picture: the console's decode is
 /// exact; the rounded fractions and BPTC's sixty-fourths are off but within the bound, on BC1 to
-/// BC5 only; a block read down its columns and a block a place aside are wrong, over an eighth of
-/// the picture at least.
+/// BC5 only, and RADV's, the sixty-fourths through a half cut toward nought, wrong nowhere; a
+/// block read down its columns and a block a place aside are wrong, over an eighth of the picture
+/// at least.
 static void Machines(void) {
     static BcnImageAnswers answers;
-    static const char *const NAME[MACHINES] = { "the console's", "the rounded", "the sixty-fourths",
+    static const char *const NAME[MACHINES] = { "the console's",      "the rounded",
+                                                "the sixty-fourths",  "RADV's",
                                                 "a block read down its columns", "a block aside" };
     uint32_t mistakes = 0;
     char first[192] = "";
@@ -259,6 +303,8 @@ static void Machines(void) {
             bool right;
             if (m == MACHINE_CONSOLE) {
                 right = count[BCN_TEXEL_OFF] == 0u && count[BCN_TEXEL_WRONG] == 0u;
+            } else if (m == MACHINE_RADV) {
+                right = count[BCN_TEXEL_WRONG] == 0u;
             } else if (m == MACHINE_ROUNDED || m == MACHINE_SIXTYFOURTHS) {
                 right = count[BCN_TEXEL_WRONG] == 0u &&
                         (BcnHasRules(image->kind) ? count[BCN_TEXEL_OFF] != 0u
@@ -274,8 +320,8 @@ static void Machines(void) {
         }
     }
     CHECK_TRUE(SUITE,
-               "the bcnimage judge takes the console's decode as exact and another GPU's "
-               "interpolants as bound, and refuses a block read down its columns and one aside",
+               "the bcnimage judge: the console's decode exact, other GPUs' and RADV's bound, a "
+               "block read down its columns or aside wrong",
                CHECK_NONE, mistakes == 0u, "%u verdicts not as they should be; the first, %s",
                (unsigned)mistakes, first);
 }
