@@ -642,6 +642,109 @@ static void CheckHeavy(void) {
            &t);
 }
 
+static void CheckLand(void) {
+    Tally t = { 0, NULL };
+    static WimsyWorldVertex vertices[WIMSY_WORLD_VERTICES_MAX], again[WIMSY_WORLD_VERTICES_MAX];
+    WimsyWorldDraw draws[WIMSY_WORLD_DRAWS_MAX];
+    uint32_t count = 0, count_again = 0;
+    // A heavy level's world is level 2's and the hills, its last draw: either side, 8 columns
+    // by 34 rows of squares, two triangles each.
+    const uint32_t made = WimsyWorldOf(3u, vertices, &count, draws);
+    Expect(&t, made == 5u && made <= WIMSY_WORLD_DRAWS_MAX && count <= WIMSY_WORLD_VERTICES_MAX &&
+                   draws[4].material == WIMSY_MATERIAL_FLAT &&
+                   draws[4].count == 2u * 8u * 34u * 6u && draws[4].count == WIMSY_HILL_VERTICES &&
+                   draws[4].first == draws[3].first + draws[3].count &&
+                   draws[4].first + draws[4].count == count,
+           "the hills are the heavy world's fifth draw, 6528 vertices after level 2's");
+    Expect(&t, WimsyWorldOf(4u, again, &count_again, draws) == 5u && count_again == count &&
+                   memcmp(vertices, again, count * sizeof(vertices[0])) == 0,
+           "level 4's world is level 3's, and asking twice gives the same");
+    WimsyWorldOf(3u, vertices, &count, draws);
+    // They meet the floor at its edge, 18 units out, at its height; no higher than 24 units; a
+    // triangle is one colour; and the field has relief: a place over 12 units, the two sides
+    // not each other's mirror.
+    bool meets = true, bounded = true, one_colour = true;
+    int32_t highest = 0;
+    uint32_t differ = 0;
+    for (uint32_t row = 0; row <= WIMSY_HILL_ROWS; ++row) {
+        meets = meets && WimsyHillHeight(0u, 0u, row) == 0 && WimsyHillHeight(1u, 0u, row) == 0;
+        for (uint32_t column = 0; column <= WIMSY_HILL_COLUMNS; ++column) {
+            const int32_t left = WimsyHillHeight(0u, column, row);
+            const int32_t right = WimsyHillHeight(1u, column, row);
+            bounded = bounded && left >= 0 && right >= 0 && left <= 24 * 256 && right <= 24 * 256;
+            highest = left > highest ? left : highest;
+            highest = right > highest ? right : highest;
+            differ += left != right ? 1u : 0u;
+        }
+    }
+    for (uint32_t i = draws[4].first; i + 2u < count; i += 3u) {
+        for (uint32_t k = 0; k < 3u; ++k) {
+            const WimsyWorldVertex *const vertex = &vertices[i + k];
+            one_colour = one_colour && vertex->r == vertices[i].r && vertex->g == vertices[i].g &&
+                         vertex->b == vertices[i].b;
+            bounded = bounded && fabsf(vertex->x) >= 18.0f && fabsf(vertex->x) <= 66.0f &&
+                      vertex->y >= 0.0f && vertex->y <= 24.0f && vertex->z <= 2.0f &&
+                      vertex->z >= -202.0f;
+        }
+    }
+    Expect(&t, meets, "the hills are at the floor's height where they meet it");
+    Expect(&t, bounded, "every corner of the hills inside the field, nought to 24 units high");
+    Expect(&t, one_colour, "a triangle of the hills is one colour");
+    Expect(&t, highest > 12 * 256 && differ > 200u,
+           "the field has relief, and two sides of its own");
+    Expect(&t, WimsyHillHeight(2u, 1u, 1u) == 0 && WimsyHillHeight(0u, 9u, 1u) == 0 &&
+                   WimsyHillHeight(0u, 1u, 35u) == 0,
+           "no hill past the field");
+    // The first square's first triangle on the left: its corners, mirrored, and a green of the
+    // low ground in the light.
+    const WimsyWorldVertex *const first = &vertices[draws[4].first];
+    Expect(&t, first[0].x == -18.0f && first[0].y == 0.0f && first[0].z == 2.0f &&
+                   first[1].x == -24.0f && first[1].z == 2.0f && first[2].x == -24.0f &&
+                   first[2].z == -4.0f &&
+                   first[1].y == (float)WimsyHillHeight(0u, 1u, 0u) / 256.0f &&
+                   first[0].g > first[0].r && first[0].g > first[0].b,
+           "the first triangle of the hills");
+    // The grass: 2048 blades at the heavy levels, each in its bounds, its corners its feet a
+    // sixteenth either side and its tip.
+    static WimsyBlade blades[WIMSY_BLADES], blades_again[WIMSY_BLADES];
+    Expect(&t, WimsyBladesOf(2u, blades) == 0u && WimsyBladesOf(3u, blades) == 2048u &&
+                   WimsyBladesOf(4u, blades_again) == WIMSY_BLADES &&
+                   memcmp(blades, blades_again, sizeof(blades)) == 0,
+           "2048 blades at levels 3 and 4, the same ones");
+    bool placed = true, cornered = true;
+    uint32_t sides[2] = { 0, 0 };
+    for (uint32_t i = 0; i < WIMSY_BLADES; ++i) {
+        const WimsyBlade *const blade = &blades[i];
+        placed = placed && fabsf(blade->x) >= 4.25f && fabsf(blade->x) <= 17.75f &&
+                 blade->z <= 1.0f && blade->z >= -199.0f && blade->height >= 0.375f &&
+                 blade->height <= 0.8125f && fabsf(blade->lean) <= 0.234375f &&
+                 blade->colour[1] >= 150u && blade->colour[3] == 255u;
+        sides[blade->x < 0.0f ? 0u : 1u] += 1u;
+        float corner[3][3];
+        for (uint32_t k = 0; k < 3u; ++k) {
+            WimsyBladeCorner(blade, k, corner[k]);
+        }
+        cornered = cornered && corner[0][0] == blade->x - 0.0625f && corner[0][1] == 0.0f &&
+                   corner[1][0] == blade->x + 0.0625f && corner[1][1] == 0.0f &&
+                   corner[2][0] == blade->x + blade->lean && corner[2][1] == blade->height &&
+                   corner[0][2] == blade->z && corner[1][2] == blade->z && corner[2][2] == blade->z;
+    }
+    Expect(&t, placed && sides[0] == 1024u && sides[1] == 1024u,
+           "every blade on the floor beside the lane, half each side");
+    Expect(&t, cornered, "a blade's corners are its feet and its tip");
+    // A machine that leaves the hills out, or the grass, is refused where the camera sees them.
+    WimsyMachine machine = WimsyMachineRight(3u);
+    machine.left_out = 1u << 4;
+    WimsyVerdict verdict = Verdict(3u, 0u, 600u, &machine);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u, "no hills is refused");
+    machine.left_out = 1u << 5;
+    verdict = Verdict(3u, 0u, 600u, &machine);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200u, "no grass is refused");
+    Report("wimsy: the heavy levels' hills and grass, from their seeds, and the machines without "
+           "them refused",
+           &t);
+}
+
 static void CheckPanels(void) {
     Tally t = { 0, NULL };
     static WimsyPanel panels[WIMSY_PANELS];
@@ -820,6 +923,7 @@ void RunReferenceWimsy(void) {
     CheckScene();
     CheckSceneFrames();
     CheckHeavy();
+    CheckLand();
     CheckPanels();
     CheckSaid();
 }

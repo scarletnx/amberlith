@@ -358,6 +358,85 @@ static WimsyWorldVertex WorldCorner(float x, float y, float z, float u, float v,
     return vertex;
 }
 
+/// The hills start where the floor ends, 18 units out, a column every six.
+#define HILL_EDGE 18
+#define HILL_STEP 6
+/// The seeds of the hills' heights and of the grass.
+#define HILL_SEED 0x48494C4Cu
+#define GRASS_SEED 0x47524153u
+
+/// What chance gives the hills at a place of a lattice, nought to 255.
+static uint32_t HillChance(uint32_t side, uint32_t column, uint32_t row, uint32_t lattice) {
+    return Chance(((side << 28) | (lattice << 24) | (column << 12) | row) ^ HILL_SEED) & 0xFFu;
+}
+
+int32_t WimsyHillHeight(uint32_t side, uint32_t column, uint32_t row) {
+    // How high a hill may be at each column, in 256ths of a unit: nought at the floor's edge,
+    // 24 units at the field's.
+    static const int32_t RISE[WIMSY_HILL_COLUMNS + 1u] = { 0,    384,  1024, 1792, 2560,
+                                                           3328, 4096, 5120, 6144 };
+    if (side > 1u || column > WIMSY_HILL_COLUMNS || row > WIMSY_HILL_ROWS) {
+        return 0;
+    }
+    // Three parts a slow rise and fall, chance at every second column and fourth row weighed
+    // between by where the place is in the square, and one part chance at the place itself.
+    const uint32_t c = column / 2u, r = row / 4u, fc = column % 2u, fr = row % 4u;
+    const uint32_t slow = HillChance(side, c, r, 0u) * (2u - fc) * (4u - fr) +
+                          HillChance(side, c + 1u, r, 0u) * fc * (4u - fr) +
+                          HillChance(side, c, r + 1u, 0u) * (2u - fc) * fr +
+                          HillChance(side, c + 1u, r + 1u, 0u) * fc * fr;
+    const uint32_t own = HillChance(side, column, row, 1u);
+    // slow is eight times a chance; of 255 * 32 in all.
+    return (int32_t)((int64_t)RISE[column] * (int64_t)(slow * 3u + own * 8u) / (255 * 32));
+}
+
+/// The whole root of @p value.
+static int64_t WholeRoot(int64_t value) {
+    int64_t root = 0;
+    for (int64_t bit = (int64_t)1 << 31; bit != 0; bit >>= 1) {
+        const int64_t next = root | bit;
+        if (next * next <= value) {
+            root = next;
+        }
+    }
+    return root;
+}
+
+/// The colour of a triangle of the hills whose corners, in 256ths of a unit, are @p at: grass
+/// low, dry grass, rock and snow by its mean height, in the level's light by the cosine between
+/// the light and the side of it that faces up. Whole numbers all the way, so every machine
+/// gives the same bytes.
+static void HillColour(const int64_t at[3][3], uint8_t colour[3]) {
+    static const uint8_t BY_HEIGHT[4][3] = {
+        { 58, 128, 52 }, { 104, 120, 72 }, { 122, 112, 104 }, { 236, 240, 244 }
+    };
+    // The light of WimsyLightOf, in hundredths.
+    static const int64_t LIGHT[3] = { 30, 45, 84 };
+    const int64_t mean = (at[0][1] + at[1][1] + at[2][1]) / 3;
+    const uint8_t *const base =
+        BY_HEIGHT[mean < 3 * 256 ? 0 : mean < 9 * 256 ? 1 : mean < 15 * 256 ? 2 : 3];
+    const int64_t a[3] = { at[1][0] - at[0][0], at[1][1] - at[0][1], at[1][2] - at[0][2] };
+    const int64_t b[3] = { at[2][0] - at[0][0], at[2][1] - at[0][1], at[2][2] - at[0][2] };
+    int64_t normal[3] = { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+                          a[0] * b[1] - a[1] * b[0] };
+    if (normal[1] < 0) {
+        normal[0] = -normal[0];
+        normal[1] = -normal[1];
+        normal[2] = -normal[2];
+    }
+    // A side is at most 6144 by 1536 of those 256ths, so the squares' sum is well inside 63 bits.
+    const int64_t length =
+        WholeRoot(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+    const int64_t facing = normal[0] * LIGHT[0] + normal[1] * LIGHT[1] + normal[2] * LIGHT[2];
+    // Two fifths of its colour turned away, all of it turned to the light: of 256.
+    const int64_t shade =
+        102 + (facing > 0 && length > 0 ? 154 * facing / (length * 100) : 0);
+    for (uint32_t k = 0; k < 3u; ++k) {
+        const int64_t value = (int64_t)base[k] * (shade > 256 ? 256 : shade) / 256;
+        colour[k] = (uint8_t)value;
+    }
+}
+
 /// Six vertices over four corners given around the quad.
 static void WorldQuad(WimsyWorldVertex *out, uint32_t *count, const WimsyWorldVertex corner[4]) {
     static const uint32_t ORDER[6] = { 0, 1, 2, 0, 2, 3 };
@@ -452,8 +531,72 @@ uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vert
     }
     draws[draw].count = count - draws[draw].first;
     draws[draw++].material = WIMSY_MATERIAL_MARK;
+    if (level >= 3u) {
+        // The hills, either side: a square of the field two triangles, the left side's mirrored.
+        draws[draw].first = count;
+        for (uint32_t side = 0; side < 2u; ++side) {
+            for (uint32_t row = 0; row < WIMSY_HILL_ROWS; ++row) {
+                for (uint32_t column = 0; column < WIMSY_HILL_COLUMNS; ++column) {
+                    static const uint32_t CORNER[2][3][2] = { { { 0, 0 }, { 1, 0 }, { 1, 1 } },
+                                                              { { 0, 0 }, { 1, 1 }, { 0, 1 } } };
+                    for (uint32_t half = 0; half < 2u; ++half) {
+                        int64_t at[3][3];
+                        for (uint32_t k = 0; k < 3u; ++k) {
+                            const uint32_t c = column + CORNER[half][k][0];
+                            const uint32_t r = row + CORNER[half][k][1];
+                            const int64_t out = (int64_t)(HILL_EDGE + HILL_STEP * (int32_t)c) * 256;
+                            at[k][0] = side == 0u ? -out : out;
+                            at[k][1] = WimsyHillHeight(side, c, r);
+                            at[k][2] = (int64_t)(FLOOR_NEAR - (int32_t)r * FLOOR_ROW) * 256;
+                        }
+                        uint8_t colour[3];
+                        HillColour(at, colour);
+                        for (uint32_t k = 0; k < 3u; ++k) {
+                            vertices[count++] =
+                                WorldCorner((float)at[k][0] / 256.0f, (float)at[k][1] / 256.0f,
+                                            (float)at[k][2] / 256.0f, 0.0f, 0.0f, colour);
+                        }
+                    }
+                }
+            }
+        }
+        draws[draw].count = count - draws[draw].first;
+        draws[draw++].material = WIMSY_MATERIAL_FLAT;
+    }
     *vertex_count = count;
     return draw;
+}
+
+uint32_t WimsyBladesOf(uint32_t level, WimsyBlade *out) {
+    if (level < 3u || level >= WIMSY_LEVELS) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < WIMSY_BLADES; ++i) {
+        const uint32_t chance = Chance(i ^ GRASS_SEED);
+        const uint32_t other = Chance((i + WIMSY_BLADES) ^ GRASS_SEED);
+        WimsyBlade *const blade = &out[i];
+        // Either side of the lane and its marks, from 4.25 to 17.75 out, down the floor's 200
+        // units; three eighths to thirteen sixteenths of a unit tall, its tip up to 15/64 aside.
+        const float out_x = 4.25f + (float)(chance & 0xFFu) * (13.5f / 256.0f);
+        blade->x = (i & 1u) == 0u ? -out_x : out_x;
+        blade->z = 1.0f - (float)(chance >> 8 & 0xFFFu) * (200.0f / 4096.0f);
+        blade->height = 0.375f + (float)(chance >> 20 & 7u) * 0.0625f;
+        blade->lean = ((float)(chance >> 24 & 15u) - 7.5f) * 0.03125f;
+        const uint32_t green = other & 3u;
+        blade->colour[0] = (uint8_t)(40u + 8u * green);
+        blade->colour[1] = (uint8_t)(150u + 12u * green);
+        blade->colour[2] = 50u;
+        blade->colour[3] = 255u;
+    }
+    return WIMSY_BLADES;
+}
+
+void WimsyBladeCorner(const WimsyBlade *blade, uint32_t corner, float out[3]) {
+    static const float UNIT[3][2] = { { -1.0f, 0.0f }, { 1.0f, 0.0f }, { 0.0f, 1.0f } };
+    const float *const unit = UNIT[corner % 3u];
+    out[0] = blade->x + unit[0] * WIMSY_BLADE_HALF_WIDTH + unit[1] * blade->lean;
+    out[1] = unit[1] * blade->height;
+    out[2] = blade->z;
 }
 
 uint32_t WimsyTextureSide(WimsyTexture texture) {
@@ -691,7 +834,7 @@ bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uin
 
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
-        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false
+        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false, 0u
     };
     return machine;
 }
@@ -765,9 +908,11 @@ static Drawn drawn[TILE * TILE * SAMPLES_MAX];
 static uint8_t tile_low[TILE * TILE][4];
 static uint8_t tile_high[TILE * TILE][4];
 static WimsyInstance scene_instance[WIMSY_INSTANCES_MAX];
-static WimsyWorldVertex world_vertices[WIMSY_WORLD_VERTICES_MAX];
-static WimsyWorldDraw world_draws[WIMSY_WORLD_DRAWS_MAX];
-static Corner world_corners[WIMSY_WORLD_VERTICES_MAX];
+// The world's vertices and draws, and after them the grass, a triangle a blade and one draw.
+static WimsyWorldVertex world_vertices[WIMSY_WORLD_VERTICES_MAX + WIMSY_BLADES * 3u];
+static WimsyWorldDraw world_draws[WIMSY_WORLD_DRAWS_MAX + 1u];
+static Corner world_corners[WIMSY_WORLD_VERTICES_MAX + WIMSY_BLADES * 3u];
+static WimsyBlade scene_blades[WIMSY_BLADES];
 static uint8_t sprite_texels[WIMSY_SPRITE_BYTES];
 static bool sprite_made;
 static GameWorld sprite_world;
@@ -1215,6 +1360,9 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
     }
     for (uint32_t d = 0; d < scene->draws; ++d) {
         const WimsyWorldDraw *const draw = &world_draws[d];
+        if ((scene->machine.left_out >> d & 1u) != 0u) {
+            continue;
+        }
         for (uint32_t t = draw->first; t + 2u < draw->first + draw->count; t += 3u) {
             const Corner *const v[3] = { &world_corners[t], &world_corners[t + 1u],
                                          &world_corners[t + 2u] };
@@ -1393,6 +1541,22 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
     }
     WimsyLightOf(level, &scene->light);
     scene->draws = WimsyWorldOf(level, world_vertices, &scene->world_count, world_draws);
+    const uint32_t blades = WimsyBladesOf(level, scene_blades);
+    if (blades != 0u) {
+        // The grass as the instanced draw leaves it: a triangle a blade, its instance's colour.
+        WimsyWorldDraw *const draw = &world_draws[scene->draws++];
+        draw->first = scene->world_count;
+        draw->count = blades * 3u;
+        draw->material = WIMSY_MATERIAL_FLAT;
+        for (uint32_t b = 0; b < blades; ++b) {
+            for (uint32_t corner = 0; corner < 3u; ++corner) {
+                float at[3];
+                WimsyBladeCorner(&scene_blades[b], corner, at);
+                world_vertices[scene->world_count++] =
+                    WorldCorner(at[0], at[1], at[2], 0.0f, 0.0f, scene_blades[b].colour);
+            }
+        }
+    }
     float view[16];
     WimsyViewOf(level, shown, frames, view);
     for (uint32_t i = 0; i < scene->world_count; ++i) {

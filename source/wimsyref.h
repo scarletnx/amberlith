@@ -28,7 +28,8 @@ extern "C" {
 /// that scene as heavy as a game's frame: a crowd of a hundred and sixty more of her, each one
 /// of her five drawings and a little off its place by one fixed seed, every
 /// model drawn part by part, a draw and a uniform buffer each, fifteen hundred draws a frame,
-/// over a floor whose texture is ASTC, 4096 texels a side. Level 4 is level 3 with that texture
+/// between hills and among grass that each come from a seed of their own, over a floor whose
+/// texture is ASTC, 4096 texels a side. Level 4 is level 3 with that texture
 /// 8192 a side.
 ///
 /// A level's frame is not held to a hash: two machines that are both right differ in a shaded
@@ -152,14 +153,46 @@ typedef struct {
     WimsyMaterial material;
 } WimsyWorldDraw;
 
-#define WIMSY_WORLD_VERTICES_MAX 1536u
+#define WIMSY_WORLD_VERTICES_MAX 4800u
 #define WIMSY_WORLD_DRAWS_MAX 8u
+/// The hills of a heavy level: either side of the floor, this many columns of six units out
+/// from it, a row a floor's row, two triangles a square, each one colour.
+#define WIMSY_HILL_COLUMNS 8u
+#define WIMSY_HILL_ROWS 34u
+#define WIMSY_HILL_VERTICES (2u * WIMSY_HILL_COLUMNS * WIMSY_HILL_ROWS * 6u)
 
 /// The world of @p level, the same on every frame: its vertices, six a quad, into @p vertices
 /// with how many in @p vertex_count, and its draws, in order, into @p draws. Returns how many
-/// draws; none for a level with no world.
+/// draws; none for a level with no world. A heavy level's last draw is its hills: a field of
+/// heights from one seed, worked out in whole numbers, rising from the floor's edge to 24 units,
+/// each triangle the colour of its height in a light baked into it.
 uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vertex_count,
                       WimsyWorldDraw *draws);
+
+/// How high the hills of side @p side (0 left, 1 right) are at column @p column out from the
+/// floor's edge and row @p row down it, in 256ths of a unit. Nought at column nought, where the
+/// hills meet the floor, and past the field.
+int32_t WimsyHillHeight(uint32_t side, uint32_t column, uint32_t row);
+
+/// A blade of grass of a heavy level, as the instance buffer holds it: a triangle standing on
+/// the floor across the lane's way, its foot WIMSY_BLADE_HALF_WIDTH either side of (x, z), its
+/// tip `height` up and `lean` aside.
+typedef struct {
+    float x, z, height, lean;
+    uint8_t colour[4];
+} WimsyBlade;
+
+#define WIMSY_BLADES 2048u
+#define WIMSY_BLADE_HALF_WIDTH 0.0625f
+
+/// The grass of @p level into @p out, the same on every frame and every run: where each blade
+/// stands, how tall, how far it leans and its green, all from one seed. Returns how many; none
+/// below the heavy levels. One draw of three vertices and that many instances draws them.
+uint32_t WimsyBladesOf(uint32_t level, WimsyBlade *out);
+
+/// Where corner @p corner of @p blade is in the world: its left foot, its right foot, its tip.
+/// The arithmetic the vertex program does on the same floats, a term of each sum nought.
+void WimsyBladeCorner(const WimsyBlade *blade, uint32_t corner, float out[3]);
 
 /// The transform from the world to clip space on frame @p frame of @p frames at @p level, column
 /// by column, which the world's draws read from their uniform buffer.
@@ -317,6 +350,9 @@ typedef struct {
     /// machine whose own corners, a fraction of a pixel from the reference's, turn it towards it.
     /// Not a fault: the judge has to pass it.
     bool thin_faces;
+    /// The world's draws it leaves out, a bit a draw in the world's order, the grass the bit
+    /// after the last: nought draws them all.
+    uint32_t left_out;
 } WimsyMachine;
 
 /// The machine that draws a level as the level asks.
