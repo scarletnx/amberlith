@@ -153,6 +153,10 @@ $(BUILD)/source/main.o: $(BUILD)/version.h
 # checks the program has no other.
 $(BUILD)/source/volume.o: CFLAGS += -fno-optimize-sibling-calls
 
+# The fractal reference repeats a compute program's float operations one for one, each fma written
+# out: a product and a sum gcc fused on its own would round once where the program rounds twice.
+$(BUILD)/source/fractalref.o: CFLAGS += -ffp-contract=off
+
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@

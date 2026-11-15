@@ -129,6 +129,10 @@ static const RunnerStep STEPS[] = {
     // The game family's levels, each named by a `level=` word: none runs without one. Untimed by
     // the passes, as the scene before it.
     { "wimsy", RunWimsy, MODE_FAMILY_GAME, false, true },
+    // The demos, after every family: each makes a device and a swapchain of its own, as the game
+    // family's scene does. Untimed by the passes: each times its own frames.
+    { "mandelbrot", RunMandelbrot, MODE_FAMILY_DEMO, false, true },
+    { "julia", RunJulia, MODE_FAMILY_DEMO, false, true },
 };
 
 // The console's frontend for the runner: its folder, its build and its steps.

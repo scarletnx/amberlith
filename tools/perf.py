@@ -9,8 +9,9 @@
     tools/perf.py a1.jsonl a2.jsonl --   the table of one side of several runs
 
 A case's time is the "us" field on its line: microseconds the graphics unit was busy with it,
-the smallest of the samples one run took. The game and wimsy suites' lines carry another kind of time, a
-mean or a percentile of its frames (docs/families/Game.md): they are compared case by case like
+the smallest of the samples one run took. The game, wimsy and demo suites' lines carry another kind of
+time, a mean or a percentile of their frames (docs/families/Game.md, docs/families/Demo.md): they are
+compared case by case like
 any other, and left out of the per-suite sums, where adding them up would mean nothing. One emulator process differs from the next by more
 than the samples inside it do, so a side is several runs, three by the method in
 docs/TimePerCase.md, and a case's time on a side is its median over them. Standard library only.
@@ -31,7 +32,7 @@ UNSTEADY = 75.0  # percent between a side's fastest and slowest run of one case
 
 # Suites whose times are not a case's graphics work but statistics of frames, which no sum of
 # them is: the per-suite tables name them and leave the numbers to the cases.
-FRAME_SUITES = ("game", "wimsy")
+FRAME_SUITES = ("game", "wimsy", "mandelbrot", "julia")
 FRAME_ROW = "frame times, compared case by case, not summed"
 
 

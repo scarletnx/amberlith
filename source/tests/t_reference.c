@@ -2490,6 +2490,7 @@ void RunReference(void) {
     RunReferenceGame();
     RunReferenceWimsy();
     RunReferenceDemo();
+    RunReferenceFractal();
     RunReferenceTex8k();
     RunReferenceFixed();
     RunReferenceCoverage();

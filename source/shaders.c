@@ -93,6 +93,9 @@ static const ShaderBlob BLOBS[SHADER_COUNT] = {
     [SHADER_WIMSY_LIT_FRAG] = { wimsy_lit_frag_dksh, (uint32_t)wimsy_lit_frag_dksh_size },
     [SHADER_WIMSY_WORLD_VERT] = { wimsy_world_vert_dksh, (uint32_t)wimsy_world_vert_dksh_size },
     [SHADER_WIMSY_FILL_COMP] = { wimsy_fill_comp_dksh, (uint32_t)wimsy_fill_comp_dksh_size },
+    [SHADER_FRACTAL_COMP] = { fractal_comp_dksh, (uint32_t)fractal_comp_dksh_size },
+    [SHADER_FRACTAL_FRAG] = { fractal_frag_dksh, (uint32_t)fractal_frag_dksh_size },
+    [SHADER_FULLSCREEN_VERT] = { fullscreen_vert_dksh, (uint32_t)fullscreen_vert_dksh_size },
 };
 
 const void *ShaderData(ShaderId id) {

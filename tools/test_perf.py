@@ -138,6 +138,9 @@ class Output(unittest.TestCase):
         level = {("wimsy", "level 1, 600 frames, present to present: the mean"): 16700}
         self.assertEqual(perf.table_one(level, ["wimsy"])[1],
                          "wimsy             1 frame times, compared case by case, not summed")
+        zoom = {("julia", "600 frames, present to present: the mean"): 16700}
+        self.assertEqual(perf.table_one(zoom, ["julia"])[1],
+                         "julia             1 frame times, compared case by case, not summed")
         lines = perf.compare(a, ["game"], b, ["game"], 20.0)
         self.assertEqual(lines[:2], [
             "cases that moved more than 20 percent and 0 us: 1 of 2 timed in both",
