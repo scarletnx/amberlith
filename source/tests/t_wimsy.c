@@ -119,6 +119,9 @@ static DkShader common_vs;
 static DkShader texture_fs;
 static DkShader model_vs;
 static DkShader lit_fs;
+/// A heavy frame's materials: the light as four fragment programs, lit_fs the first.
+#define MATERIALS 4u
+static DkShader material_fs[MATERIALS - 1u];
 static DkShader world_vs;
 static DkShader grass_vs;
 static DkGpuAddr blade_unit;
@@ -612,8 +615,13 @@ static void RecordModels(uint32_t slot) {
             continue;
         }
         // A heavy frame draws her as a game draws a character of several materials: a draw a
-        // part, each with its uniform buffer bound again.
+        // part, each with its material's fragment program and its uniform buffer bound again.
         for (uint32_t part = 0; part < WIMSY_MESH_PARTS; ++part) {
+            const uint32_t material = part % MATERIALS;
+            const DkShader *const programs[] = {
+                &model_vs, material == 0u ? &lit_fs : &material_fs[material - 1u]
+            };
+            dkCmdBufBindShaders(gpu.cmdbuf, DkStageFlag_Vertex | DkStageFlag_Fragment, programs, 2);
             dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Vertex, 0, block, INSTANCE_STRIDE);
             dkCmdBufDrawIndexed(gpu.cmdbuf, DkPrimitive_Triangles,
                                 WIMSY_MESH_PART[part].index_count, 1,
@@ -885,6 +893,12 @@ static bool BringUp(char *why, size_t why_size) {
                       ShaderSize(SHADER_WIMSY_VERT)) &&
         GpuLoadShader(&gpu, &lit_fs, ShaderData(SHADER_WIMSY_LIT_FRAG),
                       ShaderSize(SHADER_WIMSY_LIT_FRAG)) &&
+        GpuLoadShader(&gpu, &material_fs[0], ShaderData(SHADER_WIMSY_LIT_1_FRAG),
+                      ShaderSize(SHADER_WIMSY_LIT_1_FRAG)) &&
+        GpuLoadShader(&gpu, &material_fs[1], ShaderData(SHADER_WIMSY_LIT_2_FRAG),
+                      ShaderSize(SHADER_WIMSY_LIT_2_FRAG)) &&
+        GpuLoadShader(&gpu, &material_fs[2], ShaderData(SHADER_WIMSY_LIT_3_FRAG),
+                      ShaderSize(SHADER_WIMSY_LIT_3_FRAG)) &&
         GpuLoadShader(&gpu, &world_vs, ShaderData(SHADER_WIMSY_WORLD_VERT),
                       ShaderSize(SHADER_WIMSY_WORLD_VERT)) &&
         GpuLoadShader(&gpu, &grass_vs, ShaderData(SHADER_WIMSY_GRASS_VERT),
