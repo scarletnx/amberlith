@@ -533,7 +533,7 @@ void WimsyLightOf(uint32_t level, WimsyLight *out) {
 
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
-        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u
+        level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false
     };
     return machine;
 }
@@ -575,6 +575,8 @@ typedef struct {
     bool front;
     /// Not facing away by more than a rounding could undo: it may be drawn.
     bool maybe;
+    /// What a machine draws: facing the eye as its own corners have it.
+    bool drawn;
     WimsyMaterial material;
     /// The texture coordinates over w and one over w, each a plane over the target: at (x, y)
     /// the coordinate is its plane's value over the last one's.
@@ -722,10 +724,17 @@ static bool SetUp(const Scene *scene, const Corner *const v[3], const double col
     if (size < 1e-12) {
         return false;
     }
-    // Only a model's faces are culled; the world's quads are drawn whichever way they face.
+    // Only a model's faces are culled; the world's quads are drawn whichever way they face. A
+    // triangle thinner than the margin faces whichever way a machine's own corners make it: it
+    // may be drawn, and it is sure to face the eye only when it is thicker than that.
     const bool culled = material == WIMSY_MATERIAL_MODEL && scene->machine.cull;
-    out->front = culled ? area < -1e-7 : size > 1e-7;
-    out->maybe = !culled || area < 1e-7;
+    const double longest =
+        Most(hypot(v[1]->x - v[0]->x, v[1]->y - v[0]->y), hypot(v[2]->x - v[1]->x, v[2]->y - v[1]->y),
+             hypot(v[0]->x - v[2]->x, v[0]->y - v[2]->y));
+    const double thin = longest * WIMSY_EDGE_MARGIN;
+    out->front = culled ? area < -thin : size > thin;
+    out->maybe = !culled || area < thin;
+    out->drawn = !culled || area < (scene->machine.thin_faces ? thin : 0.0);
     out->material = material;
     const double sign = area < 0.0 ? -1.0 : 1.0;
     memset(out->u_plane, 0, sizeof(out->u_plane));
@@ -1146,8 +1155,7 @@ static void PassRange(const Scene *scene, const Triangle *t, uint32_t x0, uint32
 /// centre, or the last one's when the machine has no depth test.
 static void PassDraw(const Scene *scene, const Triangle *t, uint32_t x0, uint32_t y0) {
     Span span;
-    if ((scene->machine.cull && t->material == WIMSY_MATERIAL_MODEL && !t->front) ||
-        !SpanOf(t, (double)x0, (double)y0, &span)) {
+    if (!t->drawn || !SpanOf(t, (double)x0, (double)y0, &span)) {
         return;
     }
     for (uint32_t py = span.top; py <= span.bottom; ++py) {
