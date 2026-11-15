@@ -202,7 +202,8 @@ void RunEac(void);
 void RunEtc2(void);
 
 /// BC4 arrays whose layers and small levels do not end on a block boundary, every texel of
-/// every level and layer fetched.
+/// every level and layer fetched; one block of every format; and one block of every BC7 and BC6H
+/// mode, the BC6H ones signed too.
 void RunBcn(void);
 
 /// Depth textures the processor writes, Z16, ZF32 and Z24S8, sampled texel by texel, stencil
