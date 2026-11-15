@@ -561,6 +561,7 @@ static void CheckFamilies(void) {
         { "friend", UI_FAMILY_NET },
         { "game", UI_FAMILY_GAME },       { "wimsy", UI_FAMILY_GAME },
         { "mandelbrot", UI_FAMILY_DEMO }, { "julia", UI_FAMILY_DEMO },
+        { "fluid", UI_FAMILY_DEMO },
         { "nvn", UI_FAMILY_NVN },
         { "libc", UI_FAMILY_LIBC },         { "system", UI_FAMILY_LIBC },
         { "socket", UI_FAMILY_LIBC },
@@ -575,7 +576,7 @@ static void CheckFamilies(void) {
     }
     // A run with every family has a group for each suite, so the index holds them all.
     CHECK_TRUE(SUITE, "every suite a run reports is shown under its own family", CHECK_NONE,
-               wrong == 0u && count == 110u && count <= UI_MAX_GROUPS &&
+               wrong == 0u && count == 111u && count <= UI_MAX_GROUPS &&
                    UiFamilyOf("weird") == UI_FAMILY_OTHER && UiFamilyOf(NULL) == UI_FAMILY_OTHER,
                "%u of %u suites under the wrong family, the first %s; the index holds %u groups",
                (unsigned)wrong, (unsigned)count, first, (unsigned)UI_MAX_GROUPS);

@@ -369,6 +369,17 @@ void RunJuliaDemo(const DemoRun *run);
 void RunMandelbrot(void);
 void RunJulia(void);
 
+/// The fluid demo: a 2D Navier-Stokes fluid, Stam's stable fluids, as a chain of fragment passes
+/// in ping-pong between two targets a field, the dye presented every frame; each judged frame's
+/// passes worked out again from its own fields, its early frames held to the processor's whole
+/// simulation, every judged frame to the invariants (demo_fluidref.h), and the frames timed as the
+/// game scene's. As a step, as the mode file says (DemoScriptRun).
+void RunFluid(void);
+
+/// The fluid demo as the browser's registry runs it: the frames and timing @p run asks, stopped
+/// when it says so, the judged frames it did not reach left out.
+void FluidDemo(const DemoRun *run);
+
 /// The net family: nifm, dns, bsd, ssl, acc and friend, in that order, against whatever
 /// sdmc:/edenprobe/net says the backend promises. A case that needs a backend the file does not
 /// name, or a service this program cannot open, is skipped with the reason and counted apart.

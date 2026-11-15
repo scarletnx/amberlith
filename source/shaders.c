@@ -96,6 +96,12 @@ static const ShaderBlob BLOBS[SHADER_COUNT] = {
     [SHADER_FRACTAL_COMP] = { fractal_comp_dksh, (uint32_t)fractal_comp_dksh_size },
     [SHADER_FRACTAL_FRAG] = { fractal_frag_dksh, (uint32_t)fractal_frag_dksh_size },
     [SHADER_FULLSCREEN_VERT] = { fullscreen_vert_dksh, (uint32_t)fullscreen_vert_dksh_size },
+    [SHADER_FLUID_SPLAT_FRAG] = { fluid_splat_frag_dksh, (uint32_t)fluid_splat_frag_dksh_size },
+    [SHADER_FLUID_DIVERGENCE_FRAG] = { fluid_divergence_frag_dksh, (uint32_t)fluid_divergence_frag_dksh_size },
+    [SHADER_FLUID_JACOBI_FRAG] = { fluid_jacobi_frag_dksh, (uint32_t)fluid_jacobi_frag_dksh_size },
+    [SHADER_FLUID_GRADIENT_FRAG] = { fluid_gradient_frag_dksh, (uint32_t)fluid_gradient_frag_dksh_size },
+    [SHADER_FLUID_ADVECT_FRAG] = { fluid_advect_frag_dksh, (uint32_t)fluid_advect_frag_dksh_size },
+    [SHADER_FLUID_DISPLAY_FRAG] = { fluid_display_frag_dksh, (uint32_t)fluid_display_frag_dksh_size },
 };
 
 const void *ShaderData(ShaderId id) {

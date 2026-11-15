@@ -133,6 +133,8 @@ static const RunnerStep STEPS[] = {
     // family's scene does. Untimed by the passes: each times its own frames.
     { "mandelbrot", RunMandelbrot, MODE_FAMILY_DEMO, false, true },
     { "julia", RunJulia, MODE_FAMILY_DEMO, false, true },
+    // A 2D fluid in ping-pong passes, after the zooms.
+    { "fluid", RunFluid, MODE_FAMILY_DEMO, false, true },
 };
 
 // The console's frontend for the runner: its folder, its build and its steps.
