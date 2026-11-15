@@ -793,6 +793,85 @@ static void CheckLand(void) {
            &t);
 }
 
+static void CheckSmoke(void) {
+    Tally t = { 0, NULL };
+    // Four densities, each the first puffs of the next; none below the heavy levels, 256 puffs
+    // at level 3 and 1,024 at level 4 unless a density is asked for.
+    Expect(&t, WimsyPuffCount(0u) == 0u && WimsyPuffCount(1u) == 64u && WimsyPuffCount(2u) == 256u &&
+                   WimsyPuffCount(3u) == 1024u && WimsyPuffCount(3u) == WIMSY_PUFFS_MAX &&
+                   WimsyPuffCount(4u) == 0u,
+           "the four densities' puffs");
+    Expect(&t, WimsySmokeOf(2u) == 0u && WimsySmokeOf(3u) == 2u && WimsySmokeOf(4u) == 3u &&
+                   WimsySmokeOf(5u) == 0u,
+           "each level's own smoke");
+    WimsySmokeAsk(1u);
+    const bool asked = WimsySmokeOf(3u) == 1u && WimsySmokeOf(4u) == 1u && WimsySmokeOf(2u) == 0u;
+    WimsySmokeAsk(WIMSY_SMOKE_DENSITIES);
+    Expect(&t, asked && WimsySmokeOf(3u) == 2u, "a density asked for, then each level's own again");
+    static WimsyPuff puffs[WIMSY_PUFFS_MAX], fewer[64], later[WIMSY_PUFFS_MAX];
+    Expect(&t, WimsyPuffsOf(WIMSY_PUFFS_MAX, 77u, puffs) == WIMSY_PUFFS_MAX &&
+                   WimsyPuffsOf(64u, 77u, fewer) == 64u && memcmp(puffs, fewer, sizeof(fewer)) == 0 &&
+                   WimsyPuffsOf(WIMSY_PUFFS_MAX + 9u, 77u, later) == WIMSY_PUFFS_MAX,
+           "a thicker smoke's first puffs are the thinner one's");
+    // Every puff inside its bounds at every age; it comes round every 240 frames; it is
+    // nothing when it starts and never hides more than 62 of 255.
+    bool bounded = true, round_again = true;
+    uint32_t thickest = 0, starting = 0;
+    for (uint32_t frame = 0; frame < WIMSY_PUFF_FRAMES; frame += 7u) {
+        WimsyPuffsOf(WIMSY_PUFFS_MAX, frame, puffs);
+        WimsyPuffsOf(WIMSY_PUFFS_MAX, frame + WIMSY_PUFF_FRAMES, later);
+        round_again = round_again && memcmp(puffs, later, sizeof(puffs)) == 0;
+        for (uint32_t i = 0; i < WIMSY_PUFFS_MAX; ++i) {
+            const WimsyPuff *const puff = &puffs[i];
+            bounded = bounded && puff->x >= -16.0f && puff->x <= 17.5f && puff->y >= 0.5f &&
+                      puff->y <= 7.5f && puff->z <= -50.0f && puff->z >= -90.0f &&
+                      puff->size >= 1.0f && puff->size < 3.0f && puff->colour[3] <= 62u &&
+                      puff->colour[0] >= 176u && puff->colour[0] == puff->colour[1];
+            thickest = puff->colour[3] > thickest ? puff->colour[3] : thickest;
+            starting += puff->colour[3] == 0u ? 1u : 0u;
+        }
+    }
+    Expect(&t, bounded, "every puff in the smoke's place, a unit to three in half side");
+    Expect(&t, round_again, "a puff comes round every 240 frames");
+    Expect(&t, thickest >= 55u && starting > 0u, "a puff thickens from nothing and thins away");
+    // One puff by hand, over a frame: it rises 3 units and drifts 1.5 in its 240 frames, a
+    // 240th of that a frame, until it starts again.
+    WimsyPuffsOf(1u, 10u, puffs);
+    WimsyPuffsOf(1u, 11u, later);
+    const float rise = later[0].y - puffs[0].y, drift = later[0].x - puffs[0].x;
+    Expect(&t, (fabsf(rise - 3.0f / 240.0f) < 1e-4f && fabsf(drift - 1.5f / 240.0f) < 1e-4f) ||
+                   (rise < -2.9f && drift < -1.4f),
+           "a puff rises and drifts a 240th of its way a frame");
+    float scale[2];
+    WimsyPuffScale(scale);
+    Expect(&t, scale[0] == 1.125f && scale[1] == 2.0f, "a puff's reach in clip space a unit");
+    // The machine that draws the smoke as asked passes; one that draws none, and one that
+    // draws it over what is nearer, the walls 10 units in front of it, are refused.
+    WimsyMachine machine = WimsyMachineRight(3u);
+    WimsyVerdict verdict = Verdict(3u, 120u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "level 3's smoke as asked");
+    machine.smoke = false;
+    verdict = Verdict(3u, 120u, 600u, &machine);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u, "no smoke is refused");
+    machine = WimsyMachineRight(3u);
+    machine.smoke_depth = false;
+    verdict = Verdict(3u, 120u, 600u, &machine);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u,
+           "smoke over what is nearer is refused");
+    // The thickest smoke, at level 4 as its own and at level 3 as asked, passes.
+    machine = WimsyMachineRight(4u);
+    verdict = Verdict(4u, 300u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "level 4's smoke as asked");
+    WimsySmokeAsk(0u);
+    machine = WimsyMachineRight(3u);
+    verdict = Verdict(3u, 120u, 600u, &machine);
+    WimsySmokeAsk(WIMSY_SMOKE_DENSITIES);
+    Expect(&t, WimsyVerdictPasses(&verdict), "no smoke, as asked, passes");
+    Report("wimsy: the heavy levels' smoke, its puffs by seed and frame, and the machines "
+           "without it or with it over everything refused",
+           &t);
+}
+
 static void CheckPanels(void) {
     Tally t = { 0, NULL };
     static WimsyPanel panels[WIMSY_PANELS];
@@ -972,6 +1051,7 @@ void RunReferenceWimsy(void) {
     CheckSceneFrames();
     CheckHeavy();
     CheckLand();
+    CheckSmoke();
     CheckPanels();
     CheckSaid();
 }
