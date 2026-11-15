@@ -360,6 +360,15 @@ void WimsySetFrames(uint32_t frames);
 void WimsySetTiming(bool on);
 void WimsySetLevels(uint32_t levels);
 
+/// The demo family's fractal zooms (fractalref.h): a Mandelbrot and a Julia zoom, each frame a
+/// compute pass that counts every pixel's iterations and a fragment pass that colours them, six
+/// frames held to the processor's answer, every frame presented and timed. As a demo, run as
+/// @p run says; as a step, as the mode file says (DemoScriptRun).
+void RunMandelbrotDemo(const DemoRun *run);
+void RunJuliaDemo(const DemoRun *run);
+void RunMandelbrot(void);
+void RunJulia(void);
+
 /// The net family: nifm, dns, bsd, ssl, acc and friend, in that order, against whatever
 /// sdmc:/edenprobe/net says the backend promises. A case that needs a backend the file does not
 /// name, or a service this program cannot open, is skipped with the reason and counted apart.
@@ -416,6 +425,11 @@ void RunReferenceWimsy(void);
 /// The times every demo reports and how a step runs one, against answers worked out by hand:
 /// part of the reference suite.
 void RunReferenceDemo(void);
+
+/// The fractal zooms' frames, iteration and palette, against answers worked out by hand; on a
+/// computer also the judged frames whole against their pinned hashes, and how far single
+/// precision holds: part of the reference suite.
+void RunReferenceFractal(void);
 
 /// The coverage suite's sample patterns, edges, modulation table entries and modulated bytes,
 /// against answers worked out by hand: part of the reference suite.

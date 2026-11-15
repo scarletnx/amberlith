@@ -614,6 +614,7 @@ static const struct {
     { "libc", UI_FAMILY_LIBC },       { "system", UI_FAMILY_LIBC },
     { "socket", UI_FAMILY_LIBC },
     { "game", UI_FAMILY_GAME },       { "wimsy", UI_FAMILY_GAME },
+    { "mandelbrot", UI_FAMILY_DEMO }, { "julia", UI_FAMILY_DEMO },
     { "nvn", UI_FAMILY_NVN },
 };
 

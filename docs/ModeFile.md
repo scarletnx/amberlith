@@ -34,7 +34,7 @@
 | `jni` | Android's jni family: native code and the Java runtime calling each other; see [On Android](Android.md) |
 | `framework` | Android's framework family: the framework's Java API and its resources; see [On Android](Android.md) |
 | `game` | the game family: one scene that draws, plays a silent tone, reads the card, calls services and computes on four threads over three cores, as a game does, and presents and times every frame; only when named, with no row on the start screen; it writes the fs family's files the first time; see [game](families/Game.md) |
-| `demo` | the demo family: graphics workloads a game runs, drawn frame after frame for a person to watch, chosen frames judged against the processor's answer and every frame presented and timed; only when named, and `all` leaves it out; with no row on the start screen; a run that does not name it makes nothing of it; see [demo](families/Demo.md) |
+| `demo` | the demo family: graphics workloads a game runs, drawn frame after frame for a person to watch, chosen frames judged against the processor's answer and every frame presented and timed; the Mandelbrot and Julia zooms, `frames=<n>` frames each; only when named, and `all` leaves it out; with no row on the start screen; a run that does not name it makes nothing of it; see [demo](families/Demo.md) |
 | `frames=<n>` | the frames the game scene, its levels and each demo run, a whole number from 1 to 36000; 600 without it. Anything else is refused in the mode line with the number in effect: `frames=abc is not a whole number from 1 to 36000: it keeps 600`; without `game` or `demo` the mode line says those families are left out |
 | `level=<n>` | a level of the game family's [levels](families/Game.md#the-levels), 0 to 4, one word a level: `level=0 level=2` runs those two, lowest first, and none runs without one. Anything else is refused in the mode line with the levels in effect: `level=7 is not a level from 0 to 4: the run has no level`; without `game` the mode line says the family is left out |
 | `machine=<name>[@<version>]` | the machine the run is on, one of `console`, `eden`, `ryujinx`, `scarletnx`, `scarletnx-android` and `android`, and its version when the runner knows it (1 to 32 letters, digits, dots, dashes and underscores): the ban list's lines for it hold. The runners write it ([The ban list](Crashes.md#the-ban-list)); without it no line holds. A name the list does not know, or a version that cannot be one, is refused in the mode line with the machine in effect: `machine=yuzu names no machine the ban list knows (console eden ryujinx scarletnx scarletnx-android android): the run has no machine, and no ban holds` |
@@ -75,7 +75,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick game frames=120` | the same scene for 120 frames, two seconds at 60 a second |
 | `quick game level=1` | the scene, then the lit model's level for 600 frames |
 | `quick game level=0 level=2 skip=game images` | those two levels alone, each judged frame leaving its pictures |
-| `quick demo` | the judge, cpu and the demo family's demos, each presented and timed, then exit |
+| `quick demo` | the judge, cpu and the demo family's two zooms, 600 frames each, presented and timed, then exit |
 | `quick skip=tex8k` | the families a file naming none runs, the tex8k suite's cases each a skip asked for |
 
 The first 4096 bytes are read, and a longer file says so in the mode line; a word, or a `label=`, `baseline=`,
