@@ -50,6 +50,7 @@ source/vp9ref.c
 source/schedref.c
 source/binderref.c
 source/blit2dref.c
+source/mandelref.c
 source/sceneref.c
 source/serviceref.c
 source/gameref.c
@@ -92,6 +93,7 @@ source/tests/t_vp9ref.c
 source/tests/t_schedref.c
 source/tests/t_binderref.c
 source/tests/t_blit2dref.c
+source/tests/t_mandelref.c
 source/tests/t_sceneref.c
 source/tests/t_serviceref.c
 source/tests/t_baseline.c
