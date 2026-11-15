@@ -192,18 +192,31 @@ typedef struct {
     const DkShader *shaders[LAYER_STAGES];
 } LayerProgram;
 
+/// What a sampler is, in a builder and in the sampler made from it. The border colour is its
+/// four words, whichever kind (float, signed, unsigned) set them.
 typedef struct {
-    NVNdevice *device;
     uint8_t min;
     uint8_t mag;
     uint8_t wrap[3];
+    uint8_t compare_mode;
+    uint8_t compare_func;
+    uint8_t reduction;
+    uint32_t border[4];
+    float lod_min;
+    float lod_max;
+    float lod_bias;
+    float anisotropy;
+    float lod_snap;
+} LayerSamplerState;
+
+typedef struct {
+    NVNdevice *device;
+    LayerSamplerState state;
 } LayerSamplerBuilder;
 
 typedef struct {
     uint32_t magic;
-    uint8_t min;
-    uint8_t mag;
-    uint8_t wrap[3];
+    LayerSamplerState state;
 } LayerSampler;
 
 /// A texture pool or a sampler pool: @p count descriptors of 32 bytes in a memory pool.
@@ -212,6 +225,7 @@ typedef struct {
     int count;
     DkMemBlock block;
     uint32_t offset;
+    const NVNmemoryPool *memory;
 } LayerDescriptorPool;
 
 // The state objects are a few bytes each in NVN, so their records are bit fields with no magic:
