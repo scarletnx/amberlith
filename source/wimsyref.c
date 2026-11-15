@@ -531,6 +531,100 @@ void WimsyLightOf(uint32_t level, WimsyLight *out) {
     *out = light;
 }
 
+void WimsyComputeTexel(uint32_t texture, uint32_t level, uint32_t frame, uint32_t x, uint32_t y,
+                       uint8_t out[4]) {
+    out[0] = (uint8_t)(x * 5u + frame * 3u + texture * 16u);
+    out[1] = (uint8_t)(y * 7u + frame + level * 32u);
+    out[2] = (uint8_t)((x ^ y) * 9u + texture * 8u + frame * 2u);
+    out[3] = 255u;
+}
+
+void WimsyChainClear(uint32_t chain, uint8_t out[4]) {
+    out[0] = (uint8_t)(16u + chain * 8u);
+    out[1] = 24u;
+    out[2] = 40u;
+    out[3] = 255u;
+}
+
+void WimsyChainSquareOf(uint32_t chain, uint32_t step, uint32_t frame, WimsyChainSquare *out) {
+    static const uint8_t COLOURS[8][3] = {
+        { 230, 60, 60 },  { 60, 200, 80 },  { 70, 100, 230 },  { 230, 210, 60 },
+        { 210, 80, 210 }, { 60, 210, 220 }, { 240, 240, 240 }, { 240, 140, 40 },
+    };
+    // Anywhere the square fits whole, 49 places a side.
+    const uint32_t places = WIMSY_CHAIN_SIDE - WIMSY_CHAIN_SQUARE + 1u;
+    out->x = (chain * 7u + step * 5u + frame) % places;
+    out->y = (step * 11u + chain * 3u + frame / 2u) % places;
+    memcpy(out->colour, COLOURS[(chain + step) % 8u], 3u);
+    out->colour[3] = 255u;
+}
+
+void WimsyChainTexel(uint32_t chain, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]) {
+    // The last square drawn over the texel, or the first target's clear.
+    for (uint32_t step = WIMSY_CHAIN_STEPS; step-- > 0u;) {
+        WimsyChainSquare square;
+        WimsyChainSquareOf(chain, step, frame, &square);
+        if (x >= square.x && x < square.x + WIMSY_CHAIN_SQUARE && y >= square.y &&
+            y < square.y + WIMSY_CHAIN_SQUARE) {
+            memcpy(out, square.colour, 4u);
+            return;
+        }
+    }
+    WimsyChainClear(chain, out);
+}
+
+uint32_t WimsyPanelsOf(uint32_t level, WimsyPanel *out) {
+    if (level < 3u || level >= WIMSY_LEVELS) {
+        return 0;
+    }
+    uint32_t count = 0;
+    for (uint32_t t = 0; t < WIMSY_COMPUTE_TEXTURES; ++t) {
+        // Two rows of six above the scene and four below it, a panel 192 wide: level nought,
+        // and the other levels in a column of 64 beside it.
+        const uint32_t left = t < 12u ? 64u + (t % 6u) * 192u : (t - 12u) * 192u;
+        const uint32_t top = t < 12u ? 8u + (t / 6u) * 136u : 536u;
+        uint32_t down = 0;
+        for (uint32_t mip = 0; mip < WIMSY_COMPUTE_LEVELS; ++mip) {
+            const WimsyPanel panel = { mip == 0u ? left : left + WIMSY_COMPUTE_SIDE,
+                                       mip == 0u ? top : top + down, WIMSY_COMPUTE_SIDE >> mip,
+                                       false, t, mip };
+            out[count++] = panel;
+            down += mip == 0u ? 0u : WIMSY_COMPUTE_SIDE >> mip;
+        }
+    }
+    for (uint32_t c = 0; c < WIMSY_CHAINS; ++c) {
+        // Two rows of eight beside the last four textures.
+        const WimsyPanel panel = { 768u + (c % 8u) * WIMSY_CHAIN_SIDE,
+                                   536u + (c / 8u) * WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, true, c,
+                                   0u };
+        out[count++] = panel;
+    }
+    return count;
+}
+
+bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]) {
+    static WimsyPanel panels[WIMSY_PANELS];
+    static uint32_t made_for = UINT32_MAX, count;
+    if (made_for != level) {
+        count = WimsyPanelsOf(level, panels);
+        made_for = level;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+        const WimsyPanel *const panel = &panels[i];
+        if (x < panel->x || x >= panel->x + panel->side || y < panel->y ||
+            y >= panel->y + panel->side) {
+            continue;
+        }
+        if (panel->chain) {
+            WimsyChainTexel(panel->index, frame, x - panel->x, y - panel->y, out);
+        } else {
+            WimsyComputeTexel(panel->index, panel->mip, frame, x - panel->x, y - panel->y, out);
+        }
+        return true;
+    }
+    return false;
+}
+
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
         level == 0u ? 1u : 4u, level != 0u, true, true, 0u, 0u, true, 0u, true, 0u, false
@@ -624,6 +718,8 @@ typedef struct {
     uint32_t draws;
     /// The judge's frame, whose colours are ranges, or a machine's, whose colours are its own.
     bool judging;
+    /// The frame whose buffers the machine reads: this one, or an earlier one's when it is late.
+    uint32_t shown;
     WimsyLight light;
     WimsyMachine machine;
     /// Which instance `corners` holds, and the target rectangle its corners span; and every
@@ -1210,6 +1306,7 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
     scene->held = UINT32_MAX;
     SamplePlaces(scene);
     const uint32_t shown = frame >= machine->frames_late ? frame - machine->frames_late : 0u;
+    scene->shown = shown;
     if (level == 0u) {
         if (!sprite_made) {
             WimsySpriteTexels(sprite_texels);
@@ -1253,6 +1350,23 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
         corner->z = clip[2] * corner->over_w;
         corner->u = (double)vertex->u;
         corner->v = (double)vertex->v;
+    }
+}
+
+/// The panels' pixels of the tile at (@p x0, @p y0), drawn over what the scene left there: each
+/// its texel's bytes, into tile_low, and tile_high too when @p both.
+static void PanelsOver(const Scene *scene, uint32_t x0, uint32_t y0, bool both) {
+    if (scene->level < 3u) {
+        return;
+    }
+    for (uint32_t p = 0; p < TILE * TILE; ++p) {
+        uint8_t texel[4];
+        if (WimsyPanelPixel(scene->level, scene->shown, x0 + p % TILE, y0 + p / TILE, texel)) {
+            memcpy(tile_low[p], texel, 4u);
+            if (both) {
+                memcpy(tile_high[p], texel, 4u);
+            }
+        }
     }
 }
 
@@ -1301,6 +1415,7 @@ static void TileRanges(Scene *scene, uint32_t x0, uint32_t y0) {
         }
         tile_low[p][3] = tile_high[p][3] = WIMSY_CLEAR[3];
     }
+    PanelsOver(scene, x0, y0, true);
 }
 
 void WimsyRender(uint32_t level, uint32_t frame, uint32_t frames, const WimsyMachine *machine,
@@ -1336,6 +1451,7 @@ void WimsyRender(uint32_t level, uint32_t frame, uint32_t frames, const WimsyMac
                     }
                     tile_low[p][3] = WIMSY_CLEAR[3];
                 }
+                PanelsOver(&scene, x0, y0, false);
             }
             for (uint32_t y = 0; y < TILE && y0 + y < WIMSY_HEIGHT; ++y) {
                 for (uint32_t x = 0; x < TILE; ++x) {

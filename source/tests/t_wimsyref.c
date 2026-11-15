@@ -620,6 +620,92 @@ static void CheckHeavy(void) {
            &t);
 }
 
+static void CheckPanels(void) {
+    Tally t = { 0, NULL };
+    static WimsyPanel panels[WIMSY_PANELS];
+    Expect(&t, WimsyPanelsOf(2u, panels) == 0u, "level 2 has no panel");
+    const uint32_t count = WimsyPanelsOf(3u, panels);
+    Expect(&t, count == 16u * 8u + 16u && WimsyPanelsOf(4u, panels) == count,
+           "128 levels of compute textures and 16 chains at levels 3 and 4");
+    // No panel hangs off the target or over another, and each compute texture's levels halve.
+    bool apart = true, inside = true, halving = true;
+    for (uint32_t i = 0; i < count; ++i) {
+        inside = inside && panels[i].x + panels[i].side <= WIMSY_WIDTH &&
+                 panels[i].y + panels[i].side <= WIMSY_HEIGHT && panels[i].side >= 1u;
+        halving = halving && (panels[i].chain ? panels[i].side == WIMSY_CHAIN_SIDE
+                                              : panels[i].side == WIMSY_COMPUTE_SIDE >> panels[i].mip);
+        for (uint32_t j = 0; j < i; ++j) {
+            apart = apart && (panels[i].x + panels[i].side <= panels[j].x ||
+                              panels[j].x + panels[j].side <= panels[i].x ||
+                              panels[i].y + panels[i].side <= panels[j].y ||
+                              panels[j].y + panels[j].side <= panels[i].y);
+        }
+    }
+    Expect(&t, inside, "every panel inside the target");
+    Expect(&t, apart, "no panel over another");
+    Expect(&t, halving, "a compute texture's level l is 128 >> l a side, a chain's panel 64");
+    Expect(&t, panels[0].x == 64u && panels[0].y == 8u && panels[1].x == 192u && panels[1].y == 8u &&
+                   panels[2].y == 72u && panels[8].x == 256u && panels[12u * 8u].y == 536u &&
+                   panels[128].x == 768u && panels[128].y == 536u && panels[136].y == 600u,
+           "the first texture at (64, 8), its levels beside it, the chains from (768, 536)");
+    // A compute texel worked out by hand: texture 3, level 2, frame 10, texel (5, 9).
+    uint8_t texel[4];
+    WimsyComputeTexel(3u, 2u, 10u, 5u, 9u, texel);
+    Expect(&t, texel[0] == 5u * 5u + 30u + 48u && texel[1] == 63u + 10u + 64u &&
+                   texel[2] == (uint8_t)((5u ^ 9u) * 9u + 24u + 20u) && texel[3] == 255u,
+           "a compute texel from its place, texture, level and frame");
+    WimsyComputeTexel(15u, 7u, 600u, 0u, 0u, texel);
+    Expect(&t, texel[0] == (uint8_t)(1800u + 240u) && texel[1] == (uint8_t)(600u + 224u),
+           "a compute texel past a byte wraps");
+    // A chain: its clear, a square's place inside the target on every frame, and the later
+    // square over the earlier one. On frame 0, chain 0's step 0 square is at (0, 0) and step 10's
+    // at (1, 12): the texel (2, 13) is step 10's, and (63, 63), past every square, nobody's.
+    WimsyChainSquare square;
+    bool fits = true;
+    for (uint32_t frame = 0; frame < 700u; frame += 7u) {
+        for (uint32_t step = 0; step < WIMSY_CHAIN_STEPS; ++step) {
+            WimsyChainSquareOf(frame % WIMSY_CHAINS, step, frame, &square);
+            fits = fits && square.x + WIMSY_CHAIN_SQUARE <= WIMSY_CHAIN_SIDE &&
+                   square.y + WIMSY_CHAIN_SQUARE <= WIMSY_CHAIN_SIDE;
+        }
+    }
+    Expect(&t, fits, "every square whole inside its target");
+    WimsyChainSquareOf(0u, 0u, 0u, &square);
+    WimsyChainSquare last;
+    WimsyChainSquareOf(0u, 10u, 0u, &last);
+    Expect(&t, square.x == 0u && square.y == 0u && last.x == 1u && last.y == 12u, "frame 0's squares");
+    uint8_t clear[4];
+    WimsyChainClear(0u, clear);
+    WimsyChainTexel(0u, 0u, 2u, 13u, texel);
+    Expect(&t, memcmp(texel, last.colour, 4u) == 0 && memcmp(last.colour, square.colour, 4u) != 0,
+           "a later square is over an earlier one");
+    WimsyChainTexel(0u, 0u, 63u, 63u, texel);
+    Expect(&t, memcmp(texel, clear, 4u) == 0 && clear[0] == 16u && clear[3] == 255u,
+           "a texel no square reaches is the chain's clear");
+    // A panel's pixel is its texel, and a pixel between panels is none's.
+    Expect(&t, WimsyPanelPixel(3u, 10u, 64u + 5u, 8u + 9u, texel) && !WimsyPanelPixel(3u, 10u, 0u, 300u, texel) &&
+                   !WimsyPanelPixel(2u, 10u, 70u, 20u, texel),
+           "a pixel in a panel, one outside, and none at level 2");
+    WimsyPanelPixel(3u, 0u, 768u + 2u, 536u + 13u, texel);
+    Expect(&t, memcmp(texel, last.colour, 4u) == 0, "the first chain's panel shows its last target");
+    // The machine as asked is the panels' bytes; one whose compute and chains are a frame late is
+    // refused all over them.
+    const WimsyMachine right = WimsyMachineRight(3u);
+    WimsyVerdict verdict = Verdict(3u, 300u, 600u, &right);
+    Expect(&t, WimsyVerdictPasses(&verdict), "level 3 with its panels as asked");
+    uint8_t want[4];
+    WimsyComputeTexel(0u, 0u, 300u, 5u, 9u, want);
+    Expect(&t, memcmp(Pixel(69u, 17u), want, 4u) == 0, "a panel's pixel is its texel's bytes");
+    WimsyMachine late = right;
+    late.frames_late = 1u;
+    verdict = Verdict(3u, 300u, 600u, &late);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200000u,
+           "panels a frame late are refused, every texel of them");
+    Report("wimsy: the heavy levels' panels: what a compute program stores and a chain of targets "
+           "comes to, a texel a pixel",
+           &t);
+}
+
 static void CheckSaid(void) {
     Tally t = { 0, NULL };
     char said[400];
@@ -675,5 +761,6 @@ void RunReferenceWimsy(void) {
     CheckScene();
     CheckSceneFrames();
     CheckHeavy();
+    CheckPanels();
     CheckSaid();
 }

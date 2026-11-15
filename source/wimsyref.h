@@ -202,6 +202,57 @@ void WimsyTexel(WimsyTexture texture, uint32_t level, uint32_t x, uint32_t y, ui
 /// no more than their sum): an eighth of a level, for the precision it keeps a level in.
 #define WIMSY_LOD_MARGIN 0.125
 
+/// The heavy levels' panels, drawn last over the frame, each a pixel a texel with no depth
+/// test, so every pixel of one is a texel's bytes: what a compute program wrote and what a
+/// chain of small targets came to, both this frame's.
+///
+/// Sixteen textures of 128 by 128 with their eight levels, each level written every frame by a
+/// dispatch of its own through a view of that level alone, then sampled through another: a
+/// texel is a whole number worked out from its place, its texture, its level and the frame. A
+/// panel shows a texture's level nought and, beside it, the seven others one under the other.
+#define WIMSY_COMPUTE_TEXTURES 16u
+#define WIMSY_COMPUTE_SIDE 128u
+#define WIMSY_COMPUTE_LEVELS 8u
+void WimsyComputeTexel(uint32_t texture, uint32_t level, uint32_t frame, uint32_t x, uint32_t y,
+                       uint8_t out[4]);
+
+/// Sixteen chains of eleven targets of 64 by 64: a chain's first target is cleared to the
+/// chain's colour, each later one drawn with the one before, a texel a pixel, and every one
+/// then gets a square of sixteen pixels whose place and colour follow from the chain, the step
+/// and the frame. A panel shows a chain's last target.
+#define WIMSY_CHAINS 16u
+#define WIMSY_CHAIN_STEPS 11u
+#define WIMSY_CHAIN_SIDE 64u
+#define WIMSY_CHAIN_SQUARE 16u
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+    uint8_t colour[4];
+} WimsyChainSquare;
+void WimsyChainClear(uint32_t chain, uint8_t out[4]);
+void WimsyChainSquareOf(uint32_t chain, uint32_t step, uint32_t frame, WimsyChainSquare *out);
+/// Texel (@p x, @p y) of chain @p chain's last target on frame @p frame.
+void WimsyChainTexel(uint32_t chain, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]);
+
+/// A panel's square on the target: where its top left pixel is, its side, and what it shows, a
+/// level of a compute texture or a chain's last target.
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+    uint32_t side;
+    bool chain;
+    uint32_t index;
+    uint32_t mip;
+} WimsyPanel;
+#define WIMSY_PANELS (WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS + WIMSY_CHAINS)
+
+/// The panels of @p level, in the order they are drawn. Returns how many: none under level 3.
+uint32_t WimsyPanelsOf(uint32_t level, WimsyPanel *out);
+
+/// Whether the pixel at (@p x, @p y) is a panel's at @p level, and then its bytes on frame
+/// @p frame.
+bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]);
+
 /// How an imagined machine draws a frame, for WimsyRender: the reference suite's machines, each
 /// wrong in one way a real one can be.
 typedef struct {
