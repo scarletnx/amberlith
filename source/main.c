@@ -290,6 +290,8 @@ int main(int argc, char **argv) {
     WimsySetFrames(mode.frames);
     WimsySetTiming(timing);
     WimsySetLevels(mode.levels);
+    DemoSetFrames(mode.frames);
+    DemoSetTiming(timing);
     Tex8kSetTiming(timing);
     Tex8kSetVram(mode.vram);
     // The running screen, for a run with a screen: a detailed one, or one the start screen made

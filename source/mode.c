@@ -738,9 +738,10 @@ static void Describe(char *out, size_t out_size, const RunMode *mode, uint32_t p
     }
     if (mode->frames_named) {
         const size_t used = strlen(out);
-        const bool game = (ModeFamiliesToRunOf(mode, present, asked) & MODE_FAMILY_GAME) != 0u;
+        const bool used_by = (ModeFamiliesToRunOf(mode, present, asked) &
+                              (MODE_FAMILY_GAME | MODE_FAMILY_DEMO)) != 0u;
         snprintf(out + used, out_size - used, "; frames %u%s", (unsigned)mode->frames,
-                 game ? "" : ", for the game family, which this run leaves out");
+                 used_by ? "" : ", for the game and demo families, which this run leaves out");
     }
     if (mode->frames_was_refused) {
         const size_t used = strlen(out);

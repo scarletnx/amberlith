@@ -1354,13 +1354,19 @@ static void CheckFrames(void) {
                       whole.frames == 1200u,
                   "a number cut by the limit");
 
-    // Given with no game family to run it: the line says the scene is left out.
+    // Given with no family that runs frames: the line says they are left out. The demo family
+    // runs them as the game family does.
     const RunMode unused = ModeFromText("quick net frames=120");
     ModeDescribe(said, sizeof(said), &unused, MODE_FAMILIES_PRESENT);
     FRAMES_EXPECT(unused.frames == 120u &&
-                      strstr(said, "; frames 120, for the game family, which this run leaves "
-                                   "out") != NULL,
-                  "frames=120 with no game family");
+                      strstr(said, "; frames 120, for the game and demo families, which this run "
+                                   "leaves out") != NULL,
+                  "frames=120 with no game or demo family");
+    const RunMode demo = ModeFromText("quick demo frames=120");
+    ModeDescribe(said, sizeof(said), &demo, MODE_FAMILIES_PRESENT);
+    FRAMES_EXPECT(demo.frames == 120u && strstr(said, "; frames 120") != NULL &&
+                      strstr(said, "leaves out") == NULL,
+                  "frames=120 with the demo family");
 
     FRAMES_EXPECT(UiFamilyOf("game") == UI_FAMILY_GAME &&
                       strcmp(UiFamilyName(UI_FAMILY_GAME), "game") == 0,

@@ -43,7 +43,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, four hundred and eighty seven cases, no hardware involved either: the other half
+- **reference**, four hundred and eighty eight cases, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the
@@ -181,6 +181,9 @@ family reports can be believed without them.
     their floors' ASTC blocks against the suite's ASTC decoder and the machine that draws them as
     asked; their panels, a compute texel and a chain of targets worked out by hand; then what a
     line says of a verdict (see [The levels](Game.md#the-levels));
+  - one on the demo family's times, `source/demoref.c`: the warm-up left out, the means,
+    percentiles, longest and hitches of a run made to order, the case names carrying the frames
+    asked for, the note, and the run a step gives a demo (see [The demo family](Demo.md));
   - eleven on the tex8k suite's judge, `source/tex8kref.c`: the graphics memory its textures want
     of a machine and what it says of one with less, its BC7 mode 6 and BC1 blocks against the
     bytes and texels Pillow 12.3.0 decodes them to, both ways a BC1 code may become eight bits, its

@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../demo.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -410,6 +412,10 @@ void RunReferenceGame(void);
 /// its frames, the model's transform, and the judge on machines made to order, each wrong in one
 /// way: part of the reference suite.
 void RunReferenceWimsy(void);
+
+/// The times every demo reports and how a step runs one, against answers worked out by hand:
+/// part of the reference suite.
+void RunReferenceDemo(void);
 
 /// The coverage suite's sample patterns, edges, modulation table entries and modulated bytes,
 /// against answers worked out by hand: part of the reference suite.
