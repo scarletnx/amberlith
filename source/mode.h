@@ -43,9 +43,9 @@ extern "C" {
 ///             nn::time, nn::pl, nn::ngc, nn::nsd) asked through the SDK's functions the program
 ///             exports, and not by IPC: the program opens neither fsp-srv nor time:u (hooks.h).
 ///             Read once, at the program's start, before the card is the C library's.
-///   all       every family this build has but pad, which waits for a person, and nvn, whose
-///             window case runs only in a quick run from the file: one word for a run that needs
-///             nobody. pad and nvn named beside it add theirs.
+///   all       every family this build has but pad, which waits for a person, nvn, whose window
+///             case runs only in a quick run from the file, and demo, which is there to be watched:
+///             one word for a run that needs nobody. pad, nvn and demo named beside it add theirs.
 ///   listen    before the audio family's cases, a sequence of sounds for a person to hear, and
 ///             the audio family with it.
 ///   cpu       a suite family: the processor's instructions, which run in every mode anyway, so
@@ -77,6 +77,11 @@ extern "C" {
 ///   game      another: a scene that runs everything at once, as a game does, on every core the
 ///             program has, and times its frames. It runs only when named until a console has
 ///             run it.
+///   demo      another: demos a person watches, each a frame loop of a graphics workload a game
+///             runs (a fractal zoom drawn by a compute and a fragment program), every frame a
+///             function of its number, chosen frames judged against the processor's answer and
+///             every frame presented and timed. Only when named, and `all` leaves it out: a run
+///             that does not name it makes no device, no frame and no answer for it.
 ///
 /// Eight that are not words. `level=<n>`, a level of the game family's Wimsy scene (wimsyref.h),
 /// a whole number from 0 to WIMSY_LEVELS - 1, one word a level: the run draws each level named
@@ -106,7 +111,7 @@ extern "C" {
 /// effect.
 ///
 /// Families choose which suites beyond the judge run. None named means every family this build
-/// has but audio, display, game, kernel, pad, service and video. The judge itself (selfcheck,
+/// has but audio, demo, display, game, kernel, pad, service and video. The judge itself (selfcheck,
 /// support, reference) always runs, because no verdict below it can be believed without it, and
 /// so does cpu, which needs no device. Any other word is reported and ignored, never fatal: a
 /// file with a typo in it still gets a run, and a line in the report saying what was not
@@ -134,6 +139,7 @@ enum {
     MODE_FAMILY_LIBC = 1u << 12,
     MODE_FAMILY_JNI = 1u << 13,
     MODE_FAMILY_FRAMEWORK = 1u << 14,
+    MODE_FAMILY_DEMO = 1u << 15,
 };
 
 /// The families the console's build carries. A family named in the file and missing here is
@@ -142,20 +148,21 @@ enum {
     ((uint32_t)(MODE_FAMILY_CPU | MODE_FAMILY_PAD | MODE_FAMILY_GRAPHICS | MODE_FAMILY_FS |      \
                 MODE_FAMILY_KERNEL | MODE_FAMILY_DISPLAY | MODE_FAMILY_VIDEO |                     \
                 MODE_FAMILY_AUDIO | MODE_FAMILY_SERVICE | MODE_FAMILY_NET | MODE_FAMILY_GAME |     \
-                MODE_FAMILY_NVN | MODE_FAMILY_LIBC))
+                MODE_FAMILY_NVN | MODE_FAMILY_LIBC | MODE_FAMILY_DEMO))
 
 /// The console's families that run only when a word asks for them.
 #define MODE_FAMILIES_ASKED                                                                       \
     ((uint32_t)(MODE_FAMILY_AUDIO | MODE_FAMILY_DISPLAY | MODE_FAMILY_KERNEL | MODE_FAMILY_VIDEO | \
                 MODE_FAMILY_PAD | MODE_FAMILY_SERVICE | MODE_FAMILY_GAME | MODE_FAMILY_NVN |       \
-                MODE_FAMILY_LIBC))
+                MODE_FAMILY_LIBC | MODE_FAMILY_DEMO))
 
 /// What runs when the file names no family.
 #define MODE_FAMILIES_DEFAULT ((uint32_t)(MODE_FAMILIES_PRESENT & ~MODE_FAMILIES_ASKED))
 
-/// The families the word `all` leaves out: pad waits for a person, and nvn's window case runs only
-/// while no screen of the program's is up, so it is a family to name on purpose.
-#define MODE_FAMILIES_NOT_ALL ((uint32_t)(MODE_FAMILY_PAD | MODE_FAMILY_NVN))
+/// The families the word `all` leaves out: pad waits for a person, nvn's window case runs only
+/// while no screen of the program's is up, and demo is there to be watched and adds seconds of
+/// frames to a run that times everything else, so each is a family to name on purpose.
+#define MODE_FAMILIES_NOT_ALL ((uint32_t)(MODE_FAMILY_PAD | MODE_FAMILY_NVN | MODE_FAMILY_DEMO))
 
 /// How much of the mode file is read: every word there is fits many times over. A longer file is
 /// read to here and the report says so; a word the limit cuts in two is dropped, never quoted as
@@ -183,7 +190,7 @@ typedef enum {
 
 /// Room for every word ModeKey writes with all of them on, `frames=` and `vram=` at their widest,
 /// `machine=` with a name and a version as long as they may be, MODE_SKIPS_MAX `skip=` words at
-/// their longest and five `level=` words, 360 characters: the support suite holds the widest to
+/// their longest and five `level=` words, 365 characters: the support suite holds the widest to
 /// it, and the journal's fields are sized from it (journal.h, JOURNAL_MODE_MAX).
 #define MODE_KEY_MAX 368u
 

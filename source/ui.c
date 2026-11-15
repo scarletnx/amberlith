@@ -656,6 +656,8 @@ const char *UiFamilyName(UiFamily family) {
         return "game";
     case UI_FAMILY_LIBC:
         return "libc";
+    case UI_FAMILY_DEMO:
+        return "demo";
     case UI_FAMILY_OTHER:
     case UI_FAMILY_COUNT:
         break;

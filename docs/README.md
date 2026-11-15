@@ -33,5 +33,6 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[Audio](./families/Audio.md)**, **[service](./families/Service.md)** and **[net](./families/Net.md)**
   - **[Game](./families/Game.md)** - one scene that runs everything at once, as a game does, and the levels that
     draw Wimsy as a game draws a character
+  - **[Demo](./families/Demo.md)** - graphics workloads a game runs, drawn for a person to watch, judged and timed
   - **[libc](./families/Libc.md)** - the C library under every frontend
 - **[Credits](./Credits.md)**

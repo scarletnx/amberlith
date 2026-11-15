@@ -28,6 +28,7 @@ static const struct {
     { "service", MODE_FAMILY_SERVICE },
     { "net", MODE_FAMILY_NET },
     { "game", MODE_FAMILY_GAME },
+    { "demo", MODE_FAMILY_DEMO },
     { "nvn", MODE_FAMILY_NVN },
     { "libc", MODE_FAMILY_LIBC },
     { "jni", MODE_FAMILY_JNI },
@@ -889,6 +890,7 @@ size_t ModeKey(char *out, size_t out_size, const RunMode *mode) {
         { mode->all, "all" },
         { (mode->families_named & MODE_FAMILY_AUDIO) != 0u, "audio" },
         { (mode->families_named & MODE_FAMILY_CPU) != 0u, "cpu" },
+        { (mode->families_named & MODE_FAMILY_DEMO) != 0u, "demo" },
         { (mode->families_named & MODE_FAMILY_DISPLAY) != 0u, "display" },
         // It changes no case, but the mode line says what it does now: a run that has it says so.
         { mode->fatal, "fatal" },
