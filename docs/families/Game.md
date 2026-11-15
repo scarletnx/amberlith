@@ -172,7 +172,7 @@ scene's. Five levels:
 | 0, sprites | 96 sprites of her, 128 texels a side, a pixel or four a texel, half of them mirrored, some hanging off the target: one batch of 576 vertices the main thread rewrites every frame as the scene's world moves them, drawn in one draw and blended over the clear colour, as a 2D game's are |
 | 1, one lit model | her model, 1680 triangles, turning a two hundred and fortieth of a turn a frame, while the camera backs away from 3 of her half widths to 48 over the run: a transform in a uniform buffer the main thread rewrites every frame, a normal a vertex and a colour of four normalised bytes, one light worked out a pixel, the faces turned away culled, a Z24S8 depth buffer, and four samples a pixel resolved before the frame is shown |
 | 2, a scene near and far | seven of her down a floor 204 units long, the camera backing away and up from 6 units to 36 from the nearest: the floor, 204 quads through a 2048 by 2048 texture of paving stones with its twelve levels of detail, a level between two weighed; a lane down its middle through a 1024 by 1024 texture whose eleven levels are each one colour; two walls 40 units down, a sign 5/256 of a unit in front of each, drawn before its wall on the left and after it on the right; and four marks painted in the floor's own plane, brought in front of it by a depth bias. Eleven draws |
-| 3, a heavy frame | level 2's scene with a crowd of 160 more of her, twenty rows of eight either side of the lane, each her own shade, and every model drawn as a game draws a character of several materials, a draw a part with its uniform buffer bound again: 1,507 draws a frame, 280,560 triangles of hers, 167 uniform buffers the main thread rewrites. The floor's texture is ASTC in blocks of 8 by 8, 4096 texels a side, thirteen levels. Before the scene, 128 dispatches of a compute program, each storing one level of one of sixteen 128 by 128 textures through a view of that level alone, and 176 passes, sixteen chains of eleven 64 by 64 targets, each target drawn with the one before it and given a square the main thread moves every frame; after it, 144 panels drawn over the frame, a texel a pixel: every level of every compute texture and every chain's last target, all of them this frame's |
+| 3, a heavy frame | level 2's scene with a crowd of 160 more of her, twenty rows of eight either side of the lane, each her own shade, and every model drawn as a game draws a character of several materials, a draw a part with its uniform buffer bound again: 1,507 draws a frame, 280,560 triangles of hers, 167 uniform buffers the main thread rewrites. The floor's texture is ASTC in blocks of 8 by 8, 4096 texels a side, thirteen levels. Before the scene, 128 dispatches of a compute program, each storing one level of one of sixteen 128 by 128 textures through a view of that level alone, and 176 passes, sixteen chains of eleven 64 by 64 targets, each target drawn with the one before it and given a square the main thread moves every frame; after it, 146 panels drawn over the frame, a texel a pixel: every level of every compute texture, every chain's last target and the frame's two loads, all of them this frame's. A load is a 512 by 512 ASTC texture no frame before had, written whole by a worker thread straight into the memory the graphics unit samples, 64 KiB each, 7.7 MiB a second at 60 frames. Four worker threads share the frame with the main thread: one a load, two the 167 uniform buffers, half each; the frame is handed to the render thread when all four are done. And the render thread reads back, every frame, a texel the compute program stored |
 | 4, a heavy frame of 8K | level 3 with the floor's texture 8192 texels a side, fourteen levels, 22 MiB of blocks |
 
 **The model** is `source/wimsymesh.c`, which `tools/wimsy-mesh.py` makes from her drawing,
@@ -182,7 +182,7 @@ from the front, drawn by the processor in whole numbers, so its texels are the s
 machine.
 
 **A frame** is drawn into a 1280 by 720 target, the console's own screen, by two threads as the
-scene's are: the main thread, on core 0, works the frame out and writes what it reads into one of
+scene's are (and four more at the heavy levels, on cores 2, 2, 0 and 2): the main thread, on core 0, works the frame out and writes what it reads into one of
 two slots, at most a frame ahead; the render thread, on core 1, takes an image from a swapchain
 on the default window, records the frame, draws the target onto the image, submits, waits for
 the queue and presents. A level has a device of its own, sized for it. In a run with a screen
@@ -261,9 +261,18 @@ level too coarse, no depth bias or 16 bits of depth.
 The heavy levels' panels are held bit for bit inside the frame's other ranges: a compute
 texel is a whole number worked out from its place, its texture, its level and the frame
 (`WimsyComputeTexel`), stored as the normalised value that byte is, and a chain's last target is
-its clear and eleven squares, the later over the earlier (`WimsyChainTexel`). A panel a frame
-old, a level never stored, a target a pass never reached or a store the sampling view does not
-see is every texel of that panel wrong. What an emulator does for them is what a game's shadow
+its clear and eleven squares, the later over the earlier (`WimsyChainTexel`). A load's block is
+a void extent of a colour from its place and the load's number (`WimsyLoadTexel`), held to the
+two codes BC7 is given. A panel a frame old, a level never stored, a target a pass never
+reached, a store the sampling view does not see or a load the graphics unit sampled before the
+processor's write reached it is every texel of that panel wrong. One more case a heavy level
+holds the texel the processor reads back each frame to what the program stored, bit for bit.
+
+These are the ways a game on the console's one memory shares it between the processor and the
+graphics unit, each every frame: worker threads writing a texture's blocks and a draw's uniform
+buffers through mappings that stay for the run, into memory the graphics unit reads in the same
+frame with no copy between; descriptors rewritten for images the frame is the first to use; and
+the processor reading memory the graphics unit wrote, once the queue stands idle. What an emulator does for them is what a game's shadow
 maps, light probes and blur chains cost it: a dispatch and a pass each a submission's worth of
 state, and memory the graphics unit wrote read through another view in the same frame.
 
