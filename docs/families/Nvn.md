@@ -1,8 +1,16 @@
 # The nvn family
 
+## Index
+
+* [Why a layer](#why-a-layer)
+* [What a pass proves, and what it does not](#what-a-pass-proves-and-what-it-does-not)
+* [The cases](#the-cases)
+* [The scene, down three ways](#the-scene-down-three-ways)
+* [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
+
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, seventeen cases.
 
 ## Why a layer
 
@@ -76,6 +84,48 @@ The reference is the graphics unit running what the layer recorded, never the of
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
   end, `noprogress` or not: a quick run from the mode file runs it, as the game family presents only then, and the
   start screen says so when the file names nvn.
+
+## The scene, down three ways
+
+Three of the suite's cases draw one scene: through deko3d's calls, as every drawing suite draws; through the
+layer's own NVN functions; and through the NVN the program looks up. `source/drawpath.h` is what makes that one
+recording: the calls a scene draws with (a target, a depth target, programs of two stages, vertices, uniform
+buffers, textures), with a way under them for each, and `source/tests/t_nvnscene.c` records the scene once against
+it. Every way is judged by the same function against the same pixels, `source/sceneref.c`, which the host build
+checks. The device of the NVN ways is set to the upper left origin and a near plane at zero, the deko3d way's
+conventions, so the scene's vertices mean the same pixels.
+
+The scene is a 64 by 64 target in four quarters, five draws in one list, exact tier:
+
+- top left, an 8 by 8 texture drawn four pixels a texel, sampled nearest through texture slot 1, with a decoy of
+  other texels in slot 0: the texture is found through its slot's handle;
+- top right, a quad drawn with the depth test and write on, then a farther quad of another colour that the depth
+  test has to hide;
+- bottom left, a quad the fragment stage's uniform buffer colours;
+- bottom right, the clear colour and a 16 by 16 square whose vertices are the target's top left corner, moved
+  there by the vertex stage's uniform buffer, which the three draws before it bind another buffer for.
+
+The cases, the first two before the suite's lookup and the third after its window case:
+
+- **a scene of five draws through deko3d holds what the processor works out** (exact): on every machine, the
+  engine methods path.
+- **the same scene through the layer's own NVN functions holds what the processor works out** (exact): the
+  layer's bodies on every machine (`NvnLayerOwnProcs`), so that this case failing alone is the layer's
+  translation. It runs before anything looks the program's NVN up, since ScarletNX takes a function over at the
+  address its name resolves to, the layer's own from then on with it.
+- **the same scene through the NVN the program looks up holds what the processor works out** (exact): under
+  ScarletNX, the NVN its games take; on the console and in Eden, the layer again.
+
+A failing case says how many pixels are wrong and what the first one shows: a texel of the decoy (the wrong
+handle), the far quad (no depth test), the clear colour where a quad should be, the moved square in the top left
+corner (the vertex stage read another draw's buffer).
+
+Under ScarletNX 3e9ad88 on RADV all three pass, and the three pictures are the same bytes. No console and no
+emulator of the graphics unit has run them yet.
+
+One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
+layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the
+block at `binding = 0`.
 
 ## Where nvn/nvn.h comes from
 

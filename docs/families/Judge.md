@@ -45,7 +45,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, five hundred and thirty four cases, no hardware involved either: the other half
+- **reference**, five hundred and thirty six cases, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the
@@ -174,6 +174,10 @@ family reports can be believed without them.
     `tools/blit2d-expect.py`: the source, the filled destination, every case's image under each
     combination of answers and the 2D engine's words, then the verdicts on reads made to order (see
     [The blit2d suite](Blit2d.md));
+  - two on the nvn suite's scene, `source/sceneref.c`: where its quarters, the quad the depth test
+    hides and the moved square are, counted pixel by pixel from the scene's description, and that
+    no two of its colours and texels are alike, so a wrong pixel is named by the part it shows (see
+    [The nvn family](Nvn.md));
   - nine on the game scene's arithmetic, `source/gameref.c`: the world's steps and bounces worked
     out by hand, the fill whose nearest quad is not the last drawn, where the texture, the fill and
     the cells land in a frame's image, the quarters' hash, the reads that cover the big file once in
