@@ -1,0 +1,4 @@
+# The commit of ScarletNX (github.com/scarletnx/ScarletNX) whose src/nx/gpu/shader/sm86.decode the file beside this
+# one is, byte for byte, and its SHA-256: tools/test_sm86asm.py holds the copy to it.
+commit 66b8f0a59965389dc1d7544781f94ec5bf0e5840
+sha256 81e082d9a6af878cd244ab0e0c7fe1b43ebdf91f4378cd357244ea16778d8c5a

@@ -18,6 +18,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[An older driver](./OlderDriver.md)** - the masquerade layer
 - **[The NVN layer](./NvnLayer.md)** - NVN for a homebrew program, a module of its own: on deko3d for the Switch,
   the names alone for the Switch 2
+- **[Switch 2 shader programs](./Sm86.md)** - `tools/sm86asm.py`, which assembles them from their instructions
 - Reading a run:
   - **[The report](./Report.md)** - its lines, and where a run leaves them
   - **[Time per case](./TimePerCase.md)** - what a case's time measures, and comparing two builds
