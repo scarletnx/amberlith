@@ -9,8 +9,9 @@ The score is what each track is made of (see the comment at its top); the C file
 edited by hand. Every track must be one musiccompose.h names, in its order; every field must be there once and in
 range; nine channels with at most one drums, bass, lead, arp and crash and three pads, and no echo, double or
 harmony without a lead; a progression's degrees must be triads that are not diminished in the track's mode; every
-pattern must be as long as its kind and use only its marks. A score that breaks one is refused with the line, what
-it holds and what it should.
+pattern must be as long as its kind and use only its marks, and a pad pattern the pads glide out of must not let the
+chord go on its last row (the glide would start from silence). A score that breaks one is refused with the line,
+what it holds and what it should.
 
 --check writes nothing: it says whether OUT is what SCORE makes, and exits 1 when it is not.
 """
@@ -192,6 +193,13 @@ def check(tracks):
                 raise ScoreError(f"{where}: {len(t['pools'][pool])} {pool} entries, at least {fewest}")
         if "arp" in roles and not t["pools"]["arp"]:
             raise ScoreError(f"{where}: a channel plays the arp and no arp pattern is given")
+        if glide:
+            for entry, line in t["pools"]["pad"]:
+                if entry.endswith("."):
+                    raise ScoreError(
+                        f"line {line}: pad {entry!r} lets the chord go on its last row, and glide {glide} "
+                        "slides into the next one from it: end on - or x, or glide 0"
+                    )
         for entry, line in t["pools"]["form"]:
             if "A" not in entry:
                 raise ScoreError(f"line {line}: form {entry!r} has no A section")
