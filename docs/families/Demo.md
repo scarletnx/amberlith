@@ -149,3 +149,9 @@ graphics unit's two passes, the copies of a judged frame and the quad shown, up 
 No console has run the zooms. What they expect of one, besides what the order and fmath suites already check: that
 the compiled program's single precision operations round as IEEE 754 does, to nearest, ties to even, a fused
 multiply and add once, and that a compute program keeps denormals, as its compiled instructions say.
+
+## fluid
+
+A 2D Navier-Stokes fluid, Stam's stable fluids in forty seven fragment passes a frame in ping-pong between two
+targets a field: each judged frame's passes worked out again from the fields the machine left, the early frames held
+to the processor's whole simulation. Its page: [The fluid demo](Fluid.md).

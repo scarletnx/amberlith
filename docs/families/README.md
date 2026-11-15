@@ -24,7 +24,8 @@ points at. A case that ends the program costs that case, not the rest of the run
 - **[Net](./Net.md)** - nifm, dns, bsd, ssl, acc and friend, the net file and the fixture
 - **[Game](./Game.md)** - one scene that runs everything at once, as a game does, and the levels that draw Wimsy
   as a game draws a character
-- **[Demo](./Demo.md)** - graphics workloads a game runs, drawn for a person to watch, judged and timed
+- **[Demo](./Demo.md)** - graphics workloads a game runs, drawn for a person to watch, judged and timed,
+  among them the [fluid](./Fluid.md), a 2D Navier-Stokes fluid in ping-pong fragment passes
 - **[libc](./Libc.md)** - the C library and what it asks of the system, the same cases on every frontend
 
 Every drawing suite draws offscreen and reads its target back, so no case depends on the compositor, the swapchain
