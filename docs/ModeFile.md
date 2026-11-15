@@ -17,7 +17,7 @@
 | `nojournal` | no journal between cases, so a crash costs the rest of the run; for measuring what the journal costs |
 | `noprogress` | no running screen while the suites run; for a machine whose window misbehaves while the suites draw |
 | `hooks` | the console's services a machine may answer in a game's own code, nn::fs, nn::time, nn::pl, nn::ngc, nn::nsd, nn::pctl, nn::audio and nn::codec, asked through the SDK's functions the program exports, and not by IPC: the program opens neither fsp-srv nor time:u, its card is nn::fs's, and the audio, service and game families open no audio service but through those functions. For a recompiler that runs a game's SDK functions itself and serves none of those services; read at the program's start, with no row on the start screen; see [The hooks mode](Hooks.md) |
-| `all` | every family the build has but pad, which waits for a person, and nvn: one word for a run that needs nobody. `pad` or `nvn` beside it adds that family; the mode line lists the families that run |
+| `all` | every family the build has but pad, which waits for a person, nvn and demo: one word for a run that needs nobody. `pad`, `nvn` or `demo` beside it adds that family; the mode line lists the families that run |
 | `cpu` | the processor family. It runs in every mode, so naming it alone leaves the graphics, fs and net families out: a few seconds, nothing drawn |
 | `graphics` | the graphics family: the forty two drawing suites, clear to copy, and tex8k; selfcheck, support, reference and cpu always run, whatever family is named |
 | `nvn` | the nvn family: the clear suite's question asked through the program's NVN, a layer on deko3d that a runtime running a game's NVN itself (ScarletNX) takes as a game's driver; only when named, with no row on the start screen; its window case runs only in a quick run from the mode file, since a run begun on the start screen keeps the program's screen up to its end, `noprogress` or not, and the start screen says so; see [nvn](families/Nvn.md) |
@@ -34,6 +34,7 @@
 | `jni` | Android's jni family: native code and the Java runtime calling each other; see [On Android](Android.md) |
 | `framework` | Android's framework family: the framework's Java API and its resources; see [On Android](Android.md) |
 | `game` | the game family: one scene that draws, plays a silent tone, reads the card, calls services and computes on four threads over three cores, as a game does, and presents and times every frame; only when named, with no row on the start screen; it writes the fs family's files the first time; see [game](families/Game.md) |
+| `demo` | the demo family: graphics workloads a game runs, drawn frame after frame for a person to watch, chosen frames judged against the processor's answer and every frame presented and timed; only when named, and `all` leaves it out; with no row on the start screen; a run that does not name it makes nothing of it; see [demo](families/Demo.md) |
 | `frames=<n>` | the game scene's frames, a whole number from 1 to 36000; 600 without it. Anything else is refused in the mode line with the number in effect: `frames=abc is not a whole number from 1 to 36000: it keeps 600`; without `game` the mode line says the family is left out |
 | `level=<n>` | a level of the game family's [levels](families/Game.md#the-levels), 0 to 4, one word a level: `level=0 level=2` runs those two, lowest first, and none runs without one. Anything else is refused in the mode line with the levels in effect: `level=7 is not a level from 0 to 4: the run has no level`; without `game` the mode line says the family is left out |
 | `machine=<name>[@<version>]` | the machine the run is on, one of `console`, `eden`, `ryujinx`, `scarletnx`, `scarletnx-android` and `android`, and its version when the runner knows it (1 to 32 letters, digits, dots, dashes and underscores): the ban list's lines for it hold. The runners write it ([The ban list](Crashes.md#the-ban-list)); without it no line holds. A name the list does not know, or a version that cannot be one, is refused in the mode line with the machine in effect: `machine=yuzu names no machine the ban list knows (console eden ryujinx scarletnx scarletnx-android android): the run has no machine, and no ban holds` |
@@ -44,8 +45,8 @@
 | `compare=<name>` | once the suites end, this run's times are held to that file's samples: a line for each case held to them, `same`, `slower` or `faster`, and one that sums them up, no verdict changed; see [Baselines](Baseline.md) |
 
 The judge and the cpu suite always run. With no family named, every family runs but audio, pad, kernel, display,
-service, video, game, nvn and libc; on Android every family it has ([Frontends](Frontends.md)). Naming a family runs
-that family alone, so `quick audio kernel` runs no graphics; `all` is every family but pad and nvn. A family this
+service, video, game, demo, nvn and libc; on Android every family it has ([Frontends](Frontends.md)). Naming a family
+runs that family alone, so `quick audio kernel` runs no graphics; `all` is every family but pad, nvn and demo. A family this
 build lacks is listed in the mode line and skipped. Any other word is quoted and counted in the mode line and has no
 effect: a typo costs a line, never the run.
 
@@ -62,7 +63,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick fs` | the judge, cpu and the fs suite, then exit |
 | `quick video` | the judge, cpu, the vic suite and the nvdec suite, then exit: what a console run of the video family wants |
 | `quick pad` | the judge, cpu and the pad suite with a person in front of it, then exit |
-| `quick all` | the judge, cpu and every family that needs nobody: all but pad and nvn, then exit |
+| `quick all` | the judge, cpu and every family that needs nobody: all but pad, nvn and demo, then exit |
 | `quick all skip=tex8k` | the same, the tex8k suite's cases each a skip asked for: a handheld's run |
 | `quick nvn` | the judge, cpu and the nvn suite, its window case too, then exit |
 | `quick kernel display` | the judge, cpu, the sched and svc suites and the binder suite, then exit |
@@ -74,6 +75,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick game frames=120` | the same scene for 120 frames, two seconds at 60 a second |
 | `quick game level=1` | the scene, then the lit model's level for 600 frames |
 | `quick game level=0 level=2 skip=game images` | those two levels alone, each judged frame leaving its pictures |
+| `quick demo` | the judge, cpu and the demo family's demos, each presented and timed, then exit |
 | `quick skip=tex8k` | the families a file naming none runs, the tex8k suite's cases each a skip asked for |
 
 The first 4096 bytes are read, and a longer file says so in the mode line; a word, or a `label=`, `baseline=`,

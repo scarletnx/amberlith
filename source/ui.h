@@ -80,6 +80,7 @@ typedef enum {
     UI_FAMILY_NET,
     UI_FAMILY_GAME,
     UI_FAMILY_LIBC,
+    UI_FAMILY_DEMO,
     UI_FAMILY_OTHER,
     UI_FAMILY_COUNT,
 } UiFamily;

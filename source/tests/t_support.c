@@ -824,6 +824,7 @@ static void CheckVram(void);
 static void CheckMachine(void);
 static void CheckSkipWord(void);
 static void CheckAllWord(void);
+static void CheckDemoWord(void);
 static void CheckHooksWord(void);
 static void CheckWidestMode(void);
 static void CheckFrontendFamilies(void);
@@ -1089,7 +1090,7 @@ static void CheckLaunchAndMode(void) {
             (MODE_FAMILY_CPU | MODE_FAMILY_PAD | MODE_FAMILY_GRAPHICS | MODE_FAMILY_FS |
              MODE_FAMILY_KERNEL | MODE_FAMILY_DISPLAY | MODE_FAMILY_VIDEO | MODE_FAMILY_AUDIO |
              MODE_FAMILY_SERVICE | MODE_FAMILY_NET | MODE_FAMILY_GAME | MODE_FAMILY_NVN |
-             MODE_FAMILY_LIBC) &&
+             MODE_FAMILY_LIBC | MODE_FAMILY_DEMO) &&
         strcmp(net_said,
                "mode: quick, from the mode file; pictures of failures only; families net") == 0;
     const RunMode flood = ModeFromText(
@@ -1130,6 +1131,7 @@ static void CheckLaunchAndMode(void) {
     CheckMachine();
     CheckSkipWord();
     CheckAllWord();
+    CheckDemoWord();
     CheckHooksWord();
     CheckWidestMode();
     CheckFrontendFamilies();
@@ -1738,14 +1740,15 @@ static void CheckSkipWord(void) {
                (unsigned)wrong, first, said);
 }
 
-/// all: every family a frontend has but pad and nvn, which named beside it add theirs; in the key,
-/// through a launch that goes on with the start screen's choice, and gone once the screen changes
-/// a family row, the families it named that have no row kept.
+/// all: every family a frontend has but pad, nvn and demo, which named beside it add theirs; in the
+/// key, through a launch that goes on with the start screen's choice, and gone once the screen
+/// changes a family row, the families it named that have no row kept.
 static void CheckAllWord(void) {
     char said[REPORT_NOTE_MAX + 1];
     char key[MODE_KEY_MAX];
     const uint32_t present = MODE_FAMILIES_PRESENT;
-    const uint32_t everything_alone = present & ~(MODE_FAMILY_PAD | MODE_FAMILY_NVN);
+    const uint32_t everything_alone =
+        present & ~(MODE_FAMILY_PAD | MODE_FAMILY_NVN | MODE_FAMILY_DEMO);
     const RunMode all = ModeFromText("quick all");
     ModeDescribe(said, sizeof(said), &all, present);
     ModeKey(key, sizeof(key), &all);
@@ -1757,10 +1760,11 @@ static void CheckAllWord(void) {
                                       "service net game libc") == 0;
     const bool added = ModeFamiliesToRun(&(RunMode){ .all = true,
                                                      .families_named = MODE_FAMILY_PAD |
-                                                                       MODE_FAMILY_NVN },
+                                                                       MODE_FAMILY_NVN |
+                                                                       MODE_FAMILY_DEMO },
                                          present) == present &&
                        ModeFamiliesToRun(&(RunMode){ 0 }, present) == MODE_FAMILIES_DEFAULT;
-    const RunMode named = ModeFromText("quick all nvn pad");
+    const RunMode named = ModeFromText("quick all nvn pad demo");
     const uint32_t android = MODE_FAMILY_LIBC | MODE_FAMILY_GRAPHICS | MODE_FAMILY_NET |
                              MODE_FAMILY_JNI | MODE_FAMILY_FRAMEWORK;
     const bool other_frontend = ModeFamiliesToRunOf(&all, android, 0u) == android &&
@@ -1782,12 +1786,47 @@ static void CheckAllWord(void) {
                          ModeFamiliesToRun(&screen, present) ==
                              (everything_alone & ~MODE_FAMILY_GRAPHICS) &&
                          screen.chosen_on_screen;
-    CHECK_TRUE(SUITE, "all runs every family but pad and nvn, which named beside it add theirs",
+    CHECK_TRUE(SUITE,
+               "all runs every family but pad, nvn and demo, which named beside it add theirs",
                CHECK_NONE, console && added && other_frontend && kept && changed,
-               "console %d, pad and nvn added %d, another frontend %d, a launch going on %d, a "
-               "row changed %d (families 0x%x); key \"%.8s\"; said \"%.150s\"",
+               "console %d, pad, nvn and demo added %d, another frontend %d, a launch going on %d, "
+               "a row changed %d (families 0x%x); key \"%.8s\"; said \"%.150s\"",
                (int)console, (int)added, (int)other_frontend, (int)kept, (int)changed,
                (unsigned)ModeFamiliesToRun(&screen, present), key, said);
+}
+
+/// demo: the demo family, run only when named and left out of `all` and of a file that names no
+/// family, so a run that does not ask for it makes nothing of it; a word of the key, said in the
+/// mode line, kept by the start screen, and shown under its own family on the screens.
+static void CheckDemoWord(void) {
+    char said[REPORT_NOTE_MAX + 1] = "";
+    char key[MODE_KEY_MAX];
+    char saved[64];
+    const uint32_t present = MODE_FAMILIES_PRESENT;
+    const RunMode demo = ModeFromText("quick DEMO");
+    ModeDescribe(said, sizeof(said), &demo, present);
+    ModeKey(key, sizeof(key), &demo);
+    ModeFormat(saved, sizeof(saved), &demo);
+    const RunMode none = ModeFromText("quick");
+    const RunMode all = ModeFromText("quick all");
+    const RunMode both = ModeFromText("quick all demo");
+    const RunMode typo = ModeFromText("quick demos");
+    const bool read = demo.families_named == MODE_FAMILY_DEMO && demo.unknown_count == 0u &&
+                      ModeFamiliesToRun(&demo, present) == MODE_FAMILY_DEMO &&
+                      typo.families_named == 0u && typo.unknown_count == 1u;
+    const bool asked = (MODE_FAMILIES_ASKED & MODE_FAMILY_DEMO) != 0u &&
+                       (ModeFamiliesToRun(&none, present) & MODE_FAMILY_DEMO) == 0u &&
+                       (ModeFamiliesToRun(&all, present) & MODE_FAMILY_DEMO) == 0u &&
+                       (ModeFamiliesToRun(&both, present) & MODE_FAMILY_DEMO) != 0u;
+    const bool words = strcmp(key, "demo") == 0 && strcmp(saved, "quick demo") == 0 &&
+                       strcmp(said, "mode: quick, from the mode file; pictures of failures only; "
+                                    "families demo") == 0;
+    const bool screens = strcmp(UiFamilyName(UI_FAMILY_DEMO), "demo") == 0;
+    CHECK_TRUE(SUITE, "the word demo runs the demo family, only when named, and all leaves it out",
+               CHECK_NONE, read && asked && words && screens,
+               "read %d, only when named %d, key \"%.16s\" saved \"%.24s\" %d, the screens' "
+               "family \"%s\"; said \"%.120s\"",
+               (int)read, (int)asked, key, saved, (int)words, UiFamilyName(UI_FAMILY_DEMO), said);
 }
 
 /// hooks: the console's services asked through the SDK's functions (hooks.h). A word of the key,
@@ -1838,16 +1877,16 @@ _Static_assert(WIMSY_LEVELS == 5u, "the widest mode below names every level ther
 /// in MODE_KEY_MAX, the run and chosen records hold it, and a launch after a crash goes on with
 /// the run in that mode rather than starting over with an empty key.
 static void CheckWidestMode(void) {
-    static const char WIDEST[] = "quick all audio cpu display fatal frames=36000 framework fs game "
-                                 "graphics hang hooks images jni kernel level=1 level=2 level=0 "
-                                 "level=4 level=3 libc listen "
+    static const char WIDEST[] = "quick all audio cpu demo display fatal frames=36000 framework fs "
+                                 "game graphics hang hooks images jni kernel level=1 level=2 "
+                                 "level=0 level=4 level=3 libc listen "
                                  "machine=scarletnx-android@12345678901234567890123456789012 net "
                                  "notime nvn pad retry service skip=abcdefghijklmnop "
                                  "skip=bcdefghijklmnopq skip=cdefghijklmnopqr "
                                  "skip=defghijklmnopqrs stress unban video vram=1048576";
-    static const char KEY[] = "all audio cpu display fatal frames=36000 framework fs game graphics "
-                              "hang hooks images jni kernel level=0 level=1 level=2 level=3 "
-                              "level=4 libc listen "
+    static const char KEY[] = "all audio cpu demo display fatal frames=36000 framework fs game "
+                              "graphics hang hooks images jni kernel level=0 level=1 level=2 "
+                              "level=3 level=4 libc listen "
                               "machine=scarletnx-android@12345678901234567890123456789012 net "
                               "notime nvn pad retry service skip=abcdefghijklmnop "
                               "skip=bcdefghijklmnopq skip=cdefghijklmnopqr skip=defghijklmnopqrs "
