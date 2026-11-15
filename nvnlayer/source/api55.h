@@ -72,6 +72,7 @@ typedef struct {
     uint32_t magic;
     DkMemBlock block;
     int flags;
+    size_t size;
 } LayerPool;
 
 typedef struct {
