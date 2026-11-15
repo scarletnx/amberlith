@@ -18,6 +18,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[An older driver](./OlderDriver.md)** - the masquerade layer
 - **[The NVN layer](./NvnLayer.md)** - NVN for a homebrew program, a module of its own: on deko3d for the Switch,
   the names alone for the Switch 2
+- **[The probe as a Switch 2 program](./Ounce.md)** - the ExeFS build ScarletNX runs, and what a pass there says
 - **[Switch 2 shader programs](./Sm86.md)** - `tools/sm86asm.py`, which assembles them from their instructions
 - Reading a run:
   - **[The report](./Report.md)** - its lines, and where a run leaves them
@@ -32,6 +33,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[Graphics](./families/Graphics.md)** - the drawing suites, clear to tex8k, and
     **[blit2d](./families/Blit2d.md)**
   - **[nvn](./families/Nvn.md)** - clears, copies and a scene through the program's NVN, a layer on deko3d
+  - **[nvn2](./families/Nvn2.md)** - what a Switch 2 program asks of NVN, with shader programs assembled by hand
   - **[fs](./families/Fs.md)**, **[kernel](./families/Kernel.md)** and **[display](./families/Display.md)**
   - **[Video](./families/Video.md)** - the VIC, and **[nvdec](./families/Nvdec.md)**, VP9 through the decode engine
   - **[Audio](./families/Audio.md)**, **[service](./families/Service.md)** and **[net](./families/Net.md)**

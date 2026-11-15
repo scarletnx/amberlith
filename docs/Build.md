@@ -16,6 +16,12 @@ commit the toolchain ships, applies `tools/uam/*.patch`, and builds it with meso
 meson, ninja, bison, flex, Python 3 with mako, and a C and a C++ compiler for the machine. `tools/dksh-handles.py
 build/shaders/*.dksh` says where each multisample fetch reads its handle; the CI runs it after every build.
 
+## The Switch 2 ExeFS
+
+`make -f ounce.mk`, with `DEVKITPRO` set as for the NRO, builds the probe as a Switch 2 program:
+`edenprobe-ounce/exefs/main` and `main.npdm` ([The probe as a Switch 2 program](Ounce.md)). It needs no uam: its
+shader programs are assembled by `tools/sm86asm.py`. No release carries it.
+
 ## The APK
 
 ```sh

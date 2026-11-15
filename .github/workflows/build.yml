@@ -101,6 +101,14 @@ jobs:
       # a call through a pointer, which a compiler that can tell the target turns into a call by name
       - name: Check the NRO looks its NVN up through pointers
         run: python3 tools/nvn-lookups.py edenprobe.elf
+      # The probe as a Switch 2 program (docs/Ounce.md): the ExeFS builds, its descriptor is a Switch 2's, and it looks
+      # its NVN up through pointers as the NRO does
+      - name: Build the Switch 2 ExeFS
+        run: make -f ounce.mk -j"$(nproc)"
+      - name: Check the ExeFS is a Switch 2 program's
+        run: |
+          python3 tools/npdm-ounce.py read edenprobe-ounce/exefs/main.npdm | grep -x 'descriptor: Switch 2, its magic at 0x300'
+          python3 tools/nvn-lookups.py edenprobe-ounce.elf
       - name: Name the NRO after its commit
         run: cp edenprobe.nro "edenprobe-${{ steps.commit.outputs.short }}.nro"
       # Not zipped: the artifact is the NRO itself, named after it

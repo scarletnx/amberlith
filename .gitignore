@@ -13,3 +13,6 @@
 /android/.gradle/
 /android/.cxx/
 /android/local.properties
+/build-ounce/
+/edenprobe-ounce.elf
+/edenprobe-ounce/

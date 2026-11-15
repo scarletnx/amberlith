@@ -1,0 +1,90 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; The counts mandel.comp.sm86 left, drawn as bars seen from the front and above: a workgroup is a row of the grid
+; and each of its 32 invocations a column, which writes one rectangle, two triangles. A cell's rectangle is 8
+; pixels wide, from 2 pixels a count above its row's line down to the line below, and a row nearer the viewer has
+; the lesser depth, so the depth test leaves each bar's top and the part of its front no nearer bar covers. Every
+; edge is on a pixel's edge of a 256 by 256 target and every vertex of a rectangle carries the same count, so the
+; picture has one answer (ounce/t_nvn2.c, MandelPicture).
+.stage mesh
+.threads 32
+.payload 0x80
+.vertices 128
+.primitives 64
+.out position generic0.x
+        ISBERD.ATTR.SKEW.B32 R1, [RZ + 0x0]     ; the workgroup: the row
+        S2R R0, SR_LANEID                       ; the invocation: the column
+        IMAD R2, R1, 32, R0                     ; the cell's word of storage buffer 0
+        SHF.L.U32 R2, R2, 2, RZ
+        ULDC.64 UR4, c[0][0x770]                ; a mesh program's storage buffer 0, from the driver's table
+        LDG.E R8, [R2 + UR4]                    ; the count
+
+        SHF.L.U32 R10, R0, 3, RZ                ; the left edge, in pixels
+        IADD3 R11, R10, 8, RZ                   ; the right
+        SHF.L.U32 R12, R1, 3, RZ
+        IADD3 R13, R12, 40, RZ                  ; the bottom: 32 + row * 8 + 8
+        IADD3 R14, R8, R8, RZ
+        IADD3 R12, R12, 32, RZ
+        IADD3 R12, R12, -R14, RZ                ; the top: 2 pixels a count above 32 + row * 8
+        I2F.S32 R10, R10                        ; pixels to clip space, v / 128 - 1, which is exact
+        FMUL.FTZ R10, R10, 0.0078125f
+        FADD.FTZ R10, R10, -1.0f
+        I2F.S32 R11, R11
+        FMUL.FTZ R11, R11, 0.0078125f
+        FADD.FTZ R11, R11, -1.0f
+        I2F.S32 R12, R12
+        FMUL.FTZ R12, R12, 0.0078125f
+        FADD.FTZ R12, R12, -1.0f
+        I2F.S32 R13, R13
+        FMUL.FTZ R13, R13, 0.0078125f
+        FADD.FTZ R13, R13, -1.0f
+        MOV R15, 28                             ; the depth: (28 - row) / 32
+        IADD3 R15, R15, -R1, RZ
+        I2F.S32 R15, R15
+        FMUL.FTZ R15, R15, 0.03125f
+        MOV R16, 1.0f                           ; w
+        I2F.S32 R17, R8                         ; the count, for the fragment program
+
+        ; Vertex v's word k is at (v / 32) * G + (v % 32) * 4 + k * 0x80, G = 0x80 * 5 words; v = column * 4 + j
+        SHF.R.U32.HI R3, RZ, 3, R0              ; column / 8
+        IMAD R4, R3, -8, R0                     ; column % 8
+        SHF.L.U32 R4, R4, 4, RZ
+        IMAD R3, R3, 0x280, R4                  ; the first vertex's place
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x000], R10        ; vertex 0: left, top
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x080], R12
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x100], R15
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x180], R16
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x200], R17
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x004], R11        ; vertex 1: right, top
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x084], R12
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x104], R15
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x184], R16
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x204], R17
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x008], R10        ; vertex 2: left, bottom
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x088], R13
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x108], R15
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x188], R16
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x208], R17
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x00c], R11        ; vertex 3: right, bottom
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x08c], R13
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x10c], R15
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x18c], R16
+        ISBEWR.ATTR.SKEW.O.B32 [R3 + 0x20c], R17
+
+        ; Index i of primitive p is the byte at 4 + 3 * p + i; p = column * 2 and the one after
+        IMAD R5, R0, 6, RZ
+        SHF.L.U32 R6, R0, 2, RZ                 ; vertex 0's index
+        IADD3 R7, R6, 1, RZ
+        IADD3 R9, R6, 2, RZ
+        IADD3 R18, R6, 3, RZ
+        ISBEWR.MAP.O.U8 [R5 + 0x4], R6          ; 0, 1, 2
+        ISBEWR.MAP.O.U8 [R5 + 0x5], R7
+        ISBEWR.MAP.O.U8 [R5 + 0x6], R9
+        ISBEWR.MAP.O.U8 [R5 + 0x7], R9          ; 2, 1, 3
+        ISBEWR.MAP.O.U8 [R5 + 0x8], R7
+        ISBEWR.MAP.O.U8 [R5 + 0x9], R18
+        ISETP.EQ.U32.AND P0, PT, R0, 0, PT      ; the primitives the workgroup wrote, by its first invocation
+        MOV R19, 64
+        @P0 ISBEWR.MAP.O.B32 [RZ + 0x3], R19
+        EXIT
