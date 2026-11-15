@@ -198,8 +198,8 @@ family reports can be believed without them.
     those that take the nearer level of detail alone or one too coarse, draw its marks with no
     depth bias, have no depth test or keep 16 bits of depth refused; the heavy levels' crowd,
     their floors' ASTC blocks against the suite's ASTC decoder and the machine that draws them as
-    asked; their hills and grass, each from its seed, and the machines that leave either out
-    refused; their panels, a compute texel and a chain of targets worked out by hand; then what a
+    asked; their hills and grass, each from its seed, the grass's five densities and its wind,
+    and the machines that leave the hills or the grass out or keep the grass still refused; their panels, a compute texel and a chain of targets worked out by hand; then what a
     line says of a verdict (see [The levels](Game.md#the-levels));
   - one on the demo family's times, `source/demoref.c`: the warm-up left out, the means,
     percentiles, longest and hitches of a run made to order, the case names carrying the frames

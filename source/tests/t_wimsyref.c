@@ -704,34 +704,69 @@ static void CheckLand(void) {
                    first[1].y == (float)WimsyHillHeight(0u, 1u, 0u) / 256.0f &&
                    first[0].g > first[0].r && first[0].g > first[0].b,
            "the first triangle of the hills");
-    // The grass: 2048 blades at the heavy levels, each in its bounds, its corners its feet a
-    // sixteenth either side and its tip.
-    static WimsyBlade blades[WIMSY_BLADES], blades_again[WIMSY_BLADES];
-    Expect(&t, WimsyBladesOf(2u, blades) == 0u && WimsyBladesOf(3u, blades) == 2048u &&
-                   WimsyBladesOf(4u, blades_again) == WIMSY_BLADES &&
-                   memcmp(blades, blades_again, sizeof(blades)) == 0,
-           "2048 blades at levels 3 and 4, the same ones");
-    bool placed = true, cornered = true;
+    // The grass: five densities, each the first blades of the next, none below the heavy levels,
+    // level 3's a field of 65,536 and level 4's of 262,144 unless a density is asked for.
+    Expect(&t, WimsyBladeCount(0u) == 0u && WimsyBladeCount(1u) == 2048u &&
+                   WimsyBladeCount(2u) == 16384u && WimsyBladeCount(3u) == 65536u &&
+                   WimsyBladeCount(4u) == 262144u && WimsyBladeCount(4u) == WIMSY_BLADES_MAX &&
+                   WimsyBladeCount(5u) == 0u,
+           "the five densities' blades");
+    Expect(&t, WimsyGrassOf(0u) == 0u && WimsyGrassOf(2u) == 0u && WimsyGrassOf(3u) == 3u &&
+                   WimsyGrassOf(4u) == 4u && WimsyGrassOf(5u) == 0u,
+           "each level's own density");
+    WimsyGrassAsk(1u);
+    const bool asked = WimsyGrassOf(3u) == 1u && WimsyGrassOf(4u) == 1u && WimsyGrassOf(2u) == 0u;
+    WimsyGrassAsk(0u);
+    const bool none = WimsyGrassOf(3u) == 0u && WimsyGrassOf(4u) == 0u;
+    WimsyGrassAsk(WIMSY_GRASS_DENSITIES);
+    Expect(&t, asked && none && WimsyGrassOf(3u) == 3u && WimsyGrassOf(4u) == 4u,
+           "a density asked for is every heavy level's, until each has its own again");
+    enum { SOME = 4096 };
+    static WimsyBlade blades[SOME], later[SOME];
+    Expect(&t, WimsyBladesOf(0u, SOME, blades) == SOME && WimsyBladesOf(2048u, 2048u, later) == 2048u &&
+                   memcmp(&blades[2048], later, 2048u * sizeof(later[0])) == 0 &&
+                   WimsyBladesOf(WIMSY_BLADES_MAX - 16u, SOME, later) == 16u &&
+                   WimsyBladesOf(WIMSY_BLADES_MAX, SOME, later) == 0u,
+           "blades by their numbers: a thicker field's first are the thinner one's");
+    bool placed = true, cornered = true, swaying = true;
     uint32_t sides[2] = { 0, 0 };
-    for (uint32_t i = 0; i < WIMSY_BLADES; ++i) {
+    for (uint32_t i = 0; i < SOME; ++i) {
         const WimsyBlade *const blade = &blades[i];
         placed = placed && fabsf(blade->x) >= 4.25f && fabsf(blade->x) <= 17.75f &&
                  blade->z <= 1.0f && blade->z >= -199.0f && blade->height >= 0.375f &&
                  blade->height <= 0.8125f && fabsf(blade->lean) <= 0.234375f &&
                  blade->colour[1] >= 150u && blade->colour[3] == 255u;
         sides[blade->x < 0.0f ? 0u : 1u] += 1u;
-        float corner[3][3];
-        for (uint32_t k = 0; k < 3u; ++k) {
-            WimsyBladeCorner(blade, k, corner[k]);
+        // Its feet a sixteenth either side whatever the wind; its tip its lean and a sway of
+        // 3/32 at most aside, at its height.
+        for (uint32_t frame = 0; frame < WIMSY_WIND_FRAMES; frame += 31u) {
+            float corner[3][3];
+            for (uint32_t k = 0; k < 3u; ++k) {
+                WimsyBladeCorner(blade, WimsyWindOf(frame), k, corner[k]);
+            }
+            cornered = cornered && corner[0][0] == blade->x - 0.0625f && corner[0][1] == 0.0f &&
+                       corner[1][0] == blade->x + 0.0625f && corner[1][1] == 0.0f &&
+                       corner[2][1] == blade->height && corner[0][2] == blade->z &&
+                       corner[1][2] == blade->z && corner[2][2] == blade->z;
+            swaying = swaying &&
+                      fabsf(corner[2][0] - (blade->x + blade->lean)) <= WIMSY_BLADE_SWAY + 1e-6f;
         }
-        cornered = cornered && corner[0][0] == blade->x - 0.0625f && corner[0][1] == 0.0f &&
-                   corner[1][0] == blade->x + 0.0625f && corner[1][1] == 0.0f &&
-                   corner[2][0] == blade->x + blade->lean && corner[2][1] == blade->height &&
-                   corner[0][2] == blade->z && corner[1][2] == blade->z && corner[2][2] == blade->z;
     }
-    Expect(&t, placed && sides[0] == 1024u && sides[1] == 1024u,
+    Expect(&t, placed && sides[0] == SOME / 2u && sides[1] == SOME / 2u,
            "every blade on the floor beside the lane, half each side");
-    Expect(&t, cornered, "a blade's corners are its feet and its tip");
+    Expect(&t, cornered, "a blade's feet stand and its tip keeps its height");
+    Expect(&t, swaying, "a tip sways no farther than 3/32 of a unit");
+    // The wind comes round every 96 frames, and half a sway apart a tip is somewhere else: by
+    // hand, a blade at x 8 and z -16 is at the start of its sway in still wind (8/8 - 16/16 is
+    // nought), its tip 3/32 right of its lean, and 3/32 left of it 48 frames later.
+    const WimsyBlade by_hand = { 8.0f, -16.0f, 0.5f, 0.125f, { 0, 0, 0, 255 } };
+    float tip[2][3];
+    WimsyBladeCorner(&by_hand, WimsyWindOf(0u), 2u, tip[0]);
+    WimsyBladeCorner(&by_hand, WimsyWindOf(48u), 2u, tip[1]);
+    Expect(&t, WimsyWindOf(0u) == 0.0f && WimsyWindOf(96u) == 0.0f && WimsyWindOf(48u) == 0.5f &&
+                   WimsyWindOf(24u) == 0.25f && tip[0][0] == 8.0f + 0.125f + 0.09375f &&
+                   tip[1][0] == 8.0f + 0.125f - 0.09375f && tip[0][1] == 0.5f,
+           "the wind's turn, and a tip worked out by hand at either end of its sway");
     // A machine that leaves the hills out, or the grass, is refused where the camera sees them.
     WimsyMachine machine = WimsyMachineRight(3u);
     machine.left_out = 1u << 4;
@@ -740,6 +775,19 @@ static void CheckLand(void) {
     machine.left_out = 1u << 5;
     verdict = Verdict(3u, 0u, 600u, &machine);
     Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200u, "no grass is refused");
+    // And one whose grass stands still: right at frame nought, refused a quarter of a sway on.
+    machine = WimsyMachineRight(3u);
+    machine.wind = false;
+    verdict = Verdict(3u, 0u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "still grass is the right grass at frame nought");
+    verdict = Verdict(3u, 24u, 600u, &machine);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200u, "no wind is refused");
+    // The thinnest grass asked for at level 3, drawn as asked, passes.
+    WimsyGrassAsk(1u);
+    machine = WimsyMachineRight(3u);
+    verdict = Verdict(3u, 24u, 600u, &machine);
+    WimsyGrassAsk(WIMSY_GRASS_DENSITIES);
+    Expect(&t, WimsyVerdictPasses(&verdict), "the thinnest grass, as asked, passes");
     Report("wimsy: the heavy levels' hills and grass, from their seeds, and the machines without "
            "them refused",
            &t);
