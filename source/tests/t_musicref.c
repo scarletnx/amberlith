@@ -13,10 +13,10 @@
 #include "../report.h"
 #include "tests.h"
 
-// The demos' music: the arithmetic its FM synthesizer does as the OPL3 does, and what its four
-// scores hold, against answers worked out by hand. No sample of a track is rendered here (the music
-// family renders, and only when a mode asks for it): these cost the run a few thousand operator
-// readings and a walk over four scores.
+// The demos' music: the arithmetic its FM synthesizer does as the OPL2 does, against answers
+// worked out by hand, and what the composer writes for many seeds of each track. No sample of a
+// track is rendered here (the music family renders, and only when a mode asks for it): these cost
+// the run a few thousand operator readings and the composing of a few hundred passes.
 
 static const char *const SUITE = "reference";
 
@@ -51,7 +51,7 @@ static void CheckTables(void) {
     Tally t = { 0, "" };
     for (uint32_t p = 0; p < 1024u; ++p) {
         const double want = 4095.0 * sin(((double)p + 0.5) * 2.0 * PI / 1024.0);
-        const int32_t got = MusicWave(MUSIC_WAVE_SINE, p, 0, 0);
+        const int32_t got = MusicWave(MUSIC_WAVE_SINE, p, 0);
         Expect(&t, fabs((double)got - want) <= 8.0, "the sine at %u reads %d where %.1f",
                (unsigned)p, (int)got, want);
     }
@@ -61,7 +61,7 @@ static void CheckTables(void) {
     static const uint32_t ATTENUATION[6][2] = { { 0, 4095 },   { 128, 2896 }, { 256, 2047 },
                                                 { 384, 1448 }, { 2048, 15 },  { 3328, 0 } };
     for (unsigned i = 0; i < 6u; ++i) {
-        const int32_t got = MusicWave(MUSIC_WAVE_SQUARE, 100, ATTENUATION[i][0], 0);
+        const int32_t got = MusicWave(MUSIC_WAVE_SQUARE, 100, ATTENUATION[i][0]);
         Expect(&t, got == (int32_t)ATTENUATION[i][1],
                "a square at attenuation %u reads %d where %u", (unsigned)ATTENUATION[i][0],
                (int)got, (unsigned)ATTENUATION[i][1]);
@@ -71,36 +71,32 @@ static void CheckTables(void) {
            &t);
 }
 
-/// The eight waveforms and the drums' two noises, at the points that tell them apart.
+/// The eight waveforms, at the points that tell them apart.
 static void CheckWaves(void) {
     Tally t = { 0, "" };
-    // { wave, phase, noise, reading }: the peaks and the halves each one keeps or silences.
-    static const int32_t AT[][4] = {
-        { MUSIC_WAVE_SINE, 256, 0, 4095 },      { MUSIC_WAVE_SINE, 768, 0, -4095 },
-        { MUSIC_WAVE_HALF_SINE, 256, 0, 4095 }, { MUSIC_WAVE_HALF_SINE, 768, 0, 0 },
-        { MUSIC_WAVE_ABS_SINE, 768, 0, 4095 },  { MUSIC_WAVE_QUARTER_SINE, 255, 0, 4095 },
-        { MUSIC_WAVE_QUARTER_SINE, 384, 0, 0 }, { MUSIC_WAVE_QUARTER_SINE, 767, 0, 4095 },
-        { MUSIC_WAVE_ALT_SINE, 128, 0, 4095 },  { MUSIC_WAVE_ALT_SINE, 384, 0, -4095 },
-        { MUSIC_WAVE_ALT_SINE, 640, 0, 0 },     { MUSIC_WAVE_CAMEL_SINE, 384, 0, 4095 },
-        { MUSIC_WAVE_CAMEL_SINE, 896, 0, 0 },   { MUSIC_WAVE_SQUARE, 1, 0, 4095 },
-        { MUSIC_WAVE_SQUARE, 1000, 0, -4095 },  { MUSIC_WAVE_LOG_SAW, 0, 0, 4095 },
-        { MUSIC_WAVE_LOG_SAW, 256, 0, 15 },     { MUSIC_WAVE_LOG_SAW, 512, 0, -4095 },
-        { MUSIC_WAVE_NOISE, 300, 0, 4095 },     { MUSIC_WAVE_NOISE, 300, 1, -4095 },
-        { MUSIC_WAVE_METAL, 100, 0, 4095 },     { MUSIC_WAVE_METAL, 600, 0, -4095 },
-        { MUSIC_WAVE_METAL, 600, 1, 4095 },
+    // { wave, phase, reading }: the peaks and the halves each one keeps or silences.
+    static const int32_t AT[][3] = {
+        { MUSIC_WAVE_SINE, 256, 4095 },      { MUSIC_WAVE_SINE, 768, -4095 },
+        { MUSIC_WAVE_HALF_SINE, 256, 4095 }, { MUSIC_WAVE_HALF_SINE, 768, 0 },
+        { MUSIC_WAVE_ABS_SINE, 768, 4095 },  { MUSIC_WAVE_QUARTER_SINE, 255, 4095 },
+        { MUSIC_WAVE_QUARTER_SINE, 384, 0 }, { MUSIC_WAVE_QUARTER_SINE, 767, 4095 },
+        { MUSIC_WAVE_ALT_SINE, 128, 4095 },  { MUSIC_WAVE_ALT_SINE, 384, -4095 },
+        { MUSIC_WAVE_ALT_SINE, 640, 0 },     { MUSIC_WAVE_CAMEL_SINE, 384, 4095 },
+        { MUSIC_WAVE_CAMEL_SINE, 896, 0 },   { MUSIC_WAVE_SQUARE, 1, 4095 },
+        { MUSIC_WAVE_SQUARE, 1000, -4095 },  { MUSIC_WAVE_LOG_SAW, 0, 4095 },
+        { MUSIC_WAVE_LOG_SAW, 256, 15 },     { MUSIC_WAVE_LOG_SAW, 512, -4095 },
     };
     for (size_t i = 0; i < sizeof(AT) / sizeof(AT[0]); ++i) {
-        const int32_t got =
-            MusicWave((uint32_t)AT[i][0], (uint32_t)AT[i][1], 0, (uint32_t)AT[i][2]);
+        const int32_t got = MusicWave((uint32_t)AT[i][0], (uint32_t)AT[i][1], 0);
         // A sine's peak is the table's entry half a step from the top: within 1 of 4095.
-        const int32_t apart = got - AT[i][3];
-        Expect(&t, apart >= -1 && apart <= 1 && (AT[i][3] != 0 || got == 0),
-               "waveform %d at %d, noise %d, reads %d where %d", (int)AT[i][0], (int)AT[i][1],
-               (int)AT[i][2], (int)got, (int)AT[i][3]);
+        const int32_t apart = got - AT[i][2];
+        Expect(&t, apart >= -1 && apart <= 1 && (AT[i][2] != 0 || got == 0),
+               "waveform %d at %d reads %d where %d", (int)AT[i][0], (int)AT[i][1], (int)got,
+               (int)AT[i][2]);
     }
-    Expect(&t, MusicWave(MUSIC_WAVES, 0, 0, 0) == 0, "a waveform past the last reads %d",
-           (int)MusicWave(MUSIC_WAVES, 0, 0, 0));
-    Report("the OPL3's eight waveforms and the drums' noises hold their peaks and silences", &t);
+    Expect(&t, MusicWave(MUSIC_WAVES, 0, 0) == 0, "a waveform past the last reads %d",
+           (int)MusicWave(MUSIC_WAVES, 0, 0));
+    Report("the chip's eight waveforms hold their peaks and silences", &t);
 }
 
 /// A note's phase step: A4's by hand, every note within a cent of equal temperament on A4 = 440,
@@ -157,35 +153,83 @@ static void CheckEnvelope(void) {
     Report("the envelope's attack and decay keep the OPL's rates, within 1% to 3%", &t);
 }
 
-/// Each channel's side, by hand: the bass, kick and snare in the middle, the chord across both, the
-/// lead to the right and the rest on the left; and every patch a score names is one the synthesizer
-/// has.
-static void CheckMix(void) {
+/// Every voice a score names is a patch the synthesizer has, the drums with the notes they play
+/// and the rest with none; and the right chip's step is 4.7 cents above the left's, 2^(12 / 3072).
+static void CheckPatches(void) {
     Tally t = { 0, "" };
-    static const uint32_t SIDES[MUSIC_FM_CHANNELS] = {
-        MUSIC_CENTRE, MUSIC_LEFT, MUSIC_RIGHT,  MUSIC_LEFT,   MUSIC_RIGHT,
-        MUSIC_LEFT,   MUSIC_LEFT, MUSIC_CENTRE, MUSIC_CENTRE, MUSIC_LEFT,
-    };
-    for (uint32_t c = 0; c < MUSIC_FM_CHANNELS; ++c) {
-        Expect(&t, MusicPanOf(c) == SIDES[c], "channel %u sits at %u where %u", (unsigned)c,
-               (unsigned)MusicPanOf(c), (unsigned)SIDES[c]);
-    }
     for (unsigned track = 0; track < MUSIC_TRACKS; ++track) {
         const MusicScore *score = MusicScoreOf((MusicTrack)track);
-        for (unsigned v = 0; v < MUSIC_SCORE_VOICES; ++v) {
-            Expect(&t, MusicPatchNamed(score->voice[v]) != NULL, "%s's part %u names %s, no patch",
-                   score->name, v, score->voice[v]);
+        for (unsigned v = 0; v < MUSIC_VOICES; ++v) {
+            for (unsigned k = 0; k < 2u; ++k) {
+                const char *name = score->voice[v][k];
+                if (name == NULL) {
+                    Expect(&t, k == 1u, "%s's voice %u names no patch", score->name, v);
+                    continue;
+                }
+                const MusicPatch *patch = MusicPatchNamed(name);
+                Expect(&t, patch != NULL, "%s's voice %u names %s, no patch", score->name, v,
+                       name);
+                const bool drum = v <= MUSIC_VOICE_RISER;
+                Expect(&t, patch == NULL || (patch->note != 0u) == drum,
+                       "%s's voice %u plays %s, whose note is %u, where %s", score->name, v, name,
+                       patch != NULL ? (unsigned)patch->note : 0u,
+                       drum ? "a drum's" : "none (a melodic patch)");
+            }
         }
-    }
-    static const char *const DRUMS[] = { "kick", "snare", "hat", "hatopen" };
-    for (unsigned i = 0; i < 4u; ++i) {
-        Expect(&t, MusicPatchNamed(DRUMS[i]) != NULL, "no %s patch", DRUMS[i]);
     }
     Expect(&t, MusicPatchNamed("nothing") == NULL && MusicPatchNamed(NULL) == NULL,
            "a name no patch has gives one");
-    Report("each channel sits where the mix puts it, and every part plays a patch the synthesizer "
-           "has",
+    for (uint32_t note = 24; note <= 96u; note += 12u) {
+        const double ratio = (double)MusicPitchStep((note << 8) + MUSIC_SURROUND) /
+                             (double)MusicPitchStep(note << 8);
+        const double cents = 1200.0 * log2(ratio);
+        Expect(&t, fabs(cents - 4.6875) < 0.2, "the right chip sits %.2f cents above the left "
+               "at note %u, where 4.69", cents, (unsigned)note);
+    }
+    Report("every voice a score names is a patch the synthesizer has, the drums at their notes, "
+           "and the right chip 4.7 cents above the left",
            &t);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The composer
+
+#define SONG_ROWS (MUSIC_FORM_MAX * MUSIC_SECTION_BARS * MUSIC_BAR_ROWS)
+
+/// One first pass, every row of every channel, with each bar's part and chord.
+static struct {
+    MusicCell cell[SONG_ROWS][MUSIC_CHANNELS];
+    uint8_t part[MUSIC_FORM_MAX * MUSIC_SECTION_BARS];
+    uint8_t chord[MUSIC_FORM_MAX * MUSIC_SECTION_BARS];
+    uint32_t bars;
+    uint8_t form[MUSIC_FORM_MAX];
+    uint32_t form_count;
+} g_song;
+
+static MusicComposer composer;
+static MusicCell bar[MUSIC_BAR_ROWS][MUSIC_CHANNELS];
+
+static void Compose(MusicTrack track, uint32_t seed) {
+    MusicComposeStart(&composer, track, seed);
+    memcpy(g_song.form, composer.form, sizeof(g_song.form));
+    g_song.form_count = composer.form_count;
+    g_song.bars = MusicComposePassBars(track, seed);
+    for (uint32_t b = 0; b < g_song.bars; ++b) {
+        g_song.part[b] = (uint8_t)MusicComposePart(&composer);
+        g_song.chord[b] = (uint8_t)MusicComposeChord(&composer);
+        MusicComposeBar(&composer, bar);
+        memcpy(g_song.cell[b * MUSIC_BAR_ROWS], bar, sizeof(bar));
+    }
+}
+
+static uint64_t SongHash(void) {
+    uint64_t hash = MUSIC_HASH_START;
+    const uint8_t *bytes = (const uint8_t *)g_song.cell;
+    const size_t size = (size_t)g_song.bars * MUSIC_BAR_ROWS * MUSIC_CHANNELS * sizeof(MusicCell);
+    for (size_t i = 0; i < size; ++i) {
+        hash = (hash ^ bytes[i]) * 0x100000001B3ull;
+    }
+    return hash;
 }
 
 static bool InKey(const MusicScore *score, uint32_t note) {
@@ -198,143 +242,188 @@ static bool InKey(const MusicScore *score, uint32_t note) {
     return false;
 }
 
-static const char *const NOTE_NAMES[12] = { "C",  "C#", "D",  "D#", "E",  "F",
-                                            "F#", "G",  "G#", "A",  "A#", "B" };
+/// Whether @p note is a note of the triad on degree @p chord of the score's key.
+static bool OnChord(const MusicScore *score, uint32_t chord, uint32_t note) {
+    for (uint32_t i = 0; i < 3u; ++i) {
+        const uint32_t tone =
+            MusicComposeNote(score->tonic, (MusicMode)score->mode, chord + 2u * i) % 12u;
+        if (tone == note % 12u) {
+            return true;
+        }
+    }
+    return false;
+}
 
-/// Every note of the lead and the counter-melody is one of the key's, every chord a triad the key
-/// holds (its third and fifth the mode's own), and every melody fills its section's steps.
-static void CheckScores(void) {
+static bool Sounds(const MusicCell *cell) {
+    return cell->note != 0u && cell->note != MUSIC_NOTE_OFF;
+}
+
+#define SEEDS 32u
+
+/// For 32 seeds of each track: every note in the key, the lead's notes in its range and on the
+/// bar's chord on the first and third beats, the pads' notes always on it.
+static void CheckHarmony(void) {
     Tally t = { 0, "" };
-    uint32_t notes = 0;
     for (unsigned track = 0; track < MUSIC_TRACKS; ++track) {
-        const MusicScore *score = MusicScoreOf((MusicTrack)track);
-        Expect(&t,
-               strcmp(score->name, MusicTrackName((MusicTrack)track)) == 0 &&
-                   MusicTrackNamed(score->name) == (MusicTrack)track,
-               "track %u is %s", track, score->name);
-        for (uint32_t i = 0; i < score->section_count; ++i) {
-            const MusicScoreSection *s = &score->sections[i];
-            for (unsigned part = 0; part < 2u; ++part) {
-                const MusicScoreNote *line = part == 0u ? s->lead : s->counter;
-                const uint32_t count = part == 0u ? s->lead_count : s->counter_count;
-                uint32_t steps = 0;
-                for (uint32_t k = 0; k < count; ++k) {
-                    steps += line[k].steps;
-                    if (line[k].note == 0u) {
+        const MusicScore *s = MusicScoreOf((MusicTrack)track);
+        for (uint32_t seed = 1; seed <= SEEDS; ++seed) {
+            Compose((MusicTrack)track, seed);
+            for (uint32_t row = 0; row < g_song.bars * MUSIC_BAR_ROWS; ++row) {
+                const uint32_t chord = g_song.chord[row / MUSIC_BAR_ROWS];
+                for (uint32_t ch = 0; ch < MUSIC_CHANNELS; ++ch) {
+                    const MusicCell *cell = &g_song.cell[row][ch];
+                    const MusicRole role = (MusicRole)s->role[ch];
+                    if (!Sounds(cell) || role == MUSIC_ROLE_DRUMS || role == MUSIC_ROLE_CRASH) {
                         continue;
                     }
-                    ++notes;
-                    Expect(&t, InKey(score, line[k].note), "%s %s %s: %s%d is not %s",
-                           score->name, s->name, part == 0u ? "lead" : "counter",
-                           NOTE_NAMES[line[k].note % 12u], line[k].note / 12 - 1, score->key);
+                    Expect(&t, InKey(s, cell->note), "%s seed %u row %u channel %u plays note %u, "
+                           "out of the key", s->name, seed, row, ch, cell->note);
+                    if (role == MUSIC_ROLE_PAD) {
+                        Expect(&t, OnChord(s, chord, cell->note), "%s seed %u row %u: pad note "
+                               "%u is not on degree %u's triad", s->name, seed, row, cell->note,
+                               chord + 1u);
+                    }
+                    if (role == MUSIC_ROLE_LEAD) {
+                        Expect(&t,
+                               cell->note >= s->range[MUSIC_RANGE_LEAD][0] &&
+                                   cell->note <= s->range[MUSIC_RANGE_LEAD][1],
+                               "%s seed %u row %u: lead note %u outside %u to %u", s->name, seed,
+                               row, cell->note, s->range[MUSIC_RANGE_LEAD][0],
+                               s->range[MUSIC_RANGE_LEAD][1]);
+                        Expect(&t, row % 8u != 0u || OnChord(s, chord, cell->note),
+                               "%s seed %u row %u: the lead's strong beat %u is not on degree "
+                               "%u's triad",
+                               s->name, seed, row, cell->note, chord + 1u);
+                    }
                 }
-                Expect(&t, steps == s->bars * score->steps, "%s %s %s lasts %u steps where %u",
-                       score->name, s->name, part == 0u ? "lead" : "counter", (unsigned)steps,
-                       (unsigned)(s->bars * score->steps));
-            }
-            for (uint32_t b = 0; b < s->bars; ++b) {
-                const MusicScoreChord c = s->chords[b];
-                const bool triad = InKey(score, c.root) &&
-                                   InKey(score, c.root + (c.minor ? 3u : 4u)) &&
-                                   InKey(score, c.root + 7u);
-                Expect(&t, triad, "%s %s bar %u: %s%s is no triad of %s", score->name, s->name,
-                       (unsigned)b + 1u, NOTE_NAMES[c.root], c.minor ? "m" : "", score->key);
             }
         }
     }
-    Expect(&t, notes > 300u, "only %u notes in the four scores", (unsigned)notes);
-    Report("every note and chord of the four scores keeps to its key, every melody full", &t);
-}
-
-static const MusicScoreSection *SectionNamed(const MusicScore *score, const char *name) {
-    for (uint32_t i = 0; i < score->section_count; ++i) {
-        if (strcmp(score->sections[i].name, name) == 0) {
-            return &score->sections[i];
-        }
-    }
-    return NULL;
-}
-
-/// The form: the intro first, then sections of eight bars; the closing A home on the tonic; the
-/// bridge, played once, starting away from it on chords A does not play in that order.
-static void CheckForm(void) {
-    Tally t = { 0, "" };
-    for (unsigned track = 0; track < MUSIC_TRACKS; ++track) {
-        const MusicScore *score = MusicScoreOf((MusicTrack)track);
-        const MusicScoreSection *intro = &score->sections[score->form[0]];
-        Expect(&t, strcmp(intro->name, "intro") == 0 && intro->bars >= 2u && intro->bars <= 4u,
-               "%s opens with %s of %u bars", score->name, intro->name, (unsigned)intro->bars);
-        for (uint32_t i = 1; i < score->form_count; ++i) {
-            const MusicScoreSection *s = &score->sections[score->form[i]];
-            Expect(&t, s->bars == 8u, "%s's %s has %u bars where 8", score->name, s->name,
-                   (unsigned)s->bars);
-        }
-        const MusicScoreSection *a = SectionNamed(score, "A");
-        const MusicScoreSection *closing = SectionNamed(score, "A2");
-        const MusicScoreSection *bridge = SectionNamed(score, "B");
-        Expect(&t, a != NULL && closing != NULL && bridge != NULL, "%s lacks A, A2 or B",
-               score->name);
-        if (a == NULL || closing == NULL || bridge == NULL) {
-            continue;
-        }
-        const MusicScoreChord home = closing->chords[closing->bars - 1u];
-        Expect(&t, home.root == score->tonic, "%s's A2 ends on %s, not the tonic %s", score->name,
-               NOTE_NAMES[home.root], NOTE_NAMES[score->tonic]);
-        Expect(&t, bridge->chords[0].root != score->tonic, "%s's bridge starts on the tonic",
-               score->name);
-        bool differs = false;
-        for (uint32_t b = 0; b < 8u && !differs; ++b) {
-            differs = bridge->chords[b].root != a->chords[b].root ||
-                      bridge->chords[b].minor != a->chords[b].minor;
-        }
-        Expect(&t, differs, "%s's bridge plays A's chords", score->name);
-        uint32_t plays_bridge = 0;
-        for (uint32_t i = 0; i < score->form_count; ++i) {
-            plays_bridge += strcmp(score->sections[score->form[i]].name, "B") == 0 ? 1u : 0u;
-        }
-        Expect(&t, plays_bridge == 1u, "%s plays its bridge %u times", score->name,
-               (unsigned)plays_bridge);
-    }
-    Report("every track opens with its intro, then eight-bar sections, the bridge on chords of its "
-           "own and A2 home on the tonic",
+    Report("every note 32 seeds compose of each track is in its key, the pads on the bar's "
+           "chord, the lead in range and on the chord at the first and third beats",
            &t);
 }
 
-/// The patterns: each a bar of 16 or 24 steps, the bass's on the root or silent on the first step,
-/// and every one a section plays as long as its track's bar.
-static void CheckPatterns(void) {
+/// Each seed its own song: 64 seeds of each track give 64 different first passes, a seed twice
+/// the same one; a form starts with its intro, holds an A section, and is 8 bars a section; the
+/// pass after the first has no intro.
+static void CheckForm(void) {
     Tally t = { 0, "" };
-    for (size_t i = 0; i < MUSIC_SCORE_PATTERN_COUNT; ++i) {
-        const MusicScorePattern *p = &MUSIC_SCORE_PATTERNS[i];
-        const size_t length = strlen(p->grid);
-        Expect(&t, length == 16u || length == 24u, "pattern %s is %u steps", p->name,
-               (unsigned)length);
-        if (p->lane == MUSIC_LANE_BASS) {
-            Expect(&t, p->grid[0] == 'R' || p->grid[0] == '.',
-                   "bass pattern %s starts on %c, not the root or nothing", p->name, p->grid[0]);
-        }
-    }
-    static const MusicLane LANES[4] = { MUSIC_LANE_BASS, MUSIC_LANE_DRUMS, MUSIC_LANE_COMP,
-                                        MUSIC_LANE_ARP };
+    static uint64_t hashes[64];
     for (unsigned track = 0; track < MUSIC_TRACKS; ++track) {
-        const MusicScore *score = MusicScoreOf((MusicTrack)track);
-        for (uint32_t i = 0; i < score->section_count; ++i) {
-            const MusicScoreParts *parts = &score->sections[i].parts;
-            const char *const names[4] = { parts->bass, parts->drums, parts->comp, parts->arp };
-            for (unsigned k = 0; k < 4u; ++k) {
-                bool found = false;
-                for (size_t j = 0; j < MUSIC_SCORE_PATTERN_COUNT; ++j) {
-                    const MusicScorePattern *p = &MUSIC_SCORE_PATTERNS[j];
-                    if (p->lane == LANES[k] && strcmp(p->name, names[k]) == 0) {
-                        found = strlen(p->grid) == score->steps;
-                    }
+        const MusicScore *s = MusicScoreOf((MusicTrack)track);
+        uint32_t same = 0;
+        for (uint32_t seed = 0; seed < 64u; ++seed) {
+            Compose((MusicTrack)track, seed + 1u);
+            hashes[seed] = SongHash();
+            for (uint32_t before = 0; before < seed; ++before) {
+                same += hashes[before] == hashes[seed] ? 1u : 0u;
+            }
+            bool a = false;
+            for (uint32_t i = 0; i < g_song.form_count; ++i) {
+                a = a || g_song.form[i] == MUSIC_PART_A;
+            }
+            Expect(&t,
+                   g_song.form_count > 1u && g_song.form[0] == MUSIC_PART_INTRO && a &&
+                       g_song.bars == g_song.form_count * MUSIC_SECTION_BARS,
+                   "%s seed %u: %u sections, the first part %u, %s A, %u bars", s->name,
+                   seed + 1u, g_song.form_count, g_song.form[0], a ? "with an" : "no",
+                   g_song.bars);
+            // The next pass: no intro in its form.
+            MusicComposeBar(&composer, bar);
+            bool intro = false;
+            for (uint32_t i = 0; i < composer.form_count; ++i) {
+                intro = intro || composer.form[i] == MUSIC_PART_INTRO;
+            }
+            Expect(&t, composer.pass == 1u && !intro, "%s seed %u: pass %u after the first, %s",
+                   s->name, seed + 1u, composer.pass, intro ? "with an intro" : "no intro");
+        }
+        Compose((MusicTrack)track, 1u);
+        const uint64_t again = SongHash();
+        Expect(&t, same == 0u && again == hashes[0], "%s: %u pairs of 64 seeds composed the same "
+               "pass; seed 1 composed %016llx twice and %016llx once", s->name, same,
+               (unsigned long long)hashes[0], (unsigned long long)again);
+    }
+    Report("each seed composes a song of its own, 64 seeds 64 first passes, a seed twice the "
+           "same; the intro only on the first pass",
+           &t);
+}
+
+/// What each channel plays, over 16 seeds: the kit on its channel, at its patches' notes; the
+/// echo the lead's notes its rows late and its drop softer; the double the lead's notes drifting
+/// sharp, only at the climax; the harmony under the lead, only in the B section and the climax;
+/// the cymbal only on the first beat of a bar.
+static void CheckRoles(void) {
+    Tally t = { 0, "" };
+    for (unsigned track = 0; track < MUSIC_TRACKS; ++track) {
+        const MusicScore *s = MusicScoreOf((MusicTrack)track);
+        int32_t channel[MUSIC_ROLES];
+        for (unsigned r = 0; r < MUSIC_ROLES; ++r) {
+            channel[r] = -1;
+        }
+        for (unsigned ch = 0; ch < MUSIC_CHANNELS; ++ch) {
+            channel[s->role[ch]] = (int32_t)ch;
+        }
+        for (uint32_t seed = 1; seed <= 16u; ++seed) {
+            Compose((MusicTrack)track, seed);
+            const uint32_t rows = g_song.bars * MUSIC_BAR_ROWS;
+            for (uint32_t row = 0; row < rows; ++row) {
+                const MusicPart part = (MusicPart)g_song.part[row / MUSIC_BAR_ROWS];
+                const MusicCell *line = g_song.cell[row];
+                const MusicCell *lead = channel[MUSIC_ROLE_LEAD] >= 0
+                                            ? &line[channel[MUSIC_ROLE_LEAD]]
+                                            : NULL;
+                if (channel[MUSIC_ROLE_DRUMS] >= 0) {
+                    const MusicCell *d = &line[channel[MUSIC_ROLE_DRUMS]];
+                    const MusicPatch *p = d->patch != 0u ? &MUSIC_PATCHES[d->patch - 1u] : NULL;
+                    Expect(&t, !Sounds(d) || (p != NULL && p->note == d->note),
+                           "%s seed %u row %u: the kit plays note %u on %s", s->name, seed, row,
+                           d->note, p != NULL ? p->name : "no patch");
                 }
-                Expect(&t, found, "%s %s: no %u-step pattern %s", score->name,
-                       score->sections[i].name, (unsigned)score->steps, names[k]);
+                if (channel[MUSIC_ROLE_ECHO] >= 0 && Sounds(&line[channel[MUSIC_ROLE_ECHO]])) {
+                    const MusicCell *e = &line[channel[MUSIC_ROLE_ECHO]];
+                    const MusicCell *was = row >= s->echo_rows
+                                               ? &g_song.cell[row - s->echo_rows]
+                                                             [channel[MUSIC_ROLE_LEAD]]
+                                               : NULL;
+                    Expect(&t,
+                           was != NULL && was->note == e->note &&
+                               was->volume == e->volume + s->echo_drop,
+                           "%s seed %u row %u: the echo plays %u at %u, the lead %u rows before "
+                           "%u at %u",
+                           s->name, seed, row, e->note, e->volume, s->echo_rows,
+                           was != NULL ? was->note : 0u, was != NULL ? was->volume : 0u);
+                }
+                if (channel[MUSIC_ROLE_DOUBLE] >= 0) {
+                    const MusicCell *d = &line[channel[MUSIC_ROLE_DOUBLE]];
+                    Expect(&t,
+                           !Sounds(d) || (part == MUSIC_PART_CLIMAX && lead != NULL &&
+                                          lead->note == d->note &&
+                                          d->effect == MUSIC_FX_SLIDE_UP),
+                           "%s seed %u row %u (part %u): the double plays %u, the lead %u",
+                           s->name, seed, row, part, d->note, lead != NULL ? lead->note : 0u);
+                }
+                if (channel[MUSIC_ROLE_HARMONY] >= 0) {
+                    const MusicCell *h = &line[channel[MUSIC_ROLE_HARMONY]];
+                    Expect(&t,
+                           !Sounds(h) ||
+                               ((part == MUSIC_PART_B || part == MUSIC_PART_CLIMAX) &&
+                                lead != NULL && Sounds(lead) && h->note < lead->note),
+                           "%s seed %u row %u (part %u): the harmony plays %u, the lead %u",
+                           s->name, seed, row, part, h->note, lead != NULL ? lead->note : 0u);
+                }
+                if (channel[MUSIC_ROLE_CRASH] >= 0) {
+                    const MusicCell *c = &line[channel[MUSIC_ROLE_CRASH]];
+                    Expect(&t, !Sounds(c) || row % MUSIC_BAR_ROWS == 0u,
+                           "%s seed %u row %u: the cymbal strikes off a bar's first beat",
+                           s->name, seed, row);
+                }
             }
         }
     }
-    Report("every pattern a section plays fills its bar, the bass's on the root", &t);
+    Report("each channel plays its part: the kit on one channel, the echo the lead's notes late "
+           "and softer, the double and the harmony where the form asks",
+           &t);
 }
 
 void RunReferenceMusic(void) {
@@ -342,8 +431,8 @@ void RunReferenceMusic(void) {
     CheckWaves();
     CheckPitch();
     CheckEnvelope();
-    CheckMix();
-    CheckScores();
+    CheckPatches();
+    CheckHarmony();
     CheckForm();
-    CheckPatterns();
+    CheckRoles();
 }

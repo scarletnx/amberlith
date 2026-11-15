@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Writes each of the demos' tracks (source/music.h) as a WAV to listen to, one pass of its form,
-// and one more of a switch between two of them across the silence barrier, the samples the
-// music family holds a machine to: `make -f host.mk music-wav MUSIC_WAV=folder`.
+// Writes each of the demos' tracks (source/music.h) as a WAV to listen to, the first pass each
+// seed composes (the fixed one, MUSIC_SEED_FIXED, and any others asked for), and one more of a
+// switch between two of them across the silence barrier, the samples the music family holds a
+// machine to: `make -f host.mk music-wav MUSIC_WAV=folder [MUSIC_SEEDS="2 3"]`.
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,26 +65,55 @@ static int Write(const char *folder, const char *name, const int16_t *samples, u
 static MusicPlayer player;
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        fprintf(stderr, "usage: music-wav FOLDER\n");
+    if (argc < 2) {
+        fprintf(stderr, "usage: music-wav FOLDER [SEED...]\n");
         return 2;
     }
+    uint32_t seeds[16] = { MUSIC_SEED_FIXED };
+    unsigned seed_count = 1;
+    for (int i = 2; i < argc; ++i) {
+        char *end = NULL;
+        errno = 0;
+        const unsigned long v = strtoul(argv[i], &end, 0);
+        if (errno != 0 || end == argv[i] || *end != '\0' || v > UINT32_MAX) {
+            fprintf(stderr, "music-wav: seed %s is not a whole number from 0 to %" PRIu32 "\n",
+                    argv[i], UINT32_MAX);
+            return 2;
+        }
+        if (seed_count == sizeof(seeds) / sizeof(seeds[0])) {
+            fprintf(stderr, "music-wav: %d seeds, at most %u\n", argc - 2,
+                    (unsigned)(sizeof(seeds) / sizeof(seeds[0]) - 1u));
+            return 2;
+        }
+        seeds[seed_count++] = (uint32_t)v;
+    }
     int failed = 0;
-    for (unsigned t = 0; t < MUSIC_TRACKS; ++t) {
-        MusicStart(&player, (MusicTrack)t);
-        const uint64_t frames = MusicFormFrames(&player.song);
-        int16_t *samples = malloc((size_t)frames * 4u);
-        if (samples == NULL) {
-            fprintf(stderr, "music-wav: no memory for %llu frames\n", (unsigned long long)frames);
-            return 1;
+    for (unsigned s = 0; s < seed_count; ++s) {
+        for (unsigned t = 0; t < MUSIC_TRACKS; ++t) {
+            MusicStart(&player, (MusicTrack)t, seeds[s]);
+            const uint64_t frames = MusicPassFrames((MusicTrack)t, seeds[s]);
+            int16_t *samples = malloc((size_t)frames * 4u);
+            if (samples == NULL) {
+                fprintf(stderr, "music-wav: no memory for %llu frames\n",
+                        (unsigned long long)frames);
+                return 1;
+            }
+            MusicRender(&player, samples, (size_t)frames);
+            if (player.clipped != 0u) {
+                fprintf(stderr, "music-wav: %s, seed %" PRIu32 ", clipped %llu samples\n",
+                        MusicTrackName((MusicTrack)t), seeds[s],
+                        (unsigned long long)player.clipped);
+            }
+            char name[64];
+            if (s == 0u) {
+                snprintf(name, sizeof(name), "%s", MusicTrackName((MusicTrack)t));
+            } else {
+                snprintf(name, sizeof(name), "%s-seed%" PRIu32, MusicTrackName((MusicTrack)t),
+                         seeds[s]);
+            }
+            failed |= Write(argv[1], name, samples, frames);
+            free(samples);
         }
-        MusicRender(&player, samples, (size_t)frames);
-        if (player.clipped != 0u) {
-            fprintf(stderr, "music-wav: %s clipped %llu samples\n", MusicTrackName((MusicTrack)t),
-                    (unsigned long long)player.clipped);
-        }
-        failed |= Write(argv[1], MusicTrackName((MusicTrack)t), samples, frames);
-        free(samples);
     }
     // Eight seconds of the browser's track, a switch, and Wimsy's first eight seconds after the
     // fade and the barrier.
@@ -93,9 +124,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "music-wav: no memory for the switch\n");
         return 1;
     }
-    MusicStart(&player, MUSIC_TRACK_MENU);
+    MusicStart(&player, MUSIC_TRACK_MENU, MUSIC_SEED_FIXED);
     MusicRender(&player, samples, (size_t)before);
-    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
     MusicRender(&player, samples + 2u * before, (size_t)after);
     failed |= Write(argv[1], "switch-menu-wimsy", samples, before + after);
     free(samples);

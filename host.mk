@@ -68,19 +68,22 @@ host-run: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST)
 	bash android/tests/test-run-adb.sh
 	bash android/tests/test-run-scarletnx.sh
 
-# The demos' tracks as WAVs to listen to (tools/music-wav.c): one pass of each track's form and a
-# switch across the silence barrier, the samples the music family holds a machine to.
+# The demos' tracks as WAVs to listen to (tools/music-wav.c): the first pass of each track the fixed
+# seed composes, and of each seed in MUSIC_SEEDS, and a switch across the silence barrier, the
+# samples the music family holds a machine to.
 MUSIC_WAV ?= build-host/music
+MUSIC_SEEDS ?=
 MUSICFLAGS := -std=c11 -Wall -Wextra -Werror -O2 -Isource
 
 music-wav: build-host/music-wav
 	@mkdir -p $(MUSIC_WAV)
-	./build-host/music-wav $(MUSIC_WAV)
+	./build-host/music-wav $(MUSIC_WAV) $(MUSIC_SEEDS)
 
-build-host/music-wav: tools/music-wav.c source/music.c source/music.h source/musicscore.c \
-		source/musicscore.h
+build-host/music-wav: tools/music-wav.c source/music.c source/music.h source/musiccompose.c \
+		source/musiccompose.h source/musicscore.c source/musicscore.h
 	@mkdir -p build-host
-	$(HOSTCC) $(MUSICFLAGS) tools/music-wav.c source/music.c source/musicscore.c -o $@
+	$(HOSTCC) $(MUSICFLAGS) tools/music-wav.c source/music.c source/musiccompose.c \
+		source/musicscore.c -o $@
 
 host-clean:
 	rm -rf build-host

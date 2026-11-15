@@ -122,7 +122,7 @@ static void Excerpt(MusicTrack track, int16_t *left, int16_t *right) {
     if (!ReportStart(SUITE, name)) {
         return;
     }
-    MusicStart(&player, track);
+    MusicStart(&player, track, MUSIC_SEED_FIXED);
     for (uint32_t done = 0; done < EXCERPT_AT; done += RING) {
         MusicRender(&player, frames, RING);
     }
@@ -182,7 +182,8 @@ static void Stream(void) {
     char error[200] = "";
     AudioCapture(false);
     AudioStep();
-    if (!MusicStreamOpen(MUSIC_TRACK_MENU, AUDIO_SUBMIX, 1.0f, false, error, sizeof(error))) {
+    if (!MusicStreamOpen(MUSIC_TRACK_MENU, MUSIC_SEED_FIXED, AUDIO_SUBMIX, 1.0f, false, error,
+                         sizeof(error))) {
         ReportCase(SUITE, NAME, CHECK_EXACT, false, error);
         return;
     }
@@ -193,7 +194,7 @@ static void Stream(void) {
     while (stepped) {
         if (switched_at == 0u && MusicStreamQueued() >= SWITCH_AFTER) {
             switched_at = MusicStreamQueued();
-            MusicStreamSwitch(MUSIC_TRACK_WIMSY);
+            MusicStreamSwitch(MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
         }
         if (switched_at != 0u &&
             AudioVoicePlayed(MUSIC_VOICE_LEFT) >=
@@ -219,9 +220,9 @@ static void Stream(void) {
         return;
     }
     // The stream as the tracker renders it alone, switched where the stream was.
-    MusicStart(&player, MUSIC_TRACK_MENU);
+    MusicStart(&player, MUSIC_TRACK_MENU, MUSIC_SEED_FIXED);
     MusicRender(&player, reference, (size_t)switched_at);
-    MusicSwitch(&player, MUSIC_TRACK_WIMSY);
+    MusicSwitch(&player, MUSIC_TRACK_WIMSY, MUSIC_SEED_FIXED);
     MusicRender(&player, reference + 2u * switched_at, (size_t)(queued - switched_at));
     // The ring's oldest frame is where the aux would write next, at a frame's edge.
     bool found = false;
