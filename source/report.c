@@ -77,6 +77,9 @@ static uint32_t bookkeeping_notes;
 
 static ReportWatcher watcher;
 
+// The cases a run the browser began asks for; NULL, every run from the mode file, for all.
+static ReportPicked picked;
+
 static bool retaining;
 static ReportRecord *records;
 static size_t record_count;
@@ -441,6 +444,10 @@ void ReportRetain(bool on) {
     retaining = on;
 }
 
+void ReportForgetRecords(void) {
+    record_count = 0;
+}
+
 bool ReportIsRetaining(void) {
     return retaining;
 }
@@ -659,9 +666,23 @@ bool ReportWouldRun(const char *suite, const char *name, ReportReason *reason, c
     return runs;
 }
 
+void ReportSetPicked(ReportPicked which) {
+    picked = which;
+}
+
+/// A case the run did not ask for: it neither runs nor leaves a line, a count or a picture.
+static bool Unpicked(const char *suite, const char *name) {
+    return picked != NULL && !picked(suite, name);
+}
+
 bool ReportStart(const char *suite, const char *name) {
     char key[JOURNAL_NAME_MAX];
     KeyOf(key, sizeof(key), name);
+    if (Unpicked(suite, name)) {
+        // Reached all the same: a ban or a skip= on it holds for a case this build has.
+        Reached(suite, key);
+        return false;
+    }
     if (pending) {
         Bookkeeping("started while", suite, key, pending_name);
         pending = false;
@@ -826,23 +847,39 @@ static void EndSkip(const char *suite, const char *name, ReportReason reason,
 
 void ReportCase(const char *suite, const char *name, CheckTier tier, bool passed_,
                 const char *detail) {
+    if (Unpicked(suite, name)) {
+        PictureDiscard();
+        return;
+    }
     EndCase(suite, name, tier, passed_, detail, NULL, REPORT_FROM_UNSAID);
     Watch(suite, name);
 }
 
 void ReportCaseFrom(const char *suite, const char *name, CheckTier tier, ReportFrom from,
                     bool passed_, const char *detail) {
+    if (Unpicked(suite, name)) {
+        PictureDiscard();
+        return;
+    }
     EndCase(suite, name, tier, passed_, detail, NULL, from);
     Watch(suite, name);
 }
 
 void ReportCaseTime(const char *suite, const char *name, CheckTier tier, bool passed_,
                     const char *detail, uint32_t us) {
+    if (Unpicked(suite, name)) {
+        PictureDiscard();
+        return;
+    }
     EndCase(suite, name, tier, passed_, detail, &us, REPORT_FROM_UNSAID);
     Watch(suite, name);
 }
 
 void ReportSkip(const char *suite, const char *name, ReportReason reason, const char *detail) {
+    if (Unpicked(suite, name)) {
+        PictureDiscard();
+        return;
+    }
     EndSkip(suite, name, reason, detail);
     Watch(suite, name);
 }

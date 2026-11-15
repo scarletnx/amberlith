@@ -37,6 +37,10 @@ extern "C" {
 ///             whether they still end it. The start screen cannot turn this on.
 ///   nojournal nothing written between cases: no journal, so a crash costs the rest of the run.
 ///             For measuring what the journal costs, and for a card that must not be written.
+///   browse    the browser (docs/UI.md) instead of the start screen, on its suites tab: a person
+///             chooses, runs and reads one thing at a time. Only in a detailed run: beside quick it
+///             is refused in the mode line, quick being a script's. Nothing pressed on its first
+///             screen for UI_START_NANOSECONDS, the program leaves and says so.
 ///   noprogress no running screen while the suites run: the window keeps the screen before it,
 ///             as before there was one. For a machine whose window misbehaves while it draws.
 ///   hooks     the console's services that a machine may answer in a game's own code (nn::fs,
@@ -281,6 +285,8 @@ typedef struct {
     bool no_journal;
     /// The word `noprogress`: no running screen.
     bool no_progress;
+    /// The word `browse`: the browser instead of the start screen, in a detailed run.
+    bool browse;
     /// The word `hooks`: the services asked through the SDK's functions (hooks.h).
     bool hooks;
     /// The word `listen`: the listening sequence, and the audio family with it.
@@ -359,6 +365,9 @@ RunMode ModeAtLaunch(const char *text, bool detailed_button_held);
 /// Whether the launch has to ask the pad about the button at all: only when the file asked for
 /// a quick run, since the button can do nothing but add the detailed mode.
 bool ModeAsksPad(const RunMode *mode);
+
+/// Whether the run opens the browser: the word `browse` in a detailed run.
+bool ModeOpensBrowser(const RunMode *mode);
 
 /// The families @p mode names among the @p present ones: its family words, and with `all` every
 /// present family but MODE_FAMILIES_NOT_ALL. Nought when it names none.

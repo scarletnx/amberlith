@@ -16,7 +16,8 @@ One binary, two modes, chosen by the start screen or the mode file.
 - **Quick**: every suite runs and the program exits when the report closes. For scripts.
 
 Both leave the same verdicts and the same images, line for line: the viewer refuses to start while a report is open.
-The report differs only in the mode note near its top and in the line a detailed run adds when nobody is there.
+The report differs only in the mode note near its top and in the line a detailed run adds when nobody is there. After a
+detailed run its results are the browser's results tab, a press away from its other tabs ([The browser](UI.md)).
 
 ## The results screens
 
@@ -39,11 +40,15 @@ looked at; nothing is read back from the card, and `images` changes only what go
 cases; a run past that, or one that ran out of memory, says on the overview how many the screens hold. A quick run
 keeps nothing.
 
-The look is ScarletNX's: its launcher's 8 by 16 VGA font and its YoRHa theme's colours. The screens a person chooses on
-(start, resume, results) are on the theme's paper page with a faint grid, the row under the cursor inverted; the
-screens drawn while the run goes (running, listening, pad, touch) are on its run screen's dark page. Every screen names
-its keys on a band along its bottom, with the countdown above it and the touch bar's boxes at its right. See
-[Credits](Credits.md).
+The look is ScarletNX's launcher in its YoRHa theme, at the scale of two it opens in on a frame of 720 lines: its 8 by
+16 VGA font at twice its size, the title (`EDENPROBE  /  RESULTS`) at four times it with its shadow in the dim colour,
+the tabs as buttons, a frieze along the top and the bottom, and the theme's paper page with its grid, thin diagonals,
+corners a little darker and a grain. A row is a box, the one under the cursor inverted with a rule over and under it
+and the cursor in the margin. Lists read down a column, the results' and a case's detail, keep the font's own size.
+The screens drawn while the run goes (running, listening) are on the run screen's dark page with its scan lines. The
+foot is a box: the sentence of what is under the cursor on its first row, which the countdown takes while it runs,
+and on its second the keys, each inverted and what it does after it, each a button for a tap. The resume, pad and
+touch screens keep the font's own size and their band of keys. See [Credits](Credits.md).
 
 ## The running screen
 
@@ -57,8 +62,9 @@ in any run.
 
 ## The start screen
 
-Every new detailed run opens on it: no mode file, a file without `quick`, or `quick` with X held at launch. Each row
-starts as the mode file has it:
+Every new detailed run opens on it: no mode file, a file without `quick`, or `quick` with X held at launch. It is the
+browser's first tab: L, R or a tap on another tab opens the browser there instead of the run ([The browser](UI.md)).
+Each row starts as the mode file has it:
 
 | row | what it turns |
 |---|---|
@@ -70,8 +76,8 @@ starts as the mode file has it:
 | crash list | the crash list's cases again (the word `retry`); X from any row |
 | save | write the choice into `sdmc:/edenprobe/mode` for the next launch |
 
-Under the rows, the cases on the crash list, by name; while that choice is on with a case to run, a warning says the
-program may end and, started again, goes on after that case. Nothing pressed for ten seconds begins the run as the
+Beside the rows, what the row under the cursor does, and the cases on the crash list, by name; while that choice is on
+with a case to run, a warning there says the program may end and, started again, goes on after that case. Nothing pressed for ten seconds begins the run as the
 file had it. What was chosen goes in the mode line (`detailed, chosen on the start screen`, `the crash list's cases
 again, chosen on the start screen`, `saved to the mode file by the start screen`) and in the journal, so a launch that
 resumes after a crash keeps it whether or not it was saved. Saving writes the words chosen, keeps the file's label and
@@ -92,7 +98,7 @@ line after the summary:
 ```
 
 A press counts, not a connected controller: an emulator presents one whether or not anyone holds it. The countdown
-shows above the keys, and any button stops it for the rest of the run.
+shows on the foot's first row, and any button stops it for the rest of the run.
 
 ## Buttons
 
@@ -101,13 +107,15 @@ shows above the keys, and any button stops it for the rest of the run.
 | up, down | the group before or after | the case before or after | the case before or after |
 | left, right | the first group of the family before or after | the group before or after, on its first failure | the case before or after |
 | A | opens the group | opens the case | |
-| B | | back to the overview | back to the group |
-| R or ZR, L or ZL | the next or previous group that failed | the next or previous failure in the group | the next or previous failure in the group |
+| B | the browser's suites | back to the overview | back to the group |
+| ZR, ZL | the next or previous group that failed | the next or previous failure in the group | the next or previous failure in the group |
 | X | | | the pictures: all three, then each alone |
-| plus or minus | quit | quit | quit |
+| Y | the same run again, when the browser began it | the same | the same |
+| L, R | the browser's tab before or after | the same | the same |
+| minus | quit | quit | quit |
 
 - **Start screen:** up and down move the cursor, A turns the row or begins the run, plus or minus begins from any row,
-  X turns the crash list's cases from any row.
+  X turns the crash list's cases from any row, L and R open the browser on the tab before or after.
 - **Resume screen** ([When the program ends in the middle](Crashes.md)): up and down choose, A confirms.
 - **Listening screen:** Y repeats the take that is playing, X skips to the next part; nothing else does anything, so
   nothing quits the sequence.
@@ -132,9 +140,9 @@ Rules every screen shares:
 Every screen takes the touch screen as well as the buttons. A tap is one finger down and up on the same row or box,
 counted when it lifts; a finger that slides off chooses nothing, a second finger makes it no tap, and a finger already
 down when a screen opens counts only once lifted and put down again. A tap on a row moves the cursor there; a tap on the
-cursor's row does what A does. A bar of boxes at the right of the band holds what has no row: begin on the start
-screen, quit on the overview, back in a group, and prev, next, view (with pictures) and back on a case. A list longer
-than the screen keeps the cursor in its middle. A finger down keeps a screen as a press does.
+cursor's row does what A does. Each key the foot names is a button for what it does, and each tab for its tab; the
+resume, pad and touch screens keep a bar of boxes at the right of their band. A list longer than the screen keeps the
+cursor in its middle. A finger down keeps a screen as a press does.
 
-The decisions are `source/ui.c`'s (`UiTouchStep`, `UiStartTap`, `UiResumeTap`, `UiTapStep`, `UiPadTap`), which the
-support suite checks; `source/viewer.c` only reads the touch screen. A docked console's touch screen is off.
+The decisions are `source/ui.c`'s (`UiTouchStep`, `UiStartTap`, `UiResumeTap`, `UiTapStep`, `UiBrowseTap`,
+`UiPadTap`), which the support suite checks; `source/viewer.c` only reads the touch screen. A docked console's touch screen is off.

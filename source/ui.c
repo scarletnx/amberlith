@@ -33,8 +33,8 @@
 #define FOOT (UI_COUNTDOWN_ROW + UI_FOOT_BAND)
 
 // Lines under the overview's list for the selected group, and under a group's for its case.
-#define PREVIEW_LINES 6u
-#define DETAIL_LINES 7u
+#define PREVIEW_LINES 4u
+#define DETAIL_LINES 5u
 
 // One set of colours: the theme's, by its names, and the four a result is said in.
 typedef struct {
@@ -958,6 +958,12 @@ UiState UiStep(UiState state, UiInput input, const UiRun *run) {
     UiState next = state;
     if (input == UI_INPUT_QUIT) {
         next.quit = true;
+    } else if (input == UI_INPUT_AGAIN) {
+        // Only where the browser began the run: anywhere else there is nothing to run again.
+        next.again = next.browser && next.repeatable;
+    } else if (input == UI_INPUT_BACK && next.browser &&
+               (next.level == UI_LEVEL_OVERVIEW || run == NULL || run->group_count == 0u)) {
+        next.back = true;
     } else if (run != NULL && run->group_count > 0u) {
         if (next.group >= run->group_count) {
             next.group = run->group_count - 1u;
@@ -979,34 +985,60 @@ UiState UiStep(UiState state, UiInput input, const UiRun *run) {
     }
     next.changed = next.changed || next.level != state.level || next.group != state.group ||
                    next.index != state.index || next.view != state.view ||
-                   next.quit != state.quit;
+                   next.quit != state.quit || next.back != state.back ||
+                   next.again != state.again;
     return next;
 }
 
-/// The results screen's touch bar where @p state is: its words, left to right, and the input
-/// each box gives. Composing and tapping both ask here, so a box does what it says.
-static uint32_t ResultsBar(const UiRun *run, UiState state, const char **labels,
-                           UiInput *inputs) {
+uint32_t UiResultsKeys(const UiRun *run, UiState state, UiKey *keys) {
     uint32_t count = 0;
-    if (run == NULL || run->group_count == 0u || state.level == UI_LEVEL_OVERVIEW) {
-        labels[count] = "quit";
-        inputs[count++] = UI_INPUT_QUIT;
+    const UiKey quit = { state.browser ? "Minus" : "Plus", "quit", UI_INPUT_QUIT };
+    const UiKey again = { "Y", "again", UI_INPUT_AGAIN };
+    if (run == NULL || run->group_count == 0u) {
+        if (state.browser) {
+            const UiKey tabs = { "L/R", "tabs", UI_INPUT_NONE };
+            keys[count++] = tabs;
+        }
+        keys[count++] = quit;
+        return count;
+    }
+    const UiKey failures = { "ZL/ZR", "failures", UI_INPUT_NONE };
+    const UiKey back = { "B", state.level == UI_LEVEL_OVERVIEW ? "suites" : "back",
+                         UI_INPUT_BACK };
+    if (state.level == UI_LEVEL_OVERVIEW) {
+        const UiKey move = { "Up/Down", "group", UI_INPUT_NONE };
+        const UiKey open = { "A", "open", UI_INPUT_OPEN };
+        keys[count++] = move;
+        keys[count++] = open;
+        keys[count++] = failures;
+        if (state.browser) {
+            const UiKey tabs = { "L/R", "tabs", UI_INPUT_NONE };
+            keys[count++] = tabs;
+            keys[count++] = back;
+        }
     } else if (state.level == UI_LEVEL_GROUP) {
-        labels[count] = "back";
-        inputs[count++] = UI_INPUT_BACK;
+        const UiKey move = { "Up/Down", "case", UI_INPUT_NONE };
+        const UiKey open = { "A", "open", UI_INPUT_OPEN };
+        keys[count++] = move;
+        keys[count++] = open;
+        keys[count++] = failures;
+        keys[count++] = back;
     } else {
-        labels[count] = "prev";
-        inputs[count++] = UI_INPUT_LEFT;
-        labels[count] = "next";
-        inputs[count++] = UI_INPUT_RIGHT;
+        const UiKey previous = { "Left", "case", UI_INPUT_LEFT };
+        const UiKey next = { "Right", "case", UI_INPUT_RIGHT };
+        keys[count++] = previous;
+        keys[count++] = next;
         const ReportRecord *const record = UiCaseAt(run, state.group, state.index);
         if (record != NULL && record->picture >= 0) {
-            labels[count] = "view";
-            inputs[count++] = UI_INPUT_CYCLE_VIEW;
+            const UiKey view = { "X", "view", UI_INPUT_CYCLE_VIEW };
+            keys[count++] = view;
         }
-        labels[count] = "back";
-        inputs[count++] = UI_INPUT_BACK;
+        keys[count++] = back;
     }
+    if (state.browser && state.repeatable) {
+        keys[count++] = again;
+    }
+    keys[count++] = quit;
     return count;
 }
 
@@ -1025,12 +1057,12 @@ UiState UiTapStep(UiState state, const UiTap *tap, const UiRun *run, uint32_t fr
     if (tap == NULL || frame_width < UI_MIN_WIDTH || frame_height < UI_MIN_HEIGHT) {
         return state;
     }
-    const char *labels[UI_TOUCH_BOXES];
-    UiInput inputs[UI_TOUCH_BOXES];
-    const uint32_t count = ResultsBar(run, state, labels, inputs);
-    const uint32_t box = TapBox(tap, frame_width, frame_height, count);
-    if (box != UINT32_MAX) {
-        return UiStep(state, inputs[box], run);
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiResultsKeys(run, state, keys);
+    const uint32_t key = UiFootKeyAt(tap, frame_width, frame_height, keys, count);
+    if (key != UINT32_MAX) {
+        return keys[key].input != UI_INPUT_NONE ? UiStep(state, (UiInput)keys[key].input, run)
+                                                : state;
     }
     if (run == NULL || run->group_count == 0u) {
         return state;
@@ -1090,9 +1122,11 @@ UiInput UiInputFromButtons(uint32_t buttons, uint32_t frame_index) {
         UiInput input;
     } ORDER[] = {
         { UI_BUTTON_QUIT, UI_INPUT_QUIT },
+        { UI_BUTTON_RUN, UI_INPUT_QUIT },
         { UI_BUTTON_BACK, UI_INPUT_BACK },
         { UI_BUTTON_OPEN, UI_INPUT_OPEN },
         { UI_BUTTON_CYCLE_VIEW, UI_INPUT_CYCLE_VIEW },
+        { UI_BUTTON_AGAIN, UI_INPUT_AGAIN },
         { UI_BUTTON_NEXT_FAILURE, UI_INPUT_NEXT_FAILURE },
         { UI_BUTTON_PREVIOUS_FAILURE, UI_INPUT_PREVIOUS_FAILURE },
         { UI_BUTTON_UP, UI_INPUT_UP },
@@ -1140,12 +1174,13 @@ uint32_t UiRepeatButtons(UiRepeat *repeat, uint32_t held, uint32_t down, uint32_
 
 uint32_t UiListRows(UiLevel level, uint32_t height) {
     const uint32_t lines = level == UI_LEVEL_OVERVIEW ? PREVIEW_LINES : DETAIL_LINES;
-    // The foot, the lines under the list, and a gap with a rule in it.
-    const uint32_t under = FOOT + lines * LINE + 16u;
-    if (height < UI_LIST_TOP + under + UI_ROW_HEIGHT) {
+    // The pane under the list with its lines, a gap with a rule in it, and the foot.
+    const uint32_t bottom = UI_BODY_BOTTOM(height);
+    const uint32_t under = lines * LINE + 16u;
+    if (bottom < UI_LIST_TOP + under + UI_ROW_HEIGHT) {
         return 1u;
     }
-    return (height - UI_LIST_TOP - under) / UI_ROW_HEIGHT;
+    return (bottom - UI_LIST_TOP - under) / UI_ROW_HEIGHT;
 }
 
 uint32_t UiListFirst(uint32_t selected, uint32_t total, uint32_t rows) {
@@ -1187,6 +1222,319 @@ static const char *NoDetail(ReportResult result) {
 static const char *ResultWord(ReportResult result) {
     return result == REPORT_FAIL ? "FAIL" : Skipped(result) ? "SKIP" : "PASS";
 }
+
+// ---- The launcher's look -------------------------------------------------------------------
+//
+// ScarletNX's launcher in its YoRHa theme, at the scale of two it opens in on a frame of 720
+// lines (src/gui/themes/yorha/theme.ini, src/gui/main.c): the measures are its, the drawing this
+// program's own, with its VGA font and nothing from elsewhere.
+
+#define SC UI_TEXT_SCALE
+#define CW UI_CELL_WIDTH
+#define CH UI_CELL_HEIGHT
+#define BH UI_BUTTON_HEIGHT
+// The frame's edge, a cell of the font at its own size, and where the lists start across it:
+// two cells in, the cursor in the margin before them.
+#define EDGE 16u
+#define LIST_X (EDGE + 2u * CW)
+#define RULE_Y (UI_TABS_TOP + BH + 6u)
+// The frieze: a rule two pixels thick, a notch every 52 pixels (the theme's spacing of 26 at its
+// scale) and three dots between two notches.
+#define FRIEZE_SPACING 52u
+
+static uint32_t Grain(uint32_t x, uint32_t y) {
+    uint32_t h = x * 374761393u + y * 668265263u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    return h ^ (h >> 16);
+}
+
+/// The page of @p look at one pixel: its colour, the grid (or the run's lines), a diagonal every
+/// 330 pixels a third of the way to the dim colour, the corners down by up to three in a hundred,
+/// as a convex screen's, and a grain of three either way.
+static void PageColourOf(const Look *look, uint32_t x, uint32_t y, uint32_t width,
+                         uint32_t height, uint8_t out[4]) {
+    const bool line = look->grid ? x % GRID == 0u || y % GRID == 0u : y % 4u == 3u;
+    const uint8_t *const base = line ? look->ground : look->page;
+    const bool diagonal = (x + 3300u - y % 3300u) % 330u == 0u;
+    const int64_t dx = (int64_t)x - (int64_t)width / 2;
+    const int64_t dy = (int64_t)y - (int64_t)height / 2;
+    const int64_t half_w = width > 1u ? (int64_t)width / 2 : 1;
+    const int64_t half_h = height > 1u ? (int64_t)height / 2 : 1;
+    // Nought at the middle, 200 at a corner.
+    const int64_t far = dx * dx * 100 / (half_w * half_w) + dy * dy * 100 / (half_h * half_h);
+    const int grain = (int)(Grain(x, y) % 7u) - 3;
+    for (int k = 0; k < 3; ++k) {
+        int64_t value = base[k];
+        if (diagonal) {
+            value += ((int64_t)look->dim[k] - value) / 3;
+        }
+        value -= value * far * 3 / 20000;
+        value += grain;
+        out[k] = (uint8_t)(value < 0 ? 0 : value > 255 ? 255 : value);
+    }
+    out[3] = 0xFF;
+}
+
+void UiPageColour(uint32_t x, uint32_t y, uint32_t frame_width, uint32_t frame_height,
+                  uint8_t out[4]) {
+    PageColourOf(&MENU, x, y, frame_width, frame_height, out);
+}
+
+/// The page with its grain under a rectangle, following the frame, so a part drawn again meets
+/// the rest.
+static void Backdrop(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t width,
+                     uint32_t height) {
+    for (uint32_t row = y; row < y + height && row < frame->height; ++row) {
+        uint8_t *const line = frame->pixels + (size_t)row * frame->pitch;
+        for (uint32_t column = x; column < x + width && column < frame->width; ++column) {
+            PageColourOf(g_look, column, row, frame->width, frame->height,
+                         line + (size_t)column * 4u);
+        }
+    }
+}
+
+/// The frieze along the top and the bottom of a rectangle, the bottom's the top's upside down.
+static void Frieze(const UiFrame *frame, uint32_t x, uint32_t top, uint32_t width,
+                   uint32_t height) {
+    for (int bottom = 0; bottom < 2; ++bottom) {
+        const uint32_t rule = bottom ? top + height - 6u : top + 4u;
+        FillRect(frame, x, rule, width, 2u, TEXT);
+        for (uint32_t at = 0; at < width; at += FRIEZE_SPACING) {
+            const uint32_t notch = bottom ? rule - 4u : rule + 2u;
+            const uint32_t dots = bottom ? rule - 10u : rule + 6u;
+            const uint32_t low = bottom ? rule - 16u : rule + 12u;
+            const uint32_t left = at >= 4u ? at - 4u : 0u;
+            FillRect(frame, x + left, notch, at >= 4u ? (at + 4u < width ? 8u : width - left) : 4u,
+                     4u, TEXT);
+            if (at + 32u <= width) {
+                FillRect(frame, x + at + 20u, dots, 4u, 4u, TEXT);
+                FillRect(frame, x + at + 28u, dots, 4u, 4u, TEXT);
+                FillRect(frame, x + at + 24u, low, 4u, 4u, TEXT);
+            }
+        }
+    }
+}
+
+/// Text at the look's size; hands back where the next word along the line would start.
+static uint32_t Big(const UiFrame *frame, uint32_t x, uint32_t y, const uint8_t colour[4],
+                    const char *text) {
+    UiText(frame, x, y, SC, colour, text);
+    return x + (uint32_t)strlen(text) * CW;
+}
+
+/// Big text cut to end before @p right, a tilde where it was cut.
+static uint32_t BigFit(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t right,
+                       const uint8_t colour[4], const char *text) {
+    char fitted[200];
+    Fit(fitted, sizeof(fitted), text, right > x ? (right - x) / CW : 0u);
+    return Big(frame, x, y, colour, fitted);
+}
+
+/// One glyph of code page 437 at the look's size, the cursor and the arrows among them.
+static void BigGlyph(const UiFrame *frame, uint32_t x, uint32_t y, const uint8_t colour[4],
+                     unsigned char glyph) {
+    DrawGlyph(frame, x, y, SC, colour, glyph);
+}
+
+/// Where tab @p index's button is: a column wider than its name either side, a column apart.
+static UiRect TabRect(uint32_t index) {
+    uint32_t x = EDGE;
+    for (uint32_t i = 0; i < index; ++i) {
+        x += ((uint32_t)strlen(UiTabName((UiTab)i)) + 2u) * CW + CW;
+    }
+    const UiRect rect = { x, UI_TABS_TOP, ((uint32_t)strlen(UiTabName((UiTab)index)) + 2u) * CW,
+                          BH };
+    return rect;
+}
+
+const char *UiTabName(UiTab tab) {
+    switch (tab) {
+    case UI_TAB_START:
+        return "Start";
+    case UI_TAB_SUITES:
+        return "Suites";
+    case UI_TAB_DEMOS:
+        return "Demos";
+    case UI_TAB_RESULTS:
+        return "Results";
+    case UI_TAB_OPTIONS:
+    case UI_TABS:
+        break;
+    }
+    return "Options";
+}
+
+/// The tab @p tap went down and came up on, or UI_TABS.
+static UiTab TabAt(const UiTap *tap) {
+    for (uint32_t i = 0; i < UI_TABS; ++i) {
+        const UiRect rect = TabRect(i);
+        if (tap->x0 >= rect.x && tap->x0 < rect.x + rect.width && tap->y0 >= rect.y &&
+            tap->y0 < rect.y + rect.height && tap->x1 >= rect.x &&
+            tap->x1 < rect.x + rect.width && tap->y1 >= rect.y && tap->y1 < rect.y + rect.height) {
+            return (UiTab)i;
+        }
+    }
+    return UI_TABS;
+}
+
+/// The head: the frieze, the page, the tabs with @p shown inverted (none past the last), the rule
+/// under them, and the title four times the font with its shadow, @p right at its right.
+static void Head(const UiFrame *frame, uint32_t shown, const char *title, const char *right) {
+    Backdrop(frame, 0, 0, frame->width, frame->height);
+    Frieze(frame, 0, 0, frame->width, frame->height);
+    for (uint32_t i = 0; i < UI_TABS && shown <= UI_TABS; ++i) {
+        if (shown == UI_TABS) {
+            break;
+        }
+        const UiRect rect = TabRect(i);
+        FillRect(frame, rect.x, rect.y, rect.width, rect.height, i == shown ? TEXT : BORDER);
+        Big(frame, rect.x + CW, rect.y + 2u * SC, i == shown ? BACKGROUND : TEXT,
+            UiTabName((UiTab)i));
+    }
+    FillRect(frame, EDGE, RULE_Y, frame->width - 2u * EDGE, SC, BORDER);
+    UiText(frame, EDGE + 4u, UI_TITLE_TOP + 4u, 2u * SC, BORDER, title);
+    UiText(frame, EDGE, UI_TITLE_TOP, 2u * SC, TEXT, title);
+    if (right != NULL && right[0] != '\0') {
+        const uint32_t title_end = EDGE + (uint32_t)strlen(title) * 2u * CW + 2u * CW;
+        char fitted[96];
+        const uint32_t room = frame->width - EDGE > title_end ? (frame->width - EDGE - title_end) / CW
+                                                              : 0u;
+        Fit(fitted, sizeof(fitted), right, room);
+        const uint32_t width = (uint32_t)strlen(fitted) * CW;
+        Big(frame, frame->width - EDGE - width, UI_TITLE_TOP + FONTVGA_HEIGHT * 2u - CH / 2u,
+            DIM, fitted);
+    }
+}
+
+/// A box with a head: the page's colour in a frame of the dim one, its head a band of the ink
+/// with its name in the page's colour and @p right against its right. Hands back where what is
+/// in it starts.
+static uint32_t Box(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+                    const char *name, const char *right, const uint8_t *head) {
+    FillRect(frame, x, y, width, height, BACKGROUND);
+    Outline(frame, x, y, width, height, BORDER);
+    Outline(frame, x + 1u, y + 1u, width - 2u, height - 2u, BORDER);
+    if (name == NULL) {
+        return y + 8u;
+    }
+    FillRect(frame, x, y, width, BH, head != NULL ? head : TEXT);
+    BigFit(frame, x + CW / 2u, y + 2u * SC, x + width - CW / 2u, BACKGROUND, name);
+    if (right != NULL) {
+        Big(frame, x + width - CW / 2u - (uint32_t)strlen(right) * CW, y + 2u * SC, BACKGROUND,
+            right);
+    }
+    return y + BH + 4u;
+}
+
+/// A row of a list as the launcher draws one: a box on the dim colour, or under the cursor the
+/// box inverted, a rule over and under it, and the cursor in the margin. Hands back its ink.
+static const uint8_t *ListRow(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t width,
+                              uint32_t height, bool selected) {
+    if (selected) {
+        FillRect(frame, x, y - 4u, width, SC, TEXT);
+        FillRect(frame, x, y + height + 2u, width, SC, TEXT);
+        FillRect(frame, x, y, width, height, TEXT);
+        BigGlyph(frame, x - 2u * CW, y + 2u, TEXT, (unsigned char)FONTVGA_CURSOR);
+    } else {
+        FillRect(frame, x, y, width, height, BORDER);
+    }
+    return selected ? BACKGROUND : TEXT;
+}
+
+typedef enum {
+    MARK_NONE,
+    MARK_SOME,
+    MARK_ALL,
+} Mark;
+
+/// The theme's square, as whether the row is in the next run: hollow, half, full.
+static void Marker(const UiFrame *frame, uint32_t x, uint32_t y, Mark mark,
+                   const uint8_t colour[4]) {
+    const uint32_t top = y + (UI_ROW_BOX - 14u) / 2u;
+    Outline(frame, x, top, 14u, 14u, colour);
+    Outline(frame, x + 1u, top + 1u, 12u, 12u, colour);
+    if (mark == MARK_ALL) {
+        FillRect(frame, x + 4u, top + 4u, 6u, 6u, colour);
+    } else if (mark == MARK_SOME) {
+        FillRect(frame, x + 4u, top + 6u, 6u, 2u, colour);
+    }
+}
+
+UiRect UiFootKey(uint32_t frame_width, uint32_t frame_height, const UiKey *keys, uint32_t count,
+                 uint32_t index) {
+    const UiRect none = { 0, 0, 0, 0 };
+    if (keys == NULL || index >= count || frame_width < UI_MIN_WIDTH ||
+        frame_height < UI_MIN_HEIGHT) {
+        return none;
+    }
+    uint32_t text = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        text += ((uint32_t)strlen(keys[i].key) + 1u + (uint32_t)strlen(keys[i].what)) * CW;
+    }
+    // Two cells between keys, or one where two would push the first off the foot: the results of
+    // a run the browser can run again name seven.
+    const uint32_t room = frame_width - 2u * EDGE - 4u * CW;
+    const uint32_t gap = text + (count - 1u) * 2u * CW <= room ? 2u * CW : CW;
+    const uint32_t width = text + (count - 1u) * gap;
+    if (width > room) {
+        return none;
+    }
+    uint32_t x = frame_width - EDGE - CW - width;
+    for (uint32_t i = 0; i < index; ++i) {
+        x += ((uint32_t)strlen(keys[i].key) + 1u + (uint32_t)strlen(keys[i].what)) * CW + gap;
+    }
+    const UiRect rect = {
+        x - SC, UI_FOOT_TOP(frame_height) + 8u + CH,
+        ((uint32_t)strlen(keys[index].key) + 1u + (uint32_t)strlen(keys[index].what)) * CW +
+            2u * SC,
+        CH
+    };
+    return rect;
+}
+
+uint32_t UiFootKeyAt(const UiTap *tap, uint32_t frame_width, uint32_t frame_height,
+                     const UiKey *keys, uint32_t count) {
+    for (uint32_t i = 0; tap != NULL && i < count; ++i) {
+        const UiRect rect = UiFootKey(frame_width, frame_height, keys, count, i);
+        if (rect.width > 0u && Inside(rect, tap->x0, tap->y0) && Inside(rect, tap->x1, tap->y1)) {
+            return i;
+        }
+    }
+    return UINT32_MAX;
+}
+
+/// The foot: a box with the ink's bar at its left, @p tip on its first row in @p tip_colour, and
+/// on its second the keys against its right, each key inverted and what it does after it.
+static void Foot(const UiFrame *frame, const char *tip, const uint8_t *tip_colour,
+                 const UiKey *keys, uint32_t count) {
+    const uint32_t y = UI_FOOT_TOP(frame->height);
+    FillRect(frame, EDGE, y, frame->width - 2u * EDGE, UI_FOOT_HEIGHT, BACKGROUND);
+    Outline(frame, EDGE, y, frame->width - 2u * EDGE, UI_FOOT_HEIGHT, BORDER);
+    FillRect(frame, EDGE + 6u, y + 6u, 6u, UI_FOOT_HEIGHT - 12u, TEXT);
+    if (tip != NULL) {
+        BigFit(frame, EDGE + 3u * CW, y + 6u, frame->width - EDGE - CW,
+               tip_colour != NULL ? tip_colour : TEXT, tip);
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+        const UiRect rect = UiFootKey(frame->width, frame->height, keys, count, i);
+        if (rect.width == 0u) {
+            continue;
+        }
+        const uint32_t kw = (uint32_t)strlen(keys[i].key) * CW;
+        FillRect(frame, rect.x, rect.y, kw + 2u * SC, CH, TEXT);
+        Big(frame, rect.x + SC, rect.y, BACKGROUND, keys[i].key);
+        Big(frame, rect.x + SC + kw + CW, rect.y, TEXT, keys[i].what);
+    }
+}
+
+/// The verdict word on its colour at the look's size.
+static uint32_t BigVerdict(const UiFrame *frame, uint32_t x, uint32_t y, ReportResult result) {
+    const char *const word = ResultWord(result);
+    const uint32_t width = (uint32_t)strlen(word) * CW;
+    FillRect(frame, x - 2u, y, width + 4u, CH, ResultColour(result));
+    return Big(frame, x, y, BACKGROUND, word);
+}
+
 
 /// A verdict as the launcher draws a row that failed: the word on its colour, in the page's.
 static uint32_t SayVerdict(const UiFrame *frame, uint32_t x, uint32_t y, ReportResult result) {
@@ -1406,13 +1754,15 @@ static void ListGroups(char *out, size_t out_size, const UiRun *run, ReportResul
 /// Under the head's box: the line that says the screens do not hold the whole run.
 #define NOTE_Y (UI_LIST_TOP - 20u)
 
-/// That a list goes on past its top or its bottom, at the right: above it under the head, and
-/// below it on the frame of the box under the list, on the page's colour so the frame does not
-/// run through the words. @p pane is that frame's top.
+/// That a list goes on past its top or its bottom, at the right of the band over it and on the
+/// frame of the box under it, on the page's colour so the frame does not run through the words.
+/// @p pane is that frame's top.
 static void DrawMore(const UiFrame *frame, bool above, bool below, uint32_t pane) {
     const uint32_t x = frame->width - MARGIN - 10u * GLYPH;
     if (above) {
-        Say(frame, x, NOTE_Y, DIM, "more above");
+        FillRect(frame, x - GLYPH, UI_LIST_TOP - FONTVGA_HEIGHT - 2u, 12u * GLYPH,
+                 FONTVGA_HEIGHT, BACKGROUND);
+        Say(frame, x, UI_LIST_TOP - FONTVGA_HEIGHT - 2u, DIM, "more above");
     }
     if (below) {
         const uint32_t y = pane - FONTVGA_HEIGHT / 2u;
@@ -1421,34 +1771,69 @@ static void DrawMore(const UiFrame *frame, bool above, bool below, uint32_t pane
     }
 }
 
-static void ComposeOverview(const UiFrame *frame, const UiRun *run, UiState state) {
-    const ReportResult verdict = GroupResult(run->passed, run->failed);
-    SayVerdict(frame, MARGIN, HEAD_Y, verdict);
-    char text[256];
-    const uint32_t shown = run->passed + run->failed + run->skipped + run->crashed;
-    snprintf(text, sizeof(text), "%u cases", (unsigned)shown);
-    const uint32_t x = Say(frame, MARGIN + 6u * GLYPH, HEAD_Y, TEXT, text) + 2u * GLYPH;
-    SayCounts(frame, x, HEAD_Y, run->passed, run->failed, run->skipped, run->crashed);
-
-    DrawSecondBox(frame);
-    if (run->failed > 0u) {
-        snprintf(text, sizeof(text), "failed in: ");
-        ListGroups(text, sizeof(text), run, REPORT_FAIL);
-        SayFitted(frame, MARGIN, SECOND_Y, FAILED, text);
-    } else {
-        const uint32_t after = Say(frame, MARGIN, SECOND_Y, PASSED, "nothing failed");
-        if (run->crashed > 0u) {
-            snprintf(text, sizeof(text), "   crashed in: ");
-            ListGroups(text, sizeof(text), run, REPORT_CRASHED);
-            SayFitted(frame, after, SECOND_Y, CRASHED, text);
-        } else if (run->skipped > 0u) {
-            snprintf(text, sizeof(text), "   skipped in: ");
-            ListGroups(text, sizeof(text), run, REPORT_SKIP);
-            SayFitted(frame, after, SECOND_Y, DIM, text);
+/// The band over a results list: the verdict, then the counts in their colours, at the look's
+/// size; @p right against its right in the page's colour.
+static void CountsBand(const UiFrame *frame, ReportResult verdict, const char *what,
+                       uint32_t passed, uint32_t failed, uint32_t skipped, uint32_t crashed,
+                       const char *right) {
+    const uint32_t x0 = MARGIN / 2u;
+    const uint32_t width = frame->width - MARGIN;
+    FillRect(frame, x0, UI_BODY_TOP, width, BH, TEXT);
+    const uint32_t y = UI_BODY_TOP + 2u * SC;
+    uint32_t x = BigVerdict(frame, x0 + CW / 2u + 2u, y, verdict) + CW;
+    x = Big(frame, x, y, BACKGROUND, what) + CW;
+    char text[32];
+    const struct {
+        uint32_t count;
+        const char *word;
+        const uint8_t *colour;
+    } PARTS[4] = {
+        { passed, "passed", PASSED },
+        { failed, "failed", FAILED },
+        { skipped, "skipped", SKIPPED },
+        { crashed, "crashed", CRASHED },
+    };
+    const uint32_t right_x =
+        right != NULL ? x0 + width - CW / 2u - (uint32_t)strlen(right) * CW : x0 + width;
+    for (uint32_t i = 0; i < 4u; ++i) {
+        if (i == 3u && crashed == 0u) {
+            break;
         }
+        snprintf(text, sizeof(text), "%u", (unsigned)PARTS[i].count);
+        if (x + ((uint32_t)strlen(text) + strlen(PARTS[i].word) + 2u) * CW > right_x) {
+            break;
+        }
+        x = Big(frame, x, y, PARTS[i].count > 0u ? PARTS[i].colour : DIM, text);
+        x = Big(frame, x + CW, y, BACKGROUND, PARTS[i].word) + 2u * CW;
     }
-    // A run whose cases did not all reach the screens says so where the person is, rather than
-    // leaving the counts above to disagree with the report's summary in silence.
+    if (right != NULL) {
+        Big(frame, right_x, y, BACKGROUND, right);
+    }
+}
+
+static void ResultsHead(const UiFrame *frame, const UiRun *run, UiState state) {
+    Head(frame, state.browser ? UI_TAB_RESULTS : UI_TABS, "EDENPROBE  /  RESULTS",
+         run != NULL ? run->heading : NULL);
+}
+
+static void ResultsFoot(const UiFrame *frame, const UiRun *run, UiState state, const char *tip,
+                        const uint8_t *tip_colour) {
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiResultsKeys(run, state, keys);
+    Foot(frame, tip, tip_colour, keys, count);
+}
+
+static void ComposeOverview(const UiFrame *frame, const UiRun *run, UiState state) {
+    const uint32_t shown = run->passed + run->failed + run->skipped + run->crashed;
+    char text[256];
+    snprintf(text, sizeof(text), "%u cases:", (unsigned)shown);
+    CountsBand(frame, GroupResult(run->passed, run->failed), text, run->passed, run->failed,
+               run->skipped, run->crashed, NULL);
+
+    // The tip: where it failed, or crashed, or skipped; and before all that, a run whose cases
+    // did not all reach the screens says so where the person is, rather than leaving the counts
+    // above to disagree with the report's summary in silence.
+    const uint8_t *tip_colour = FAILED;
     if (run->reported > shown) {
         char memory[48] = "";
         char suites[48] = "";
@@ -1461,12 +1846,23 @@ static void ComposeOverview(const UiFrame *frame, const UiRun *run, UiState stat
                      memory[0] != '\0' ? ";" : "", (unsigned)run->unplaced,
                      (unsigned)UI_MAX_GROUPS);
         }
-        snprintf(text, sizeof(text), "the screens hold %u of the run's %u cases:%s%s",
+        snprintf(text, sizeof(text), "The screens hold %u of the run's %u cases:%s%s",
                  (unsigned)shown, (unsigned)run->reported, memory, suites);
-        // Short of where the list says there is more above it.
-        char fitted[256];
-        Fit(fitted, sizeof(fitted), text, (frame->width - 2u * MARGIN - 12u * GLYPH) / GLYPH);
-        Say(frame, MARGIN, NOTE_Y, SKIPPED, fitted);
+        tip_colour = SKIPPED;
+    } else if (run->failed > 0u) {
+        snprintf(text, sizeof(text), "Failed in: ");
+        ListGroups(text, sizeof(text), run, REPORT_FAIL);
+    } else if (run->crashed > 0u) {
+        snprintf(text, sizeof(text), "Nothing failed; crashed in: ");
+        ListGroups(text, sizeof(text), run, REPORT_CRASHED);
+        tip_colour = CRASHED;
+    } else if (run->skipped > 0u) {
+        snprintf(text, sizeof(text), "Nothing failed; skipped in: ");
+        ListGroups(text, sizeof(text), run, REPORT_SKIP);
+        tip_colour = PASSED;
+    } else {
+        snprintf(text, sizeof(text), "Nothing failed");
+        tip_colour = PASSED;
     }
 
     // Every family heading and every group as one list, scrolled to keep the cursor in view.
@@ -1474,6 +1870,7 @@ static void ComposeOverview(const UiFrame *frame, const UiRun *run, UiState stat
     const uint32_t selected = UiOverviewRow(run, state.group);
     const uint32_t total = UiOverviewRow(run, run->group_count - 1u) + 1u;
     const uint32_t first = UiListFirst(selected, total, rows);
+    DrawPane(frame, UI_LIST_TOP - 6u, UI_LIST_TOP + rows * UI_ROW_HEIGHT + 4u);
     uint32_t row = 0;
     for (uint32_t g = 0; g < run->group_count; ++g) {
         if (g == 0u || run->groups[g].family != run->groups[g - 1u].family) {
@@ -1494,40 +1891,26 @@ static void ComposeOverview(const UiFrame *frame, const UiRun *run, UiState stat
         }
         ++row;
     }
-    const uint32_t below = frame->height - FOOT - PREVIEW_LINES * LINE;
-    DrawPane(frame, below - 8u, frame->height - FOOT - 2u);
+    const uint32_t below = UI_BODY_BOTTOM(frame->height) - PREVIEW_LINES * LINE;
+    DrawPane(frame, below - 8u, UI_BODY_BOTTOM(frame->height));
     DrawMore(frame, first > 0u, first + rows < total, below - 8u);
     ComposePreview(frame, run, state.group, below);
-    static const Key KEYS[] = {
-        { "up/down", "group" }, { "left/right", "family" },        { "A", "open" },
-        { "R/ZR, L/ZL", "failed groups" }, { "plus", "quit" }, { "tap", "a row, twice opens" },
-    };
-    DrawKeys(frame, KEYS, sizeof(KEYS) / sizeof(KEYS[0]), KeysRight(frame, 1u));
+    ResultsFoot(frame, run, state, text, tip_colour);
 }
 
 static void ComposeGroup(const UiFrame *frame, const UiRun *run, UiState state) {
     const UiGroup *const group = &run->groups[state.group];
-    const ReportResult verdict = GroupResult(group->passed, group->failed);
-    SayVerdict(frame, MARGIN, HEAD_Y, verdict);
-    const uint32_t x = Say(frame, MARGIN + 6u * GLYPH, HEAD_Y, TEXT, group->suite) + 2u * GLYPH;
-    SayCounts(frame, x, HEAD_Y, group->passed, group->failed, group->skipped, group->crashed);
-
     const uint32_t rows = UiListRows(UI_LEVEL_GROUP, frame->height);
     const uint32_t first = UiListFirst(state.index, group->count, rows);
     const uint32_t last = first + rows < group->count ? first + rows : group->count;
-    char text[160];
-    int wrote = snprintf(text, sizeof(text), "%s family   group %u of %u   case %u of %u",
-                         UiFamilyName(group->family), (unsigned)(state.group + 1u),
-                         (unsigned)run->group_count, (unsigned)(state.index + 1u),
-                         (unsigned)group->count);
-    if (group->count > rows && wrote > 0 && (size_t)wrote < sizeof(text)) {
-        snprintf(text + wrote, sizeof(text) - (size_t)wrote, "   showing %u to %u",
-                 (unsigned)(first + 1u), (unsigned)last);
-    }
-    DrawSecondBox(frame);
-    SayFitted(frame, MARGIN, SECOND_Y, DIM, text);
+    char right[48];
+    snprintf(right, sizeof(right), "%u / %u", (unsigned)(state.index + 1u),
+             (unsigned)group->count);
+    CountsBand(frame, GroupResult(group->passed, group->failed), group->suite, group->passed,
+               group->failed, group->skipped, group->crashed, right);
 
     // Room at the end of the row for the word that says there are pictures to open.
+    DrawPane(frame, UI_LIST_TOP - 6u, UI_LIST_TOP + rows * UI_ROW_HEIGHT + 4u);
     const uint32_t name_x = UI_MARK_LEFT + 5u * GLYPH;
     const uint32_t name_right = name_x + MARGIN + 4u * GLYPH;
     const uint32_t name_columns =
@@ -1547,12 +1930,13 @@ static void ComposeGroup(const UiFrame *frame, const UiRun *run, UiState state) 
     // The selected case under the list: its whole name, as much of its detail as fits, and what
     // opening it will show.
     const ReportRecord *const record = UiCaseAt(run, state.group, state.index);
-    const uint32_t below = frame->height - FOOT - DETAIL_LINES * LINE;
-    DrawPane(frame, below - 8u, frame->height - FOOT - 2u);
+    const uint32_t below = UI_BODY_BOTTOM(frame->height) - DETAIL_LINES * LINE;
+    DrawPane(frame, below - 8u, UI_BODY_BOTTOM(frame->height));
+    DrawMore(frame, first > 0u, last < group->count, below - 8u);
     const uint32_t columns = Columns(frame);
     const uint32_t named =
         TextWrapped(frame, MARGIN, below, 1u, LINE, TEXT, record->name, columns, 2u);
-    const uint32_t room = DETAIL_LINES - 1u - named;
+    const uint32_t room = DETAIL_LINES - named;
     const uint32_t detail_y = below + named * LINE;
     uint32_t needed = 0;
     if (record->detail[0] == '\0') {
@@ -1562,97 +1946,86 @@ static void ComposeGroup(const UiFrame *frame, const UiRun *run, UiState state) 
         TextWrapped(frame, MARGIN, detail_y, 1u, LINE, DIM, record->detail, columns, room);
     }
     const char *const hint = record->picture >= 0 ? "A opens its pictures"
-                             : needed > room      ? "the detail runs on: A shows all of it"
+                             : needed > room      ? "The detail runs on: A shows all of it"
                                                   : "A opens it on a page of its own";
-    Say(frame, MARGIN, below + (DETAIL_LINES - 1u) * LINE, DIM, hint);
+    char tip[96];
+    snprintf(tip, sizeof(tip), "%s family: %s", UiFamilyName(group->family), hint);
+    ResultsFoot(frame, run, state, tip, TEXT);
+}
 
-    static const Key KEYS[] = {
-        { "up/down", "case" }, { "left/right", "group" },  { "A", "open" },
-        { "B", "back" },       { "R/ZR, L/ZL", "failures" }, { "plus", "quit" },
-        { "tap", "a row, twice opens" },
-    };
-    DrawKeys(frame, KEYS, sizeof(KEYS) / sizeof(KEYS[0]), KeysRight(frame, 1u));
+UiRect UiPanelRect(uint32_t frame_width, uint32_t frame_height, uint32_t width, uint32_t height,
+                   UiView view, uint32_t panel) {
+    const UiRect none = { 0, 0, 0, 0 };
+    if (width == 0u || height == 0u || frame_width < UI_MIN_WIDTH ||
+        frame_height < UI_MIN_HEIGHT) {
+        return none;
+    }
+    // The key and two lines of the detail under the pictures, above the foot.
+    const uint32_t bottom = UI_BODY_BOTTOM(frame_height) - 2u * LINE - 36u;
+    const uint32_t down = bottom > UI_PANEL_TOP ? (bottom - UI_PANEL_TOP) / height : 1u;
+    const bool all = view == UI_VIEW_ALL;
+    const uint32_t room = all ? (frame_width - 4u * MARGIN) / 3u : frame_width - 2u * MARGIN;
+    uint32_t scale = room / width;
+    scale = down < scale ? down : scale;
+    scale = scale == 0u ? 1u : scale;
+    const uint32_t size = width * scale;
+    uint32_t x;
+    if (all) {
+        const uint32_t gap = frame_width > 2u * MARGIN + 3u * size
+                                 ? (frame_width - 2u * MARGIN - 3u * size) / 2u
+                                 : MARGIN;
+        x = MARGIN + (panel < 3u ? panel : 2u) * (size + gap);
+    } else {
+        x = frame_width > size ? (frame_width - size) / 2u : 0u;
+    }
+    const UiRect rect = { x, UI_PANEL_TOP, size, height * scale };
+    return rect;
 }
 
 /// The case's pictures, laid out as the detailed mode always has: the three side by side or
 /// one alone, the colours of a verdict named under them, and the detail under that.
 static void ComposePictures(const UiFrame *frame, const PictureRecord *record,
                             const ReportRecord *line, UiView view) {
-    const uint32_t top = UI_PANEL_TOP;
     const uint32_t columns = Columns(frame);
-    uint32_t bottom;
-
-    if (view == UI_VIEW_ALL) {
-        // Every division below is guarded, because a frame too small for the layout should come
-        // out cramped rather than wrap around and address the whole of memory.
-        const uint32_t room =
-            frame->width > 4u * MARGIN ? (frame->width - 4u * MARGIN) / 3u : record->width;
-        uint32_t scale = record->width > 0u ? room / record->width : 1u;
-        if (scale == 0u) {
-            scale = 1u;
-        }
-        const uint32_t size = record->width * scale;
-        static const UiView PANELS[3] = { UI_VIEW_GOT, UI_VIEW_EXPECTED, UI_VIEW_DIFF };
-        for (uint32_t panel = 0; panel < 3u; ++panel) {
-            const uint32_t x = MARGIN + panel * (size + MARGIN);
-            Say(frame, x, top - 20u, DIM, ViewLabel(PANELS[panel]));
-            DrawPanel(frame, x, top, scale, record, PANELS[panel]);
-        }
-        bottom = top + record->height * scale;
-    } else {
-        const uint32_t room_across =
-            frame->width > 2u * MARGIN ? frame->width - 2u * MARGIN : record->width;
-        const uint32_t room_down =
-            frame->height > top + 128u ? frame->height - top - 128u : record->height;
-        uint32_t scale = record->width > 0u ? room_across / record->width : 1u;
-        const uint32_t down = record->height > 0u ? room_down / record->height : 1u;
-        if (down < scale) {
-            scale = down;
-        }
-        if (scale == 0u) {
-            scale = 1u;
-        }
-        const uint32_t size = record->width * scale;
-        const uint32_t x = frame->width > size ? (frame->width - size) / 2u : 0u;
-        Say(frame, x, top - 20u, DIM, ViewLabel(view));
-        DrawPanel(frame, x, top, scale, record, view);
-        bottom = top + record->height * scale;
+    static const UiView PANELS[3] = { UI_VIEW_GOT, UI_VIEW_EXPECTED, UI_VIEW_DIFF };
+    const uint32_t panels = view == UI_VIEW_ALL ? 3u : 1u;
+    UiRect rect = { 0, 0, 0, 0 };
+    for (uint32_t panel = 0; panel < panels; ++panel) {
+        rect = UiPanelRect(frame->width, frame->height, record->width, record->height, view,
+                           panel);
+        const UiView shown = view == UI_VIEW_ALL ? PANELS[panel] : view;
+        Say(frame, rect.x, rect.y - 20u, DIM, ViewLabel(shown));
+        DrawPanel(frame, rect.x, rect.y, rect.width / record->width, record, shown);
     }
+    const uint32_t bottom = rect.y + rect.height;
 
     // The key sits between the pictures and the sentence, because it explains the one and is
     // read on the way to the other.
-    DrawKey(frame, MARGIN, bottom + 12u);
+    DrawKey(frame, MARGIN, bottom + UI_KEY_GAP);
 
-    const uint32_t detail_y = bottom + 48u;
-    const uint32_t room_for_lines =
-        frame->height > detail_y + FOOT ? (frame->height - detail_y - FOOT) / LINE : 1u;
+    const uint32_t detail_y = bottom + 36u;
+    const uint32_t limit = UI_BODY_BOTTOM(frame->height);
+    const uint32_t room_for_lines = limit > detail_y + LINE ? (limit - detail_y) / LINE : 1u;
     if (line->detail[0] != '\0') {
         TextWrapped(frame, MARGIN, detail_y, 1u, LINE, TEXT, line->detail, columns,
                     room_for_lines);
     } else {
         Say(frame, MARGIN, detail_y, DIM, NoDetail(line->result));
     }
-
-    static const Key KEYS[] = {
-        { "left/right or up/down", "case" }, { "X", "view" }, { "R/ZR", "next failure" },
-        { "L/ZL", "previous failure" },      { "B", "back" }, { "plus", "quit" },
-    };
-    DrawKeys(frame, KEYS, sizeof(KEYS) / sizeof(KEYS[0]), KeysRight(frame, 4u));
 }
 
 /// A case with no pictures, as a page: its whole name and its whole detail.
 static void ComposeDetail(const UiFrame *frame, const UiGroup *group, const ReportRecord *line) {
     const uint32_t columns = Columns(frame);
-    uint32_t y = 40u;
+    uint32_t y = UI_BODY_TOP + BH + 12u;
     y += TextWrapped(frame, MARGIN, y, 1u, PAGE_LINE, TEXT, line->name, columns, 3u) *
              PAGE_LINE +
          12u;
     Say(frame, MARGIN, y, DIM, Skipped(line->result) ? "why it was skipped" : "detail");
     y += PAGE_LINE;
     // One line kept back for the note below.
-    const uint32_t room =
-        frame->height > y + FOOT + 2u * PAGE_LINE ? (frame->height - y - FOOT) / PAGE_LINE - 1u
-                                                  : 1u;
+    const uint32_t limit = UI_BODY_BOTTOM(frame->height);
+    const uint32_t room = limit > y + 2u * PAGE_LINE ? (limit - y) / PAGE_LINE - 1u : 1u;
     if (line->detail[0] == '\0') {
         Say(frame, MARGIN, y, DIM, NoDetail(line->result));
         y += PAGE_LINE;
@@ -1665,12 +2038,6 @@ static void ComposeDetail(const UiFrame *frame, const UiGroup *group, const Repo
     if (group->family == UI_FAMILY_GRAPHICS && line->picture < 0) {
         Say(frame, MARGIN, y + 8u, DIM, "no pictures were kept for this case");
     }
-    static const Key KEYS[] = {
-        { "left/right or up/down", "case" }, { "R/ZR", "next failure" },
-        { "L/ZL", "previous failure" },      { "B", "back" },
-        { "plus", "quit" },
-    };
-    DrawKeys(frame, KEYS, sizeof(KEYS) / sizeof(KEYS[0]), KeysRight(frame, 3u));
 }
 
 static void ComposeCase(const UiFrame *frame, const UiRun *run, UiState state,
@@ -1696,20 +2063,21 @@ static void ComposeCase(const UiFrame *frame, const UiRun *run, UiState state,
                  group->suite, (unsigned)(state.index + 1u), (unsigned)group->count,
                  (unsigned)group->failed, line->tier);
     }
-    // The verdict first, and at the margin, because it is the one thing on this screen that
-    // must be there however narrow the frame is or however long the rest of the line runs.
-    SayVerdict(frame, MARGIN, HEAD_Y, line->result);
-    SayFitted(frame, MARGIN + 6u * GLYPH, HEAD_Y, DIM, header);
+    // The verdict first, at the band's start, because it is the one thing on this screen that
+    // must be there however long the rest of the line runs; the case's name after it.
+    const uint32_t x0 = MARGIN / 2u;
+    FillRect(frame, x0, UI_BODY_TOP, frame->width - MARGIN, BH, TEXT);
+    const uint32_t after = BigVerdict(frame, x0 + CW / 2u + 2u, UI_BODY_TOP + 2u * SC,
+                                      line->result) +
+                           CW;
+    BigFit(frame, after, UI_BODY_TOP + 2u * SC, frame->width - MARGIN, BACKGROUND, line->name);
 
     if (picture != NULL) {
-        char name[200];
-        Fit(name, sizeof(name), line->name, Columns(frame));
-        DrawSecondBox(frame);
-        Say(frame, MARGIN, SECOND_Y, TEXT, name);
         ComposePictures(frame, picture, line, state.view);
     } else {
         ComposeDetail(frame, group, line);
     }
+    ResultsFoot(frame, run, state, header, line->result == REPORT_FAIL ? FAILED : TEXT);
 }
 
 void UiCompose(const UiFrame *frame, const UiRun *run, UiState state,
@@ -1718,26 +2086,22 @@ void UiCompose(const UiFrame *frame, const UiRun *run, UiState state,
         return;
     }
     g_look = &MENU;
-    Page(frame, 0, 0, frame->width, frame->height);
     // Every subtraction in the layout is from a frame at least this big; a smaller one would
     // wrap round and draw a line four thousand million pixels long.
     if (frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        Page(frame, 0, 0, frame->width, frame->height);
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
+    ResultsHead(frame, run, state);
     if (run == NULL || run->group_count == 0u) {
-        Say(frame, MARGIN, MARGIN, TEXT, "no case was kept for the screens");
+        Big(frame, LIST_X, UI_BODY_TOP + 6u, TEXT, "No case was kept for the screens");
+        char text[96] = "";
         if (run != NULL && run->reported > 0u) {
-            char text[96];
-            snprintf(text, sizeof(text), "the run reported %u, and none of them fit in memory",
+            snprintf(text, sizeof(text), "The run reported %u, and none of them fit in memory",
                      (unsigned)run->reported);
-            Say(frame, MARGIN, MARGIN + LINE + 4u, DIM, text);
         }
-        static const Key KEYS[] = { { "plus", "quit" } };
-        DrawKeys(frame, KEYS, 1u, KeysRight(frame, 1u));
-        const char *labels[UI_TOUCH_BOXES];
-        UiInput inputs[UI_TOUCH_BOXES];
-        DrawTouchBar(frame, labels, ResultsBar(run, state, labels, inputs));
+        ResultsFoot(frame, run, state, text, DIM);
         return;
     }
     // A state from anywhere is drawn as the navigation would have left it, never read past the
@@ -1759,9 +2123,6 @@ void UiCompose(const UiFrame *frame, const UiRun *run, UiState state,
         ComposeCase(frame, run, state, picture);
         break;
     }
-    const char *labels[UI_TOUCH_BOXES];
-    UiInput inputs[UI_TOUCH_BOXES];
-    DrawTouchBar(frame, labels, ResultsBar(run, state, labels, inputs));
 }
 
 bool UiWaitsForPad(uint32_t frame_index, bool connected) {
@@ -1794,17 +2155,26 @@ static void DrawCountdown(const UiFrame *frame, const char *line) {
 
 void UiComposeCountdown(const UiFrame *frame, uint32_t seconds_left) {
     if (frame == NULL || frame->pixels == NULL || frame->width < UI_MIN_WIDTH ||
-        frame->height < UI_MIN_HEIGHT) {
+        frame->height < UI_MIN_HEIGHT || seconds_left == 0u) {
         return;
     }
     g_look = &MENU;
-    char line[96];
+    // Over the foot's first row, the tip's, which it stands in for until a press.
+    const uint32_t y = UI_FOOT_TOP(frame->height);
+    FillRect(frame, EDGE + 14u, y + 4u, frame->width - 2u * EDGE - 16u, CH + 2u, BACKGROUND);
+    char line[128];
     snprintf(line, sizeof(line),
-             "nothing pressed yet: this screen closes by itself in %u s, a button or a touch "
-             "keeps it",
+             "Nothing pressed yet: this closes by itself in %u s; a button or a touch keeps it",
              (unsigned)seconds_left);
-    DrawCountdown(frame, seconds_left > 0u ? line : NULL);
+    BigFit(frame, EDGE + 3u * CW, y + 6u, frame->width - EDGE - CW, SKIPPED, line);
 }
+
+// The rows' column: its width, a row's box and the step to the next, which fit the eleven rows
+// between the head and the foot; and the box beside them that says what the row does.
+#define START_WIDTH 512u
+#define START_BOX 34u
+#define START_PITCH 41u
+#define START_HELP_HEIGHT 230u
 
 bool UiStartShown(const UiStartInfo *info) {
     return info != NULL &&
@@ -1936,6 +2306,15 @@ UiStartState UiStartStep(UiStartState state, uint32_t pressed, uint32_t frame_in
         state.changed = true;
         return state;
     }
+    // L or R: the browser's tab after or before this one, the run not begun. Both in one edge
+    // is a pad's whole mask, and nobody's choice.
+    const uint32_t tabs = pressed & (UI_START_TAB_PREVIOUS | UI_START_TAB_NEXT);
+    if (tabs == UI_START_TAB_NEXT || tabs == UI_START_TAB_PREVIOUS) {
+        state.tab_asked = tabs == UI_START_TAB_NEXT ? (uint32_t)UI_TAB_SUITES
+                                                    : (uint32_t)UI_TAB_OPTIONS;
+        state.changed = true;
+        return state;
+    }
     const uint32_t moves = pressed & (UI_START_UP | UI_START_DOWN);
     if (select && moves != 0u) {
         // The same whole mask, away from begin the run: nobody chose that row.
@@ -1996,18 +2375,30 @@ uint32_t UiStartSecondsLeft(uint64_t elapsed_ns, bool pressed) {
 }
 
 uint32_t UiStartWarningTop(uint32_t frame_height) {
-    // Above the countdown and the button line, which take the frame's last 32 rows.
-    const uint32_t height = UI_START_WARNING_LINES * LINE + 16u;
-    return frame_height > FOOT + height + 8u ? frame_height - FOOT - height - 8u : 0u;
+    // At the bottom of the crash list's box, above the foot.
+    const uint32_t height = UI_START_WARNING_LINES * LINE + 8u;
+    return UI_BODY_BOTTOM(frame_height) > height ? UI_BODY_BOTTOM(frame_height) - height : 0u;
 }
 
 uint32_t UiStartRowTop(uint32_t row) {
-    return UI_LIST_TOP + row * UI_ROW_HEIGHT;
+    return UI_BODY_TOP + 6u + row * START_PITCH;
+}
+
+UiRect UiStartRowBox(uint32_t row) {
+    const UiRect box = { LIST_X, UiStartRowTop(row), START_WIDTH, START_BOX };
+    return box;
 }
 
 uint32_t UiStartNvnTop(void) {
-    // The line under the note, which the crash list's heading leaves free.
-    return UiStartRowTop(UI_START_ROWS) + 4u + LINE;
+    // At the bottom of the box beside the rows, under what the row does.
+    return UI_BODY_TOP + START_HELP_HEIGHT - 2u * LINE - 6u;
+}
+
+UiRect UiStartNvnBox(uint32_t frame_width) {
+    const uint32_t x = LIST_X + START_WIDTH + 2u * CW + CW / 2u;
+    const UiRect box = { x, UiStartNvnTop(), frame_width > x + EDGE + CW ? frame_width - x - EDGE - CW : 0u,
+                         2u * LINE };
+    return box;
 }
 
 // What each row is called and what it does, in the order of UiStartRow; the crash list's row says
@@ -2016,7 +2407,7 @@ static const struct {
     const char *name;
     const char *what;
 } START_ROWS[UI_START_ROWS] = {
-    { "begin the run", "A here, plus from any row, or tap begin" },
+    { "begin the run", "A here, or plus from any row, begins it as the rows say" },
     { "graphics", "the drawing suites, clear to blit2d" },
     { "fs", "reads from the memory card, timed" },
     { "audio", "the audio renderer, nearly silent" },
@@ -2037,65 +2428,140 @@ static const Icon START_ICONS[UI_START_ROWS] = {
 
 // Across the row, in cells from the margin: the launcher's marker, the icon, the box, the name,
 // and what it does.
-#define START_ICON_COLUMN 2u
-#define START_BOX_COLUMN 5u
-#define START_NAME_COLUMN 9u
 #define START_WHAT_COLUMN 24u
 
-/// One row of the menu, as a row of the launcher's: a box, inverted under the cursor, and in the
-/// soft colour where it cannot be turned on.
-static void DrawStartRow(const UiFrame *frame, uint32_t row, const char *what, bool selected,
-                         bool available, bool on) {
+/// One row of the menu, as a row of the launcher's: a box, inverted under the cursor, its marker
+/// and icon, its name, and at its right whether it is on; in the soft colour where it cannot be
+/// turned on.
+static void DrawStartRow(const UiFrame *frame, uint32_t row, bool selected, bool available,
+                         bool on) {
     const uint32_t y = UiStartRowTop(row);
-    const uint8_t *const ink = DrawRowBox(frame, y, UI_ROW_HEIGHT, selected);
+    const uint8_t *const ink = ListRow(frame, LIST_X, y, START_WIDTH, START_BOX, selected);
     const uint8_t *const words = available || selected ? ink : DIM;
-    DrawGlyph(frame, MARGIN, y + 2u, 1u, words, (unsigned char)FONTVGA_MARKER);
-    DrawIcon(frame, MARGIN + START_ICON_COLUMN * GLYPH, y + 2u, START_ICONS[row], words);
-    const bool risky = row == UI_START_ROW_RETRY;
-    if (row == UI_START_ROW_BEGIN) {
-        Say(frame, MARGIN + START_BOX_COLUMN * GLYPH, y + 2u, ink, START_ROWS[row].name);
-    } else {
-        const uint8_t *const box = selected     ? ink
-                                   : !available ? DIM
-                                   : on         ? (risky ? SKIPPED : PASSED)
-                                                : DIM;
-        Say(frame, MARGIN + START_BOX_COLUMN * GLYPH, y + 2u, box, on ? "[x]" : "[ ]");
-        Say(frame, MARGIN + START_NAME_COLUMN * GLYPH, y + 2u, words, START_ROWS[row].name);
+    BigGlyph(frame, LIST_X + CW / 2u, y + 1u, words, (unsigned char)FONTVGA_MARKER);
+    DrawIcon(frame, LIST_X + 2u * CW, y + (START_BOX - 16u) / 2u, START_ICONS[row], words);
+    char name[32];
+    snprintf(name, sizeof(name), "%s", START_ROWS[row].name);
+    name[0] = (char)(name[0] >= 'a' && name[0] <= 'z' ? name[0] - 'a' + 'A' : name[0]);
+    Big(frame, LIST_X + 4u * CW, y + 1u, words, name);
+    if (row != UI_START_ROW_BEGIN) {
+        const bool risky = row == UI_START_ROW_RETRY;
+        const char *const value = on ? "On" : "Off";
+        const uint8_t *const colour = selected     ? ink
+                                      : !available ? DIM
+                                      : on         ? (risky ? SKIPPED : PASSED)
+                                                   : DIM;
+        Big(frame, LIST_X + START_WIDTH - CW / 2u - (uint32_t)strlen(value) * CW, y + 1u, colour,
+            value);
     }
-    SayFitted(frame, MARGIN + START_WHAT_COLUMN * GLYPH, y + 2u, words, what);
 }
 
-/// A list under its heading, in @p room lines at most: its heading, as many names as fit, and a
-/// line saying how many more there are when not all of them do.
-static uint32_t DrawStartList(const UiFrame *frame, uint32_t y, uint32_t room,
-                              const char *heading, uint32_t count, const char *const *suites,
+/// A list under its heading, in @p room lines at most at the font's own size: as many names as
+/// fit, and a line saying how many more there are when not all of them do.
+static uint32_t DrawStartList(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t right,
+                              uint32_t room, uint32_t count, const char *const *suites,
                               const char *const *names) {
-    if (count == 0u || room < 2u) {
+    if (count == 0u || room < 1u) {
         return y;
     }
-    Say(frame, MARGIN, y, DIM, heading);
-    y += LINE;
-    --room;
     const uint32_t held = count < UI_START_LIST_MAX ? count : UI_START_LIST_MAX;
     const uint32_t fits = held <= room && held == count ? held : (room > 1u ? room - 1u : 0u);
     const uint32_t shown = fits < held ? fits : held;
-    const uint32_t columns = Columns(frame) > 13u ? Columns(frame) - 13u : 1u;
+    const uint32_t columns = right > x + 13u * GLYPH ? (right - x - 13u * GLYPH) / GLYPH : 1u;
     for (uint32_t i = 0; i < shown; ++i) {
         char suite[16];
         Fit(suite, sizeof(suite), suites[i], 10u);
-        Say(frame, MARGIN + 2u * GLYPH, y, DIM, suite);
+        Say(frame, x, y, DIM, suite);
         char name[200];
         Fit(name, sizeof(name), names[i], columns);
-        Say(frame, MARGIN + 13u * GLYPH, y, TEXT, name);
+        Say(frame, x + 11u * GLYPH, y, TEXT, name);
         y += LINE;
     }
     if (shown < count) {
         char more[48];
         snprintf(more, sizeof(more), "and %u more", (unsigned)(count - shown));
-        Say(frame, MARGIN + 2u * GLYPH, y, DIM, more);
+        Say(frame, x, y, DIM, more);
         y += LINE;
     }
     return y;
+}
+
+uint32_t UiStartKeys(UiKey *keys) {
+    static const UiKey KEYS[] = {
+        { "Up/Down", "select", 0 },
+        { "A", "choose", UI_START_SELECT },
+        { "Plus", "begin", UI_START_BEGIN },
+        { "X", "crash list", UI_START_TOGGLE_RETRY },
+        { "L/R", "tabs", 0 },
+    };
+    const uint32_t count = (uint32_t)(sizeof(KEYS) / sizeof(KEYS[0]));
+    for (uint32_t i = 0; i < count; ++i) {
+        keys[i] = KEYS[i];
+    }
+    return count;
+}
+
+/// What the start tab draws under the head, which the browser's start tab draws too.
+static void ComposeStartBody(const UiFrame *frame, const UiStartInfo *info, UiStartState state,
+                             const char *tip, const uint8_t *tip_colour, const UiKey *keys,
+                             uint32_t key_count) {
+    for (uint32_t row = 0; row < UI_START_ROWS; ++row) {
+        DrawStartRow(frame, row, state.cursor == row, RowAvailable(info, row),
+                     RowOn(&state, row));
+    }
+
+    // Beside the rows: what the one under the cursor does, and the crash list.
+    const uint32_t x = LIST_X + START_WIDTH + 2u * CW;
+    const uint32_t width = frame->width - EDGE - x;
+    char name[32];
+    snprintf(name, sizeof(name), "%s", START_ROWS[state.cursor].name);
+    name[0] = (char)(name[0] >= 'a' && name[0] <= 'z' ? name[0] - 'a' + 'A' : name[0]);
+    uint32_t y = Box(frame, x, UI_BODY_TOP, width, START_HELP_HEIGHT, name, NULL, NULL);
+    char what[160];
+    if (state.cursor == UI_START_ROW_RETRY) {
+        snprintf(what, sizeof(what), "The crash list's %u case%s again; X turns it from any row",
+                 (unsigned)info->listed_count, info->listed_count == 1u ? "" : "s");
+    } else {
+        snprintf(what, sizeof(what), "%s", START_ROWS[state.cursor].what);
+        what[0] = (char)(what[0] >= 'a' && what[0] <= 'z' ? what[0] - 'a' + 'A' : what[0]);
+    }
+    const uint32_t columns = (width - CW) / CW;
+    y += TextWrapped(frame, x + CW / 2u, y, SC, CH, TEXT, what, columns, 3u) * CH + 4u;
+    TextWrapped(frame, x + CW / 2u, y, SC, CH, DIM,
+                "The judge and the cpu suite run whatever is chosen", columns, 2u);
+    if (info->nvn_named) {
+        // Said where the person sees it before the run: the case's skip line says it after.
+        const UiRect box = UiStartNvnBox(frame->width);
+        TextWrapped(frame, box.x, box.y, 1u, LINE, SKIPPED, UI_START_NVN_SAID, box.width / GLYPH,
+                    2u);
+    }
+
+    const bool warned = state.retry && info->listed_count > 0u;
+    const uint32_t list_top = UI_BODY_TOP + START_HELP_HEIGHT + 10u;
+    char count[24];
+    snprintf(count, sizeof(count), "%u case%s", (unsigned)info->listed_count,
+             info->listed_count == 1u ? "" : "s");
+    y = Box(frame, x, list_top, width, UI_BODY_BOTTOM(frame->height) - list_top,
+            "On the crash list", count, warned ? FAILED : NULL);
+    const uint32_t warning_top = UiStartWarningTop(frame->height);
+    const uint32_t room = warning_top > y + 4u ? (warning_top - y - 4u) / LINE : 0u;
+    if (info->listed_count == 0u) {
+        Say(frame, x + CW / 2u, y, DIM, "nothing has ended a program on this machine");
+    }
+    DrawStartList(frame, x + CW / 2u, y, x + width - CW / 2u, room, info->listed_count,
+                  info->listed_suite, info->listed_name);
+    if (warned) {
+        static const char *const WARNING[UI_START_WARNING_LINES] = {
+            "these cases ended an emulator's program; this one may end too",
+            "if it does, start edenprobe again: the run goes on after the case",
+            "that ended it, which is then skipped as crashed and listed",
+        };
+        FillRect(frame, x + 6u, warning_top, 3u, UI_START_WARNING_LINES * LINE, FAILED);
+        for (uint32_t i = 0; i < UI_START_WARNING_LINES; ++i) {
+            SayFitted(frame, x + CW, warning_top + i * LINE, FAILED, WARNING[i]);
+        }
+    }
+    Foot(frame, tip, tip_colour, keys, key_count);
 }
 
 void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState state,
@@ -2104,73 +2570,26 @@ void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState 
         return;
     }
     g_look = &MENU;
-    Page(frame, 0, 0, frame->width, frame->height);
     if (frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        Page(frame, 0, 0, frame->width, frame->height);
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
-    SayFitted(frame, MARGIN, HEAD_Y, TEXT, info->heading != NULL ? info->heading : "edenprobe");
-    DrawSecondBox(frame);
-    SayFitted(frame, MARGIN, SECOND_Y, DIM,
-              "before the run: choose what runs, or let the countdown begin it");
-
-    for (uint32_t row = 0; row < UI_START_ROWS; ++row) {
-        char what[96];
-        if (row == UI_START_ROW_RETRY) {
-            snprintf(what, sizeof(what), "the crash list's %u case%s again; X from any row",
-                     (unsigned)info->listed_count, info->listed_count == 1u ? "" : "s");
-        } else {
-            snprintf(what, sizeof(what), "%s", START_ROWS[row].what);
-        }
-        DrawStartRow(frame, row, what, state.cursor == row, RowAvailable(info, row),
-                     RowOn(&state, row));
+    Head(frame, UI_TAB_START, "EDENPROBE  /  START", info->heading);
+    char tip[160];
+    const uint8_t *colour = TEXT;
+    if (seconds_left > 0u) {
+        snprintf(tip, sizeof(tip),
+                 "Nothing pressed yet: the run begins in %u s as the mode file says; a button or "
+                 "a touch keeps this",
+                 (unsigned)seconds_left);
+        colour = SKIPPED;
+    } else {
+        snprintf(tip, sizeof(tip), "Choose what runs, then begin it, or L/R to the suites");
     }
-    const uint32_t note = UiStartRowTop(UI_START_ROWS) + 4u;
-    SayFitted(frame, MARGIN, note, DIM, "the judge and the cpu suite run whatever is chosen");
-    if (info->nvn_named) {
-        // Said where the person sees it before the run: the case's skip line says it after.
-        SayFitted(frame, MARGIN, UiStartNvnTop(), SKIPPED, UI_START_NVN_SAID);
-    }
-
-    // The crash list in what is left above the warning's place, which is kept free whether or
-    // not the warning shows, so turning the choice on moves nothing else.
-    const uint32_t warning_top = UiStartWarningTop(frame->height);
-    const uint32_t y = note + 2u * LINE;
-    const uint32_t rows = warning_top > y + 8u ? (warning_top - y - 8u) / LINE : 0u;
-    DrawStartList(frame, y, rows, "on the crash list (the mode word retry runs them):",
-                  info->listed_count, info->listed_suite, info->listed_name);
-
-    if (state.retry && info->listed_count > 0u) {
-        static const char *const WARNING[UI_START_WARNING_LINES] = {
-            "these cases ended an emulator's program; this one may end too",
-            "if it does, start edenprobe again: the run goes on after the case",
-            "that ended it, which is then skipped as crashed and listed",
-        };
-        // The launcher's tips box, in the failure colour: framed twice as thick, its bar at the
-        // left.
-        const uint32_t height = UI_START_WARNING_LINES * LINE + 16u;
-        FillRect(frame, MARGIN / 2u, warning_top, frame->width - MARGIN, height, FAILED);
-        FillRect(frame, MARGIN / 2u + 2u, warning_top + 2u, frame->width - MARGIN - 4u,
-                 height - 4u, BACKGROUND);
-        FillRect(frame, MARGIN / 2u + 5u, warning_top + 6u, 3u, height - 12u, FAILED);
-        for (uint32_t i = 0; i < UI_START_WARNING_LINES; ++i) {
-            SayFitted(frame, MARGIN, warning_top + 8u + i * LINE, FAILED, WARNING[i]);
-        }
-    }
-
-    char line[128];
-    snprintf(line, sizeof(line),
-             "nothing pressed yet: the run begins in %u s as the mode file says, a button or a "
-             "touch keeps this",
-             (unsigned)seconds_left);
-    DrawCountdown(frame, seconds_left > 0u ? line : NULL);
-    static const Key KEYS[] = {
-        { "up/down", "move" }, { "A", "choose, begin on its row" }, { "plus", "begin" },
-        { "X", "crash list" }, { "tap", "a row twice" },
-    };
-    DrawKeys(frame, KEYS, sizeof(KEYS) / sizeof(KEYS[0]), KeysRight(frame, 1u));
-    static const char *const BEGIN[1] = { "begin" };
-    DrawTouchBar(frame, BEGIN, 1u);
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiStartKeys(keys);
+    ComposeStartBody(frame, info, state, tip, colour, keys, count);
 }
 
 UiStartState UiStartTap(UiStartState state, const UiTap *tap, uint32_t frame_width,
@@ -2179,13 +2598,31 @@ UiStartState UiStartTap(UiStartState state, const UiTap *tap, uint32_t frame_wid
         frame_height < UI_MIN_HEIGHT) {
         return state;
     }
-    if (TapBox(tap, frame_width, frame_height, 1u) == 0u) {
-        state.begun = true;
-        state.changed = true;
+    const UiTab tab = TabAt(tap);
+    if (tab != UI_TABS) {
+        if (tab != UI_TAB_START) {
+            state.tab_asked = (uint32_t)tab;
+            state.changed = true;
+        }
         return state;
     }
-    const uint32_t row =
-        TapRow(tap, frame_width, UiStartRowTop(0), UI_ROW_HEIGHT, UI_START_ROWS);
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiStartKeys(keys);
+    const uint32_t key = UiFootKeyAt(tap, frame_width, frame_height, keys, count);
+    if (key != UINT32_MAX) {
+        return keys[key].input != 0
+                   ? UiStartStep(state, (uint32_t)keys[key].input, UI_SETTLING_FRAMES, info)
+                   : state;
+    }
+    // A row: both ends of the tap on its box or in the cursor's margin beside it.
+    uint32_t row = UINT32_MAX;
+    for (uint32_t r = 0; r < UI_START_ROWS; ++r) {
+        const UiRect box = { LIST_X - 2u * CW, UiStartRowTop(r), START_WIDTH + 2u * CW,
+                             START_BOX };
+        if (Inside(box, tap->x0, tap->y0) && Inside(box, tap->x1, tap->y1)) {
+            row = r;
+        }
+    }
     if (row == UINT32_MAX) {
         return state;
     }
@@ -2241,7 +2678,7 @@ uint32_t UiResumeSecondsLeft(uint64_t elapsed_ns, bool pressed) {
 // Below the sentence of where it stopped, which takes up to three lines, and the three lines of
 // how far the run got, with a line between.
 #define RESUME_WHERE_LINES 3u
-#define RESUME_ROWS_TOP (UI_LIST_TOP + (RESUME_WHERE_LINES + 4u) * LINE)
+#define RESUME_ROWS_TOP (UI_SMALL_LIST_TOP + (RESUME_WHERE_LINES + 4u) * LINE)
 
 uint32_t UiResumeRowTop(uint32_t row) {
     return RESUME_ROWS_TOP + row * 2u * LINE;
@@ -2263,11 +2700,11 @@ void UiComposeResume(const UiFrame *frame, const UiResumeInfo *info, UiResumeSta
     SayFitted(frame, MARGIN, SECOND_Y, SKIPPED,
               "the last run in this folder stopped before its end");
 
-    TextWrapped(frame, MARGIN, UI_LIST_TOP, 1u, LINE, TEXT,
+    TextWrapped(frame, MARGIN, UI_SMALL_LIST_TOP, 1u, LINE, TEXT,
                 info->where != NULL && info->where[0] != '\0' ? info->where
                                                               : "where it stopped is not known",
                 Columns(frame), RESUME_WHERE_LINES);
-    uint32_t y = UI_LIST_TOP + RESUME_WHERE_LINES * LINE;
+    uint32_t y = UI_SMALL_LIST_TOP + RESUME_WHERE_LINES * LINE;
     char text[160];
     snprintf(text, sizeof(text), "this is launch %u of the run; %u of its %u steps are done",
              (unsigned)info->launch, (unsigned)info->steps_done, (unsigned)info->steps);
@@ -2393,16 +2830,20 @@ size_t UiElapsedWords(char *out, size_t out_size, uint64_t ns) {
 /// the running screen's bar, which the listening screen draws too. The launcher's run screen
 /// fills its bar in the ink colour and leaves the rest in the dim one; the step under way is in
 /// the soft colour between them.
-static void DrawStepsBar(const UiFrame *frame, uint32_t step, uint32_t steps) {
-    const uint32_t width = frame->width - 2u * MARGIN;
-    FillRect(frame, MARGIN, UI_PROGRESS_BAR_TOP, width, UI_PROGRESS_BAR_HEIGHT, BORDER);
+static void DrawStepsBarAt(const UiFrame *frame, uint32_t step, uint32_t steps, uint32_t x,
+                           uint32_t top, uint32_t height) {
+    const uint32_t width = frame->width - x - (x == LIST_X ? EDGE : x);
+    FillRect(frame, x, top, width, height, BORDER);
     if (steps > 0u && step > 0u) {
         const uint32_t done = (uint32_t)((uint64_t)width * (step - 1u) / steps);
         const uint32_t under_way = (uint32_t)((uint64_t)width * step / steps) - done;
-        FillRect(frame, MARGIN, UI_PROGRESS_BAR_TOP, done, UI_PROGRESS_BAR_HEIGHT, TEXT);
-        FillRect(frame, MARGIN + done, UI_PROGRESS_BAR_TOP, under_way, UI_PROGRESS_BAR_HEIGHT,
-                 DIM);
+        FillRect(frame, x, top, done, height, TEXT);
+        FillRect(frame, x + done, top, under_way, height, DIM);
     }
+}
+
+static void DrawStepsBar(const UiFrame *frame, uint32_t step, uint32_t steps) {
+    DrawStepsBarAt(frame, step, steps, LIST_X, UI_PROGRESS_BAR_TOP, UI_PROGRESS_BAR_HEIGHT);
 }
 
 void UiComposeProgress(const UiFrame *frame, const UiProgress *progress) {
@@ -2410,40 +2851,35 @@ void UiComposeProgress(const UiFrame *frame, const UiProgress *progress) {
         return;
     }
     g_look = &RUN;
-    Page(frame, 0, 0, frame->width, frame->height);
     if (frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        Page(frame, 0, 0, frame->width, frame->height);
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
-    // The results screens' header: one word at the margin, the program after it, the counts on
-    // the second row; as the launcher's run screen puts its title in the ink and the name after
-    // it in the soft colour.
-    Say(frame, MARGIN, HEAD_Y, TEXT, "running");
-    SayFitted(frame, MARGIN + 9u * GLYPH, HEAD_Y, DIM,
-              progress->heading != NULL ? progress->heading : "edenprobe");
-    const uint32_t x = Say(frame, MARGIN, SECOND_Y, DIM, "so far: ");
-    SayCounts(frame, x, SECOND_Y, progress->passed, progress->failed, progress->skipped,
-              progress->crashed);
-
+    // The launcher's run screen: its colours, the title and the program at its right, the step
+    // and its bar, the case under way, the counts.
+    Head(frame, UI_TABS, "EDENPROBE  /  RUNNING", progress->heading);
+    const uint32_t right = frame->width - EDGE;
     char text[200];
     const uint32_t step = progress->step < progress->steps ? progress->step : progress->steps;
-    snprintf(text, sizeof(text), "step %u of %u: %s", (unsigned)step, (unsigned)progress->steps,
+    snprintf(text, sizeof(text), "Step %u of %u: %s", (unsigned)step, (unsigned)progress->steps,
              progress->step_name != NULL ? progress->step_name : "");
-    SayFitted(frame, MARGIN, UI_LIST_TOP, TEXT, text);
+    BigFit(frame, LIST_X, UI_BODY_TOP + 2u, right, TEXT, text);
 
     DrawStepsBar(frame, step, progress->steps);
 
-    uint32_t y = UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT + 16u;
+    uint32_t y = UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT + 14u;
     if (UiProgressPassWords(text, sizeof(text), progress->pass, progress->passes) > 0u) {
-        SayFitted(frame, MARGIN, y, DIM, text);
+        text[0] = (char)(text[0] >= 'a' && text[0] <= 'z' ? text[0] - 'a' + 'A' : text[0]);
+        BigFit(frame, LIST_X, y, right, DIM, text);
     }
-    y += LINE;
+    y += CH;
     if (progress->name != NULL && progress->case_number > 0u) {
         if (progress->case_total >= progress->case_number) {
-            snprintf(text, sizeof(text), "case %u of %u", (unsigned)progress->case_number,
+            snprintf(text, sizeof(text), "Case %u of %u", (unsigned)progress->case_number,
                      (unsigned)progress->case_total);
         } else {
-            snprintf(text, sizeof(text), "case %u", (unsigned)progress->case_number);
+            snprintf(text, sizeof(text), "Case %u", (unsigned)progress->case_number);
         }
         // The suite as the case's line names it, when it is not the step's own name: the net
         // step's six suites.
@@ -2453,24 +2889,41 @@ void UiComposeProgress(const UiFrame *frame, const UiProgress *progress) {
             const size_t used = strlen(text);
             snprintf(text + used, sizeof(text) - used, ", in %s", progress->suite);
         }
-        SayFitted(frame, MARGIN, y, DIM, text);
-        TextWrapped(frame, MARGIN, y + LINE, 1u, LINE, TEXT, progress->name, Columns(frame), 2u);
+        BigFit(frame, LIST_X, y, right, DIM, text);
+        TextWrapped(frame, LIST_X, y + CH, SC, CH, TEXT, progress->name, (right - LIST_X) / CW,
+                    2u);
     }
-    y += 3u * LINE + 8u;
+    y += 3u * CH + 10u;
+    uint32_t x = Big(frame, LIST_X, y, DIM, "So far: ");
+    const struct {
+        uint32_t count;
+        const char *word;
+        const uint8_t *colour;
+    } PARTS[4] = {
+        { progress->passed, "passed", PASSED },
+        { progress->failed, "failed", FAILED },
+        { progress->skipped, "skipped", SKIPPED },
+        { progress->crashed, "crashed", CRASHED },
+    };
+    for (uint32_t i = 0; i < 4u; ++i) {
+        if (i == 3u && progress->crashed == 0u) {
+            break;
+        }
+        snprintf(text, sizeof(text), "%u %s", (unsigned)PARTS[i].count, PARTS[i].word);
+        x = Big(frame, x, y, PARTS[i].count > 0u ? PARTS[i].colour : DIM, text) + 2u * CW;
+    }
+    y += CH;
     char elapsed[32];
     UiElapsedWords(elapsed, sizeof(elapsed), progress->elapsed_ns);
-    snprintf(text, sizeof(text), "running for %s", elapsed);
-    SayFitted(frame, MARGIN, y, DIM, text);
+    snprintf(text, sizeof(text), "Running for %s", elapsed);
+    BigFit(frame, LIST_X, y, right, DIM, text);
     snprintf(text, sizeof(text), "folder: %s", progress->folder != NULL ? progress->folder : "");
-    SayFitted(frame, MARGIN, y + LINE, DIM, text);
+    SayFitted(frame, LIST_X, y + CH + 4u, DIM, text);
 
-    DrawFootNote(frame,
-                 progress->quick
-                     ? "nothing to press: the program leaves when the run ends; this screen "
-                       "is drawn between cases"
-                     : "nothing to press: the results come up when the run ends; this "
-                       "screen is drawn between cases",
-                 frame->width - MARGIN);
+    Foot(frame,
+         progress->quick ? "Nothing to press: the program leaves when the run ends"
+                         : "Nothing to press: the results come up when the run ends",
+         DIM, NULL, 0u);
 }
 
 // The listening sequence, one row per screen, in the order a run with no button plays them.
@@ -2598,8 +3051,8 @@ void UiComposeListen(const UiFrame *frame, UiListenScreen screen, double left, d
         return;
     }
     g_look = &RUN;
-    Page(frame, 0, 0, frame->width, frame->height);
     if (frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        Page(frame, 0, 0, frame->width, frame->height);
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
@@ -2607,10 +3060,8 @@ void UiComposeListen(const UiFrame *frame, UiListenScreen screen, double left, d
     UiListenCopy text;
     UiListenCopyOf(screen, left, right, &text, guide, sizeof(guide));
 
-    // The running screen's layout, which comes before and after it: the word and what is
-    // playing on the top row, a second row in the dim colour, the step and its bar where a list
-    // would start, and what to listen for below the bar.
-    Say(frame, MARGIN, HEAD_Y, TEXT, "listening");
+    // The running screen's layout, which comes before and after it: the title, what is playing
+    // at its right, the step and its bar, and what to listen for below the bar.
     char line[200];
     if (text.mark != NULL) {
         snprintf(line, sizeof(line), "part %s: %s", text.mark, text.name);
@@ -2618,26 +3069,26 @@ void UiComposeListen(const UiFrame *frame, UiListenScreen screen, double left, d
         snprintf(line, sizeof(line), "%s", screen == UI_LISTEN_OPENING ? "before the parts"
                                                                        : "after the parts");
     }
-    SayFitted(frame, MARGIN + 11u * GLYPH, HEAD_Y, DIM, line);
-    SayFitted(frame, MARGIN, SECOND_Y, DIM,
-              "about 40 seconds of sound to hear, before the audio suite's cases");
+    Head(frame, UI_TABS, "EDENPROBE  /  LISTENING", line);
 
     const uint32_t steps = UI_LISTEN_CLOSING + 1u;
     const uint32_t step = screen < steps ? (uint32_t)screen + 1u : steps;
-    snprintf(line, sizeof(line), "step %u of %u: %s", (unsigned)step, (unsigned)steps,
+    snprintf(line, sizeof(line), "Step %u of %u: %s", (unsigned)step, (unsigned)steps,
              text.take);
-    SayFitted(frame, MARGIN, UI_LIST_TOP, TEXT, line);
+    BigFit(frame, LIST_X, UI_BODY_TOP + 2u, frame->width - EDGE, TEXT, line);
     DrawStepsBar(frame, step, steps);
 
-    const uint32_t y = UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT + 16u;
-    Say(frame, MARGIN, y, DIM, "listen for");
-    const uint32_t top = y + LINE;
-    const uint32_t room = frame->height > top + FOOT ? (frame->height - top - FOOT) / LINE : 1u;
-    TextWrapped(frame, MARGIN, top, 1u, LINE, TEXT, text.guide, Columns(frame), room);
+    const uint32_t y = UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT + 14u;
+    Big(frame, LIST_X, y, DIM, "Listen for");
+    const uint32_t top = y + CH + 4u;
+    const uint32_t bottom = UI_BODY_BOTTOM(frame->height);
+    const uint32_t room = bottom > top + LINE ? (bottom - top) / LINE : 1u;
+    TextWrapped(frame, LIST_X, top, 1u, LINE, TEXT, text.guide,
+                (frame->width - EDGE - LIST_X) / GLYPH, room);
 
     // Its buttons as the sentence names them, "Y repeat   X next part": a key and what it does,
     // apart from the next by more than one space.
-    Key keys[4];
+    UiKey keys[4];
     char words[4][64];
     uint32_t count = 0;
     for (const char *at = text.buttons; *at != '\0' && count < 4u;) {
@@ -2652,13 +3103,15 @@ void UiComposeListen(const UiFrame *frame, UiListenScreen screen, double left, d
         }
         keys[count].key = words[count];
         keys[count].what = space != NULL ? space + 1 : "";
+        keys[count].input = 0;
         ++count;
         at += length;
         while (*at == ' ') {
             ++at;
         }
     }
-    DrawKeys(frame, keys, count, frame->width - MARGIN);
+    Foot(frame, "About 40 seconds of sound to hear, before the audio suite's cases", DIM, keys,
+         count);
 }
 
 // The pad screen's two stick boxes, side by side at the right of the live lines: each stick's
@@ -2703,11 +3156,11 @@ void UiComposePad(const UiFrame *frame, const UiPadScreen *screen) {
     char line[200];
     const uint32_t prompt = screen->prompt < screen->prompts ? screen->prompt : screen->prompts;
     snprintf(line, sizeof(line), "prompt %u of %u", (unsigned)prompt, (unsigned)screen->prompts);
-    SayFitted(frame, MARGIN, UI_LIST_TOP, TEXT, line);
-    DrawStepsBar(frame, prompt, screen->prompts);
+    SayFitted(frame, MARGIN, UI_SMALL_LIST_TOP, TEXT, line);
+    DrawStepsBarAt(frame, prompt, screen->prompts, MARGIN, UI_PAD_BAR_TOP, UI_PAD_BAR_HEIGHT);
 
     // Large enough to read from a sofa: six times the cell, as long as it fits across.
-    uint32_t y = UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT + 24u;
+    uint32_t y = UI_PAD_BAR_TOP + UI_PAD_BAR_HEIGHT + 24u;
     const char *const big = screen->big != NULL ? screen->big : "";
     const uint32_t room = frame->width - 2u * MARGIN;
     uint32_t scale = UI_PAD_BIG;
@@ -2850,4 +3303,1451 @@ PadAnswer UiPadTap(const UiTap *tap, uint32_t frame_width, uint32_t frame_height
     }
     const uint32_t box = TapBox(tap, frame_width, frame_height, 2u);
     return box == 0u ? PAD_ANSWER_YES : box == 1u ? PAD_ANSWER_NO : PAD_ANSWER_NONE;
+}
+
+// ---- The browser ------------------------------------------------------------------------------
+
+// The suites the browser lists, each FAMILIES row of a family the browser shows, the families in
+// their order and each one's suites in the table's: worked out the first time it is asked.
+static uint8_t browse_suites[UI_BROWSE_SUITES];
+static uint32_t browse_suite_count;
+
+static void ListBrowseSuites(void) {
+    if (browse_suite_count > 0u) {
+        return;
+    }
+    for (uint32_t family = 0; family < UI_FAMILY_OTHER; ++family) {
+        for (size_t i = 0; i < sizeof(FAMILIES) / sizeof(FAMILIES[0]); ++i) {
+            if (FAMILIES[i].family == (UiFamily)family &&
+                browse_suite_count < UI_BROWSE_SUITES) {
+                browse_suites[browse_suite_count++] = (uint8_t)i;
+            }
+        }
+    }
+}
+
+_Static_assert(sizeof(FAMILIES) / sizeof(FAMILIES[0]) <= UI_BROWSE_SUITES,
+               "every suite the screens know has a row in the browser");
+
+uint32_t UiBrowseSuiteCount(void) {
+    ListBrowseSuites();
+    return browse_suite_count;
+}
+
+const char *UiBrowseSuite(uint32_t index) {
+    ListBrowseSuites();
+    return index < browse_suite_count ? FAMILIES[browse_suites[index]].suite : NULL;
+}
+
+UiFamily UiBrowseSuiteFamily(uint32_t index) {
+    ListBrowseSuites();
+    return index < browse_suite_count ? FAMILIES[browse_suites[index]].family : UI_FAMILY_OTHER;
+}
+
+uint32_t UiBrowseSuiteIndex(const char *suite) {
+    for (uint32_t i = 0; suite != NULL && i < UiBrowseSuiteCount(); ++i) {
+        if (strcmp(UiBrowseSuite(i), suite) == 0) {
+            return i;
+        }
+    }
+    return UINT32_MAX;
+}
+
+/// The families the browser lists, in their order: every one but other.
+#define BROWSE_FAMILIES ((uint32_t)UI_FAMILY_OTHER)
+
+/// The suites of @p family: how many, and the index of the @p n th.
+static uint32_t FamilySuites(UiFamily family) {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < UiBrowseSuiteCount(); ++i) {
+        count += UiBrowseSuiteFamily(i) == family ? 1u : 0u;
+    }
+    return count;
+}
+
+static uint32_t FamilySuiteAt(UiFamily family, uint32_t n) {
+    for (uint32_t i = 0; i < UiBrowseSuiteCount(); ++i) {
+        if (UiBrowseSuiteFamily(i) == family && n-- == 0u) {
+            return i;
+        }
+    }
+    return UINT32_MAX;
+}
+
+/// Where suite @p suite sits among its family's.
+static uint32_t PlaceInFamily(uint32_t suite) {
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < suite && i < UiBrowseSuiteCount(); ++i) {
+        n += UiBrowseSuiteFamily(i) == UiBrowseSuiteFamily(suite) ? 1u : 0u;
+    }
+    return n;
+}
+
+uint32_t UiBrowseCases(const UiBrowseInfo *info, uint32_t suite) {
+    const char *const name = UiBrowseSuite(suite);
+    uint32_t count = 0;
+    for (uint32_t i = 0; info != NULL && name != NULL && i < info->catalogue_count; ++i) {
+        count += strcmp(info->catalogue[i].suite, name) == 0 ? 1u : 0u;
+    }
+    return count;
+}
+
+uint32_t UiBrowseCaseAt(const UiBrowseInfo *info, uint32_t suite, uint32_t n) {
+    const char *const name = UiBrowseSuite(suite);
+    for (uint32_t i = 0; info != NULL && name != NULL && i < info->catalogue_count; ++i) {
+        if (strcmp(info->catalogue[i].suite, name) == 0 && n-- == 0u) {
+            return i;
+        }
+    }
+    return UINT32_MAX;
+}
+
+static bool Bit(const uint8_t *bits, uint32_t index) {
+    return (bits[index / 8u] >> (index % 8u) & 1u) != 0u;
+}
+
+static void SetBit(uint8_t *bits, uint32_t index, bool on) {
+    if (on) {
+        bits[index / 8u] = (uint8_t)(bits[index / 8u] | (1u << (index % 8u)));
+    } else {
+        bits[index / 8u] = (uint8_t)(bits[index / 8u] & ~(1u << (index % 8u)));
+    }
+}
+
+/// The judge's suites always run, so they are never marked.
+static bool Markable(uint32_t suite) {
+    return UiBrowseSuiteFamily(suite) != UI_FAMILY_JUDGE;
+}
+
+/// How much of suite @p suite the marks hold.
+static Mark SuiteMark(const UiBrowseState *state, const UiBrowseInfo *info, uint32_t suite) {
+    if (Bit(state->suite_marks, suite)) {
+        return MARK_ALL;
+    }
+    const uint32_t cases = UiBrowseCases(info, suite);
+    for (uint32_t n = 0; n < cases; ++n) {
+        const uint32_t at = UiBrowseCaseAt(info, suite, n);
+        if (at < UI_MAX_CASES && Bit(state->case_marks, at)) {
+            return MARK_SOME;
+        }
+    }
+    return MARK_NONE;
+}
+
+static Mark FamilyMark(const UiBrowseState *state, const UiBrowseInfo *info, UiFamily family) {
+    const uint32_t count = FamilySuites(family);
+    uint32_t whole = 0;
+    bool some = false;
+    for (uint32_t n = 0; n < count; ++n) {
+        const Mark mark = SuiteMark(state, info, FamilySuiteAt(family, n));
+        whole += mark == MARK_ALL ? 1u : 0u;
+        some = some || mark != MARK_NONE;
+    }
+    return count > 0u && whole == count ? MARK_ALL : some ? MARK_SOME : MARK_NONE;
+}
+
+static void MarkSuite(UiBrowseState *state, const UiBrowseInfo *info, uint32_t suite, bool on) {
+    if (!Markable(suite)) {
+        return;
+    }
+    SetBit(state->suite_marks, suite, on);
+    const uint32_t cases = UiBrowseCases(info, suite);
+    for (uint32_t n = 0; n < cases; ++n) {
+        const uint32_t at = UiBrowseCaseAt(info, suite, n);
+        if (at < UI_MAX_CASES) {
+            SetBit(state->case_marks, at, false);
+        }
+    }
+}
+
+/// X on the row under the cursor: a family or a suite whole, or off when it was; a case alone,
+/// and in a suite marked whole, every case of it but this one; a demo.
+static void ToggleMark(UiBrowseState *state, const UiBrowseInfo *info) {
+    if (state->tab == UI_TAB_DEMOS) {
+        if (state->demo < info->demo_count && state->demo < 32u) {
+            state->demo_marks ^= 1u << state->demo;
+        }
+        return;
+    }
+    if (state->level == 0u) {
+        const UiFamily family = (UiFamily)state->family;
+        const bool on = FamilyMark(state, info, family) != MARK_ALL;
+        for (uint32_t n = 0; n < FamilySuites(family); ++n) {
+            MarkSuite(state, info, FamilySuiteAt(family, n), on);
+        }
+    } else if (state->level == 1u) {
+        MarkSuite(state, info, state->suite, SuiteMark(state, info, state->suite) != MARK_ALL);
+    } else if (Markable(state->suite)) {
+        const uint32_t at = UiBrowseCaseAt(info, state->suite, state->item);
+        if (at >= UI_MAX_CASES) {
+            return;
+        }
+        if (Bit(state->suite_marks, state->suite)) {
+            SetBit(state->suite_marks, state->suite, false);
+            for (uint32_t n = 0; n < UiBrowseCases(info, state->suite); ++n) {
+                const uint32_t other = UiBrowseCaseAt(info, state->suite, n);
+                if (other < UI_MAX_CASES) {
+                    SetBit(state->case_marks, other, other != at);
+                }
+            }
+        } else {
+            SetBit(state->case_marks, at, !Bit(state->case_marks, at));
+        }
+    }
+    state->changed = true;
+}
+
+const uint32_t UI_DEMO_FRAMES[UI_DEMO_FRAME_CHOICES] = { 120u, 600u, 3600u, 36000u };
+
+UiOptions UiOptionsFrom(const RunMode *mode) {
+    UiOptions options;
+    memset(&options, 0, sizeof(options));
+    options.timing = mode == NULL || !mode->no_timing;
+    options.every_picture = mode != NULL && mode->every_case;
+    options.retry = mode != NULL && mode->retry;
+    options.frames = UI_DEMO_FRAMES[1];
+    const uint32_t asked = mode != NULL ? mode->frames : MODE_FRAMES_DEFAULT;
+    for (uint32_t i = UI_DEMO_FRAME_CHOICES; i-- > 0u;) {
+        if (UI_DEMO_FRAMES[i] >= asked) {
+            options.frames = UI_DEMO_FRAMES[i];
+        }
+    }
+    options.music = true;
+    options.motion = true;
+    options.hud = true;
+    return options;
+}
+
+UiBrowseState UiBrowseOpen(UiTab tab, const UiStartState *start, UiOptions options,
+                           const UiBrowseInfo *info) {
+    UiBrowseState state;
+    memset(&state, 0, sizeof(state));
+    state.tab = tab < UI_TABS ? tab : UI_TAB_SUITES;
+    if (start != NULL) {
+        state.start = *start;
+        state.start.begun = false;
+        state.start.tab_asked = 0u;
+    }
+    state.options = options;
+    state.family = (uint32_t)UI_FAMILY_GRAPHICS;
+    state.suite = FamilySuiteAt(UI_FAMILY_GRAPHICS, 0u);
+    state.results = UiStart(info != NULL ? info->results : NULL);
+    state.results.browser = true;
+    state.changed = true;
+    return state;
+}
+
+/// The start tab's buttons from the browser's.
+static uint32_t StartButtons(uint32_t buttons) {
+    static const struct {
+        uint32_t from;
+        uint32_t to;
+    } MAP[] = {
+        { UI_BUTTON_UP, UI_START_UP },
+        { UI_BUTTON_DOWN, UI_START_DOWN },
+        { UI_BUTTON_OPEN, UI_START_SELECT },
+        { UI_BUTTON_RUN, UI_START_BEGIN },
+        { UI_BUTTON_CYCLE_VIEW, UI_START_TOGGLE_RETRY },
+        { UI_BUTTON_AGAIN, UI_START_Y },
+    };
+    uint32_t out = 0;
+    for (size_t i = 0; i < sizeof(MAP) / sizeof(MAP[0]); ++i) {
+        out |= (buttons & MAP[i].from) != 0u ? MAP[i].to : 0u;
+    }
+    return out;
+}
+
+static void StepSuites(UiBrowseState *state, uint32_t buttons, const UiBrowseInfo *info) {
+    const UiFamily family = (UiFamily)state->family;
+    if (state->level == 0u) {
+        if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u) {
+            state->family = Around(state->family, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1,
+                                   BROWSE_FAMILIES);
+        } else if ((buttons & UI_BUTTON_OPEN) != 0u && FamilySuites(family) > 0u) {
+            state->level = 1u;
+            state->suite = FamilySuiteAt(family, 0u);
+        }
+    } else if (state->level == 1u) {
+        const uint32_t count = FamilySuites(family);
+        const uint32_t place = PlaceInFamily(state->suite);
+        if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u && count > 0u) {
+            state->suite = FamilySuiteAt(
+                family, Around(place, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1, count));
+        } else if ((buttons & (UI_BUTTON_LEFT | UI_BUTTON_RIGHT)) != 0u) {
+            // The family before or after, on its first suite; one with none is passed over.
+            uint32_t next = state->family;
+            do {
+                next = Around(next, (buttons & UI_BUTTON_LEFT) != 0u ? -1 : 1, BROWSE_FAMILIES);
+            } while (FamilySuites((UiFamily)next) == 0u && next != state->family);
+            state->family = next;
+            state->suite = FamilySuiteAt((UiFamily)next, 0u);
+        } else if ((buttons & UI_BUTTON_OPEN) != 0u) {
+            state->level = 2u;
+            state->item = 0u;
+        } else if ((buttons & UI_BUTTON_BACK) != 0u) {
+            state->level = 0u;
+        }
+    } else {
+        const uint32_t cases = UiBrowseCases(info, state->suite);
+        if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u && cases > 0u) {
+            state->item = Around(state->item, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1, cases);
+        } else if ((buttons & (UI_BUTTON_LEFT | UI_BUTTON_RIGHT)) != 0u) {
+            const uint32_t count = FamilySuites(family);
+            state->suite = FamilySuiteAt(
+                family, Around(PlaceInFamily(state->suite),
+                               (buttons & UI_BUTTON_LEFT) != 0u ? -1 : 1, count));
+            state->item = 0u;
+        } else if ((buttons & UI_BUTTON_OPEN) != 0u && cases > 0u &&
+                   Markable(state->suite)) {
+            state->ask = UI_ASK_RUN_ONE;
+        } else if ((buttons & UI_BUTTON_BACK) != 0u) {
+            state->level = 1u;
+        }
+    }
+}
+
+/// The results tab after its own step or tap: B on its overview goes to the suites, and its run
+/// again and its quit are the browser's to do.
+static UiBrowseState ResultsAsked(UiBrowseState state) {
+    if (state.results.back) {
+        state.results.back = false;
+        state.tab = UI_TAB_SUITES;
+    }
+    if (state.results.again) {
+        state.results.again = false;
+        state.ask = UI_ASK_AGAIN;
+    }
+    if (state.results.quit) {
+        state.results.quit = false;
+        state.ask = UI_ASK_QUIT;
+    }
+    return state;
+}
+
+UiBrowseState UiBrowseStep(UiBrowseState state, uint32_t buttons, uint32_t frame_index,
+                           const UiBrowseInfo *info) {
+    state.ask = UI_ASK_NONE;
+    if (frame_index < UI_SETTLING_FRAMES || info == NULL || buttons == 0u) {
+        return state;
+    }
+    const UiBrowseState before = state;
+    state.pressed = true;
+    // Leaving first, as the results do; then the tabs, which every tab has.
+    const uint32_t tabs = buttons & (UI_BUTTON_TAB_PREVIOUS | UI_BUTTON_TAB_NEXT);
+    if ((buttons & UI_BUTTON_QUIT) != 0u) {
+        state.ask = UI_ASK_QUIT;
+    } else if (tabs == UI_BUTTON_TAB_NEXT || tabs == UI_BUTTON_TAB_PREVIOUS) {
+        state.tab = (UiTab)Around(state.tab, tabs == UI_BUTTON_TAB_NEXT ? 1 : -1, UI_TABS);
+    } else if (tabs != 0u) {
+        // Both in one edge: a pad's whole mask, nobody's choice.
+    } else if (state.tab == UI_TAB_START) {
+        state.start = UiStartStep(state.start, StartButtons(buttons), UI_SETTLING_FRAMES,
+                                  info->start);
+        if (state.start.begun) {
+            state.start.begun = false;
+            state.ask = UI_ASK_BEGIN;
+        }
+    } else if (state.tab == UI_TAB_RESULTS) {
+        state.results.browser = true;
+        state.results = UiStep(state.results,
+                               UiInputFromButtons(buttons & ~UI_BUTTON_RUN, UI_SETTLING_FRAMES),
+                               info->results);
+        state = ResultsAsked(state);
+    } else if ((buttons & UI_BUTTON_RUN) != 0u) {
+        state.ask = UI_ASK_RUN;
+    } else if ((buttons & UI_BUTTON_CYCLE_VIEW) != 0u && state.tab != UI_TAB_OPTIONS) {
+        ToggleMark(&state, info);
+    } else if (state.tab == UI_TAB_SUITES) {
+        StepSuites(&state, buttons, info);
+    } else if (state.tab == UI_TAB_DEMOS) {
+        if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u && info->demo_count > 0u) {
+            state.demo =
+                Around(state.demo, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1, info->demo_count);
+        } else if ((buttons & UI_BUTTON_OPEN) != 0u && info->demo_count > 0u) {
+            state.ask = UI_ASK_RUN_ONE;
+        }
+    } else if (state.tab == UI_TAB_OPTIONS) {
+        if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u) {
+            state.option = Around(state.option, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1,
+                                  UI_OPTIONS);
+        } else if ((buttons & (UI_BUTTON_LEFT | UI_BUTTON_RIGHT | UI_BUTTON_OPEN)) != 0u) {
+            UiOptions *const o = &state.options;
+            switch (state.option) {
+            case UI_OPTION_TIMING:
+                o->timing = !o->timing;
+                break;
+            case UI_OPTION_PICTURES:
+                o->every_picture = !o->every_picture;
+                break;
+            case UI_OPTION_RETRY:
+                o->retry = !o->retry;
+                break;
+            case UI_OPTION_FRAMES: {
+                uint32_t at = 0;
+                while (at + 1u < UI_DEMO_FRAME_CHOICES && UI_DEMO_FRAMES[at] < o->frames) {
+                    ++at;
+                }
+                at = Around(at, (buttons & UI_BUTTON_LEFT) != 0u ? -1 : 1,
+                            UI_DEMO_FRAME_CHOICES);
+                o->frames = UI_DEMO_FRAMES[at];
+                break;
+            }
+            case UI_OPTION_MUSIC:
+                o->music = !o->music;
+                break;
+            case UI_OPTION_MOTION:
+                o->motion = !o->motion;
+                break;
+            default:
+                o->hud = !o->hud;
+                break;
+            }
+        }
+    }
+    if ((buttons & UI_BUTTON_BACK) != 0u && before.tab == state.tab &&
+        state.tab != UI_TAB_RESULTS && state.tab != UI_TAB_START &&
+        (state.tab != UI_TAB_SUITES || before.level == 0u)) {
+        state.tab = UI_TAB_START;
+    }
+    state.changed = state.changed || memcmp(&before, &state, sizeof(state)) != 0;
+    return state;
+}
+
+/// The rows the suites tab lists at its level, and the one the cursor is on.
+static uint32_t SuitesRows(const UiBrowseState *state, const UiBrowseInfo *info,
+                           uint32_t *cursor) {
+    if (state->level == 0u) {
+        *cursor = state->family;
+        return BROWSE_FAMILIES;
+    }
+    if (state->level == 1u) {
+        *cursor = PlaceInFamily(state->suite);
+        return FamilySuites((UiFamily)state->family);
+    }
+    *cursor = state->item;
+    return UiBrowseCases(info, state->suite);
+}
+
+/// The list's first row and how many it shows, at the rows' step from @p top to the body's foot.
+static uint32_t ListWindow(uint32_t cursor, uint32_t total, uint32_t top, uint32_t height,
+                           uint32_t *first) {
+    const uint32_t bottom = UI_BODY_BOTTOM(height);
+    const uint32_t rows = bottom > top + UI_ROW_PITCH ? (bottom - top) / UI_ROW_PITCH : 1u;
+    *first = UiListFirst(cursor, total, rows);
+    return total - *first < rows ? total - *first : rows;
+}
+
+// The lists' column in the suites, demos and options tabs, and the top of their rows under the
+// band that names what they list.
+#define BROWSE_LIST_WIDTH 560u
+#define BROWSE_CASES_WIDTH 688u
+#define BROWSE_ROWS_TOP (UI_BODY_TOP + BH + 12u)
+
+UiBrowseState UiBrowseTap(UiBrowseState state, const UiTap *tap, uint32_t frame_width,
+                          uint32_t frame_height, const UiBrowseInfo *info) {
+    state.ask = UI_ASK_NONE;
+    if (tap == NULL || info == NULL || frame_width < UI_MIN_WIDTH ||
+        frame_height < UI_MIN_HEIGHT) {
+        return state;
+    }
+    state.pressed = true;
+    const UiTab tab = TabAt(tap);
+    if (tab != UI_TABS) {
+        state.changed = state.changed || tab != state.tab;
+        state.tab = tab;
+        return state;
+    }
+    if (state.tab == UI_TAB_RESULTS) {
+        // Its foot's keys are the results screen's, which name its own inputs.
+        state.results.browser = true;
+        state.results = UiTapStep(state.results, tap, info->results, frame_width, frame_height);
+        return ResultsAsked(state);
+    }
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiBrowseKeys(&state, info, keys);
+    const uint32_t key = UiFootKeyAt(tap, frame_width, frame_height, keys, count);
+    if (key != UINT32_MAX) {
+        return keys[key].input != 0
+                   ? UiBrowseStep(state, (uint32_t)keys[key].input, UI_SETTLING_FRAMES, info)
+                   : state;
+    }
+    if (state.tab == UI_TAB_START) {
+        UiStartState start = UiStartTap(state.start, tap, frame_width, frame_height, info->start);
+        if (start.begun) {
+            start.begun = false;
+            state.ask = UI_ASK_BEGIN;
+        }
+        state.changed = state.changed || start.changed;
+        state.start = start;
+        return state;
+    }
+    // A row of the list: both ends on its box, or in the cursor's margin beside it.
+    uint32_t cursor = 0;
+    uint32_t total = 0;
+    uint32_t width = BROWSE_LIST_WIDTH;
+    if (state.tab == UI_TAB_SUITES) {
+        total = SuitesRows(&state, info, &cursor);
+        width = state.level == 2u ? BROWSE_CASES_WIDTH : BROWSE_LIST_WIDTH;
+    } else if (state.tab == UI_TAB_DEMOS) {
+        total = info->demo_count;
+        cursor = state.demo;
+    } else {
+        total = UI_OPTIONS;
+        cursor = state.option;
+    }
+    uint32_t first = 0;
+    const uint32_t shown = ListWindow(cursor, total, BROWSE_ROWS_TOP, frame_height, &first);
+    // The focused row of a suite's cases is as tall as its name, which a tap does not reach
+    // past: rows are told apart by their step.
+    for (uint32_t r = 0; r < shown; ++r) {
+        const UiRect box = { LIST_X - 2u * CW, BROWSE_ROWS_TOP + r * UI_ROW_PITCH,
+                             width + 2u * CW, UI_ROW_BOX };
+        if (!Inside(box, tap->x0, tap->y0) || !Inside(box, tap->x1, tap->y1)) {
+            continue;
+        }
+        if (first + r == cursor) {
+            return UiBrowseStep(state, UI_BUTTON_OPEN, UI_SETTLING_FRAMES, info);
+        }
+        if (state.tab == UI_TAB_SUITES && state.level == 0u) {
+            state.family = first + r;
+        } else if (state.tab == UI_TAB_SUITES && state.level == 1u) {
+            state.suite = FamilySuiteAt((UiFamily)state.family, first + r);
+        } else if (state.tab == UI_TAB_SUITES) {
+            state.item = first + r;
+        } else if (state.tab == UI_TAB_DEMOS) {
+            state.demo = first + r;
+        } else {
+            state.option = first + r;
+        }
+        state.changed = true;
+        return state;
+    }
+    return state;
+}
+
+uint32_t UiBrowseKeys(const UiBrowseState *state, const UiBrowseInfo *info, UiKey *keys) {
+    if (state->tab == UI_TAB_RESULTS) {
+        UiState results = state->results;
+        results.browser = true;
+        return UiResultsKeys(info != NULL ? info->results : NULL, results, keys);
+    }
+    uint32_t count = 0;
+    const UiKey select = { "Up/Down", "select", 0 };
+    const UiKey quit = { "Minus", "quit", UI_BUTTON_QUIT };
+    const UiKey tabs = { "L/R", "tabs", 0 };
+    keys[count++] = select;
+    if (state->tab == UI_TAB_START) {
+        const UiKey choose = { "A", "choose", UI_BUTTON_OPEN };
+        const UiKey begin = { "Plus", "begin", UI_BUTTON_RUN };
+        const UiKey retry = { "X", "crash list", UI_BUTTON_CYCLE_VIEW };
+        keys[count++] = choose;
+        keys[count++] = begin;
+        keys[count++] = retry;
+        keys[count++] = tabs;
+    } else if (state->tab == UI_TAB_OPTIONS) {
+        const UiKey change = { "A", "change", UI_BUTTON_OPEN };
+        keys[count++] = change;
+        keys[count++] = tabs;
+        const UiKey back = { "B", "back", UI_BUTTON_BACK };
+        keys[count++] = back;
+    } else {
+        const bool runs_one =
+            state->tab == UI_TAB_DEMOS || (state->tab == UI_TAB_SUITES && state->level == 2u);
+        const UiKey open = { "A", runs_one ? "run it" : "open", UI_BUTTON_OPEN };
+        const UiKey mark = { "X", "mark", UI_BUTTON_CYCLE_VIEW };
+        const UiKey run = { "Plus", "run", UI_BUTTON_RUN };
+        keys[count++] = open;
+        keys[count++] = mark;
+        keys[count++] = run;
+        if (state->tab == UI_TAB_SUITES && state->level > 0u) {
+            const UiKey back = { "B", "back", UI_BUTTON_BACK };
+            keys[count++] = back;
+        } else {
+            keys[count++] = tabs;
+        }
+    }
+    keys[count++] = quit;
+    return count;
+}
+
+/// A family in a sentence, for the box beside the list.
+static const char *FamilyWords(UiFamily family) {
+    switch (family) {
+    case UI_FAMILY_JUDGE:
+        return "The judge: the comparisons every family leans on. It runs before every run, so "
+               "it has no mark.";
+    case UI_FAMILY_CPU:
+        return "The processor's instructions, held to what they must give. No device.";
+    case UI_FAMILY_PAD:
+        return "The controller, then the touch screen: a person presses what the screen names.";
+    case UI_FAMILY_GRAPHICS:
+        return "The drawing suites, clear to copy, and tex8k: what the graphics unit draws, "
+               "pixel by pixel.";
+    case UI_FAMILY_NVN:
+        return "The clear suite's question asked through the program's NVN layer.";
+    case UI_FAMILY_FS:
+        return "Reads from the memory card, timed and checked.";
+    case UI_FAMILY_KERNEL:
+        return "The scheduler and the kernel's answers to waits, events, handles and memory.";
+    case UI_FAMILY_DISPLAY:
+        return "The buffer history of a layer of the display service.";
+    case UI_FAMILY_VIDEO:
+        return "The video image compositor and the VP9 decoder, a job per case.";
+    case UI_FAMILY_AUDIO:
+        return "The audio renderer: its resampler, its sinks and its limiter, nearly silent.";
+    case UI_FAMILY_SERVICE:
+        return "Commands a game sends to the system's services, each answer held to reden's.";
+    case UI_FAMILY_NET:
+        return "The online services, nifm to friend, against what sdmc:/edenprobe/net names.";
+    case UI_FAMILY_GAME:
+        return "Everything at once, as a game does it: the scene and the Wimsy levels.";
+    case UI_FAMILY_LIBC:
+        return "The C library and what it asks of the system.";
+    case UI_FAMILY_DEMO:
+        return "Demos to watch, each frame a graphics workload a game runs, chosen frames judged "
+               "and every frame timed.";
+    case UI_FAMILY_MUSIC:
+        return "The demos' music: each track rendered and held to the host's samples, then "
+               "played through the audio renderer.";
+    case UI_FAMILY_OTHER:
+    case UI_FAMILY_COUNT:
+        break;
+    }
+    return "Suites the screens know no family for.";
+}
+
+/// The catalogue's counts for a suite, or for every suite of a family when @p suite is
+/// UINT32_MAX.
+static void CatalogueCounts(const UiBrowseInfo *info, UiFamily family, uint32_t suite,
+                            uint32_t counts[4]) {
+    memset(counts, 0, 4u * sizeof(counts[0]));
+    const char *const name = suite != UINT32_MAX ? UiBrowseSuite(suite) : NULL;
+    for (uint32_t i = 0; i < info->catalogue_count; ++i) {
+        const ReportRecord *const record = &info->catalogue[i];
+        if (name != NULL ? strcmp(record->suite, name) != 0
+                         : UiFamilyOf(record->suite) != family) {
+            continue;
+        }
+        ++counts[record->result == REPORT_PASS     ? 0
+                 : record->result == REPORT_FAIL   ? 1
+                 : record->result == REPORT_SKIP   ? 2
+                                                   : 3];
+    }
+}
+
+/// At a row's right: how its last run went, "?" when the card has none.
+static void RowVerdict(const UiFrame *frame, uint32_t right, uint32_t y, const uint32_t counts[4],
+                       bool selected, const uint8_t *ink) {
+    char text[32];
+    const uint8_t *colour = DIM;
+    if (counts[0] + counts[1] + counts[2] + counts[3] == 0u) {
+        snprintf(text, sizeof(text), "?");
+    } else if (counts[1] > 0u) {
+        snprintf(text, sizeof(text), "%u failed", (unsigned)counts[1]);
+        colour = FAILED;
+    } else if (counts[0] == 0u) {
+        snprintf(text, sizeof(text), "skipped");
+        colour = SKIPPED;
+    } else {
+        snprintf(text, sizeof(text), "pass");
+        colour = PASSED;
+    }
+    Big(frame, right - (uint32_t)strlen(text) * CW, y, selected ? ink : colour, text);
+}
+
+/// The box that says what the next run holds, under the box beside the list.
+static void NextRunBox(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t width,
+                       const UiBrowseState *state, const UiBrowseInfo *info) {
+    if (y + BH + CH > UI_BODY_BOTTOM(frame->height)) {
+        return;
+    }
+    uint32_t at = Box(frame, x, y, width, UI_BODY_BOTTOM(frame->height) - y, "Next run",
+                      "Plus runs it", NULL);
+    const uint32_t bottom = UI_BODY_BOTTOM(frame->height);
+    uint32_t whole = 0;
+    uint32_t cases = 0;
+    for (uint32_t i = 0; i < UiBrowseSuiteCount(); ++i) {
+        whole += Bit(state->suite_marks, i) ? 1u : 0u;
+    }
+    for (uint32_t i = 0; i < info->catalogue_count && i < UI_MAX_CASES; ++i) {
+        cases += Bit(state->case_marks, i) ? 1u : 0u;
+    }
+    uint32_t demos = 0;
+    for (uint32_t i = 0; i < info->demo_count && i < 32u; ++i) {
+        demos += (state->demo_marks >> i & 1u) != 0u ? 1u : 0u;
+    }
+    char text[96];
+    if (whole + cases + demos == 0u) {
+        Big(frame, x + CW / 2u, at, DIM, "Nothing marked: Plus runs");
+        Big(frame, x + CW / 2u, at + CH, DIM, "the row under the cursor");
+        return;
+    }
+    Big(frame, x + CW / 2u, at, TEXT, "The judge, first");
+    at += CH;
+    const struct {
+        uint32_t count;
+        const char *one;
+        const char *many;
+    } LINES[3] = {
+        { whole, "suite whole", "suites whole" },
+        { cases, "case alone", "cases alone" },
+        { demos, "demo", "demos" },
+    };
+    for (uint32_t i = 0; i < 3u && at + CH <= bottom; ++i) {
+        if (LINES[i].count > 0u) {
+            snprintf(text, sizeof(text), "%u %s", (unsigned)LINES[i].count,
+                     LINES[i].count == 1u ? LINES[i].one : LINES[i].many);
+            Big(frame, x + CW / 2u, at, TEXT, text);
+            at += CH;
+        }
+    }
+}
+
+static void ComposeSuites(const UiFrame *frame, const UiBrowseInfo *info,
+                          const UiBrowseState *state, char *tip, size_t tip_size) {
+    const uint32_t right_edge = frame->width - EDGE;
+    uint32_t cursor = 0;
+    const uint32_t total = SuitesRows(state, info, &cursor);
+    const uint32_t width = state->level == 2u ? BROWSE_CASES_WIDTH : BROWSE_LIST_WIDTH;
+    // The band over the list: where it is, and how many there are.
+    char band[96];
+    char count[32];
+    if (state->level == 0u) {
+        snprintf(band, sizeof(band), "Families");
+        snprintf(count, sizeof(count), "%u", (unsigned)total);
+    } else if (state->level == 1u) {
+        snprintf(band, sizeof(band), "%s", UiFamilyName((UiFamily)state->family));
+        snprintf(count, sizeof(count), "%u suites", (unsigned)total);
+    } else {
+        snprintf(band, sizeof(band), "%s > %s", UiFamilyName((UiFamily)state->family),
+                 UiBrowseSuite(state->suite));
+        snprintf(count, sizeof(count), total > 0u ? "%u / %u" : "? cases",
+                 (unsigned)(state->item + 1u), (unsigned)total);
+    }
+    band[0] = (char)(band[0] >= 'a' && band[0] <= 'z' ? band[0] - 'a' + 'A' : band[0]);
+    FillRect(frame, LIST_X, UI_BODY_TOP, width, BH, TEXT);
+    BigFit(frame, LIST_X + CW / 2u, UI_BODY_TOP + 2u * SC,
+           LIST_X + width - CW - (uint32_t)strlen(count) * CW, BACKGROUND, band);
+    Big(frame, LIST_X + width - CW / 2u - (uint32_t)strlen(count) * CW, UI_BODY_TOP + 2u * SC,
+        BACKGROUND, count);
+
+    uint32_t first = 0;
+    const uint32_t shown = ListWindow(cursor, total, BROWSE_ROWS_TOP, frame->height, &first);
+    uint32_t y = BROWSE_ROWS_TOP;
+    for (uint32_t r = 0; r < shown; ++r) {
+        const uint32_t row = first + r;
+        const bool selected = row == cursor;
+        uint32_t counts[4];
+        if (state->level == 0u) {
+            const UiFamily family = (UiFamily)row;
+            const uint8_t *const ink = ListRow(frame, LIST_X, y, width, UI_ROW_BOX, selected);
+            Marker(frame, LIST_X + 8u, y, FamilyMark(state, info, family),
+                   family == UI_FAMILY_JUDGE && !selected ? DIM : ink);
+            char name[24];
+            snprintf(name, sizeof(name), "%s", UiFamilyName(family));
+            name[0] = (char)(name[0] - 'a' + 'A');
+            Big(frame, LIST_X + 2u * CW, y + 2u, ink, name);
+            char suites[16];
+            snprintf(suites, sizeof(suites), "%3u", (unsigned)FamilySuites(family));
+            Big(frame, LIST_X + 14u * CW, y + 2u, selected ? ink : DIM, suites);
+            CatalogueCounts(info, family, UINT32_MAX, counts);
+            RowVerdict(frame, LIST_X + width - CW / 2u, y + 2u, counts, selected, ink);
+            y += UI_ROW_PITCH;
+        } else if (state->level == 1u) {
+            const uint32_t suite = FamilySuiteAt((UiFamily)state->family, row);
+            CatalogueCounts(info, UI_FAMILY_OTHER, suite, counts);
+            const uint8_t *const ink = ListRow(frame, LIST_X, y, width, UI_ROW_BOX, selected);
+            Marker(frame, LIST_X + 8u, y, SuiteMark(state, info, suite),
+                   Markable(suite) || selected ? ink : DIM);
+            BigFit(frame, LIST_X + 2u * CW, y + 2u, LIST_X + 14u * CW,
+                   selected || counts[1] == 0u ? ink : FAILED, UiBrowseSuite(suite));
+            const uint32_t cases = UiBrowseCases(info, suite);
+            char text[16];
+            if (cases > 0u) {
+                snprintf(text, sizeof(text), "%3u", (unsigned)cases);
+            } else {
+                snprintf(text, sizeof(text), "  ?");
+            }
+            Big(frame, LIST_X + 14u * CW, y + 2u, selected ? ink : DIM, text);
+            RowVerdict(frame, LIST_X + width - CW / 2u, y + 2u, counts, selected, ink);
+            y += UI_ROW_PITCH;
+        } else {
+            const uint32_t at = UiBrowseCaseAt(info, state->suite, row);
+            const ReportRecord *const record = &info->catalogue[at];
+            // The focused row as tall as its whole name, three rows at most; the others one,
+            // cut.
+            const uint32_t name_x = LIST_X + 8u * CW;
+            const uint32_t columns = (LIST_X + width - CW / 2u - name_x) / CW;
+            const uint32_t wrapped = UiWrappedLines(record->name, columns);
+            const uint32_t lines = selected ? (wrapped < 3u ? wrapped : 3u) : 1u;
+            const uint32_t height = UI_ROW_BOX + (lines > 0u ? lines - 1u : 0u) * CH;
+            if (y + height > UI_BODY_BOTTOM(frame->height)) {
+                break;
+            }
+            const uint8_t *const ink = ListRow(frame, LIST_X, y, width, height, selected);
+            const bool bring_up = strcmp(record->tier, "none") == 0;
+            const Mark mark = Bit(state->suite_marks, state->suite) ||
+                                      (at < UI_MAX_CASES && Bit(state->case_marks, at))
+                                  ? MARK_ALL
+                              : bring_up ? MARK_SOME
+                                         : MARK_NONE;
+            Marker(frame, LIST_X + 8u, y, mark, bring_up && !selected ? DIM : ink);
+            BigVerdict(frame, LIST_X + 2u * CW + 2u, y + 2u, record->result);
+            if (selected) {
+                TextWrapped(frame, name_x, y + 2u, SC, CH, ink, record->name, columns, 3u);
+            } else {
+                BigFit(frame, name_x, y + 2u, LIST_X + width - CW / 2u, ink, record->name);
+            }
+            y += height + (UI_ROW_PITCH - UI_ROW_BOX);
+        }
+    }
+    if (first > 0u) {
+        BigGlyph(frame, LIST_X + width + 4u, BROWSE_ROWS_TOP + 2u, DIM,
+                 (unsigned char)FONTVGA_UP);
+    }
+    if (first + shown < total) {
+        BigGlyph(frame, LIST_X + width + 4u, y - UI_ROW_PITCH + 2u, DIM,
+                 (unsigned char)FONTVGA_DOWN);
+    }
+
+    // Beside the list: what the row under the cursor is, and the next run.
+    const uint32_t x = LIST_X + width + 2u * CW;
+    const uint32_t box_width = right_edge - x;
+    const uint32_t columns = (box_width - CW) / CW;
+    uint32_t counts[4];
+    char text[200];
+    if (state->level == 2u && total > 0u) {
+        const ReportRecord *const record =
+            &info->catalogue[UiBrowseCaseAt(info, state->suite, state->item)];
+        uint32_t at = Box(frame, x, UI_BODY_TOP, box_width,
+                          UI_BODY_BOTTOM(frame->height) - UI_BODY_TOP, "Last run", NULL, NULL);
+        BigVerdict(frame, x + CW / 2u + 2u, at, record->result);
+        snprintf(text, sizeof(text), "tier %s", record->tier);
+        Big(frame, x + CW / 2u + 6u * CW, at, DIM, text);
+        at += CH + 6u;
+        Big(frame, x + CW / 2u, at, DIM,
+            Skipped(record->result) ? "Why it was skipped:" : "The judge said:");
+        at += CH;
+        const char *const detail =
+            record->detail[0] != '\0' ? record->detail : NoDetail(record->result);
+        const uint32_t room = UI_BODY_BOTTOM(frame->height) > at + 3u * CH
+                                  ? (UI_BODY_BOTTOM(frame->height) - at - 2u * CH) / CH
+                                  : 1u;
+        at += TextWrapped(frame, x + CW / 2u, at, SC, CH, TEXT, detail, columns, room) * CH;
+        TextWrapped(frame, x + CW / 2u, at + 6u, SC, CH, DIM,
+                    "Runs with it: the suite's bring-up cases", columns, 2u);
+        snprintf(tip, tip_size, "A runs this case now, alone; X puts it in the next run");
+        return;
+    }
+    if (state->level == 0u) {
+        const UiFamily family = (UiFamily)state->family;
+        char name[24];
+        snprintf(name, sizeof(name), "%s", UiFamilyName(family));
+        name[0] = (char)(name[0] - 'a' + 'A');
+        snprintf(text, sizeof(text), "%u suites", (unsigned)FamilySuites(family));
+        uint32_t at = Box(frame, x, UI_BODY_TOP, box_width, 268u, name, text, NULL);
+        at += TextWrapped(frame, x + CW / 2u, at, SC, CH, TEXT, FamilyWords(family), columns,
+                          3u) *
+                  CH +
+              6u;
+        CatalogueCounts(info, family, UINT32_MAX, counts);
+        snprintf(text, sizeof(text), "Last run: %u passed, %u failed, %u skipped",
+                 (unsigned)counts[0], (unsigned)counts[1], (unsigned)(counts[2] + counts[3]));
+        BigFit(frame, x + CW / 2u, at, right_edge - CW / 2u, DIM,
+               counts[0] + counts[1] + counts[2] + counts[3] > 0u
+                   ? text
+                   : "Last run: none on this card");
+        snprintf(tip, tip_size, "%s: A opens its suites, X puts the whole family in the next run",
+                 name);
+    } else {
+        const uint32_t suite = state->suite;
+        const uint32_t cases = UiBrowseCases(info, suite);
+        snprintf(text, sizeof(text), cases > 0u ? "%u cases" : "? cases", (unsigned)cases);
+        uint32_t at = Box(frame, x, UI_BODY_TOP, box_width, 268u, UiBrowseSuite(suite), text,
+                          NULL);
+        CatalogueCounts(info, UI_FAMILY_OTHER, suite, counts);
+        if (cases == 0u) {
+            at += TextWrapped(frame, x + CW / 2u, at, SC, CH, TEXT,
+                              "Not on this card yet: run it once, whole, and its cases are "
+                              "listed here",
+                              columns, 3u) *
+                  CH;
+        } else {
+            snprintf(text, sizeof(text), "Last run: %u passed, %u failed, %u skipped",
+                     (unsigned)counts[0], (unsigned)counts[1],
+                     (unsigned)(counts[2] + counts[3]));
+            BigFit(frame, x + CW / 2u, at, right_edge - CW / 2u, TEXT, text);
+            at += CH;
+            // Its first failures, at the font's own size.
+            for (uint32_t n = 0, listed = 0; n < cases && listed < 4u; ++n) {
+                const ReportRecord *const record =
+                    &info->catalogue[UiBrowseCaseAt(info, suite, n)];
+                if (record->result == REPORT_FAIL) {
+                    DrawCaseLine(frame, x + CW / 2u, at + 4u + listed * LINE, record,
+                                 (box_width - CW) / GLYPH - 6u, TEXT);
+                    ++listed;
+                }
+            }
+        }
+        if (info->catalogue_from != NULL && info->catalogue_from[0] != '\0') {
+            SayFitted(frame, x + CW / 2u, UI_BODY_TOP + 268u - LINE - 4u, DIM,
+                      info->catalogue_from);
+        }
+        snprintf(tip, tip_size, "%s: A opens its cases, X puts the whole suite in the next run",
+                 UiBrowseSuite(suite));
+    }
+    NextRunBox(frame, x, UI_BODY_TOP + 278u, box_width, state, info);
+}
+
+static void ComposeDemos(const UiFrame *frame, const UiBrowseInfo *info,
+                         const UiBrowseState *state, char *tip, size_t tip_size) {
+    const uint32_t width = 400u;
+    if (info->demo_count == 0u) {
+        Big(frame, LIST_X, UI_BODY_TOP + 6u, DIM, "This build has no demo");
+        snprintf(tip, tip_size, "No demo to run");
+        return;
+    }
+    uint32_t first = 0;
+    const uint32_t shown =
+        ListWindow(state->demo, info->demo_count, UI_BODY_TOP + 6u, frame->height, &first);
+    for (uint32_t r = 0; r < shown; ++r) {
+        const uint32_t row = first + r;
+        const uint32_t y = UI_BODY_TOP + 6u + r * UI_ROW_PITCH;
+        const bool selected = row == state->demo;
+        const uint8_t *const ink = ListRow(frame, LIST_X, y, width, UI_ROW_BOX, selected);
+        Marker(frame, LIST_X + 8u, y,
+               row < 32u && (state->demo_marks >> row & 1u) != 0u ? MARK_ALL : MARK_NONE, ink);
+        BigFit(frame, LIST_X + 2u * CW, y + 2u, LIST_X + width - CW / 2u, ink,
+               info->demos[row].name);
+    }
+    const UiDemoRow *const demo = &info->demos[state->demo];
+    const uint32_t x = LIST_X + width + 2u * CW;
+    const uint32_t box_width = frame->width - EDGE - x;
+    const uint32_t columns = (box_width - CW) / CW;
+    char right[48];
+    snprintf(right, sizeof(right), "%s", demo->suite);
+    uint32_t at = Box(frame, x, UI_BODY_TOP, box_width,
+                      UI_BODY_BOTTOM(frame->height) - UI_BODY_TOP, demo->name, right, NULL);
+    at += TextWrapped(frame, x + CW / 2u, at, SC, CH, TEXT, demo->description, columns, 5u) * CH +
+          10u;
+    uint32_t counts[4];
+    CatalogueCounts(info, UI_FAMILY_OTHER, UiBrowseSuiteIndex(demo->suite), counts);
+    char text[96];
+    static const char *const FACTS[3] = { "Last run", "Frames", "Music" };
+    char values[3][64];
+    if (counts[0] + counts[1] + counts[2] + counts[3] > 0u) {
+        snprintf(values[0], sizeof(values[0]), "%u passed, %u failed", (unsigned)counts[0],
+                 (unsigned)counts[1]);
+    } else {
+        snprintf(values[0], sizeof(values[0]), "not on this card yet");
+    }
+    snprintf(values[1], sizeof(values[1]), "%u, in the options", (unsigned)state->options.frames);
+    snprintf(values[2], sizeof(values[2]), "%s",
+             !state->options.music ? "off, in the options"
+             : demo->track != NULL ? demo->track
+                                   : "none of its own");
+    for (uint32_t i = 0; i < 3u; ++i) {
+        Big(frame, x + CW / 2u, at, DIM, FACTS[i]);
+        BigFit(frame, x + CW / 2u + 10u * CW, at, frame->width - EDGE - CW / 2u, TEXT, values[i]);
+        at += CH;
+    }
+    snprintf(text, sizeof(text), "While it runs: Plus pauses, B stops it");
+    BigFit(frame, x + CW / 2u, at + 8u, frame->width - EDGE - CW / 2u, DIM, text);
+    snprintf(tip, tip_size, "%s: A runs it now, with its HUD over the frames", demo->name);
+}
+
+static void ComposeOptions(const UiFrame *frame, const UiBrowseState *state, char *tip,
+                           size_t tip_size) {
+    static const struct {
+        const char *name;
+        const char *what;
+    } ROWS[UI_OPTIONS] = {
+        { "Timing", "On: a drawing suite makes 11 passes and its lines carry times. Off: once, "
+                    "as the word notime." },
+        { "Pictures", "Failures: a picture for each failing drawing case. Every case: passing "
+                      "ones too, as the word images." },
+        { "Crash list", "On: the cases that ended a program before run again, as the word retry; "
+                        "this one may end too." },
+        { "Demo frames", "How long a demo runs: 120, 600, 3600 or 36000 frames, as frames=." },
+        { "Music", "The browser's track, and each demo's own while it runs; never in a run the "
+                   "mode file begins." },
+        { "Motion", "A new screen comes in over a tenth of a second, top first. Off: at once." },
+        { "HUD", "Over a demo's frames: its numbers and the frame times. Y hides it there." },
+    };
+    const UiOptions *const o = &state->options;
+    for (uint32_t r = 0; r < UI_OPTIONS; ++r) {
+        const uint32_t y = UI_BODY_TOP + 6u + r * UI_ROW_PITCH;
+        const bool selected = r == state->option;
+        const uint8_t *const ink = ListRow(frame, LIST_X, y, 512u, UI_ROW_BOX, selected);
+        BigGlyph(frame, LIST_X + CW / 2u, y + 2u, ink, (unsigned char)FONTVGA_MARKER);
+        Big(frame, LIST_X + 2u * CW, y + 2u, ink, ROWS[r].name);
+        char value[24];
+        switch (r) {
+        case UI_OPTION_TIMING:
+            snprintf(value, sizeof(value), "%s", o->timing ? "On" : "Off");
+            break;
+        case UI_OPTION_PICTURES:
+            snprintf(value, sizeof(value), "%s", o->every_picture ? "Every case" : "Failures");
+            break;
+        case UI_OPTION_RETRY:
+            snprintf(value, sizeof(value), "%s", o->retry ? "On" : "Off");
+            break;
+        case UI_OPTION_FRAMES:
+            snprintf(value, sizeof(value), "%u", (unsigned)o->frames);
+            break;
+        case UI_OPTION_MUSIC:
+            snprintf(value, sizeof(value), "%s", o->music ? "On" : "Off");
+            break;
+        case UI_OPTION_MOTION:
+            snprintf(value, sizeof(value), "%s", o->motion ? "On" : "Off");
+            break;
+        default:
+            snprintf(value, sizeof(value), "%s", o->hud ? "On" : "Off");
+            break;
+        }
+        char shown[32];
+        snprintf(shown, sizeof(shown), selected ? "< %s >" : "%s", value);
+        Big(frame, LIST_X + 512u - CW / 2u - (uint32_t)strlen(shown) * CW, y + 2u, ink, shown);
+    }
+    const uint32_t x = LIST_X + 512u + 2u * CW;
+    const uint32_t width = frame->width - EDGE - x;
+    const uint32_t columns = (width - CW) / CW;
+    uint32_t at = Box(frame, x, UI_BODY_TOP, width, 230u, ROWS[state->option].name, NULL, NULL);
+    TextWrapped(frame, x + CW / 2u, at, SC, CH, TEXT, ROWS[state->option].what, columns, 5u);
+    at = Box(frame, x, UI_BODY_TOP + 240u, width,
+             UI_BODY_BOTTOM(frame->height) - UI_BODY_TOP - 240u, "Always", NULL, NULL);
+    TextWrapped(frame, x + CW / 2u, at, SC, CH, DIM,
+                "The judge runs before every run begun here. The mode file's other words hold: "
+                "hooks, machine, skip, label, unban, hang.",
+                columns, 5u);
+    snprintf(tip, tip_size, "%s: Left/Right or A changes it, for this session",
+             ROWS[state->option].name);
+}
+
+void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBrowseState *state) {
+    if (frame == NULL || frame->pixels == NULL || info == NULL || state == NULL) {
+        return;
+    }
+    g_look = &MENU;
+    if (frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        Page(frame, 0, 0, frame->width, frame->height);
+        UiText(frame, 0, 0, 1, TEXT, "frame too small");
+        return;
+    }
+    if (state->tab == UI_TAB_RESULTS && info->results != NULL) {
+        UiState results = state->results;
+        results.browser = true;
+        const int32_t picture = UiOpenPicture(info->results, results);
+        UiCompose(frame, info->results, results,
+                  picture >= 0 && info->picture != NULL ? info->picture(picture) : NULL);
+        UiComposeCountdown(frame, info->seconds_left);
+        return;
+    }
+    char title[48];
+    snprintf(title, sizeof(title), "EDENPROBE  /  %s", UiTabName(state->tab));
+    for (char *c = title; *c != '\0'; ++c) {
+        *c = (char)(*c >= 'a' && *c <= 'z' ? *c - 'a' + 'A' : *c);
+    }
+    Head(frame, state->tab, title, info->machine);
+    char tip[200] = "";
+    const uint8_t *tip_colour = TEXT;
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiBrowseKeys(state, info, keys);
+    if (state->tab == UI_TAB_START && info->start != NULL) {
+        snprintf(tip, sizeof(tip), "Begin the run: the families on, whole, in a run of its own");
+        ComposeStartBody(frame, info->start, state->start, tip, tip_colour, keys, count);
+        UiComposeCountdown(frame, info->seconds_left);
+        return;
+    }
+    switch (state->tab) {
+    case UI_TAB_SUITES:
+        ComposeSuites(frame, info, state, tip, sizeof(tip));
+        break;
+    case UI_TAB_DEMOS:
+        ComposeDemos(frame, info, state, tip, sizeof(tip));
+        break;
+    case UI_TAB_OPTIONS:
+        ComposeOptions(frame, state, tip, sizeof(tip));
+        break;
+    default:
+        Big(frame, LIST_X, UI_BODY_TOP + 6u, DIM, "No run yet in this session");
+        snprintf(tip, sizeof(tip), "Plus, in the suites or the demos, runs what is marked");
+        break;
+    }
+    Foot(frame, tip, tip_colour, keys, count);
+    UiComposeCountdown(frame, info->seconds_left);
+}
+
+bool UiBrowsePick(const UiBrowseState *state, const UiBrowseInfo *info, UiPick *pick) {
+    memset(pick, 0, sizeof(*pick));
+    if (state == NULL || info == NULL) {
+        return false;
+    }
+    bool any = false;
+    if (state->ask == UI_ASK_BEGIN && info->start != NULL) {
+        // The start tab's families whole, cpu with them, as a run from it has always had.
+        static const struct {
+            uint32_t mode;
+            UiFamily family;
+        } ROWS[] = {
+            { MODE_FAMILY_GRAPHICS, UI_FAMILY_GRAPHICS }, { MODE_FAMILY_FS, UI_FAMILY_FS },
+            { MODE_FAMILY_AUDIO, UI_FAMILY_AUDIO },       { MODE_FAMILY_NET, UI_FAMILY_NET },
+            { MODE_FAMILY_PAD, UI_FAMILY_PAD },           { MODE_FAMILY_CPU, UI_FAMILY_CPU },
+        };
+        const uint32_t families = state->start.families | MODE_FAMILY_CPU;
+        for (uint32_t i = 0; i < UiBrowseSuiteCount(); ++i) {
+            for (size_t r = 0; r < sizeof(ROWS) / sizeof(ROWS[0]); ++r) {
+                if ((families & ROWS[r].mode) != 0u && UiBrowseSuiteFamily(i) == ROWS[r].family) {
+                    SetBit(pick->suites, i, true);
+                    any = true;
+                }
+            }
+        }
+        return any;
+    }
+    const bool alone = state->ask == UI_ASK_RUN_ONE;
+    if (!alone) {
+        memcpy(pick->suites, state->suite_marks, sizeof(pick->suites));
+        memcpy(pick->cases, state->case_marks, sizeof(pick->cases));
+        pick->demos = state->demo_marks;
+        for (size_t i = 0; i < sizeof(pick->suites) && !any; ++i) {
+            any = pick->suites[i] != 0u;
+        }
+        for (size_t i = 0; i < sizeof(pick->cases) && !any; ++i) {
+            any = pick->cases[i] != 0u;
+        }
+        any = any || pick->demos != 0u;
+        if (any) {
+            return true;
+        }
+    }
+    // The row under the cursor.
+    if (state->tab == UI_TAB_DEMOS && state->demo < info->demo_count && state->demo < 32u) {
+        pick->demos = 1u << state->demo;
+        return true;
+    }
+    if (state->tab != UI_TAB_SUITES) {
+        return false;
+    }
+    if (state->level == 0u) {
+        for (uint32_t n = 0; n < FamilySuites((UiFamily)state->family); ++n) {
+            const uint32_t suite = FamilySuiteAt((UiFamily)state->family, n);
+            if (Markable(suite)) {
+                SetBit(pick->suites, suite, true);
+                any = true;
+            }
+        }
+        return any;
+    }
+    if (state->level == 1u && Markable(state->suite)) {
+        SetBit(pick->suites, state->suite, true);
+        return true;
+    }
+    const uint32_t at = UiBrowseCaseAt(info, state->suite, state->item);
+    if (state->level == 2u && Markable(state->suite) && at < UI_MAX_CASES) {
+        SetBit(pick->cases, at, true);
+        return true;
+    }
+    return false;
+}
+
+bool UiPickHas(const UiPick *pick, const UiBrowseInfo *info, const char *suite,
+               const char *name) {
+    if (pick == NULL || suite == NULL || UiFamilyOf(suite) == UI_FAMILY_JUDGE) {
+        return true;
+    }
+    const uint32_t index = UiBrowseSuiteIndex(suite);
+    if (index != UINT32_MAX && Bit(pick->suites, index)) {
+        return true;
+    }
+    bool suite_picked = false;
+    uint32_t found = UINT32_MAX;
+    for (uint32_t i = 0; info != NULL && i < info->catalogue_count && i < UI_MAX_CASES; ++i) {
+        const ReportRecord *const record = &info->catalogue[i];
+        if (strcmp(record->suite, suite) != 0) {
+            continue;
+        }
+        suite_picked = suite_picked || Bit(pick->cases, i);
+        if (found == UINT32_MAX && name != NULL && strcmp(record->name, name) == 0) {
+            found = i;
+        }
+    }
+    if (found != UINT32_MAX && Bit(pick->cases, found)) {
+        return true;
+    }
+    // A case of a picked case's suite: its bring-up, which the catalogue holds with no tier, or
+    // one the catalogue does not hold at all, which may be its bring-up too.
+    return suite_picked &&
+           (found == UINT32_MAX || strcmp(info->catalogue[found].tier, "none") == 0);
+}
+
+bool UiPickHasFamily(const UiPick *pick, UiFamily family) {
+    for (uint32_t i = 0; pick != NULL && i < UiBrowseSuiteCount(); ++i) {
+        if (UiBrowseSuiteFamily(i) == family && Bit(pick->suites, i)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ---- The demo's HUD and its pause menu ------------------------------------------------------
+
+/// A box of the HUD: opaque, the menu's page in a frame of the ink, its head a band of the ink
+/// with the launcher's bar at its left.
+static uint32_t HudBox(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t width,
+                       uint32_t height, const char *name, const char *right) {
+    FillRect(frame, x, y, width, height, BACKGROUND);
+    Outline(frame, x, y, width, height, TEXT);
+    FillRect(frame, x, y, width, BH, TEXT);
+    FillRect(frame, x + 6u, y + 8u, 4u, BH - 16u, BACKGROUND);
+    BigFit(frame, x + 2u * CW, y + 2u * SC, x + width - CW / 2u, BACKGROUND, name);
+    if (right != NULL) {
+        Big(frame, x + width - CW / 2u - (uint32_t)strlen(right) * CW, y + 2u * SC, BACKGROUND,
+            right);
+    }
+    return y + BH + 4u;
+}
+
+/// Keys as the foot draws them, in a box of their own centred at @p y.
+static void HudKeys(const UiFrame *frame, uint32_t y, const UiKey *keys, uint32_t count) {
+    uint32_t width = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        width += ((uint32_t)strlen(keys[i].key) + 1u + (uint32_t)strlen(keys[i].what)) * CW +
+                 (i + 1u < count ? 2u * CW : 0u);
+    }
+    const uint32_t box = width + 4u * CW;
+    const uint32_t x0 = frame->width > box ? (frame->width - box) / 2u : 0u;
+    FillRect(frame, x0, y, box, CH + 12u, BACKGROUND);
+    Outline(frame, x0, y, box, CH + 12u, TEXT);
+    uint32_t x = x0 + 2u * CW;
+    for (uint32_t i = 0; i < count; ++i) {
+        const uint32_t kw = (uint32_t)strlen(keys[i].key) * CW;
+        FillRect(frame, x - SC, y + 6u, kw + 2u * SC, CH, TEXT);
+        Big(frame, x, y + 6u, BACKGROUND, keys[i].key);
+        x = Big(frame, x + kw + CW, y + 6u, TEXT, keys[i].what) + 2u * CW;
+    }
+}
+
+void UiComposeHud(const UiFrame *frame, const UiHud *hud) {
+    if (frame == NULL || frame->pixels == NULL || hud == NULL ||
+        frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        return;
+    }
+    g_look = &MENU;
+    char text[64];
+    // Top left: the demo and its numbers.
+    const uint32_t width = 368u;
+    char name[48];
+    snprintf(name, sizeof(name), "%s", hud->name != NULL ? hud->name : "demo");
+    for (char *c = name; *c != '\0'; ++c) {
+        *c = (char)(*c >= 'a' && *c <= 'z' ? *c - 'a' + 'A' : *c);
+    }
+    uint32_t y = HudBox(frame, EDGE, EDGE, width, BH + 4u + 3u * CH + 8u, name, NULL);
+    snprintf(text, sizeof(text), "%u.%u", (unsigned)(hud->fps_tenths / 10u),
+             (unsigned)(hud->fps_tenths % 10u));
+    uint32_t x = Big(frame, EDGE + CW, y, TEXT, text);
+    x = Big(frame, x, y, DIM, " fps  ");
+    snprintf(text, sizeof(text), "%u.%u", (unsigned)(hud->frame_us / 1000u),
+             (unsigned)(hud->frame_us % 1000u / 100u));
+    x = Big(frame, x, y, TEXT, text);
+    Big(frame, x, y, DIM, " ms");
+    y += CH;
+    x = Big(frame, EDGE + CW, y, DIM, "frame ");
+    snprintf(text, sizeof(text), "%u / %u", (unsigned)hud->frame, (unsigned)hud->frames);
+    Big(frame, x, y, TEXT, text);
+    y += CH;
+    x = Big(frame, EDGE + CW, y, DIM, "track ");
+    BigFit(frame, x, y, EDGE + width - CW / 2u, TEXT,
+           hud->track != NULL && hud->track[0] != '\0' ? hud->track : "none");
+
+    // Top right: the frame times, against the display's two periods at 60 a second.
+    const uint32_t graph_width = 352u;
+    const uint32_t gx = frame->width - EDGE - graph_width;
+    y = HudBox(frame, gx, EDGE, graph_width, BH + 4u + 3u * CH + 8u, "FRAME TIMES", "ms");
+    const uint32_t base = y + 3u * CH - 4u;
+    // Three pixels a millisecond: 33.3 ms is a hundred.
+    const uint32_t count = hud->time_count < UI_HUD_TIMES ? hud->time_count : UI_HUD_TIMES;
+    uint32_t previous = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t height = hud->times[i] * 3u / 1000u;
+        if (height > 3u * CH - 8u) {
+            height = 3u * CH - 8u;
+        }
+        const uint32_t from = i == 0u ? height : previous;
+        const uint32_t low = from < height ? from : height;
+        const uint32_t high = from < height ? height : from;
+        FillRect(frame, gx + 16u + i * 2u, base - high - 1u, 2u, high - low + 2u,
+                 hud->times[i] > 33333u ? FAILED : TEXT);
+        previous = height;
+    }
+    FillRect(frame, gx + 12u, base - 50u, graph_width - 24u, 1u, PASSED);
+    FillRect(frame, gx + 12u, base - 100u + 8u, graph_width - 24u, 1u, FAILED);
+    Say(frame, gx + graph_width - 6u * GLYPH, base - 50u - 17u, PASSED, "16.7");
+    Say(frame, gx + graph_width - 6u * GLYPH, base - 92u - 17u, FAILED, "33.3");
+
+    static const UiKey KEYS[3] = {
+        { "Plus", "pause", 0 },
+        { "B", "stop", 0 },
+        { "Y", "hide this", 0 },
+    };
+    HudKeys(frame, frame->height - EDGE - CH - 12u, KEYS, 3u);
+}
+
+UiPauseState UiPauseOpen(const UiPauseInfo *info, uint32_t frames, bool music, bool hud) {
+    UiPauseState state;
+    memset(&state, 0, sizeof(state));
+    state.cursor = UI_PAUSE_RESUME;
+    state.level = info != NULL ? info->running : 0u;
+    state.frames = frames;
+    state.music = music;
+    state.hud = hud;
+    state.changed = true;
+    return state;
+}
+
+UiPauseState UiPauseStep(UiPauseState state, uint32_t buttons, const UiPauseInfo *info) {
+    const UiPauseState before = state;
+    const bool left = (buttons & UI_BUTTON_LEFT) != 0u;
+    const bool change = left || (buttons & UI_BUTTON_RIGHT) != 0u;
+    if ((buttons & UI_BUTTON_RUN) != 0u) {
+        state.resume = true;
+    } else if ((buttons & UI_BUTTON_BACK) != 0u) {
+        state.back = true;
+    } else if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u) {
+        state.cursor =
+            Around(state.cursor, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1, UI_PAUSE_ROWS);
+    } else if (change && state.cursor == UI_PAUSE_LEVEL && info != NULL &&
+               info->level_count > 0u) {
+        state.level = Around(state.level, left ? -1 : 1, info->level_count);
+    } else if (change && state.cursor == UI_PAUSE_FRAMES) {
+        uint32_t at = 0;
+        while (at + 1u < UI_DEMO_FRAME_CHOICES && UI_DEMO_FRAMES[at] < state.frames) {
+            ++at;
+        }
+        state.frames = UI_DEMO_FRAMES[Around(at, left ? -1 : 1, UI_DEMO_FRAME_CHOICES)];
+    } else if ((change || (buttons & UI_BUTTON_OPEN) != 0u) && state.cursor == UI_PAUSE_MUSIC) {
+        state.music = !state.music;
+    } else if ((change || (buttons & UI_BUTTON_OPEN) != 0u) && state.cursor == UI_PAUSE_HUD) {
+        state.hud = !state.hud;
+    } else if ((buttons & UI_BUTTON_OPEN) != 0u) {
+        switch (state.cursor) {
+        case UI_PAUSE_RESUME:
+            state.resume = true;
+            break;
+        case UI_PAUSE_BACK:
+            state.back = true;
+            break;
+        case UI_PAUSE_RESTART:
+            state.level = info != NULL ? info->running : state.level;
+            state.start_level = true;
+            break;
+        case UI_PAUSE_LEVEL:
+        case UI_PAUSE_FRAMES:
+            state.start_level = true;
+            break;
+        default:
+            break;
+        }
+    }
+    state.changed = state.changed || memcmp(&before, &state, sizeof(state)) != 0;
+    return state;
+}
+
+void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPauseState *state) {
+    if (frame == NULL || frame->pixels == NULL || info == NULL || state == NULL ||
+        frame->width < UI_MIN_WIDTH || frame->height < UI_MIN_HEIGHT) {
+        return;
+    }
+    // The frozen frame dimmed with nothing blended: every other row of it the run's page.
+    for (uint32_t y = 1; y < frame->height; y += 2u) {
+        FillRect(frame, 0, y, frame->width, 1u, RUN.page);
+    }
+    g_look = &MENU;
+    const uint32_t width = 1056u;
+    const uint32_t height = 540u;
+    const uint32_t bx = (frame->width - width) / 2u;
+    const uint32_t by = (frame->height - height) / 2u;
+    Backdrop(frame, bx, by, width, height);
+    Outline(frame, bx, by, width, height, TEXT);
+    Outline(frame, bx + 1u, by + 1u, width - 2u, height - 2u, TEXT);
+    Frieze(frame, bx, by, width, height);
+    UiText(frame, bx + 3u * CW + 4u, by + 38u, 2u * SC, BORDER, "PAUSED");
+    UiText(frame, bx + 3u * CW, by + 34u, 2u * SC, TEXT, "PAUSED");
+    if (info->name != NULL) {
+        Big(frame, bx + width - 3u * CW - (uint32_t)strlen(info->name) * CW, by + 50u, DIM,
+            info->name);
+    }
+    FillRect(frame, bx + 3u * CW, by + 108u, width - 6u * CW, SC, BORDER);
+
+    const UiDemoRow *const level =
+        info->levels != NULL && state->level < info->level_count ? &info->levels[state->level]
+                                                                 : NULL;
+    const uint32_t x = bx + 5u * CW;
+    const uint32_t list_width = 432u;
+    const uint32_t top = by + 124u;
+    static const char *const NAMES[UI_PAUSE_ROWS] = {
+        "Resume", "Level", "Frames", "Music", "HUD", "Restart", "Back to the browser",
+    };
+    for (uint32_t r = 0; r < UI_PAUSE_ROWS; ++r) {
+        const uint32_t y = top + r * (UI_ROW_BOX + 4u);
+        const bool selected = r == state->cursor;
+        const uint8_t *const ink = ListRow(frame, x, y, list_width, UI_ROW_BOX, selected);
+        BigGlyph(frame, x + CW / 2u, y + 2u, ink, (unsigned char)FONTVGA_MARKER);
+        Big(frame, x + 2u * CW, y + 2u, ink, NAMES[r]);
+        char value[48] = "";
+        if (r == UI_PAUSE_LEVEL && level != NULL) {
+            snprintf(value, sizeof(value), "%s", level->name);
+        } else if (r == UI_PAUSE_FRAMES) {
+            snprintf(value, sizeof(value), "%u", (unsigned)state->frames);
+        } else if (r == UI_PAUSE_MUSIC) {
+            snprintf(value, sizeof(value), "%s", state->music ? "On" : "Off");
+        } else if (r == UI_PAUSE_HUD) {
+            snprintf(value, sizeof(value), "%s", state->hud ? "On" : "Off");
+        }
+        if (value[0] != '\0') {
+            char shown[64];
+            snprintf(shown, sizeof(shown), selected && r <= UI_PAUSE_FRAMES ? "< %s >" : "%s",
+                     value);
+            char fitted[64];
+            Fit(fitted, sizeof(fitted), shown, (list_width - 12u * CW) / CW);
+            Big(frame, x + list_width - CW / 2u - (uint32_t)strlen(fitted) * CW, y + 2u, ink,
+                fitted);
+        }
+    }
+    const uint32_t sx = x + list_width + 2u * CW;
+    const uint32_t side = bx + width - 3u * CW - sx;
+    const uint32_t columns = (side - CW) / CW;
+    uint32_t y = Box(frame, sx, top, side, UI_PAUSE_ROWS * (UI_ROW_BOX + 4u) - 4u,
+                     level != NULL ? level->name : "Level", NULL, NULL);
+    y += TextWrapped(frame, sx + CW / 2u, y, SC, CH, TEXT,
+                     "Left/Right picks another; A starts it, and this one ends where it is.",
+                     columns, 3u) *
+             CH +
+         6u;
+    char text[64];
+    snprintf(text, sizeof(text), "Frame %u of %u", (unsigned)info->frame, (unsigned)info->frames);
+    Big(frame, sx + CW / 2u, y, DIM, text);
+    TextWrapped(frame, sx + CW / 2u, y + CH, SC, CH, DIM,
+                "The time it is paused is left out of the frame times", columns, 2u);
+    static const UiKey KEYS[4] = {
+        { "Up/Down", "select", 0 },
+        { "Left/Right", "change", 0 },
+        { "A", "choose", 0 },
+        { "Plus", "resume", 0 },
+    };
+    uint32_t kx = bx + 5u * CW;
+    const uint32_t ky = by + height - 30u - CH;
+    for (uint32_t i = 0; i < 4u; ++i) {
+        const uint32_t kw = (uint32_t)strlen(KEYS[i].key) * CW;
+        FillRect(frame, kx - SC, ky, kw + 2u * SC, CH, TEXT);
+        Big(frame, kx, ky, BACKGROUND, KEYS[i].key);
+        kx = Big(frame, kx + kw + CW, ky, TEXT, KEYS[i].what) + 2u * CW;
+    }
+}
+
+uint32_t UiMotionRows(uint32_t step, uint32_t frame_height) {
+    if (step >= UI_MOTION_STEPS) {
+        return frame_height;
+    }
+    return (uint32_t)((uint64_t)frame_height * (step + 1u) / UI_MOTION_STEPS);
 }

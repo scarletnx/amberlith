@@ -431,6 +431,18 @@ size_t PictureCount(void) {
     return record_count;
 }
 
+void PictureForgetKept(void) {
+    for (size_t i = 0; i < record_count; ++i) {
+        free(records[i].got);
+        free(records[i].expected);
+        free(records[i].verdict);
+    }
+    record_count = 0;
+    retained_bytes = 0;
+    // A new run's folder: the names its files take start again.
+    used_count = 0;
+}
+
 const PictureRecord *PictureAt(size_t index) {
     return index < record_count ? &records[index] : NULL;
 }

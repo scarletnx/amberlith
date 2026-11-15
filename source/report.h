@@ -230,6 +230,17 @@ const char *ReportReasonWord(ReportReason reason);
 /// result "skip" and the none tier, since it compares nothing.
 void ReportSkip(const char *suite, const char *name, ReportReason reason, const char *detail);
 
+/// Which cases the run asks for, for a run the browser began (docs/UI.md): NULL, which every run
+/// from the mode file has, asks for all. A case @p picked says no to neither runs nor leaves a
+/// line, a count, a picture or a record: ReportStart says false and writes nothing, and a case
+/// that ends without starting is dropped where it ends. The run's mode line says what was picked.
+typedef bool (*ReportPicked)(const char *suite, const char *name);
+void ReportSetPicked(ReportPicked picked);
+
+/// Forgets the cases kept for the screens, for the browser's next run; the store keeps its
+/// memory.
+void ReportForgetRecords(void);
+
 /// Says the case @p name is about to start, before any of its work, and whether it may.
 ///
 /// False when it must not run: it ended this machine's program in this run or an earlier one,

@@ -29,6 +29,9 @@ void RunSupport(void);
 /// Part of the support suite, which runs it.
 void RunSupportScreens(void);
 
+/// The browser's catalogue, picks, walk, HUD and pause menu: part of the support suite.
+void RunSupportBrowse(void);
+
 /// The journal, the crash list and what a launch decides from them: part of the support suite,
 /// which hands it a directory of its own to write a file into and take it away again.
 void RunSupportJournal(const char *scratch);
@@ -354,6 +357,9 @@ void RunGame(void);
 /// frames' times (not with `notime`).
 void GameSetFrames(uint32_t frames);
 void GameSetTiming(bool on);
+/// The browser's run of the scene as a demo (demo.h), or NULL for a run from the mode file:
+/// B stops its frames, and the time its pause menu is up is left out of the frames' times.
+void GameSetDemo(const DemoRun *run);
 
 /// The game family's levels: Wimsy, ScarletNX's mascot, drawn as a game draws a character, a
 /// level a scene, from sprites to her lit model and on to a game's heaviest frame; each level's
@@ -367,6 +373,10 @@ void RunWimsy(void);
 void WimsySetFrames(uint32_t frames);
 void WimsySetTiming(bool on);
 void WimsySetLevels(uint32_t levels);
+/// The browser's run of a level as a demo (demo.h), or NULL for a run from the mode file: the
+/// level shows its frames through the program's screen, B stops them, and the pause is left out
+/// of their times.
+void WimsySetDemo(const DemoRun *run);
 
 /// The demo family's fractal zooms (fractalref.h): a Mandelbrot and a Julia zoom, each frame a
 /// compute pass that counts every pixel's iterations and a fragment pass that colours them, six

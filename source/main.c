@@ -3,17 +3,23 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <switch.h>
 
+#include "browse.h"
+#include "demo.h"
 #include "hooks.h"
 #include "journal.h"
 #include "mode.h"
+#include "musicplay.h"
 #include "picture.h"
+#include "platform.h"
 #include "report.h"
 #include "runner.h"
 #include "tests/tests.h"
 #include "viewer.h"
 #include "version.h"
+#include "wimsyref.h"
 
 // The console's frontend (docs/Frontends.md): the run itself is runner.c's, the same on every
 // frontend; what is the console's own is here: its steps, the screens a person sees around the
@@ -179,28 +185,38 @@ static void SaveModeFile(RunMode *mode) {
     }
 }
 
+// The start screen's words, which the browser's start tab shows too.
+static UiStartInfo start_info;
+
 /// The start screen, when a new detailed run begins: the menu that chooses the families, quick,
-/// notime, the crash list's cases, and whether to keep the choice in the mode file. Hands back
-/// the mode the run begins with; as it came when there was no screen.
-static RunMode StartScreen(const RunMode *from_file) {
-    static UiStartInfo info;
-    memset(&info, 0, sizeof(info));
+/// notime, the crash list's cases, and whether to keep the choice in the mode file; and L, R or
+/// a tab for the browser instead. Hands back the mode the run begins with, as it came when there
+/// was no screen, and in @p chosen the screen as it was left.
+static void FillStartInfo(const RunMode *from_file) {
+    UiStartInfo *const info = &start_info;
+    memset(info, 0, sizeof(*info));
     static char heading[96];
     snprintf(heading, sizeof(heading), "edenprobe %s (%s)", EDENPROBE_VERSION, EDENPROBE_BUILD);
-    info.heading = heading;
-    info.families_present = MODE_FAMILIES_PRESENT;
-    info.nvn_named = (ModeFamiliesNamed(from_file, MODE_FAMILIES_PRESENT) & MODE_FAMILY_NVN) != 0u;
+    info->heading = heading;
+    info->families_present = MODE_FAMILIES_PRESENT;
+    info->nvn_named = (ModeFamiliesNamed(from_file, MODE_FAMILIES_PRESENT) & MODE_FAMILY_NVN) != 0u;
     const CrashList *const listed = ReportCrashList();
-    for (uint32_t i = 0; i < listed->count && info.listed_count < UI_START_LIST_MAX; ++i) {
-        info.listed_suite[info.listed_count] = listed->entries[i].suite;
-        info.listed_name[info.listed_count] = listed->entries[i].name;
-        ++info.listed_count;
+    for (uint32_t i = 0; i < listed->count && info->listed_count < UI_START_LIST_MAX; ++i) {
+        info->listed_suite[info->listed_count] = listed->entries[i].suite;
+        info->listed_name[info->listed_count] = listed->entries[i].name;
+        ++info->listed_count;
     }
-    UiStartState chosen;
-    if (!UiStartShown(&info) || !ViewerStartScreen(&info, from_file, &chosen)) {
+}
+
+static RunMode StartScreen(const RunMode *from_file, UiStartState *chosen) {
+    FillStartInfo(from_file);
+    const UiStartInfo *const info = &start_info;
+    *chosen = UiStartOpen(from_file, MODE_FAMILIES_PRESENT);
+    if (!UiStartShown(info) || !ViewerStartScreen(info, from_file, chosen)) {
         return *from_file;
     }
-    return UiStartMode(&chosen, *from_file, MODE_FAMILIES_PRESENT);
+    return chosen->tab_asked != 0u ? *from_file
+                                   : UiStartMode(chosen, *from_file, MODE_FAMILIES_PRESENT);
 }
 
 /// The screen that asks whether to go on with the run the journal left in the middle, before
@@ -234,6 +250,416 @@ static void AskToGoOn(const RunMode *mode) {
     }
 }
 
+// ---- The browser (docs/UI.md) ---------------------------------------------------------------
+
+// The demos the browser lists, one line a demo, as STEPS is one a step: what it is called, the
+// suite its lines report under, what it shows, its music, its family, and its run.
+static void DemoGame(const DemoRun *run) {
+    GameSetFrames(run->frames);
+    GameSetTiming(run->timing);
+    GameSetDemo(run);
+    RunGame();
+    GameSetDemo(NULL);
+}
+
+static void DemoWimsy(const DemoRun *run, uint32_t level) {
+    WimsySetFrames(run->frames);
+    WimsySetTiming(run->timing);
+    WimsySetLevels(1u << level);
+    WimsySetDemo(run);
+    RunWimsy();
+    WimsySetDemo(NULL);
+}
+
+static void DemoWimsy0(const DemoRun *run) {
+    DemoWimsy(run, 0u);
+}
+static void DemoWimsy1(const DemoRun *run) {
+    DemoWimsy(run, 1u);
+}
+static void DemoWimsy2(const DemoRun *run) {
+    DemoWimsy(run, 2u);
+}
+static void DemoWimsy3(const DemoRun *run) {
+    DemoWimsy(run, 3u);
+}
+static void DemoWimsy4(const DemoRun *run) {
+    DemoWimsy(run, 4u);
+}
+
+static const BrowseDemo DEMOS[] = {
+    { "Game scene", "game",
+      "Everything a game asks at once: four threads over three cores, a silent tone, the card and "
+      "the services, each frame's image held to what the processor works out.",
+      NULL, MODE_FAMILY_GAME, DemoGame },
+    { "Wimsy level 0", "wimsy",
+      "Sprites: Wimsy flat, a sheet of her frames, as a game draws a character in two "
+      "dimensions. Five frames are held to the ranges the processor works out.",
+      "wimsy", MODE_FAMILY_GAME, DemoWimsy0 },
+    { "Wimsy level 1", "wimsy",
+      "Her lit model, turning: depth, culling and light, five frames held to the processor's "
+      "ranges.",
+      "wimsy", MODE_FAMILY_GAME, DemoWimsy1 },
+    { "Wimsy level 2", "wimsy",
+      "A scene near and far: Wimsy on a mipmapped ground with plants around her.", "wimsy",
+      MODE_FAMILY_GAME, DemoWimsy2 },
+    { "Wimsy level 3", "wimsy",
+      "A game's heavy frame: Wimsy among some fifteen hundred draws, each with its own uniform "
+      "buffer, over a 4K ASTC ground.",
+      "wimsy", MODE_FAMILY_GAME, DemoWimsy3 },
+    { "Wimsy level 4", "wimsy", "Level 3 over an 8K ground.", "wimsy", MODE_FAMILY_GAME,
+      DemoWimsy4 },
+    { "Mandelbrot", "mandelbrot",
+      "A zoom into the Mandelbrot set: each frame a compute pass counts every pixel's "
+      "iterations and a fragment pass colours them; six frames held to the processor's answer.",
+      "fractal", MODE_FAMILY_DEMO, RunMandelbrotDemo },
+    { "Julia", "julia", "The same zoom over a Julia set.", "fractal", MODE_FAMILY_DEMO,
+      RunJuliaDemo },
+    { "Fluid", "fluid",
+      "A 2D fluid, Stam's stable fluids, in fragment passes in ping-pong between two targets a "
+      "field; its early frames held to the processor's simulation, every judged one to the "
+      "invariants.",
+      "fluid", MODE_FAMILY_DEMO, FluidDemo },
+    { "Fluid, aliased", "fluid-alias",
+      "The fluid with its targets drawn over their old selves and a compute pass's storage "
+      "image over them, as a game's dynamic resolution leaves its pool.",
+      "fluid", MODE_FAMILY_DEMO, FluidAliasDemo },
+};
+
+#define DEMO_COUNT (sizeof(DEMOS) / sizeof(DEMOS[0]))
+_Static_assert(DEMO_COUNT <= UI_BROWSE_DEMOS && DEMO_COUNT <= 32u,
+               "every demo has a row and a mark in the browser");
+
+// What the browser shows and what its runs pick, for the report's filter, which takes a plain
+// function.
+static BrowseCatalog catalog;
+static UiDemoRow demo_rows[DEMO_COUNT];
+static UiBrowseInfo browse_info;
+static UiPick picked;
+
+static bool Picked(const char *suite, const char *name) {
+    return UiPickHas(&picked, &browse_info, suite, name);
+}
+
+static bool StepPicked(const RunnerStep *step) {
+    return BrowseStepRuns(step->name, &picked, &browse_info);
+}
+
+static const PictureRecord *PictureOf(int32_t index) {
+    return index >= 0 ? PictureAt((size_t)index) : NULL;
+}
+
+static bool DemoStopped(void) {
+    return ViewerDemoStopped();
+}
+
+static bool DemoPaused(void) {
+    return ViewerDemoPaused();
+}
+
+// The music (musicplay.h), which only the browser plays: started, switched and stopped here, a
+// refusal said in the report's next line rather than kept back.
+static void MusicTo(const char *track) {
+    char error[160];
+    const bool played = track == NULL ? (MusicPlayStop(), true)
+                        : MusicPlayOn()  ? MusicPlaySwitch(track, error, sizeof(error))
+                                         : MusicPlayStart(track, error, sizeof(error));
+    if (!played) {
+        ReportNote("browser: the music's track %s did not play: %s", track, error);
+    }
+}
+
+/// The demos of the same suite as @p index, the ones its pause menu's level row walks: the first
+/// of them and how many.
+static uint32_t DemoLevels(uint32_t index, uint32_t *count) {
+    uint32_t first = index;
+    while (first > 0u && strcmp(DEMOS[first - 1u].suite, DEMOS[index].suite) == 0) {
+        --first;
+    }
+    uint32_t last = index;
+    while (last + 1u < DEMO_COUNT && strcmp(DEMOS[last + 1u].suite, DEMOS[index].suite) == 0) {
+        ++last;
+    }
+    *count = last - first + 1u;
+    return first;
+}
+
+typedef struct {
+    const BrowseDemo *demo;
+    DemoRun run;
+} DemoStep;
+
+static void RunDemoStep(const void *argument) {
+    const DemoStep *const step = (const DemoStep *)argument;
+    step->demo->run(&step->run);
+}
+
+/// The suites and the demos @p pick holds, a run of its own in a folder of its own: the report
+/// opened, the judge, the steps picked in their order, the demos, the summary. The screen stays
+/// up for the results.
+static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiStartState *start) {
+    RunMode mode = *from_file;
+    mode.no_timing = !options->timing;
+    mode.every_case = options->every_picture;
+    mode.retry = options->retry;
+    mode.frames = options->frames;
+    mode.quick = false;
+    mode.detailed = true;
+    mode.listen = start != NULL && start->listen && UiPickHasFamily(&picked, UI_FAMILY_AUDIO);
+    // The cases the last run kept, and their pictures, go: this run's are what its results show.
+    ReportForgetRecords();
+    PictureForgetKept();
+    const uint32_t number = RunnerPlanBrowser(&runner, &mode);
+    if (number == 0u) {
+        char said[RUNNER_ROOT_MAX + 160u];
+        snprintf(said, sizeof(said),
+                 "EDENPROBE BROWSER: no folder is left under %s for a run, the %u there are taken",
+                 runner.runs_directory, (unsigned)RUNNER_BROWSER_RUNS_MAX);
+        PlatformLog(said, strlen(said));
+        return;
+    }
+    RunnerOpen(&runner, &mode);
+    RunnerBeginJournal(&runner, &mode, &mode);
+    RunnerApplyMode(&runner, &mode);
+    {
+        char described[REPORT_NOTE_MAX - 64];
+        BrowseDescribePick(described, sizeof(described), &picked, &browse_info);
+        ReportNote("browser: run %u, picked in the browser: the judge, then %s; the cases of a "
+                   "step not picked neither run nor leave a line",
+                   (unsigned)number, described);
+    }
+    HooksReportOwnCode(NULL);
+    PictureWriteEveryCase(mode.every_case);
+    PictureRetain(true);
+    ReportRetain(true);
+    StreamSetStress(mode.stress);
+    AudioSetListen(mode.listen);
+    const bool timing = !mode.no_timing;
+    GameSetFrames(mode.frames);
+    GameSetTiming(timing);
+    WimsySetFrames(mode.frames);
+    WimsySetTiming(timing);
+    WimsySetLevels(BrowseLevels(&picked, &browse_info, "wimsy", WIMSY_LEVELS));
+    Tex8kSetTiming(timing);
+    Tex8kSetVram(mode.vram);
+
+    uint32_t steps = 0;
+    for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); ++i) {
+        steps += StepPicked(&STEPS[i]) ? 1u : 0u;
+    }
+    uint32_t demos = 0;
+    for (uint32_t i = 0; i < DEMO_COUNT; ++i) {
+        demos += (picked.demos >> i & 1u) != 0u ? 1u : 0u;
+    }
+    // No music while cases run: what they time and the audio family's own renderer stay as a run
+    // from the mode file has them.
+    MusicTo(NULL);
+    static char running[96];
+    snprintf(running, sizeof(running), "edenprobe %s (%s), browser run %u", EDENPROBE_VERSION,
+             EDENPROBE_BUILD, (unsigned)number);
+    ViewerProgressBegin(running, runner.run_directory, steps + demos, false, false);
+    ReportSetPicked(Picked);
+    RunnerStepsWhere(&runner, StepPicked, timing, ViewerProgressStep);
+    ReportSetPicked(NULL);
+    uint32_t step_number = steps;
+    for (uint32_t i = 0; i < DEMO_COUNT; ++i) {
+        if ((picked.demos >> i & 1u) == 0u) {
+            continue;
+        }
+        // A demo, and the levels the person asks for from its pause menu after it.
+        for (uint32_t next = i; next != UINT32_MAX;) {
+            const BrowseDemo *const demo = &DEMOS[next];
+            uint32_t level_count = 0;
+            const uint32_t first = DemoLevels(next, &level_count);
+            if (options->music) {
+                // A demo with no track of its own (the game scene, whose audio thread steps a
+                // renderer of its own) plays none.
+                MusicTo(demo->track);
+            }
+            const ViewerDemo shown = {
+                demo->name,     demo->track,       options->frames, options->hud,
+                options->music, &demo_rows[first], level_count,     next - first,
+            };
+            ViewerDemoBegin(&shown);
+            DemoStep step = { demo, { true, options->frames, timing, DemoStopped, DemoPaused } };
+            RunnerRunExtra(&runner, ++step_number, demo->suite, RunDemoStep, &step,
+                           ViewerProgressStep);
+            const ViewerDemoEnd end = ViewerDemoFinish();
+            options->frames = end.frames;
+            options->music = end.music;
+            options->hud = end.hud;
+            if (!options->music) {
+                MusicTo(NULL);
+            }
+            next = end.back || end.next == UINT32_MAX ? UINT32_MAX : first + end.next;
+            if (end.back) {
+                i = DEMO_COUNT;
+            }
+        }
+    }
+    ViewerProgressEnd();
+    RunnerFinish(&runner, &mode, timing);
+    if (options->music) {
+        MusicTo(BROWSE_MENU_TRACK);
+    }
+}
+
+/// Where the results of the run just ended open: on the one case or the one suite it ran alone,
+/// else on the first failure.
+static UiState ResultsOn(const UiRun *results, const UiPick *pick) {
+    UiState state = UiStart(results);
+    state.browser = true;
+    uint32_t whole = 0;
+    uint32_t one_case = UINT32_MAX;
+    uint32_t cases = 0;
+    for (uint32_t i = 0; i < UiBrowseSuiteCount(); ++i) {
+        whole += (pick->suites[i / 8u] >> (i % 8u) & 1u) != 0u ? 1u : 0u;
+    }
+    for (uint32_t i = 0; i < browse_info.catalogue_count && i < UI_MAX_CASES; ++i) {
+        if ((pick->cases[i / 8u] >> (i % 8u) & 1u) != 0u) {
+            one_case = i;
+            ++cases;
+        }
+    }
+    if (whole != 0u || cases != 1u || pick->demos != 0u) {
+        return state;
+    }
+    const ReportRecord *const wanted = &browse_info.catalogue[one_case];
+    for (uint32_t g = 0; g < results->group_count; ++g) {
+        for (uint32_t n = 0; n < results->groups[g].count; ++n) {
+            const ReportRecord *const record = UiCaseAt(results, g, n);
+            if (strcmp(record->suite, wanted->suite) == 0 &&
+                strcmp(record->name, wanted->name) == 0) {
+                state.level = UI_LEVEL_CASE;
+                state.group = g;
+                state.index = n;
+                return state;
+            }
+        }
+    }
+    return state;
+}
+
+/// The browser until it is left: @p tab first, the results of the run just ended among the tabs
+/// when there was one. @p unattended_ns leaves when nothing is pressed that long (0: never).
+/// Hands back how it ended.
+static ViewerEnd BrowserSession(const RunMode *from_file, UiTab tab, const UiStartState *start,
+                                const UiStartInfo *start_info, uint64_t unattended_ns,
+                                bool after_run) {
+    for (uint32_t i = 0; i < DEMO_COUNT; ++i) {
+        const UiDemoRow row = { DEMOS[i].name, DEMOS[i].suite, DEMOS[i].description,
+                                DEMOS[i].track };
+        demo_rows[i] = row;
+    }
+    static char heading[96];
+    snprintf(heading, sizeof(heading), "%s%s%s", EDENPROBE_VERSION,
+             from_file->machine[0] != '\0' ? " on " : "", from_file->machine);
+    browse_info.heading = heading;
+    browse_info.machine = heading;
+    browse_info.catalogue = catalog.records;
+    browse_info.catalogue_count = catalog.count;
+    browse_info.demos = demo_rows;
+    browse_info.demo_count = (uint32_t)DEMO_COUNT;
+    browse_info.picture = PictureOf;
+    browse_info.start = start_info;
+    browse_info.results = after_run ? ViewerIndexRun(heading) : NULL;
+    if (after_run) {
+        BrowseCatalogMerge(&catalog, browse_info.results->records,
+                           browse_info.results->count);
+        browse_info.catalogue = catalog.records;
+        browse_info.catalogue_count = catalog.count;
+    }
+    UiBrowseState state = UiBrowseOpen(tab, start, UiOptionsFrom(from_file), &browse_info);
+    // The interactive mode: the music may play now, and only now (music.h).
+    MusicSetInteractive(true);
+    if (state.options.music) {
+        MusicTo(BROWSE_MENU_TRACK);
+    }
+    UiPick last;
+    memset(&last, 0, sizeof(last));
+    bool have_last = false;
+    ViewerEnd end = VIEWER_CLOSED;
+    for (;;) {
+        end = ViewerBrowse(&browse_info, &state, unattended_ns);
+        unattended_ns = state.pressed ? 0u : unattended_ns;
+        if (end != VIEWER_ASKED) {
+            break;
+        }
+        UiPick pick;
+        if (state.ask == UI_ASK_AGAIN) {
+            if (!have_last) {
+                continue;
+            }
+            pick = last;
+        } else if (!UiBrowsePick(&state, &browse_info, &pick)) {
+            continue;
+        }
+        picked = pick;
+        last = pick;
+        have_last = true;
+        BrowserRun(from_file, &state.options, &state.start);
+        browse_info.results = ViewerIndexRun(heading);
+        BrowseCatalogMerge(&catalog, browse_info.results->records, browse_info.results->count);
+        browse_info.catalogue = catalog.records;
+        browse_info.catalogue_count = catalog.count;
+        state.results = ResultsOn(browse_info.results, &pick);
+        state.results.repeatable = true;
+        state.tab = UI_TAB_RESULTS;
+        state.changed = true;
+    }
+    MusicTo(NULL);
+    MusicSetInteractive(false);
+    ViewerBrowseClose();
+    return end;
+}
+
+/// The catalogue the browser lists, read before the report a launch opens is written over the
+/// last one: that report, then the newest of the browser's runs over it.
+static void ReadCatalogue(void) {
+    (void)BrowseCatalogRead(&catalog, runner.report_path);
+    char browse[RUNNER_PATH_MAX + 16u];
+    snprintf(browse, sizeof(browse), "%s/browse", runner.run_directory);
+    uint32_t newest = 0;
+    for (uint32_t n = 1; n <= RUNNER_BROWSER_RUNS_MAX; ++n) {
+        char path[RUNNER_PATH_MAX + 32u];
+        snprintf(path, sizeof(path), "%s/%u", browse, (unsigned)n);
+        struct stat about;
+        if (stat(path, &about) != 0) {
+            break;
+        }
+        newest = n;
+    }
+    if (newest > 0u) {
+        char path[RUNNER_PATH_MAX + 48u];
+        snprintf(path, sizeof(path), "%s/%u/report.jsonl", browse, (unsigned)newest);
+        (void)BrowseCatalogRead(&catalog, path);
+    }
+}
+
+/// The browser instead of a run, asked for by the mode file's `browse` or from the start
+/// screen: the launch's report says so and closes, and every run begun in the browser writes a
+/// report of its own. Nothing pressed on its first screen for UI_START_NANOSECONDS when the word
+/// opened it, the program leaves and the launch's report says why.
+static int Browse(const RunMode *mode, UiTab tab, const UiStartState *start, bool by_word) {
+    static char launch_report[RUNNER_PATH_MAX + 16u];
+    snprintf(launch_report, sizeof(launch_report), "%s", runner.report_path);
+    ReportNote("browser: %s; each run begun there writes its own report under %s/browse",
+               by_word ? "the mode file's word browse opened it" : "the start screen opened it",
+               runner.run_directory);
+    ReportSummary();
+    ReportClose();
+    const ViewerEnd end = BrowserSession(mode, tab, start, &start_info,
+                                         by_word ? UI_START_NANOSECONDS : 0u, false);
+    if (end == VIEWER_UNATTENDED) {
+        ReportAppend(launch_report);
+        ReportNote("browser: nothing pressed for %u seconds on its first screen, left by itself",
+                   (unsigned)(UI_START_NANOSECONDS / 1000000000ull));
+        ReportClose();
+    }
+    ViewerEndScreen();
+    return 0;
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
@@ -259,9 +685,16 @@ int main(int argc, char **argv) {
         }
     }
 
+    // The cases the browser lists, from the report the launch is about to open over: only for a
+    // launch a person attends, so a run from the mode file reads nothing more.
+    if (runner.plan.start == JOURNAL_FRESH && mode.detailed) {
+        ReadCatalogue();
+    }
+
     // Opened first, because reading the pad touches a service this program otherwise never
     // uses, and a run that dies there should still leave a report.
     RunnerOpen(&runner, &mode);
+    RunnerAdoptBrowserCrash(&runner);
 
     // What the mode changes is which families run, whether the finished cases and pictures are
     // kept in memory and shown once everything is over, and whether every drawing case writes
@@ -272,9 +705,20 @@ int main(int argc, char **argv) {
     mode = ViewerModeWithPad(mode);
     if (runner.plan.start == JOURNAL_FRESH) {
         const RunMode asked = mode;
-        if (mode.detailed) {
-            mode = StartScreen(&asked);
-            SaveModeFile(&mode);
+        UiStartState start = UiStartOpen(&asked, MODE_FAMILIES_PRESENT);
+        uint32_t tab = 0u;
+        if (ModeOpensBrowser(&mode)) {
+            FillStartInfo(&asked);
+            tab = UI_TAB_SUITES;
+        } else if (mode.detailed) {
+            mode = StartScreen(&asked, &start);
+            tab = start.tab_asked;
+            if (tab == 0u) {
+                SaveModeFile(&mode);
+            }
+        }
+        if (tab != 0u) {
+            return Browse(&asked, (UiTab)tab, &start, ModeOpensBrowser(&asked));
         }
         RunnerBeginJournal(&runner, &asked, &mode);
     }
@@ -327,8 +771,14 @@ int main(int argc, char **argv) {
     RunnerFinish(&runner, &mode, timing);
 
     // Last, and only now: the report is written, counted and closed, so nothing a person does
-    // in front of the screen can reach it.
-    if (mode.detailed && ViewerRun() == VIEWER_UNATTENDED) {
+    // in front of the screen can reach it. The results are the browser's results tab, and its
+    // other tabs are a press away.
+    UiStartState start = UiStartOpen(&mode, MODE_FAMILIES_PRESENT);
+    if (start_info.heading == NULL) {
+        FillStartInfo(&mode);
+    }
+    if (mode.detailed && BrowserSession(&mode, UI_TAB_RESULTS, &start, &start_info,
+                                        UI_UNATTENDED_NANOSECONDS, true) == VIEWER_UNATTENDED) {
         // The one line that comes after the summary, and only on this path: a detailed run
         // nobody attended says it left by itself, on both channels, so a script that forgot the
         // mode file finds out why its emulator took ten seconds longer to stop.

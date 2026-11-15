@@ -99,6 +99,18 @@ void WimsySetLevels(uint32_t mask) {
     levels = mask;
 }
 
+// The browser's run of a level as a demo, NULL in every run from the mode file; whether its frames
+// go through the program's screen rather than a swapchain; and the frames the run still wants,
+// which B makes fewer.
+static const DemoRun *demo;
+static bool on_screen;
+static uint32_t frames_wanted;
+static const uint8_t *last_shown;
+
+void WimsySetDemo(const DemoRun *run) {
+    demo = run;
+}
+
 // The graphics device and everything a level's frames draw with, made before its first frame.
 static uint32_t level;
 static GpuContext gpu;
@@ -617,7 +629,7 @@ static uint32_t JudgedAt(uint32_t k) {
 /// the wait for an image is not; the present comes after it, and a judged frame's copy after
 /// that.
 static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
-    const int image = dkQueueAcquireImage(gpu.queue, swapchain);
+    const int image = on_screen ? 0 : dkQueueAcquireImage(gpu.queue, swapchain);
     const uint64_t began = armGetSystemTick();
     GpuBeginPass(&gpu);
     // The processor rewrote this slot after the graphics unit last read it, through memory the
@@ -636,6 +648,27 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
             GpuSetTarget(&gpu, NULL, WIMSY_WIDTH, WIMSY_HEIGHT);
         }
         RecordModels(slot);
+    }
+
+    if (on_screen) {
+        // Through the program's screen: the target read back and composed by the processor,
+        // the judged frames kept from the same copy.
+        GpuSubmit(&gpu);
+        const uint64_t worked = armGetSystemTick() - began;
+        const uint8_t *const pixels = GpuReadBack(&gpu);
+        if (pixels == NULL) {
+            return worked;
+        }
+        const uint32_t j = JudgedAt(k);
+        if (j < WIMSY_JUDGED && kept[j] != NULL) {
+            memcpy(kept[j], pixels, WIMSY_IMAGE_BYTES);
+            ++render.copied;
+        }
+        last_shown = pixels;
+        if (ViewerShowImage(pixels, WIMSY_WIDTH, WIMSY_HEIGHT)) {
+            ++render.presented;
+        }
+        return worked;
     }
 
     // The target drawn onto the image the display shows, a pixel a pixel.
@@ -678,11 +711,37 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
     return worked;
 }
 
+/// The last frame shown again while the demo is paused (demo.h): the screen's copy of it, which
+/// still holds it. No pass runs and nothing is judged.
+static void ShowAgain(void) {
+    if (on_screen && last_shown != NULL) {
+        (void)ViewerShowImage(last_shown, WIMSY_WIDTH, WIMSY_HEIGHT);
+    } else {
+        svcSleepThread(16666667ull);
+    }
+}
+
+/// Held while the person keeps the demo paused, the last frame shown again; hands back the ticks
+/// it held, which no frame's time counts.
+static uint64_t HoldWhilePaused(void) {
+    if (demo == NULL || demo->paused == NULL || !demo->paused()) {
+        return 0u;
+    }
+    const uint64_t from = armGetSystemTick();
+    while (demo->paused() && (demo->stopped == NULL || !demo->stopped())) {
+        ShowAgain();
+    }
+    return armGetSystemTick() - from;
+}
+
 static void RenderMain(void *argument) {
     (void)argument;
     uint64_t previous = 0;
     for (uint32_t k = 0; k < frames; ++k) {
         semaphoreWait(&frame_go);
+        if (k >= __atomic_load_n(&frames_wanted, __ATOMIC_ACQUIRE)) {
+            break;
+        }
         if (k == 0u) {
             previous = armGetSystemTick();
         }
@@ -691,7 +750,7 @@ static void RenderMain(void *argument) {
         const uint64_t now = armGetSystemTick();
         frame_us[k] = Microseconds(now - previous);
         render_us[k] = Microseconds(worked);
-        previous = now;
+        previous = now + HoldWhilePaused();
         semaphoreSignal(&slot_free);
     }
 }
@@ -1042,6 +1101,9 @@ static bool BringUp(char *why, size_t why_size) {
         }
     }
 
+    if (on_screen) {
+        return true;
+    }
     const DkImage *const presented[SWAP_IMAGES] = { &swap_images[0], &swap_images[1] };
     dkSwapchainMakerDefaults(&swap_maker, gpu.device, nwindowGetDefault(), presented, SWAP_IMAGES);
     uint32_t aborted = 0;
@@ -1097,8 +1159,15 @@ static bool RunFrames(char *why, size_t why_size) {
         ++started;
     }
     const bool staffed = level < 3u || started == WORKERS;
+    __atomic_store_n(&frames_wanted, frames, __ATOMIC_RELEASE);
     GameWorldStart(&world);
     for (uint32_t k = 0; k < frames && staffed; ++k) {
+        if (demo != NULL && demo->stopped != NULL && demo->stopped()) {
+            // B: the frames end here, and the render thread waiting for the next one leaves.
+            __atomic_store_n(&frames_wanted, k, __ATOMIC_RELEASE);
+            semaphoreSignal(&frame_go);
+            break;
+        }
         semaphoreWait(&slot_free);
         const uint64_t began = armGetSystemTick();
         WriteSlot(k % SLOTS, k);
@@ -1190,6 +1259,8 @@ static void JudgeFrame(const char *name, uint32_t j) {
 }
 
 static void RunLevel(void) {
+    on_screen = false;
+    last_shown = NULL;
     static char bring_up[96];
     static char frames_name[96];
     static char judged_names[WIMSY_JUDGED][96];
@@ -1226,15 +1297,23 @@ static void RunLevel(void) {
     char why[400] = "";
     if (!ReportStart(SUITE, bring_up)) {
         depends = "the level's bring-up did not run, so neither did its frames";
-    } else if (ViewerScreenUp()) {
+    } else if (ViewerScreenUp() && demo == NULL) {
         // The window is the program's screen's while it is up, and a swapchain made on it then
-        // is what Eden never came back from (the game scene shows its frames through the screen;
-        // these are too large for it).
+        // is what Eden never came back from; the browser's run of a level shows its frames
+        // through that screen instead.
         ReportSkip(SUITE, bring_up, REPORT_REASON_UNAVAILABLE,
                    "the program's screen is up on the window, and the level presents through a "
-                   "swapchain of its own there: it runs in a quick run from the mode file");
+                   "swapchain of its own there: it runs in a quick run from the mode file, or "
+                   "from the browser's demos");
         depends = "the level did not come up, so its frames did not run";
     } else {
+        on_screen = ViewerScreenUp();
+        if (on_screen) {
+            ReportNote("wimsy: level %u's frames go through the program's screen, read back and "
+                       "composed by the processor, rather than a swapchain: their times are that "
+                       "way's, not a quick run's",
+                       (unsigned)level);
+        }
         bool up = BringUp(why, sizeof(why));
         for (uint32_t j = 0; j < judged_count && up; ++j) {
             kept[j] = (uint8_t *)malloc(WIMSY_IMAGE_BYTES);
@@ -1262,39 +1341,68 @@ static void RunLevel(void) {
         depends = "the frames' case did not run, so there are no frames to judge";
     } else if (depends == NULL) {
         const bool ran = RunFrames(why, sizeof(why));
-        char detail[400];
-        snprintf(detail, sizeof(detail), "%u of %u frames were presented and %u of %u kept; %s",
-                 (unsigned)render.presented, (unsigned)frames, (unsigned)render.copied,
-                 (unsigned)judged_count,
-                 !ran ? why : gpu.failure[0] != '\0' ? gpu.failure
-                                                    : "the graphics queue reported no fault");
-        const bool whole = ran && render.presented == frames && render.copied == judged_count;
-        ReportCase(SUITE, frames_name, CHECK_NONE, whole, whole ? NULL : detail);
-        if (whole) {
+        const uint32_t drawn = __atomic_load_n(&frames_wanted, __ATOMIC_ACQUIRE);
+        if (ran && drawn < frames) {
+            // Stopped by the browser's B: the judged frames it drew are judged, the others and
+            // the times are skipped as asked, and the frames' case says how far it got.
+            char said[200];
+            snprintf(said, sizeof(said),
+                     "stopped at frame %u of %u by the browser's B: %u of %u frames were "
+                     "presented",
+                     (unsigned)drawn, (unsigned)frames, (unsigned)render.presented,
+                     (unsigned)frames);
+            ReportSkip(SUITE, frames_name, REPORT_REASON_ASKED, said);
             for (uint32_t j = 0; j < judged_count; ++j) {
-                JudgeFrame(judged_names[j], j);
+                if (judged[j] < drawn && kept[j] != NULL) {
+                    JudgeFrame(judged_names[j], j);
+                } else {
+                    ReportSkip(SUITE, judged_names[j], REPORT_REASON_ASKED, said);
+                }
             }
-            if (level >= 3u && ReportStart(SUITE, peek_name)) {
-                uint8_t want[4];
-                WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL, render.peek_wrong_at, 0u, 0u,
-                                  want);
-                CHECK_TRUE(SUITE, peek_name, CHECK_EXACT,
-                           render.peeked == frames && render.peek_wrong == 0u,
-                           "%u of %u frames read back, %u of them another texel; the first, frame "
-                           "%u, read %02x %02x %02x %02x where the program stored %02x %02x %02x "
-                           "%02x",
-                           (unsigned)render.peeked, (unsigned)frames, (unsigned)render.peek_wrong,
-                           (unsigned)render.peek_wrong_at, render.peek_got[0], render.peek_got[1],
-                           render.peek_got[2], render.peek_got[3], want[0], want[1], want[2],
-                           want[3]);
+            if (level >= 3u) {
+                ReportSkip(SUITE, peek_name, REPORT_REASON_ASKED, said);
             }
-            if (timing) {
-                Times();
+            for (uint32_t i = 0; timing && i < GAME_TIME_CASES; ++i) {
+                ReportSkip(SUITE, time_names[i], REPORT_REASON_ASKED, said);
             }
+            after_count = 0;
         } else {
-            --after_count;
-            memmove(after, after + 1, after_count * sizeof(after[0]));
-            depends = "not every frame was presented and kept, so none is judged or timed";
+            char detail[400];
+            snprintf(detail, sizeof(detail),
+                     "%u of %u frames were presented and %u of %u kept; %s",
+                     (unsigned)render.presented, (unsigned)frames, (unsigned)render.copied,
+                     (unsigned)judged_count,
+                     !ran ? why : gpu.failure[0] != '\0' ? gpu.failure
+                                                        : "the graphics queue reported no fault");
+            const bool whole =
+                ran && render.presented == frames && render.copied == judged_count;
+            ReportCase(SUITE, frames_name, CHECK_NONE, whole, whole ? NULL : detail);
+            if (whole) {
+                for (uint32_t j = 0; j < judged_count; ++j) {
+                    JudgeFrame(judged_names[j], j);
+                }
+                if (level >= 3u && ReportStart(SUITE, peek_name)) {
+                    uint8_t want[4];
+                    WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL, render.peek_wrong_at,
+                                      0u, 0u, want);
+                    CHECK_TRUE(SUITE, peek_name, CHECK_EXACT,
+                               render.peeked == frames && render.peek_wrong == 0u,
+                               "%u of %u frames read back, %u of them another texel; the first, "
+                               "frame %u, read %02x %02x %02x %02x where the program stored %02x "
+                               "%02x %02x %02x",
+                               (unsigned)render.peeked, (unsigned)frames,
+                               (unsigned)render.peek_wrong, (unsigned)render.peek_wrong_at,
+                               render.peek_got[0], render.peek_got[1], render.peek_got[2],
+                               render.peek_got[3], want[0], want[1], want[2], want[3]);
+                }
+                if (timing) {
+                    Times();
+                }
+            } else {
+                --after_count;
+                memmove(after, after + 1, after_count * sizeof(after[0]));
+                depends = "not every frame was presented and kept, so none is judged or timed";
+            }
         }
     }
     if (depends != NULL) {

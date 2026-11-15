@@ -82,6 +82,15 @@ void GameSetTiming(bool on) {
     timing = on;
 }
 
+// The browser's run of the scene as a demo, NULL in every run from the mode file; and the frames
+// the run still wants, which B makes fewer: the threads waiting for a frame past them leave.
+static const DemoRun *demo;
+static uint32_t frames_wanted;
+
+void GameSetDemo(const DemoRun *run) {
+    demo = run;
+}
+
 // The graphics device and everything the frames draw with, made once before the first frame.
 static GpuContext gpu;
 static DkShader common_vs;
@@ -370,11 +379,38 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
     return worked;
 }
 
+/// The last frame shown again while the demo is paused (demo.h): the screen's copy of it, which
+/// still holds it. No pass runs and nothing is judged.
+static void ShowAgain(void) {
+    if (on_screen && gpu.ready) {
+        (void)ViewerShowImage((const uint8_t *)dkMemBlockGetCpuAddr(gpu.read_memory), GAME_TARGET,
+                              GAME_TARGET);
+    } else {
+        svcSleepThread(16666667ull);
+    }
+}
+
+/// Held while the person keeps the demo paused, the last frame shown again; hands back the ticks
+/// it held, which no frame's time counts.
+static uint64_t HoldWhilePaused(void) {
+    if (demo == NULL || demo->paused == NULL || !demo->paused()) {
+        return 0u;
+    }
+    const uint64_t from = armGetSystemTick();
+    while (demo->paused() && (demo->stopped == NULL || !demo->stopped())) {
+        ShowAgain();
+    }
+    return armGetSystemTick() - from;
+}
+
 static void RenderMain(void *argument) {
     (void)argument;
     uint64_t previous = 0;
     for (uint32_t k = 0; k < frames; ++k) {
         semaphoreWait(&frame_go);
+        if (k >= __atomic_load_n(&frames_wanted, __ATOMIC_ACQUIRE)) {
+            break;
+        }
         if (k == 0u) {
             previous = armGetSystemTick();
         }
@@ -384,7 +420,7 @@ static void RenderMain(void *argument) {
         const uint64_t now = armGetSystemTick();
         frame_us[k] = Microseconds(now - previous);
         render_us[k] = Microseconds(worked);
-        previous = now;
+        previous = now + HoldWhilePaused();
         semaphoreSignal(&slot_free);
     }
 }
@@ -423,6 +459,9 @@ static void FileMain(void *argument) {
     (void)argument;
     for (uint32_t k = 0; k < frames; ++k) {
         semaphoreWait(&file_go);
+        if (k >= __atomic_load_n(&frames_wanted, __ATOMIC_ACQUIRE)) {
+            break;
+        }
         Look(&reads.core, FILE_CORE, k);
         const uint32_t chunk = GameFileChunk(k);
         u64 got = 0;
@@ -697,6 +736,7 @@ static bool RunFrames(char *why, size_t why_size) {
     memset(&asked, 0, sizeof(asked));
     __atomic_store_n(&frames_over_tick, 0u, __ATOMIC_RELEASE);
     __atomic_store_n(&audio_stop, false, __ATOMIC_RELEASE);
+    __atomic_store_n(&frames_wanted, frames, __ATOMIC_RELEASE);
     semaphoreInit(&frame_go, 0);
     semaphoreInit(&slot_free, SLOTS);
     semaphoreInit(&file_go, 0);
@@ -742,6 +782,13 @@ static bool RunFrames(char *why, size_t why_size) {
     memset(&last, 0, sizeof(last));
     GameWorldStart(&world);
     for (uint32_t k = 0; k < frames; ++k) {
+        if (demo != NULL && demo->stopped != NULL && demo->stopped()) {
+            // B: the frames end here, and the threads waiting for the next one leave.
+            __atomic_store_n(&frames_wanted, k, __ATOMIC_RELEASE);
+            semaphoreSignal(&frame_go);
+            semaphoreSignal(&file_go);
+            break;
+        }
         semaphoreWait(&slot_free);
         const uint64_t began = armGetSystemTick();
         AskServices(k, &pad, &last);
@@ -1053,7 +1100,27 @@ static void RunScene(void) {
                  "the scene did not come up, so its frames did not run");
     } else if (ReportStart(SUITE, image_name)) {
         ran = RunFrames(why, sizeof(why));
-        JudgeImage(image_name, ran, why);
+        const uint32_t drawn = __atomic_load_n(&frames_wanted, __ATOMIC_ACQUIRE);
+        const bool stopped = ran && drawn < frames;
+        if (stopped) {
+            // Stopped by the browser's B: what the frames ask holds over every frame, so none of
+            // it is judged on a part of them.
+            char said[160];
+            snprintf(said, sizeof(said),
+                     "stopped at frame %u of %u by the browser's B: the scene is judged over every "
+                     "frame, so nothing of it is",
+                     (unsigned)drawn, (unsigned)frames);
+            ReportSkip(SUITE, image_name, REPORT_REASON_ASKED, said);
+            for (size_t i = 1; i < sizeof(all) / sizeof(all[0]); ++i) {
+                ReportSkip(SUITE, all[i], REPORT_REASON_ASKED, said);
+            }
+            for (uint32_t i = 0; timing && i < GAME_TIME_CASES; ++i) {
+                ReportSkip(SUITE, time_cases[i].name, REPORT_REASON_ASKED, said);
+            }
+            ran = false;
+        } else {
+            JudgeImage(image_name, ran, why);
+        }
         if (ran) {
             JudgeSound(SOUND_NAME);
             JudgeReads(reads_name);
@@ -1062,7 +1129,7 @@ static void RunScene(void) {
             if (timing) {
                 Times();
             }
-        } else {
+        } else if (!stopped) {
             SkipFrom(all + 1, after_count, why);
         }
     } else {

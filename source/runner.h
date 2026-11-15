@@ -53,6 +53,8 @@ typedef struct {
 } RunnerFrontend;
 
 #define RUNNER_ROOT_MAX 160u
+/// The most runs a launch's folder keeps from the browser.
+#define RUNNER_BROWSER_RUNS_MAX 9999u
 #define RUNNER_PATH_MAX (RUNNER_ROOT_MAX + 16u + MODE_FOLDER_MAX + 16u)
 
 /// A run, as the runner works it out. Large: a frontend keeps one, static.
@@ -70,6 +72,9 @@ typedef struct {
     JournalState journal;
     CrashList crashes;
     JournalPlan plan;
+    /// The browser's run the launch before went to (last-run), relative to the root, when it went
+    /// to one: where a crash it ended in is found (RunnerAdoptBrowserCrash).
+    char browser_last[RUNNER_PATH_MAX];
 } Runner;
 
 /// Names every path under the frontend's root and makes the root. False when the root is longer
@@ -116,6 +121,26 @@ void RunnerSteps(Runner *runner, uint32_t families, bool timing, RunnerProgress 
 /// After the steps: the notes a run ends on, the baseline's lines, the summary; the report and the
 /// journal closed, and `EDENPROBE DONE` with the counts on the log.
 void RunnerFinish(Runner *runner, const RunMode *mode, bool timing);
+
+/// A run the browser begins (docs/UI.md), in a folder of its own under the launch's:
+/// runs/<folder>/browse/<n>, n the first number with no folder there yet, every path under it,
+/// last-run naming it, the pictures' root; the crash list read again, and a fresh plan. Hands
+/// back n, or nought when no folder could be named.
+uint32_t RunnerPlanBrowser(Runner *runner, const RunMode *mode);
+
+/// Runs every step @p runs says yes to, in the frontend's order, as RunnerSteps does with a
+/// fresh plan; @p progress counts them among those @p runs says yes to.
+void RunnerStepsWhere(Runner *runner, bool (*runs)(const RunnerStep *step), bool timing,
+                      RunnerProgress progress);
+
+/// One more step after them, journaled as a step is: a demo the browser runs. @p number is its
+/// place for @p progress.
+void RunnerRunExtra(Runner *runner, uint32_t number, const char *name, void (*run)(const void *),
+                    const void *argument, RunnerProgress progress);
+
+/// After RunnerOpen: when the launch before went to a browser's run that the program ended
+/// inside a case of, that case goes on the crash list, and a note says so.
+void RunnerAdoptBrowserCrash(Runner *runner);
 
 #ifdef __cplusplus
 }
