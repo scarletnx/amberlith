@@ -112,6 +112,29 @@ static void Depths(void) {
                    FixedBoundsPass(0.5f, 0.25f, 0.5f) && !FixedBoundsPass(0.5f, 0.125f, 0.375f) &&
                    !FixedBoundsPass(0.5f, 0.625f, 0.875f),
                "a bound disagrees with the hand-worked answer");
+    // The clamp off keeps 0 to 1 and clamps there; the clamp on keeps everything and clamps to
+    // the clip range, 0.25 to 0.5 here.
+    CHECK_TRUE(SUITE,
+               "with the clamp off a primitive past a depth plane is clipped, with it on kept",
+               CHECK_NONE,
+               !FixedDepthKept(false, 1.5f) && !FixedDepthKept(false, -0.5f) &&
+                   FixedDepthKept(false, 0.0f) && FixedDepthKept(false, 1.0f) &&
+                   FixedDepthKept(true, 1.5f) && FixedDepthKept(true, -0.5f),
+               "a plane disagrees with the hand-worked answer");
+    const float off_far = FixedDepthClamped(false, 1.5f, 0.25f, 0.5f);
+    const float off_in = FixedDepthClamped(false, 0.875f, 0.25f, 0.5f);
+    const float off_near = FixedDepthClamped(false, -0.5f, 0.25f, 0.5f);
+    const float on_far = FixedDepthClamped(true, 1.5f, 0.25f, 0.5f);
+    const float on_near = FixedDepthClamped(true, 0.125f, 0.25f, 0.5f);
+    const float on_in = FixedDepthClamped(true, 0.375f, 0.25f, 0.5f);
+    CHECK_TRUE(SUITE,
+               "the clamp off holds 1.5, 0.875 and -0.5 to 1, 0.875 and 0; the clamp on holds 1.5, "
+               "0.125 and 0.375 to 0.5, 0.25 and 0.375",
+               CHECK_NONE,
+               off_far == 1.0f && off_in == 0.875f && off_near == 0.0f && on_far == 0.5f &&
+                   on_near == 0.25f && on_in == 0.375f,
+               "got %.9g %.9g %.9g, and %.9g %.9g %.9g", (double)off_far, (double)off_in,
+               (double)off_near, (double)on_far, (double)on_near, (double)on_in);
 }
 
 static void Alpha(void) {

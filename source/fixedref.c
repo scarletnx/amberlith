@@ -44,6 +44,15 @@ float FixedWindowDepth(float z, bool minus_one_to_one) {
     return minus_one_to_one ? z * 0.5f + 0.5f : z;
 }
 
+bool FixedDepthKept(bool clamp, float z) {
+    return clamp || (z >= 0.0f && z <= 1.0f);
+}
+
+float FixedDepthClamped(bool clamp, float depth, float clip_min, float clip_max) {
+    const float low = clamp ? clip_min : 0.0f, high = clamp ? clip_max : 1.0f;
+    return depth < low ? low : depth > high ? high : depth;
+}
+
 FixedRect FixedPointRect(double cx, double cy, double size) {
     // Pixel i's centre is i + 1/2; it is inside when it lies strictly between the two edges.
     const double half = size * 0.5;

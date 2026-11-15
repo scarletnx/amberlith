@@ -192,7 +192,7 @@ equality. Three cases are about the write rather than the test, the half a colou
 
 ## fixed
 
-Thirty one cases and three notes. The fixed function state a game's driver sets and Vulkan lacks
+Thirty six cases and a note. The fixed function state a game's driver sets and Vulkan lacks
 or keeps elsewhere, so an emulator carries it over itself. Every case draws flat colours over whole
 pixels of a 64 by 64 RGBA8 target and reads all 4096 back: exact. The rules past a comparison are
 `source/fixedref.c`'s, pinned by the reference suite. In the order they run:
@@ -225,6 +225,28 @@ pixels of a 64 by 64 RGBA8 target and reads all 4096 back: exact. The rules past
   rule for a negative viewport height too; an emulator that tracks the face through the scale's
   sign and the swizzle apart gets one of them inside out. Last, the swizzle that swaps x and y,
   with no culling, transposes the picture. Six cases.
+- **A depth past the viewport's range.** A quad over each half of a ZF32 buffer cleared to 0.75,
+  under a viewport from 0.25 to 0.5 (scale and offset 0.25), the depth test ALWAYS with the write on,
+  depth from the geometry (`flat.frag`) or written by the shader (`depth_out.frag`, the vertex
+  colour's alpha): every pixel's colour or the clear, and its depth bit for bit. deko3d writes 0x181D
+  to the 3D class's view volume clip control for its depth clamp off and 0x101A for it on
+  (`gpu_3d_state.cpp`), and the class's header (open-gpu-doc `clb197.h`, SET_VIEWPORT_CLIP_CONTROL)
+  says what they do: off, the geometry is clipped at the depth planes (FRUSTUM_XYZ_CLIP, a tight z
+  guardband) and a fragment's depth clamped to nought to one (PIXEL_MIN_Z and PIXEL_MAX_Z CLAMP,
+  MIN_Z_ZERO_MAX_Z_ONE, deko3d's ForceDepthRangeZeroToOne); on, nothing is clipped at the depth
+  planes and the depth is clamped to the viewport's clip range (SET_VIEWPORT_CLIP_MIN_Z and MAX_Z,
+  which deko3d sets to the viewport's near and far). NVK, which drives the same registers on these
+  GPUs, sets MIN_Z_ZERO_MAX_Z_ONE for exactly that clamp to nought to one (`nvk_cmd_draw.c`).
+  `fixedref.c`'s `FixedDepthKept` and `FixedDepthClamped` hold the rule. With the clamp off, a
+  shader's 1.5 and 0.875 store 1 and 0.875, not the range's 0.5; with it on, 1.5 and 0.125 store
+  0.5 and 0.25. With the clamp off a quad at clip z 1.5 is clipped and one at 0.5 drawn at 0.375;
+  with it on quads at 1.5 and -0.5 are drawn at 0.5 and 0.25. Last, the clip range written apart
+  after the viewport by a raw method (`RawViewportClipZ`, 0.3125 to 0.4375): with the clamp on the
+  shader's 0.875 and 0.125 store 0.4375 and 0.3125, the clip range's ends, not the transform's.
+  Vulkan's one switch (`depthClampEnable`) clamps and turns the depth clip off together, and with
+  the clamp off a depth past the viewport's range is undefined (Depth Clamping and Range
+  Adjustment): an emulator needs VK_EXT_depth_clip_enable for the first case and
+  VK_EXT_depth_clamp_control for the last. Five cases.
 - **A device with the lower left origin** (`DkDeviceFlags_OriginLowerLeft`): the viewport's y scale
   stays positive, so clip space y of one is the target's last row, and the window origin's FlipY
   bit flips the winding back, so the counter clockwise rectangle is still front. Two cases.
@@ -234,24 +256,21 @@ pixels of a 64 by 64 RGBA8 target and reads all 4096 back: exact. The rules past
   volume to minus one, and a z scale and offset of a half: an emulator that only rescales z, and
   clips where Vulkan clips, loses the first two columns.
 
-The notes, which no machine is held to, since a console run is what says which answer is right:
+The note, which no machine is held to, since a console run is what says which answer is right:
 
 - **Which way up a point's coordinate runs.** deko3d sets PointCoordReplace's origin to lower
   left. A point of size 8 drawn with a shader that writes `gl_PointCoord` reads 16 at its first row
   when the origin is at the top of the target's memory and 239 when it is at the bottom; the note
   gives both corners.
-- **A depth outside the range, with the clamp off and on.** A quad at z -0.5 and one at 1.5 on the
-  default device, over a buffer of 0.75: drawn at depth 0 or 1 is clamped, the clear and 0.75 is
-  clipped. deko3d's ViewVolumeClipControl words for the clamp off and on are not documented, so the
-  library's word alone does not settle it.
 
 In an emulator a failure points at the 3D engine's registers the state comes from and the way it
 reaches the host: the point size (`maxwell_3d.h`, `point_size`; `vk_graphics_pipeline.cpp`), the
 alpha test (`shader_recompiler`'s alpha test emulation, `vk_pipeline_cache.cpp`), the depth bounds
 (`vk_rasterizer.cpp`, `UpdateDepthBounds`), the rasteriser enable, the viewport transform's scale,
 swizzle and the window origin (`vk_rasterizer.cpp`, `GetViewportState`; `FrontFace` in
-`maxwell_to_vk.cpp`), and the depth mode (`depth_mode`, VK_EXT_depth_clip_control or the shader's
-z fix-up).
+`maxwell_to_vk.cpp`), the depth mode (`depth_mode`, VK_EXT_depth_clip_control or the shader's
+z fix-up), and the view volume clip control's depth clip and clamp (VK_EXT_depth_clip_enable and
+VK_EXT_depth_clamp_control).
 ## stencil
 
 Fifty six cases, on the two depth formats that carry stencil, Z24S8 and ZF32_X24S8 (a 32-bit float
