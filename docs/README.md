@@ -43,6 +43,6 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[Demo](./families/Demo.md)** - graphics workloads a game runs, drawn for a person to watch, judged and timed,
     among them the **[fluid](./families/Fluid.md)**, a 2D Navier-Stokes fluid in ping-pong fragment passes
   - **[libc](./families/Libc.md)** - the C library under every frontend
-  - **[Music](./families/Music.md)** - the demos' music, written tracks on an FM synthesizer in the OPL3's
-    manner, held to the host's samples
+  - **[Music](./families/Music.md)** - the demos' music, AdLib tracker songs composed from a seed on an FM
+    synthesizer in the OPL2's manner, held to the host's samples
 - **[Credits](./Credits.md)**

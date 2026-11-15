@@ -223,15 +223,17 @@ family reports can be believed without them.
     on eleven machines made to order, each wrong in one way, failing the checks that way reaches
     and no other (see [The fluid demo](Fluid.md));
     and no other, and the notes (see [The fluid demo](Fluid.md));
-  - eight on the demos' music, `source/music.c` and `source/musicscore.txt`, with no sample of a
-    track rendered: the FM synthesizer's log-sine and exponential tables against the sine and
-    attenuations worked out by hand, the OPL3's eight waveforms and the drums' noises at the
-    points that tell them apart, a note's phase step (A4 at 440 Hz by hand, every note within a
-    cent of equal temperament), the envelope's attack and decay at the chip's sixteen rates as it
-    plays, each channel's side and every part's patch; then what the four scores hold: every note
-    and chord in the key, every melody full, the intro then eight-bar sections with the bridge on
-    chords of its own and A2 home on the tonic, every pattern a bar long (see [The music
-    family](Music.md));
+  - eight on the demos' music, `source/music.c`, `source/musiccompose.c` and
+    `source/musicscore.txt`, with no sample of a track rendered: the FM synthesizer's log-sine and
+    exponential tables against the sine and attenuations worked out by hand, the chip's eight
+    waveforms at the points that tell them apart, a note's phase step (A4 at 440 Hz by hand, every
+    note within a cent of equal temperament), the envelope's attack and decay at the chip's
+    sixteen rates as it plays, every voice's patch and the surround's 4.7 cents; then what the
+    composer writes: for 32 seeds of each track every note in the key, the pads on the bar's
+    chord, the lead in its range and on the chord at the first and third beats; 64 seeds 64
+    different first passes, a seed twice the same, the intro only on the first pass; and each
+    channel its part, the kit on one channel, the echo the lead's notes late and softer, the
+    double and the harmony only where the form asks (see [The music family](Music.md));
   - eleven on the tex8k suite's judge, `source/tex8kref.c`: the graphics memory its textures want
     of a machine and what it says of one with less, its BC7 mode 6 and BC1 blocks against the
     bytes and texels Pillow 12.3.0 decodes them to, both ways a BC1 code may become eight bits, its
