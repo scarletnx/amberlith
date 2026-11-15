@@ -17,7 +17,10 @@ HOSTDEP  := $(HOSTOBJ:.o=.d)
 
 .PHONY: host host-run host-clean
 
-host: $(HOSTOUT)
+# Where the fluid demo's budgets come from, measured on the processor (tools/fluid-envelope.c).
+FLUIDTOOL := build-host/fluid-envelope
+
+host: $(HOSTOUT) $(FLUIDTOOL)
 
 build-host/%.o: source/%.c
 	@mkdir -p $(dir $@)
@@ -26,14 +29,19 @@ build-host/%.o: source/%.c
 $(HOSTOUT): $(HOSTOBJ)
 	$(HOSTCC) $(HOSTFLAGS) $(HOSTOBJ) -lm -pthread -o $@
 
+$(FLUIDTOOL): tools/fluid-envelope.c build-host/demo_fluidref.o
+	$(HOSTCC) $(HOSTFLAGS) $^ -lm -o $@
+
 # Twice, the second from somewhere else on purpose: a path built relative to the working
 # directory works from here and nowhere else, and the suite has to be able to notice that. Then
 # the report tools, which read what the binary wrote and have tests of their own, the CI's
 # scripts in .github/scripts, against a fake GitHub and a fake Discord, and the APK's runners,
-# against a fake adb and a fake ScarletNX driver.
-host-run: $(HOSTOUT)
+# against a fake adb and a fake ScarletNX driver. The fluid demo's budgets are measured between
+# them, on the early frames and a default run's 600.
+host-run: $(HOSTOUT) $(FLUIDTOOL)
 	./$(HOSTOUT)
 	cd / && exec $(CURDIR)/$(HOSTOUT)
+	./$(FLUIDTOOL) 64 600
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts
 	bash android/tests/test-run-adb.sh

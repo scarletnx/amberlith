@@ -2491,6 +2491,7 @@ void RunReference(void) {
     RunReferenceWimsy();
     RunReferenceDemo();
     RunReferenceFractal();
+    RunReferenceFluid();
     RunReferenceTex8k();
     RunReferenceFixed();
     RunReferenceCoverage();
