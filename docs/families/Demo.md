@@ -42,7 +42,8 @@ What every demo of the family does:
   they hold it paused. A step of the run asks it with the mode file's words, and nobody stops or pauses it; a screen
   that lets a person pick a demo asks it with its own. Paused, a demo shows its last frame again and draws no new
   one, and the time it stays paused is in no frame's time; the frames case says how often and how long. Frames a
-  stopped demo did not reach are skipped as `asked`, saying the frame it stopped at.
+  stopped demo did not reach are skipped as `asked`, saying the frame it stopped at. A third question, the pad's
+  sticks, is for a demo a person steers; a step of the run has nobody to ask.
 
 ## mandelbrot and julia
 

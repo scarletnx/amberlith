@@ -1078,13 +1078,25 @@ enum {
     UI_PAUSE_ROWS,
 };
 
+/// A row of a demo's own in the pause menu, between the HUD's and Restart: what it is called and
+/// the values Left and Right walk. A sets the demo off again with them.
+#define UI_PAUSE_OPTIONS 4u
 typedef struct {
+    const char *name;
+    const char *const *values;
+    uint32_t count;
+} UiPauseOption;
+
+typedef struct {
+    /// The row the cursor is on, from the top as the menu shows them.
     uint32_t cursor;
     /// The demo the level row names, among the demos of its family (UiPauseInfo).
     uint32_t level;
     uint32_t frames;
     bool music;
     bool hud;
+    /// The value each of the demo's own rows is at.
+    uint32_t option[UI_PAUSE_OPTIONS];
     /// What the press asked: resume, run @p level (a restart when it is the demo running),
     /// back to the browser.
     bool resume;
@@ -1101,6 +1113,10 @@ typedef struct {
     uint32_t running;
     uint32_t frame;
     uint32_t frames;
+    /// The demo's own rows, UI_PAUSE_OPTIONS at most, and the value each has as the demo runs.
+    const UiPauseOption *options;
+    uint32_t option_count;
+    uint32_t option_now[UI_PAUSE_OPTIONS];
 } UiPauseInfo;
 
 UiPauseState UiPauseOpen(const UiPauseInfo *info, uint32_t frames, bool music, bool hud);

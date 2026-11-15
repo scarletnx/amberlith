@@ -120,6 +120,50 @@ void WimsySetDemo(const DemoRun *run) {
     demo = run;
 }
 
+// A person's camera at a heavy level: where it stands, eye high, and how it is turned, of 65536
+// a turn. The left stick walks it over the floor, the right one turns it.
+static bool free_camera;
+static float free_eye[3];
+static uint32_t free_heading;
+static int32_t free_pitch;
+
+void WimsySetFree(bool on) {
+    free_camera = on;
+}
+
+/// A stick's push past its dead middle, from -1 to 1.
+static float Push(int32_t value) {
+    return value > 6000 || value < -6000 ? (float)value / 32767.0f : 0.0f;
+}
+
+/// One frame of the person's camera: turned two degrees and walked a quarter of a unit at a full
+/// push, kept between the walls, over the floor's length, and from looking straight up or down.
+static void SteerCamera(uint32_t k) {
+    if (k == 0u) {
+        free_eye[0] = 0.0f;
+        free_eye[1] = 2.5f;
+        free_eye[2] = 6.0f;
+        free_heading = 0u;
+        free_pitch = 0;
+    }
+    DemoSticks sticks = { { 0, 0 }, { 0, 0 } };
+    if (demo != NULL && demo->sticks != NULL) {
+        demo->sticks(&sticks);
+    }
+    free_heading = (uint32_t)((int32_t)free_heading - (int32_t)(Push(sticks.right[0]) * 364.0f)) & 0xFFFFu;
+    free_pitch += (int32_t)(Push(sticks.right[1]) * 273.0f);
+    free_pitch = free_pitch > 10922 ? 10922 : free_pitch < -10922 ? -10922 : free_pitch;
+    float ahead[3], level_ahead[3];
+    WimsyLookAt(free_heading, free_pitch, ahead);
+    WimsyLookAt(free_heading, 0, level_ahead);
+    const float walk = Push(sticks.left[1]) * 0.25f, aside = Push(sticks.left[0]) * 0.25f;
+    free_eye[0] += level_ahead[0] * walk - level_ahead[2] * aside;
+    free_eye[2] += level_ahead[2] * walk + level_ahead[0] * aside;
+    free_eye[0] = free_eye[0] > 17.0f ? 17.0f : free_eye[0] < -17.0f ? -17.0f : free_eye[0];
+    free_eye[2] = free_eye[2] > 6.0f ? 6.0f : free_eye[2] < -190.0f ? -190.0f : free_eye[2];
+    WimsyCameraAsk(free_eye, ahead);
+}
+
 // The graphics device and everything a level's frames draw with, made before its first frame.
 static uint32_t level;
 static GpuContext gpu;
@@ -313,6 +357,9 @@ static void WriteSlot(uint32_t slot, uint32_t k) {
                       sprites[i].mirrored ? 1.0f : 0.0f, sprites[i].mirrored ? 0.0f : 1.0f);
         }
         return;
+    }
+    if (free_camera && level >= 3u) {
+        SteerCamera(k);
     }
     WimsyViewOf(level, k, frames, view_cpu[slot]);
     // After the matrix, the frame's wind, which the grass's vertex program reads.
@@ -1575,7 +1622,13 @@ static void RunLevel(void) {
             ReportCase(SUITE, frames_name, CHECK_NONE, whole, whole ? NULL : detail);
             if (whole) {
                 for (uint32_t j = 0; j < judged_count; ++j) {
-                    JudgeFrame(judged_names[j], j);
+                    if (free_camera && level >= 3u) {
+                        ReportSkip(SUITE, judged_names[j], REPORT_REASON_ASKED,
+                                   "the camera was the person's, by the pause menu's row: no "
+                                   "frame of the run is the walk's");
+                    } else {
+                        JudgeFrame(judged_names[j], j);
+                    }
                 }
                 if (level >= 3u && ReportStart(SUITE, peek_name)) {
                     uint8_t want[4];
@@ -1630,6 +1683,8 @@ void RunWimsy(void) {
     for (level = 0; level < WIMSY_LEVELS; ++level) {
         if ((levels >> level & 1u) != 0u) {
             RunLevel();
+            // A person's camera goes with the run that had it.
+            WimsyCameraWalk();
         }
     }
     if (levels != 0u) {

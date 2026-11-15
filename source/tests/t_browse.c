@@ -638,10 +638,37 @@ static void CheckHud(uint8_t *pixels) {
     const bool frames = other.frames == 3600u;
     const bool resumed = UiPauseStep(other, UI_BUTTON_RUN, &info).resume;
     const bool back = UiPauseStep(other, UI_BUTTON_BACK, &info).back;
+    // A demo's own rows sit between the HUD's and Restart: Left and Right walk a row's values
+    // round, A starts the demo with them, and Restart and Back are the rows after them.
+    static const char *const THICK[3] = { "Thin", "Thick", "Thicker" };
+    static const char *const SWITCH[2] = { "On", "Off" };
+    static const UiPauseOption OWN[2] = { { "Grass", THICK, 3u }, { "Legend", SWITCH, 2u } };
+    UiPauseInfo with = info;
+    with.options = OWN;
+    with.option_count = 2u;
+    with.option_now[0] = 2u;
+    UiPauseState own = UiPauseOpen(&with, 600u, true, true);
+    for (uint32_t i = 0; i < 5u; ++i) {
+        own = UiPauseStep(own, UI_BUTTON_DOWN, &with);
+    }
+    own = UiPauseStep(own, UI_BUTTON_RIGHT, &with);
+    const bool walked = own.cursor == 5u && own.option[0] == 0u && own.option[1] == 0u && !own.start_level;
+    own = UiPauseStep(UiPauseStep(own, UI_BUTTON_DOWN, &with), UI_BUTTON_LEFT, &with);
+    const bool second = own.cursor == 6u && own.option[1] == 1u;
+    const bool chosen = UiPauseStep(own, UI_BUTTON_OPEN, &with).start_level;
+    own = UiPauseStep(own, UI_BUTTON_DOWN, &with);
+    const UiPauseState again = UiPauseStep(own, UI_BUTTON_OPEN, &with);
+    const bool restart = own.cursor == 7u && again.start_level && again.level == 3u;
+    own = UiPauseStep(UiPauseStep(own, UI_BUTTON_DOWN, &with), UI_BUTTON_DOWN, &with);
+    const bool round_again = own.cursor == 0u;
+    UiComposePause(&frame, &with, &own);
+    const bool rows_own = walked && second && chosen && restart && round_again;
     CHECK_TRUE(SUITE, "the pause menu changes the level and the frames, resumes and goes back",
-               CHECK_NONE, level && started && frames && resumed && back,
-               "level %d, started %d, frames %d (%u), resumed %d, back %d", (int)level,
-               (int)started, (int)frames, (unsigned)other.frames, (int)resumed, (int)back);
+               CHECK_NONE, level && started && frames && resumed && back && rows_own,
+               "level %d, started %d, frames %d (%u), resumed %d, back %d; a demo's own rows: "
+               "walked %d, the second %d, chosen %d, restart after them %d, round %d",
+               (int)level, (int)started, (int)frames, (unsigned)other.frames, (int)resumed,
+               (int)back, (int)walked, (int)second, (int)chosen, (int)restart, (int)round_again);
 
     // Motion: the new screen from the top, all of it at the last step.
     CHECK_TRUE(SUITE, "motion brings a new screen in from the top, whole at its last step",

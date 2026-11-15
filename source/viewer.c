@@ -480,6 +480,8 @@ static struct {
     UiPauseInfo pause_info;
     UiPauseState pause;
     ViewerDemoEnd end;
+    /// The sticks as the last frame shown found them, read by the demo's own thread.
+    DemoSticks sticks;
 } demo;
 
 void ViewerDemoBegin(const ViewerDemo *asked) {
@@ -499,6 +501,7 @@ void ViewerDemoBegin(const ViewerDemo *asked) {
     demo.end.frames = asked->frames;
     demo.end.music = asked->music;
     demo.end.hud = asked->hud;
+    memcpy(demo.end.option, asked->option_now, sizeof(demo.end.option));
 }
 
 ViewerDemoEnd ViewerDemoFinish(void) {
@@ -517,6 +520,13 @@ bool ViewerDemoPaused(void) {
 
 bool ViewerDemoMusic(void) {
     return __atomic_load_n(&demo.music, __ATOMIC_ACQUIRE);
+}
+
+void ViewerDemoSticks(DemoSticks *out) {
+    for (uint32_t k = 0; k < 2u; ++k) {
+        out->left[k] = __atomic_load_n(&demo.sticks.left[k], __ATOMIC_RELAXED);
+        out->right[k] = __atomic_load_n(&demo.sticks.right[k], __ATOMIC_RELAXED);
+    }
 }
 
 /// The music as the pause menu left it: the demo's track, or none, through the browser's player;
@@ -553,6 +563,7 @@ static void DemoPauseStep(uint32_t buttons) {
     demo.end.hud = demo.pause.hud;
     demo.end.music = demo.pause.music;
     demo.end.frames = demo.pause.frames;
+    memcpy(demo.end.option, demo.pause.option, sizeof(demo.end.option));
     if (demo.pause.back) {
         demo.end.back = true;
         __atomic_store_n(&demo.stopped, true, __ATOMIC_RELEASE);
@@ -576,6 +587,12 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
                       ? BrowseButtonsFrom(padGetButtonsDown(&demo.pad))
                       : 0u;
         demo.frames_seen += demo.frames_seen < UI_SETTLING_FRAMES ? 1u : 0u;
+        const HidAnalogStickState left = padGetStickPos(&demo.pad, 0);
+        const HidAnalogStickState right = padGetStickPos(&demo.pad, 1);
+        __atomic_store_n(&demo.sticks.left[0], demo.paused ? 0 : left.x, __ATOMIC_RELAXED);
+        __atomic_store_n(&demo.sticks.left[1], demo.paused ? 0 : left.y, __ATOMIC_RELAXED);
+        __atomic_store_n(&demo.sticks.right[0], demo.paused ? 0 : right.x, __ATOMIC_RELAXED);
+        __atomic_store_n(&demo.sticks.right[1], demo.paused ? 0 : right.y, __ATOMIC_RELAXED);
         if (demo.paused) {
             DemoPauseStep(buttons);
         } else if ((buttons & UI_BUTTON_BACK) != 0u) {
@@ -591,6 +608,9 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
             demo.pause_info.running = demo.asked.running;
             demo.pause_info.frame = demo.hud.frame;
             demo.pause_info.frames = demo.asked.frames;
+            demo.pause_info.options = demo.asked.options;
+            demo.pause_info.option_count = demo.asked.option_count;
+            memcpy(demo.pause_info.option_now, demo.end.option, sizeof(demo.end.option));
             demo.pause = UiPauseOpen(&demo.pause_info, demo.asked.frames, demo.music, demo.hud_on);
             __atomic_store_n(&demo.paused, true, __ATOMIC_RELEASE);
         }

@@ -20,7 +20,7 @@ void DemoSetTiming(bool on) {
 }
 
 DemoRun DemoScriptRun(void) {
-    const DemoRun run = { false, script_frames, script_timing, NULL, NULL };
+    const DemoRun run = { false, script_frames, script_timing, NULL, NULL, NULL };
     return run;
 }
 

@@ -4593,10 +4593,35 @@ void UiComposeHud(const UiFrame *frame, const UiHud *hud) {
     HudKeys(frame, frame->height - EDGE - CH - 12u, KEYS, 3u);
 }
 
+/// How many rows of its own a demo gives the pause menu.
+static uint32_t PauseOptions(const UiPauseInfo *info) {
+    return info == NULL || info->options == NULL
+               ? 0u
+               : info->option_count < UI_PAUSE_OPTIONS ? info->option_count : UI_PAUSE_OPTIONS;
+}
+
+/// What the menu's row @p shown from the top is: one of the menu's own (UI_PAUSE_*), or, with
+/// UI_PAUSE_ROWS returned, the demo's row @p option, which sit between the HUD's and Restart.
+static uint32_t PauseRow(const UiPauseInfo *info, uint32_t shown, uint32_t *option) {
+    const uint32_t options = PauseOptions(info);
+    *option = 0u;
+    if (shown < UI_PAUSE_RESTART) {
+        return shown;
+    }
+    if (shown < UI_PAUSE_RESTART + options) {
+        *option = shown - UI_PAUSE_RESTART;
+        return UI_PAUSE_ROWS;
+    }
+    return shown - options;
+}
+
 UiPauseState UiPauseOpen(const UiPauseInfo *info, uint32_t frames, bool music, bool hud) {
     UiPauseState state;
     memset(&state, 0, sizeof(state));
     state.cursor = UI_PAUSE_RESUME;
+    for (uint32_t k = 0; k < PauseOptions(info); ++k) {
+        state.option[k] = info->option_now[k] < info->options[k].count ? info->option_now[k] : 0u;
+    }
     state.level = info != NULL ? info->running : 0u;
     state.frames = frames;
     state.music = music;
@@ -4614,23 +4639,37 @@ UiPauseState UiPauseStep(UiPauseState state, uint32_t buttons, const UiPauseInfo
     } else if ((buttons & UI_BUTTON_BACK) != 0u) {
         state.back = true;
     } else if ((buttons & (UI_BUTTON_UP | UI_BUTTON_DOWN)) != 0u) {
-        state.cursor =
-            Around(state.cursor, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1, UI_PAUSE_ROWS);
-    } else if (change && state.cursor == UI_PAUSE_LEVEL && info != NULL &&
-               info->level_count > 0u) {
+        state.cursor = Around(state.cursor, (buttons & UI_BUTTON_UP) != 0u ? -1 : 1,
+                              UI_PAUSE_ROWS + PauseOptions(info));
+        state.changed = state.changed || memcmp(&before, &state, sizeof(state)) != 0;
+        return state;
+    }
+    uint32_t option = 0;
+    const uint32_t row = PauseRow(info, state.cursor, &option);
+    if (state.resume || state.back) {
+        // Plus or B, whatever the row.
+    } else if (row == UI_PAUSE_ROWS) {
+        // A row of the demo's own: Left and Right walk its values, A starts the demo with them.
+        if (change && info->options[option].count > 0u) {
+            state.option[option] =
+                Around(state.option[option], left ? -1 : 1, info->options[option].count);
+        } else if ((buttons & UI_BUTTON_OPEN) != 0u) {
+            state.start_level = true;
+        }
+    } else if (change && row == UI_PAUSE_LEVEL && info != NULL && info->level_count > 0u) {
         state.level = Around(state.level, left ? -1 : 1, info->level_count);
-    } else if (change && state.cursor == UI_PAUSE_FRAMES) {
+    } else if (change && row == UI_PAUSE_FRAMES) {
         uint32_t at = 0;
         while (at + 1u < UI_DEMO_FRAME_CHOICES && UI_DEMO_FRAMES[at] < state.frames) {
             ++at;
         }
         state.frames = UI_DEMO_FRAMES[Around(at, left ? -1 : 1, UI_DEMO_FRAME_CHOICES)];
-    } else if ((change || (buttons & UI_BUTTON_OPEN) != 0u) && state.cursor == UI_PAUSE_MUSIC) {
+    } else if ((change || (buttons & UI_BUTTON_OPEN) != 0u) && row == UI_PAUSE_MUSIC) {
         state.music = !state.music;
-    } else if ((change || (buttons & UI_BUTTON_OPEN) != 0u) && state.cursor == UI_PAUSE_HUD) {
+    } else if ((change || (buttons & UI_BUTTON_OPEN) != 0u) && row == UI_PAUSE_HUD) {
         state.hud = !state.hud;
     } else if ((buttons & UI_BUTTON_OPEN) != 0u) {
-        switch (state.cursor) {
+        switch (row) {
         case UI_PAUSE_RESUME:
             state.resume = true;
             break;
@@ -4663,8 +4702,10 @@ void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPause
         FillRect(frame, 0, y, frame->width, 1u, RUN.page);
     }
     g_look = &MENU;
+    const uint32_t options = PauseOptions(info);
+    const uint32_t rows = UI_PAUSE_ROWS + options;
     const uint32_t width = 1056u;
-    const uint32_t height = 540u;
+    const uint32_t height = 540u + options * (UI_ROW_BOX + 4u);
     const uint32_t bx = (frame->width - width) / 2u;
     const uint32_t by = (frame->height - height) / 2u;
     Backdrop(frame, bx, by, width, height);
@@ -4688,14 +4729,22 @@ void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPause
     static const char *const NAMES[UI_PAUSE_ROWS] = {
         "Resume", "Level", "Frames", "Music", "HUD", "Restart", "Back to the browser",
     };
-    for (uint32_t r = 0; r < UI_PAUSE_ROWS; ++r) {
-        const uint32_t y = top + r * (UI_ROW_BOX + 4u);
-        const bool selected = r == state->cursor;
+    for (uint32_t shown_row = 0; shown_row < rows; ++shown_row) {
+        uint32_t option = 0;
+        const uint32_t r = PauseRow(info, shown_row, &option);
+        const uint32_t y = top + shown_row * (UI_ROW_BOX + 4u);
+        const bool selected = shown_row == state->cursor;
         const uint8_t *const ink = ListRow(frame, x, y, list_width, UI_ROW_BOX, selected);
         BigGlyph(frame, x + CW / 2u, y + 2u, ink, (unsigned char)FONTVGA_MARKER);
-        Big(frame, x + 2u * CW, y + 2u, ink, NAMES[r]);
+        Big(frame, x + 2u * CW, y + 2u, ink,
+            r == UI_PAUSE_ROWS ? info->options[option].name : NAMES[r]);
         char value[48] = "";
-        if (r == UI_PAUSE_LEVEL && level != NULL) {
+        if (r == UI_PAUSE_ROWS) {
+            const UiPauseOption *const row = &info->options[option];
+            if (state->option[option] < row->count) {
+                snprintf(value, sizeof(value), "%s", row->values[state->option[option]]);
+            }
+        } else if (r == UI_PAUSE_LEVEL && level != NULL) {
             snprintf(value, sizeof(value), "%s", level->name);
         } else if (r == UI_PAUSE_FRAMES) {
             snprintf(value, sizeof(value), "%u", (unsigned)state->frames);
@@ -4706,7 +4755,8 @@ void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPause
         }
         if (value[0] != '\0') {
             char shown[64];
-            snprintf(shown, sizeof(shown), selected && r <= UI_PAUSE_FRAMES ? "< %s >" : "%s",
+            snprintf(shown, sizeof(shown),
+                     selected && (r <= UI_PAUSE_FRAMES || r == UI_PAUSE_ROWS) ? "< %s >" : "%s",
                      value);
             char fitted[64];
             Fit(fitted, sizeof(fitted), shown, (list_width - 12u * CW) / CW);
@@ -4717,7 +4767,7 @@ void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPause
     const uint32_t sx = x + list_width + 2u * CW;
     const uint32_t side = bx + width - 3u * CW - sx;
     const uint32_t columns = (side - CW) / CW;
-    uint32_t y = Box(frame, sx, top, side, UI_PAUSE_ROWS * (UI_ROW_BOX + 4u) - 4u,
+    uint32_t y = Box(frame, sx, top, side, rows * (UI_ROW_BOX + 4u) - 4u,
                      level != NULL ? level->name : "Level", NULL, NULL);
     y += TextWrapped(frame, sx + CW / 2u, y, SC, CH, TEXT,
                      "Left/Right picks another; A starts it, and this one ends where it is.",

@@ -228,6 +228,20 @@ _Static_assert(SCENE_MODELS + CROWD_MODELS <= WIMSY_INSTANCES_MAX, "the crowd fi
 #define LANE_REPEAT 2.0f
 #define SIGN_GAP 0.01953125f
 
+/// A person's camera, when one was asked for in place of the walk.
+static bool camera_asked;
+static float camera_eye[3], camera_ahead[3];
+
+void WimsyCameraAsk(const float eye[3], const float ahead[3]) {
+    memcpy(camera_eye, eye, sizeof(camera_eye));
+    memcpy(camera_ahead, ahead, sizeof(camera_ahead));
+    camera_asked = true;
+}
+
+void WimsyCameraWalk(void) {
+    camera_asked = false;
+}
+
 void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[16]) {
     memset(to_clip, 0, 16u * sizeof(float));
     if (level < 2u || level >= WIMSY_LEVELS) {
@@ -235,7 +249,10 @@ void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[
     }
     const float along = (float)WimsyPathAt(frame, frames) / 65536.0f;
     float eye[3], ahead[3];
-    if (level >= 3u) {
+    if (level >= 3u && camera_asked) {
+        memcpy(eye, camera_eye, sizeof(camera_eye));
+        memcpy(ahead, camera_ahead, sizeof(camera_ahead));
+    } else if (level >= 3u) {
         WimsyWalkAt(along, eye, ahead);
     } else {
         eye[0] = 0.0f;
