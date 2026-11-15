@@ -10,7 +10,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, twenty one cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, twenty three cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -54,7 +54,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, a hundred and
-  forty three.
+  fifty.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -101,6 +101,14 @@ The reference is the graphics unit running what the layer recorded, never the of
   What a getter is held to is NVN's own word for it, that it gives what the setter took: on the console and in Eden
   the layer answers from its record, so only ScarletNX's answers are news there. The levels are the graphics
   unit's.
+- **a memory pool and its builder give back what they were set, and the pool maps its storage** (exact): a pool
+  of two pages, cached to the processor and to the graphics unit, made through a builder: the builder's device,
+  memory, size and flags, the pool's size and flags, and `nvnMemoryPoolMap`, which is the storage's own address,
+  a pool being the memory the program gave it.
+- **a page flushed from a cached pool is what a copy reads, and the copy is there after an invalidate** (exact):
+  a page written through that pool's mapping, `nvnMemoryPoolFlushMappedRange`, a copy of it by the graphics unit
+  into the pool's second page, `nvnMemoryPoolInvalidateMappedRange`, and both pages read, every byte. Every other
+  pool of the suite is uncached to the processor, where neither call has anything to do.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its

@@ -97,6 +97,9 @@ static struct {
     void *levels_storage;
     void *levels_read_storage;
     ptrdiff_t levels_offset;
+    _Alignas(8) NVNmemoryPool cached_pool;
+    bool cached_pool_up;
+    void *cached_storage;
 } nvn;
 
 /// The reason a step failed: the layer's, when it gave one, else @p fallback. Under ScarletNX the
@@ -230,6 +233,7 @@ static void TearDown(void) {
     }
     DropPool(&nvn.levels_pool, &nvn.levels_storage, &nvn.levels_pool_up);
     DropPool(&nvn.levels_read_pool, &nvn.levels_read_storage, &nvn.levels_read_pool_up);
+    DropPool(&nvn.cached_pool, &nvn.cached_storage, &nvn.cached_pool_up);
     if (nvn.command_up) {
         nvn.nvn.nvnCommandBufferFinalize(&nvn.command);
         nvn.command_up = false;
@@ -896,6 +900,118 @@ static void LevelsCase(const char *name) {
                READ_PRESET);
 }
 
+// ---- what a memory pool answers of itself, and the processor's cache of one
+
+// Every other pool of the suite is uncached to the processor, which needs neither call: a game
+// keeps its vertex and uniform data in cached pools, and flushes what it wrote before the
+// graphics unit reads it. The pool here is two pages, the first the bytes and the second where a
+// copy by the graphics unit puts them.
+
+#define CACHED_BYTES (2u * POOL_PAGE)
+#define CACHED_FLAGS (NVN_MEMORY_POOL_FLAGS_CPU_CACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED)
+
+/// Byte @p at of the page the cache case copies; no run of it is the preset's.
+static uint8_t CachedByte(uint32_t at) {
+    return (uint8_t)(at * 7u + (at >> 8) + 3u);
+}
+
+/// A cached pool made through a builder, with what the builder and the pool then say: the
+/// device, the storage, the size and the flags, and a mapping that is the storage itself, since
+/// a pool is the memory the program gave it.
+static void PoolCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    nvn.cached_storage = aligned_alloc(POOL_PAGE, CACHED_BYTES);
+    if (nvn.cached_storage == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, "no memory for a pool of two pages");
+        return;
+    }
+    memset(nvn.cached_storage, 0, CACHED_BYTES);
+    _Alignas(8) NVNmemoryPoolBuilder builder;
+    nvn.nvn.nvnMemoryPoolBuilderSetDefaults(&builder);
+    nvn.nvn.nvnMemoryPoolBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnMemoryPoolBuilderSetStorage(&builder, nvn.cached_storage, CACHED_BYTES);
+    nvn.nvn.nvnMemoryPoolBuilderSetFlags(&builder, CACHED_FLAGS);
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnMemoryPoolBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's memory",
+          (long long)(uintptr_t)nvn.nvn.nvnMemoryPoolBuilderGetMemory(&builder),
+          (long long)(uintptr_t)nvn.cached_storage);
+    Gives(why, sizeof(why), "the builder's size",
+          (long long)nvn.nvn.nvnMemoryPoolBuilderGetSize(&builder), CACHED_BYTES);
+    Gives(why, sizeof(why), "the builder's flags",
+          nvn.nvn.nvnMemoryPoolBuilderGetFlags(&builder), CACHED_FLAGS);
+    nvn.cached_pool_up = nvn.nvn.nvnMemoryPoolInitialize(&nvn.cached_pool, &builder);
+    if (!nvn.cached_pool_up) {
+        free(nvn.cached_storage);
+        nvn.cached_storage = NULL;
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("nvnMemoryPoolInitialize of a pool cached to the processor: false"));
+        return;
+    }
+    Gives(why, sizeof(why), "the pool's size", (long long)nvn.nvn.nvnMemoryPoolGetSize(
+                                                   &nvn.cached_pool),
+          CACHED_BYTES);
+    Gives(why, sizeof(why), "the pool's flags", nvn.nvn.nvnMemoryPoolGetFlags(&nvn.cached_pool),
+          CACHED_FLAGS);
+    Gives(why, sizeof(why), "the pool's mapping",
+          (long long)(uintptr_t)nvn.nvn.nvnMemoryPoolMap(&nvn.cached_pool),
+          (long long)(uintptr_t)nvn.cached_storage);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// A page written through the cached pool's mapping and flushed, copied by the graphics unit
+/// into the pool's second page, which is read after an invalidate: both pages, every byte.
+static void PoolCacheCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    uint8_t *const bytes = nvn.nvn.nvnMemoryPoolMap(&nvn.cached_pool);
+    if (bytes == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    for (uint32_t at = 0; at < POOL_PAGE; ++at) {
+        bytes[at] = CachedByte(at);
+    }
+    memset(bytes + POOL_PAGE, READ_PRESET, POOL_PAGE);
+    nvn.nvn.nvnMemoryPoolFlushMappedRange(&nvn.cached_pool, 0, CACHED_BYTES);
+    const NVNbufferAddress address = nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.cached_pool);
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    nvn.nvn.nvnCommandBufferCopyBufferToBuffer(&nvn.command, address, address + POOL_PAGE,
+                                               POOL_PAGE, NVN_COPY_FLAGS_NONE);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    if (list == 0u) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnCommandBufferEndRecording gave no list"));
+        return;
+    }
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnMemoryPoolInvalidateMappedRange(&nvn.cached_pool, (ptrdiff_t)POOL_PAGE, POOL_PAGE);
+    if (NvnLayerError()[0] != '\0') {
+        ReportCase(SUITE, name, CHECK_NONE, false, NvnLayerError());
+        return;
+    }
+    uint32_t wrong = 0, first = 0;
+    for (uint32_t at = 0; at < CACHED_BYTES; ++at) {
+        if (bytes[at] != CachedByte(at % POOL_PAGE) && wrong++ == 0u) {
+            first = at;
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
+               "%u of %u bytes wrong; the first, byte %u of the %s page, is 0x%02x, expected "
+               "0x%02x (0x%02x is a byte nothing copied)",
+               (unsigned)wrong, (unsigned)CACHED_BYTES, (unsigned)(first % POOL_PAGE),
+               first < POOL_PAGE ? "written" : "copied", bytes[first],
+               CachedByte(first % POOL_PAGE), READ_PRESET);
+}
+
 /// The cases on the suite's own device, from the lookup to the window.
 static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
@@ -920,10 +1036,14 @@ static void LayerCases(void) {
                                          "builder had";
     static const char *const LEVELS_COPY = "a picture copied into each level of a texture "
                                            "through a view comes back from that level";
+    static const char *const POOL = "a memory pool and its builder give back what they were "
+                                    "set, and the pool maps its storage";
+    static const char *const POOL_CACHE = "a page flushed from a cached pool is what a copy "
+                                          "reads, and the copy is there after an invalidate";
     const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
-                                         WINDOW };
+                                         POOL, POOL_CACHE, WINDOW };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
@@ -1036,6 +1156,14 @@ static void LayerCases(void) {
         } else {
             LevelsCase(LEVELS_COPY);
         }
+    }
+
+    PoolCase(POOL);
+    if (!nvn.cached_pool_up) {
+        ReportSkip(SUITE, POOL_CACHE, REPORT_REASON_DEPENDS,
+                   "the pool cached to the processor did not come up");
+    } else {
+        PoolCacheCase(POOL_CACHE);
     }
 
 #if NVN_LAYER_API < 231
