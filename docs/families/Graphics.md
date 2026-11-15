@@ -893,7 +893,7 @@ that every block's bytes read that way and that no block's colours do.
 
 ## bcn
 
-Twenty eight cases. BC4 arrays whose levels or layers do not end on a block boundary: six
+Seventy two cases. BC4 arrays whose levels or layers do not end on a block boundary: six
 layers with levels down to 1x1, the shape of every mipmapped cube map; two layers six texels
 tall; and a 4x16 texture whose second level is two texels wide and two blocks tall. Every block
 is one value unique to its layer, level and position, written by the processor where
@@ -923,6 +923,18 @@ second one's anchor at texel 2, whose indices line up only for a decoder that re
 and the anchor from the tables. A channel times 255, 65535 or 32767, rounded, must be the decoded
 integer; a BC6H channel must be the half exactly. A host that samples BCn natively answers with
 its own GPU's interpolants, which is the question these ask of it.
+
+Last, one block of each of BC7's eight modes and BC6H's fourteen, and BC6H's four reserved mode
+codes, each block's bits after its mode from a fixed hash (`tools/bcn-images.py`): every bit after
+a mode's is a block of that mode, so every field of every mode, partition, anchor, p-bit, rotation,
+index selection and transformed endpoint, holds bits a decoder has to put in their place. Each BC6H
+block is read twice, through the unsigned format and the signed one, where a transformed mode's
+deltas are sign extended and added and the sum sign extended again. Every texel is held to
+`source/bcnref.c`'s decode, which the reference suite holds to Pillow's decode of the BC7 blocks
+and bcdec's of the BC6H ones; BPTC decodes one way, so the tier
+is exact. A reserved code is opaque black. In an emulator a failure here points at the mode table
+of its BPTC decoder (`texture_cache/decode_bc.cpp`, `externals/bc_decoder/bc_decoder.cpp`), or at a host format that
+reads the signed blocks unsigned.
 
 ## zeta
 

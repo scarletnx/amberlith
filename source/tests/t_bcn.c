@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../bcnimages.h"
 #include "../bcnref.h"
 #include "../check.h"
 #include "../gpu.h"
@@ -40,6 +41,10 @@
 // eight bit formats, 65535 or 32767 for BC4 and BC5, rounded, must be the decoded integer; BC6H's
 // halves are exact floats. A host that samples the blocks natively gives its own GPU's
 // interpolants.
+//
+// Last, one block of each of BC7's eight modes and BC6H's fourteen, the BC6H ones read unsigned
+// and signed, and BC6H's four reserved mode codes, each block's bits after its mode from a fixed
+// hash, every texel held to source/bcnref.c's decode.
 
 static const char *const SUITE = "bcn";
 
@@ -356,6 +361,39 @@ static void Bc1(uint8_t *out, uint32_t c0, uint32_t c1, uint32_t indices) {
     PutWord64(out, (uint64_t)indices << 32 | (uint64_t)c1 << 16 | c0);
 }
 
+/// One block of every BC7 mode and every BC6H mode, the BC6H ones read unsigned and signed, and
+/// BC6H's four reserved mode codes: each block's bits after its mode from a fixed hash
+/// (source/bcnimages.h), so every field of every mode holds bits a decoder has to place, and every
+/// texel judged against source/bcnref.c's decode, which the reference suite holds to bcdec's and
+/// Pillow's. BPTC decodes one way, so the tier is exact.
+static void RunBcnModes(GpuContext *gpu, const DkShader *vertex_shader, const DkShader *fetch) {
+    for (uint32_t i = 0; i < BCN_MODE_BLOCKS; ++i) {
+        const BcnModeBlock *const b = &BCN_MODE_BLOCK[i];
+        for (uint32_t way = 0; way < (b->kind == BCN_BC7 ? 1u : 2u); ++way) {
+            const BcnKind kind = way == 0u ? b->kind : BCN_BC6H_SF;
+            uint16_t texels[16][4];
+            BcnDecodeBlock(kind, BCN_RULE_NVIDIA, b->bytes, texels);
+            DecodedTexel want[16];
+            for (uint32_t t = 0; t < 16u; ++t) {
+                want[t].x = (uint8_t)(t % 4u);
+                want[t].y = (uint8_t)(t / 4u);
+                for (uint32_t c = 0; c < 4u; ++c) {
+                    want[t].channel[c] = texels[t][c];
+                }
+            }
+            char name[128];
+            snprintf(name, sizeof(name),
+                     "a %s%s block, its bits from a fixed hash, decodes every texel",
+                     way == 0u ? "" : "signed ", b->name);
+            DecodeCase(gpu, vertex_shader, fetch, name,
+                       kind == BCN_BC7       ? DkImageFormat_RGBA_BC7_Unorm
+                       : kind == BCN_BC6H_SF ? DkImageFormat_RGBA_BC6H_SF16_Float
+                                             : DkImageFormat_RGBA_BC6H_UF16_Float,
+                       b->bytes, 16, kind == BCN_BC7 ? SCALE_BYTE : SCALE_HALF, want, 16);
+        }
+    }
+}
+
 static void RunBcnDecode(void) {
     static const char *const OPEN = "graphics device opens with a target of floats";
     if (!ReportStart(SUITE, OPEN)) {
@@ -663,6 +701,7 @@ static void RunBcnDecode(void) {
     DecodeCase(&gpu, &vertex_shader, &fetch, "a BC7 block with no mode decodes transparent black",
                DkImageFormat_RGBA_BC7_Unorm, block, 16, SCALE_BYTE,
                (const DecodedTexel[]){ { 1, 1, { 0, 0, 0, 0 } } }, 1);
+    RunBcnModes(&gpu, &vertex_shader, &fetch);
     GpuClose(&gpu);
 }
 
