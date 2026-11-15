@@ -116,8 +116,9 @@ $(BUILD)/shaders/%.tese.dksh: $(SHADER_DIR)/%.tese.glsl
 	$(TOOLS)/uam -s tess_eval -o $@ $<
 
 # uam as the toolchain ships it (1.1.0) predates Mesa's f9d385d77716: a multisample fetch through a handle gets its
-# sample in the register the console reads the handle from. The shaders that make one are built by that uam with the
-# fix (tools/uam.sh, tools/uam/), every other by the toolchain's, as before. Its first build clones uam's source.
+# sample in the register the console reads the handle from; and it reads a uniform block's vector indexed by a
+# component worked out at run time from the vector's first word. The shaders that do either are built by scarletnx/uam
+# with both fixes (tools/uam.sh, tools/uam/), every other by the toolchain's, as before. Its first build clones it.
 UAM_FIXED := $(BUILD)/uam/uam
 
 $(UAM_FIXED): tools/uam.sh $(wildcard tools/uam/*.patch)
