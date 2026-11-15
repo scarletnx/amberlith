@@ -17,7 +17,7 @@
 | `nojournal` | no journal between cases, so a crash costs the rest of the run; for measuring what the journal costs |
 | `noprogress` | no running screen while the suites run; for a machine whose window misbehaves while the suites draw |
 | `hooks` | the console's services a machine may answer in a game's own code, nn::fs, nn::time, nn::pl, nn::ngc, nn::nsd, nn::pctl, nn::audio and nn::codec, asked through the SDK's functions the program exports, and not by IPC: the program opens neither fsp-srv nor time:u, its card is nn::fs's, and the audio, service and game families open no audio service but through those functions. For a recompiler that runs a game's SDK functions itself and serves none of those services; read at the program's start, with no row on the start screen; see [The hooks mode](Hooks.md) |
-| `all` | every family the build has but pad, which waits for a person, nvn and demo: one word for a run that needs nobody. `pad`, `nvn` or `demo` beside it adds that family; the mode line lists the families that run |
+| `all` | every family the build has but pad, which waits for a person, nvn, demo and music: one word for a run that needs nobody. `pad`, `nvn`, `demo` or `music` beside it adds that family; the mode line lists the families that run |
 | `cpu` | the processor family. It runs in every mode, so naming it alone leaves the graphics, fs and net families out: a few seconds, nothing drawn |
 | `graphics` | the graphics family: the forty two drawing suites, clear to copy, and tex8k; selfcheck, support, reference and cpu always run, whatever family is named |
 | `nvn` | the nvn family: the clear suite's question asked through the program's NVN, a layer on deko3d that a runtime running a game's NVN itself (ScarletNX) takes as a game's driver; only when named, with no row on the start screen; its window case runs only in a quick run from the mode file, since a run begun on the start screen keeps the program's screen up to its end, `noprogress` or not, and the start screen says so; see [nvn](families/Nvn.md) |
@@ -33,6 +33,7 @@
 | `libc` | the libc family: the C library and what it asks of the system, the same cases on every frontend; on the console only when named, on Android in every run that names no family; see [libc](families/Libc.md) |
 | `jni` | Android's jni family: native code and the Java runtime calling each other; see [On Android](Android.md) |
 | `framework` | Android's framework family: the framework's Java API and its resources; see [On Android](Android.md) |
+| `music` | the music family: the demos' tracks rendered and held to the host's samples, then played through the audio renderer, silent, and held to them again; only when named, and `all` leaves it out, since outside it and the interactive mode the music makes nothing; no row on the start screen; see [music](families/Music.md) |
 | `game` | the game family: one scene that draws, plays a silent tone, reads the card, calls services and computes on four threads over three cores, as a game does, and presents and times every frame; only when named, with no row on the start screen; it writes the fs family's files the first time; see [game](families/Game.md) |
 | `demo` | the demo family: graphics workloads a game runs, drawn frame after frame for a person to watch, chosen frames judged against the processor's answer and every frame presented and timed; the Mandelbrot and Julia zooms, `frames=<n>` frames each; only when named, and `all` leaves it out; with no row on the start screen; a run that does not name it makes nothing of it; see [demo](families/Demo.md) |
 | `frames=<n>` | the frames the game scene, its levels and each demo run, a whole number from 1 to 36000; 600 without it. Anything else is refused in the mode line with the number in effect: `frames=abc is not a whole number from 1 to 36000: it keeps 600`; without `game` or `demo` the mode line says those families are left out |
@@ -45,8 +46,9 @@
 | `compare=<name>` | once the suites end, this run's times are held to that file's samples: a line for each case held to them, `same`, `slower` or `faster`, and one that sums them up, no verdict changed; see [Baselines](Baseline.md) |
 
 The judge and the cpu suite always run. With no family named, every family runs but audio, pad, kernel, display,
-service, video, game, demo, nvn and libc; on Android every family it has ([Frontends](Frontends.md)). Naming a family
-runs that family alone, so `quick audio kernel` runs no graphics; `all` is every family but pad, nvn and demo. A family this
+service, video, game, demo, nvn, libc and music; on Android every family it has ([Frontends](Frontends.md)). Naming a
+family runs that family alone, so `quick audio kernel` runs no graphics; `all` is every family but pad, nvn, demo and
+music. A family this
 build lacks is listed in the mode line and skipped. Any other word is quoted and counted in the mode line and has no
 effect: a typo costs a line, never the run.
 
@@ -63,7 +65,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick fs` | the judge, cpu and the fs suite, then exit |
 | `quick video` | the judge, cpu, the vic suite and the nvdec suite, then exit: what a console run of the video family wants |
 | `quick pad` | the judge, cpu and the pad suite with a person in front of it, then exit |
-| `quick all` | the judge, cpu and every family that needs nobody: all but pad, nvn and demo, then exit |
+| `quick all` | the judge, cpu and every family that needs nobody: all but pad, nvn, demo and music, then exit |
 | `quick all skip=tex8k` | the same, the tex8k suite's cases each a skip asked for: a handheld's run |
 | `quick nvn` | the judge, cpu and the nvn suite, its window case too, then exit |
 | `quick kernel display` | the judge, cpu, the sched and svc suites and the binder suite, then exit |
@@ -76,6 +78,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick game level=1` | the scene, then the lit model's level for 600 frames |
 | `quick game level=0 level=2 skip=game images` | those two levels alone, each judged frame leaving its pictures |
 | `quick demo` | the judge, cpu and the demo family's two zooms, 600 frames each, presented and timed, then exit |
+| `quick music` | the judge, cpu and the music family's ten cases, then exit: about five seconds, four of them silent sound through the renderer |
 | `quick skip=tex8k` | the families a file naming none runs, the tex8k suite's cases each a skip asked for |
 
 The first 4096 bytes are read, and a longer file says so in the mode line; a word, or a `label=`, `baseline=`,

@@ -137,6 +137,9 @@ static const RunnerStep STEPS[] = {
     { "fluid", RunFluid, MODE_FAMILY_DEMO, false, true },
     // Its aliasing level: targets drawn over their old selves and a storage image over them.
     { "fluid-alias", RunFluidAlias, MODE_FAMILY_DEMO, false, true },
+    // After every family that times its frames: what it asks for is the music those must not
+    // hear. Untimed: its cases wait for sound to play.
+    { "music", RunMusic, MODE_FAMILY_MUSIC, false, true },
 };
 
 // The console's frontend for the runner: its folder, its build and its steps.

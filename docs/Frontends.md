@@ -65,7 +65,7 @@ The rest is the frontend's own code, around the runner's calls (`runner.h`):
 
 | Frontend | Source | Root | Families |
 |---|---|---|---|
-| The console (NRO) | `source/main.c`, `source/platform_switch.c` | `sdmc:/edenprobe` | judge and cpu always; graphics, fs, net when no word names one; pad, kernel, display, video, audio, service, game and libc when named |
+| The console (NRO) | `source/main.c`, `source/platform_switch.c` | `sdmc:/edenprobe` | judge and cpu always; graphics, fs, net when no word names one; pad, kernel, display, video, audio, service, game, libc and music when named |
 | Android (APK) | `android/src/main/cpp/frontend.c`, `platform_android.c`, the Java in `android/src/main/java` | the app's external files, `edenprobe/` | judge always; libc, graphics, net, jni and framework when no word names one ([On Android](Android.md)) |
 | Host | `source/host_main.c`, `source/platform_host.c` | none: `edenprobe-host-report.jsonl` where it runs | the judge and the libc family, every time ([Build](Build.md#the-host-build)) |
 

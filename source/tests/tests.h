@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "../demo.h"
+#include "../music.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -379,6 +380,12 @@ void RunFluid(void);
 /// The fluid demo as the browser's registry runs it: the frames and timing @p run asks, stopped
 /// when it says so, the judged frames it did not reach left out.
 void FluidDemo(const DemoRun *run);
+/// The music family: the demos' music asked for by name (music.h). Each track rendered whole and
+/// held to the host's samples, a switch across its silence barrier held to the tracks alone, then
+/// what the audio renderer plays of them, the game family's path, recorded by an aux effect and
+/// held to the tracker's samples one for one: a looped excerpt of each track, and the interactive
+/// mode's own stream across a switch.
+void RunMusic(void);
 
 /// The fluid demo's aliasing level, the suite fluid-alias: the dye's splat target and the
 /// divergence drawn over their old selves every so often, and a compute pass's storage image
@@ -392,6 +399,15 @@ void FluidAliasDemo(const DemoRun *run);
 /// name, or a service this program cannot open, is skipped with the reason and counted apart.
 void RunNet(void);
 #endif
+
+/// The music family's cases that need no renderer, which the host build runs too: its hashes are
+/// the host's.
+void RunMusicRender(void);
+
+/// The case a suite that times a demo's frames ends with: between @p before and now the demos'
+/// music made nothing, no thread, no voice, no sample, so it took none of the frames' time.
+/// @p where says what ran in between, "while the scene ran".
+void MusicJudgeOff(const char *suite, const char *where, MusicMade before);
 
 /// The net family's parsers and expectations, with no service: part of the reference suite.
 void RunReferenceNet(void);

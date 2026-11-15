@@ -44,8 +44,9 @@ extern "C" {
 ///             exports, and not by IPC: the program opens neither fsp-srv nor time:u (hooks.h).
 ///             Read once, at the program's start, before the card is the C library's.
 ///   all       every family this build has but pad, which waits for a person, nvn, whose window
-///             case runs only in a quick run from the file, and demo, which is there to be watched:
-///             one word for a run that needs nobody. pad, nvn and demo named beside it add theirs.
+///             case runs only in a quick run from the file, demo, which is there to be watched, and
+///             music, which plays only when asked for: one word for a run that needs nobody. pad,
+///             nvn, demo and music named beside it add theirs.
 ///   listen    before the audio family's cases, a sequence of sounds for a person to hear, and
 ///             the audio family with it.
 ///   cpu       a suite family: the processor's instructions, which run in every mode anyway, so
@@ -82,6 +83,10 @@ extern "C" {
 ///             function of its number, chosen frames judged against the processor's answer and
 ///             every frame presented and timed. Only when named, and `all` leaves it out: a run
 ///             that does not name it makes no device, no frame and no answer for it.
+///   music     another: the demos' music (music.h), each track rendered and held to the host's
+///             samples, then played through the audio renderer and held to them again. Only when
+///             named, and `all` leaves it out: outside it and the interactive mode the music
+///             makes no thread, no voice and no sample.
 ///
 /// Eight that are not words. `level=<n>`, a level of the game family's Wimsy scene (wimsyref.h),
 /// a whole number from 0 to WIMSY_LEVELS - 1, one word a level: the run draws each level named
@@ -110,11 +115,11 @@ extern "C" {
 /// else, or one past MODE_SKIPS_MAX, is refused and said in the mode line with the suites in
 /// effect.
 ///
-/// Families choose which suites beyond the judge run. None named means every family this build
-/// has but audio, demo, display, game, kernel, pad, service and video. The judge itself (selfcheck,
-/// support, reference) always runs, because no verdict below it can be believed without it, and
-/// so does cpu, which needs no device. Any other word is reported and ignored, never fatal: a
-/// file with a typo in it still gets a run, and a line in the report saying what was not
+/// Families choose which suites beyond the judge run. None named means every family this build has
+/// but audio, demo, display, game, kernel, music, pad, service and video. The judge itself
+/// (selfcheck, support, reference) always runs, because no verdict below it can be believed without
+/// it, and so does cpu, which needs no device. Any other word is reported and ignored, never fatal:
+/// a file with a typo in it still gets a run, and a line in the report saying what was not
 /// understood.
 
 /// What the mode line says for the word `fatal`, which a new run's report and log carry once.
@@ -140,6 +145,7 @@ enum {
     MODE_FAMILY_JNI = 1u << 13,
     MODE_FAMILY_FRAMEWORK = 1u << 14,
     MODE_FAMILY_DEMO = 1u << 15,
+    MODE_FAMILY_MUSIC = 1u << 16,
 };
 
 /// The families the console's build carries. A family named in the file and missing here is
@@ -148,21 +154,23 @@ enum {
     ((uint32_t)(MODE_FAMILY_CPU | MODE_FAMILY_PAD | MODE_FAMILY_GRAPHICS | MODE_FAMILY_FS |      \
                 MODE_FAMILY_KERNEL | MODE_FAMILY_DISPLAY | MODE_FAMILY_VIDEO |                     \
                 MODE_FAMILY_AUDIO | MODE_FAMILY_SERVICE | MODE_FAMILY_NET | MODE_FAMILY_GAME |     \
-                MODE_FAMILY_NVN | MODE_FAMILY_LIBC | MODE_FAMILY_DEMO))
+                MODE_FAMILY_NVN | MODE_FAMILY_LIBC | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC))
 
 /// The console's families that run only when a word asks for them.
 #define MODE_FAMILIES_ASKED                                                                       \
     ((uint32_t)(MODE_FAMILY_AUDIO | MODE_FAMILY_DISPLAY | MODE_FAMILY_KERNEL | MODE_FAMILY_VIDEO | \
                 MODE_FAMILY_PAD | MODE_FAMILY_SERVICE | MODE_FAMILY_GAME | MODE_FAMILY_NVN |       \
-                MODE_FAMILY_LIBC | MODE_FAMILY_DEMO))
+                MODE_FAMILY_LIBC | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC))
 
 /// What runs when the file names no family.
 #define MODE_FAMILIES_DEFAULT ((uint32_t)(MODE_FAMILIES_PRESENT & ~MODE_FAMILIES_ASKED))
 
 /// The families the word `all` leaves out: pad waits for a person, nvn's window case runs only
-/// while no screen of the program's is up, and demo is there to be watched and adds seconds of
-/// frames to a run that times everything else, so each is a family to name on purpose.
-#define MODE_FAMILIES_NOT_ALL ((uint32_t)(MODE_FAMILY_PAD | MODE_FAMILY_NVN | MODE_FAMILY_DEMO))
+/// while no screen of the program's is up, demo is there to be watched and adds seconds of frames
+/// to a run that times everything else, and the music makes nothing unless asked for by name, so
+/// each is a family to name on purpose.
+#define MODE_FAMILIES_NOT_ALL                                                                     \
+    ((uint32_t)(MODE_FAMILY_PAD | MODE_FAMILY_NVN | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC))
 
 /// How much of the mode file is read: every word there is fits many times over. A longer file is
 /// read to here and the report says so; a word the limit cuts in two is dropped, never quoted as
@@ -190,9 +198,9 @@ typedef enum {
 
 /// Room for every word ModeKey writes with all of them on, `frames=` and `vram=` at their widest,
 /// `machine=` with a name and a version as long as they may be, MODE_SKIPS_MAX `skip=` words at
-/// their longest and five `level=` words, 365 characters: the support suite holds the widest to
-/// it, and the journal's fields are sized from it (journal.h, JOURNAL_MODE_MAX).
-#define MODE_KEY_MAX 368u
+/// their longest, five `level=` words, `demo` and `music`, 371 characters: the support suite holds
+/// the widest to it, and the journal's fields are sized from it (journal.h, JOURNAL_MODE_MAX).
+#define MODE_KEY_MAX 376u
 
 /// How many `skip=<suite>` words a mode file may have, and the longest suite name one takes: every
 /// suite edenprobe has fits, the longest today twelve characters.
