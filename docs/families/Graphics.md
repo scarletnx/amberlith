@@ -32,6 +32,7 @@
 * [eac](#eac)
 * [etc2](#etc2)
 * [bcn](#bcn)
+* [bcnimage](#bcnimage)
 * [zeta](#zeta)
 * [swizzle](#swizzle)
 * [texel](#texel)
@@ -48,7 +49,7 @@
 * [What a console run settles](#what-a-console-run-settles)
 * [Where reden falls short](#where-reden-falls-short)
 
-The forty two drawing suites, clear to copy, in the order they run, and tex8k after them.
+The forty three drawing suites, clear to copy, in the order they run, and tex8k after them.
 
 ## clear
 
@@ -935,6 +936,52 @@ and bcdec's of the BC6H ones; BPTC decodes one way, so the tier
 is exact. A reserved code is opaque black. In an emulator a failure here points at the mode table
 of its BPTC decoder (`texture_cache/decode_bc.cpp`, `externals/bc_decoder/bc_decoder.cpp`), or at a host format that
 reads the signed blocks unsigned.
+
+## bcnimage
+
+Eighteen cases. Whole BCn textures, as a game's are: the astcimage suite's question asked of the
+other family of formats a game ships. The picture is the astcimage suite's, the same 128x128
+bytes in four regions, encoded as a game's tools would: by etcpak 0.9.15 in BC1, BC3, BC4 (red),
+BC5 (red and green) and BC7 (its bc7enc, which keeps to modes 1, 5 and 6), and by Pillow 12.3.0
+in BC2. No encoder here writes BC7's other modes or BC6H at all, so `tools/bcn-images.py`
+encodes two more pictures itself with each block's mode chosen in turn: BC7 block n in mode n % 8,
+its partition, rotation and index selection in turn as well, and BC6H block n in mode n % 14, its
+partition in turn, each fitted to the block so that the picture still shows. Four are sampled as
+sRGB (BC1, BC2 and BC3 from their linear blocks, BC7 from an encode with perceptual weights) and
+one through BC1's RGB format, whose alpha is one and whose transparent texel black. Each picture
+is written by the processor in the block linear layout and fetched onto a 128x128 target, a texel
+a pixel. Then two 2048x2048 textures of the same blocks repeated, BC1 at half a byte a texel and
+BC7 at a byte, each made and fetched at every sixteenth texel, whose times are the upload, decoding
+included where the host decodes; and the BC7 one fetched by 256 draws, each texel once, whose time
+is sampling it: the astcimage suite's 8x8, 4x4 and sampling cases at the other formats' rates.
+
+What each texel must be is `source/bcnref.c`'s decode, which the reference suite holds to Pillow's
+decode of every BC1 to BC5 and BC7 picture and bcdec's (0.985, through imagecodecs) of the BC6H
+one. BC6H and BC7 decode one way, and a texel either is its decode or is wrong. BC1 to BC5 leave
+the precision of an interpolated value to the implementation, and here the suite parts from the
+bcn suite: a texel that reads NVIDIA's interpolants, the console's texture unit's, is exact; one
+that reads another GPU's is off the console's but within the format's freedom, which the suite
+takes as anything between the lowest and the highest of three decodes: NVIDIA's, the
+specification's exact fractions rounded, and BPTC's weights in sixty-fourths (21 and 43 for the
+thirds, 9 to 55 for the sevenths, 13 to 51 for the fifths), which is what RADV on an RX 6700 XT
+reads, every interpolant the bcn suite asks for included. A picture with no texel wrong passes;
+one with a texel off says how many and how far, under the [bound](../Design.md#the-tiers) tier,
+as tex8k's ASTC texels within BC7's loss do; a texel outside all three fails, with how many, how
+far, the PSNR over the picture and over each region, and the first one. An sRGB texel's red,
+green and blue may land on either byte beside its code turned linear, as an astcimage one's, and
+a BC6H half on a half step on either byte beside it.
+
+```json
+{"type":"case","suite":"bcnimage","name":"a picture in BC1 blocks decodes as the console's, every texel","tier":"bound","result":"pass","detail":"BC1 every texel: 0 of 16384 texels wrong, worst channel 0 away; PSNR exact (gradients exact, edges exact, noise exact, alpha exact); 1961 texels on another GPU's interpolants and not the console's, by at most 2"}
+```
+
+In an emulator a failure points at its BCn decoder, or at the format it maps each BCn format to:
+the sRGB formats and BC1's RGB one to a host format of the same kind, BC6H's unsigned to an
+unsigned one (`texture_cache/decode_bc.cpp`, `externals/bc_decoder/bc_decoder.cpp`, `format_lookup_table.cpp`,
+`maxwell_to_vk.cpp`); a block a place aside or read down its columns fails across the
+picture, and the reference suite's machines made to order show that the judge says so. The times
+point at how it uploads a BCn texture: as it is, or decoded on the processor or in a compute
+shader first.
 
 ## zeta
 
