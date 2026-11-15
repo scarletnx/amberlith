@@ -10,6 +10,7 @@
   * [How far single precision holds](#how-far-single-precision-holds)
   * [What is timed](#what-is-timed)
   * [What rests on reasoning](#what-rests-on-reasoning)
+* [fluid and fluid-alias](#fluid-and-fluid-alias)
 
 ## The family
 

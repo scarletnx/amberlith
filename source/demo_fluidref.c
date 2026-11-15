@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <math.h>
-#include <stdarg.h>
-#include <stdio.h>
 #include <string.h>
 
 #include "demo_fluidref.h"
@@ -641,89 +639,4 @@ void FluidJudgeFrame(const FluidGrid *grid, const FluidFrame *frame, double budg
         }
     }
     sane->passed = sane->wrong_reads == 0u;
-}
-
-// The notes, as the game scene's.
-
-static bool Append(char *out, size_t out_size, const char *fmt, ...)
-    __attribute__((format(printf, 3, 4)));
-
-static bool Append(char *out, size_t out_size, const char *fmt, ...) {
-    const size_t used = strlen(out);
-    if (used + 1u >= out_size) {
-        return false;
-    }
-    va_list args;
-    va_start(args, fmt);
-    const int wrote = vsnprintf(out + used, out_size - used, fmt, args);
-    va_end(args);
-    return wrote >= 0 && (size_t)wrote < out_size - used;
-}
-
-static void AppendMeasure(char *out, size_t out_size, const char *what,
-                          const GameFrameStats *stats) {
-    Append(out, out_size, "; %s: mean %u us, 99th percentile %u us, longest %u us at frame %u",
-           what, (unsigned)stats->mean, (unsigned)stats->p99, (unsigned)stats->longest,
-           (unsigned)stats->longest_at);
-}
-
-size_t FluidDescribeFrames(char *out, size_t out_size, const char *suite,
-                           const GameTimes *times) {
-    if (out == NULL || out_size == 0u) {
-        return 0;
-    }
-    out[0] = '\0';
-    if (times == NULL || suite == NULL) {
-        return 0;
-    }
-    const GameFrameStats *const present = &times->present;
-    const uint64_t total = present->total + times->warmup_present;
-    Append(out, out_size,
-           "%s: %u frame%s in %.2f s; frame 0, the warm-up, left out of the times (%u us "
-           "present to present, %u us the main thread's part, %u us the render thread's)",
-           suite, (unsigned)times->frames, times->frames == 1u ? "" : "s", (double)total / 1e6,
-           (unsigned)times->warmup_present, (unsigned)times->warmup_main,
-           (unsigned)times->warmup_render);
-    if (present->frames == 0u) {
-        Append(out, out_size, "; no frame past it to time");
-        return strlen(out);
-    }
-    Append(out, out_size, "; the %u past it", (unsigned)present->frames);
-    AppendMeasure(out, out_size, "present to present", present);
-    if (present->hitches == 0u) {
-        Append(out, out_size, ", none over %u us, two frames at 60 Hz", (unsigned)GAME_HITCH_US);
-        return strlen(out);
-    }
-    Append(out, out_size, ", %u over %u us, two frames at 60 Hz: frame%s",
-           (unsigned)present->hitches, (unsigned)GAME_HITCH_US,
-           present->hitches == 1u ? "" : "s");
-    const uint32_t listed =
-        present->hitches < GAME_HITCHES_LISTED ? present->hitches : GAME_HITCHES_LISTED;
-    for (uint32_t i = 0; i < listed; ++i) {
-        Append(out, out_size, "%s %u", i == 0u ? "" : ",", (unsigned)present->hitch_at[i]);
-    }
-    if (present->hitches > listed) {
-        Append(out, out_size, " and %u more", (unsigned)(present->hitches - listed));
-    }
-    return strlen(out);
-}
-
-size_t FluidDescribeParts(char *out, size_t out_size, const char *suite,
-                          const GameTimes *times) {
-    if (out == NULL || out_size == 0u) {
-        return 0;
-    }
-    out[0] = '\0';
-    if (times == NULL || suite == NULL) {
-        return 0;
-    }
-    Append(out, out_size, "%s: past the warm-up", suite);
-    if (times->present.frames == 0u) {
-        Append(out, out_size, ", no frame to time");
-        return strlen(out);
-    }
-    AppendMeasure(out, out_size, "the main thread's part", &times->main_part);
-    AppendMeasure(out, out_size, "the render thread's part, the graphics unit's in it",
-                  &times->render_part);
-    return strlen(out);
 }

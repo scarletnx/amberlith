@@ -11,7 +11,6 @@
 #include "../check.h"
 #include "../demo.h"
 #include "../demo_fluidref.h"
-#include "../gameref.h"
 #include "../gpu.h"
 #include "../mode.h"
 #include "../picture.h"
@@ -146,7 +145,6 @@ static DkGpuAddr reads_gpu;
 // What the frames left: their times.
 static uint32_t frame_us[MODE_FRAMES_MAX];
 static uint32_t sorted_us[MODE_FRAMES_MAX];
-static uint32_t main_us[MODE_FRAMES_MAX];
 static uint32_t render_us[MODE_FRAMES_MAX];
 
 static Thread render_thread;
@@ -369,6 +367,10 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot, int judged_index) {
 // The frame the run stopped at, the earliest either thread asked for: none is drawn from it on.
 static uint32_t last_frame;
 
+// How often the person paused the demo, and for how long in all, out of every frame's time.
+static uint32_t pauses;
+static uint64_t paused_ticks;
+
 static void StopAt(uint32_t k) {
     uint32_t was = __atomic_load_n(&last_frame, __ATOMIC_ACQUIRE);
     while (k < was && !__atomic_compare_exchange_n(&last_frame, &was, k, false, __ATOMIC_ACQ_REL,
@@ -396,6 +398,8 @@ static bool HoldWhilePaused(uint32_t k, uint64_t *held) {
         }
     }
     *held = armGetSystemTick() - from;
+    ++pauses;
+    paused_ticks += *held;
     return going;
 }
 
@@ -759,6 +763,8 @@ static void WriteSlot(uint32_t k, uint32_t slot) {
 /// reason when the thread did not start, and then no frame ran.
 static bool RunFrames(char *why, size_t why_size) {
     memset(&render, 0, sizeof(render));
+    pauses = 0;
+    paused_ticks = 0;
     semaphoreInit(&frame_go, 0);
     semaphoreInit(&slot_free, SLOTS);
     __atomic_store_n(&last_frame, frames, __ATOMIC_RELEASE);
@@ -786,9 +792,7 @@ static bool RunFrames(char *why, size_t why_size) {
             semaphoreSignal(&frame_go);
             break;
         }
-        const uint64_t began = armGetSystemTick();
         WriteSlot(k, k % SLOTS);
-        main_us[k] = Microseconds(armGetSystemTick() - began);
         semaphoreSignal(&frame_go);
     }
     threadWaitForExit(&render_thread);
@@ -1203,35 +1207,28 @@ static void JudgeStorage(const char *name) {
                (unsigned)FluidAliasWord(first, first_x, first_y));
 }
 
-static GameTimeCase time_cases[GAME_TIME_CASES];
+static DemoTimeCase time_cases[DEMO_TIME_CASES];
 
-/// The timed cases and the notes, as the game scene's: frame 0 left out as the warm-up.
+/// The timed cases and their note, the demo family's (demo.h): frame 0 left out as the warm-up,
+/// the names keeping the frames asked whatever the person did.
 static void Times(void) {
-    static GameTimes times;
-    GameTimesOf(&times, ran_frames, frame_us, main_us, render_us, sorted_us);
-    // The names keep the frames asked (time_cases has them): a run the browser's B stopped is
-    // still the same run's line, its frames said in the detail.
-    static GameTimeCase measured[GAME_TIME_CASES];
-    const uint32_t timed = GameTimeCases(&times, ran_frames, measured);
-    for (uint32_t i = 0; i < GAME_TIME_CASES; ++i) {
-        time_cases[i].us = measured[i].us;
-    }
+    static DemoTimes times;
+    DemoTimesOf(&times, ran_frames, frame_us, render_us, sorted_us);
+    const uint32_t timed = DemoTimeCases(&times, frames, time_cases);
     char detail[160];
     snprintf(detail, sizeof(detail), "%u frames past the warm-up; %u of %u presented",
              (unsigned)timed, (unsigned)render.presented, (unsigned)ran_frames);
-    for (uint32_t i = 0; i < GAME_TIME_CASES; ++i) {
+    for (uint32_t i = 0; i < DEMO_TIME_CASES; ++i) {
         if (timed == 0u) {
             ReportSkip(SUITE, time_cases[i].name, REPORT_REASON_DEPENDS,
                        "the run's one frame is the warm-up, which the times leave out");
         } else if (ReportStart(SUITE, time_cases[i].name)) {
-            ReportCaseTime(SUITE, time_cases[i].name, CHECK_NONE, render.presented == frames,
+            ReportCaseTime(SUITE, time_cases[i].name, CHECK_NONE, render.presented == ran_frames,
                            detail, time_cases[i].us);
         }
     }
     char note[REPORT_NOTE_MAX + 1];
-    FluidDescribeFrames(note, sizeof(note), SUITE, &times);
-    ReportNote("%s", note);
-    FluidDescribeParts(note, sizeof(note), SUITE, &times);
+    DemoDescribeTimes(note, sizeof(note), SUITE, &times);
     ReportNote("%s", note);
 }
 
@@ -1240,7 +1237,7 @@ static void SkipFrom(const char *const names[], size_t count, const char *why) {
     for (size_t i = 0; i < count; ++i) {
         ReportSkip(SUITE, names[i], REPORT_REASON_DEPENDS, why);
     }
-    for (uint32_t i = 0; timing && i < GAME_TIME_CASES; ++i) {
+    for (uint32_t i = 0; timing && i < DEMO_TIME_CASES; ++i) {
         ReportSkip(SUITE, time_cases[i].name, REPORT_REASON_DEPENDS, why);
     }
 }
@@ -1296,7 +1293,7 @@ static void RunScene(void) {
              (unsigned)judged_count);
     all[FLUID_CHECKS + 2u] = names[FLUID_CHECKS + 1u];
     const size_t all_count = FLUID_CHECKS + 2u + (alias ? 1u : 0u);
-    (void)GameTimeCases(NULL, frames, time_cases);
+    (void)DemoTimeCases(NULL, frames, time_cases);
     const size_t after_count = all_count - 1u;
 
     if (!ReportStart(SUITE, BRING_UP)) {
@@ -1352,6 +1349,11 @@ static void RunScene(void) {
             ReportNote("%s: stopped at frame %u of %u by the browser's B; the judged frames "
                        "past it are left out: %s",
                        SUITE, (unsigned)ran_frames, (unsigned)frames, left);
+        }
+        if (ran && pauses > 0u) {
+            ReportNote("%s: paused %u times for %llu ms, out of every frame's time", SUITE,
+                       (unsigned)pauses,
+                       (unsigned long long)(armTicksToNs(paused_ticks) / 1000000u));
         }
         if (ran && ran_frames == 0u) {
             ReportSkip(SUITE, frames_name, REPORT_REASON_ASKED,

@@ -19,12 +19,12 @@ game scene's are ([game](Game.md)). One of the [demo family](Demo.md)'s demos: o
 leaves it out, and `frames=` sets its length (600 without it). `source/demo_fluidref.c` is every pass on the
 processor, operation for operation, and `source/tests/t_demo_fluid.c` the scene.
 
-- **fluid**, twenty cases, thirteen with `notime`. One says the scene came up (none tier): a graphics device, the
+- **fluid**, eighteen cases, thirteen with `notime`. One says the scene came up (none tier): a graphics device, the
   fields' targets, the shaders, and a swapchain on the default window or the program's screen. Then the frames run,
   inside the case that holds the early frames to the processor's whole simulation; the ten after it hold every
   judged frame to its passes worked out again and to the invariants, one holds each judged frame's fields to the
-  next's, and the seven last carry the frames' times.
-- **fluid-alias**, twenty one cases, fourteen with `notime`: the same demo with its targets drawn over their old
+  next's, and the five last carry the frames' times.
+- **fluid-alias**, nineteen cases, fourteen with `notime`: the same demo with its targets drawn over their old
   selves and a compute pass's storage image over them ([The aliasing level](#the-aliasing-level)), and a case more
   for the compute pass's words.
 
@@ -165,17 +165,17 @@ back the wrong layer hands the next frame other bytes, or moves a pass's output,
 
 ## What is timed
 
-As the game scene: frame 0 is the warm-up, and over the frames past it seven cases carry present to present's mean,
-99th percentile and longest, and the main and render threads' parts' means and 99th percentiles. The main thread's
-part is the script and its two uniform buffers; the render thread's is the frame's forty seven draws and the
-graphics unit's work, from the image in hand to the queue standing idle, a judged frame's ten copies in it. Two notes
-end the run, `fluid:` where the game scene's say `game:`. `notime` leaves the seven cases and the notes out.
+As every demo of the family ([Demo](Demo.md)): frame 0 is the warm-up, and over the frames past it five cases carry
+present to present's mean, 99th percentile and longest, and the frame's work's mean and 99th percentile: the forty
+seven draws and the graphics unit's work, from the image in hand to the queue standing idle, a judged frame's ten
+copies in it. A note ends the run, `fluid:` or `fluid-alias:`. `notime` leaves the five cases and the note out.
 
 ## In the browser
 
 The browser runs it as a demo (`FluidDemo`): its frames and timing are the browser's options and the dye is shown
 through the program's screen. Paused, the simulation holds at the frame it was about to draw and the last frame is
-shown again; the time paused is no frame's, so the frame after it is timed from the end of the pause. Stopped (B, a
+shown again; the time paused is no frame's, so the frame after it is timed from the end of the pause, and a note
+says how often and how long. Stopped (B, a
 restart, another level), it ends at the next frame: each case is judged on the judged frames the run reached, a note
 says where it stopped and which judged frames it left out, and the cases keep the names of the frames asked, so a run
 of a length compares with another whatever the person did. Stopped before frame 0 drew, every case after the
