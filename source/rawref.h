@@ -34,6 +34,9 @@ extern "C" {
 /// VIEWPORT_TRANSFORM's y scale of viewport 0: its x scale is 0x280, and the y and z scales and
 /// the three offsets follow (deko3d source/maxwell/engine_3d.def).
 #define RAW_3D_VIEWPORT_SCALE_Y 0x281u
+/// SET_VIEWPORT_CLIP_MIN_Z of viewport 0, byte 0x0c08 (open-gpu-doc clb197.h); its MAX_Z follows.
+/// deko3d sets both to the viewport's near and far (DepthRangeNear and Far, engine_3d.def).
+#define RAW_3D_VIEWPORT_CLIP_MIN_Z 0x302u
 /// MULTISAMPLE_CONTROL, byte 0x153C: alpha to coverage in bit 0 and alpha to one in bit 4 (deko3d
 /// source/maxwell/engine_3d.def, MultisampleControl). The library writes only the first.
 #define RAW_3D_MULTISAMPLE_CONTROL 0x54Fu
@@ -69,6 +72,10 @@ size_t RawRenderEnable(uint32_t out[4], uint64_t address, uint32_t mode);
 /// Writes the two words that set viewport 0's y scale to @p scale, which the library writes as
 /// half the viewport's height, negated for its upper left origin. Returns 2.
 size_t RawViewportScaleY(uint32_t out[2], float scale);
+
+/// Writes the three words that set viewport 0's clip range, the depth range the clamp holds a
+/// fragment to with the clamp on, to @p min_z and @p max_z. Returns 3.
+size_t RawViewportClipZ(uint32_t out[3], float min_z, float max_z);
 
 /// The argument of VERTEX_ARRAY_INSTANCE_FIRST and _SUBSEQUENT: the first vertex in bits 0-15,
 /// the vertex count in bits 16-27 and the topology in bits 28-31, the layout of the 3D class's

@@ -21,8 +21,9 @@
 // Every case draws flat colours over whole pixels and reads all 4096 back: exact. Where a rule
 // is more than a comparison (which pixels a point covers, where a swizzled viewport puts a
 // rectangle, which face a triangle shows), it is fixedref.c's, pinned by the reference suite.
-// Two things only a console settles are notes, not cases: which way up a point's coordinate
-// runs, and whether a depth outside the range is clipped or clamped.
+// One thing only a console settles is a note, not a case: which way up a point's coordinate runs.
+// A depth outside the viewport's range is cases: what deko3d's two words for its depth clamp do,
+// by the 3D class's header, is fixedref.c's FixedDepthKept and FixedDepthClamped.
 
 static const char *const SUITE = "fixed";
 
@@ -39,6 +40,8 @@ typedef struct {
     DkShader vertex;
     DkShader flat;
     DkShader point_coord;
+    /// Writes the vertex colour's alpha as the fragment's depth.
+    DkShader depth_out;
     /// What the case expects, built pixel by pixel before it is compared.
     uint8_t expected[PIXEL_COUNT * 4u];
 } FixedContext;
@@ -495,12 +498,39 @@ static void FaceCase(FixedContext *x, const char *name, FaceMode mode, bool lowe
 
 // ---- depth outside the range
 
-/// What a quad at a depth outside the range leaves, on the device's own depth mode: a note,
-/// since whether the console clips it or clamps it with the clamp off is not settled.
-static void OutsideNote(FixedContext *x, bool clamp) {
+/// The depth every value is cleared to before a depth case, which a clipped half keeps.
+#define CLEAR_DEPTH 0.75f
+/// The viewport's depth range the depth cases draw under (scale and offset 0.25): narrower than
+/// nought to one, so a clamp to the range and a clamp to nought to one tell apart.
+#define RANGE_NEAR 0.25f
+#define RANGE_FAR 0.5f
+
+/// A quad over half the target at clip space depth @p z, and, when @p writes, the depth its shader
+/// writes.
+typedef struct {
+    float z;
+    bool writes;
+    float depth;
+} DepthHalf;
+
+/// Draws a quad over each half of the target, left then right, with the depth clamp @p clamp,
+/// depth test ALWAYS with the write on, over a buffer of CLEAR_DEPTH, the viewport's range from
+/// RANGE_NEAR to RANGE_FAR; with @p raw_clip, the viewport's clip range written apart after it,
+/// @p clip_min to @p clip_max (deko3d writes the viewport's own there). Each half is held to
+/// FixedDepthKept and FixedDepthClamped: its colour or the clear on every pixel, and its depth
+/// bit for bit.
+static void DepthCase(FixedContext *x, const char *name, bool clamp, const DepthHalf half[2],
+                      bool raw_clip, float clip_min, float clip_max) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
     Clear(x);
-    GpuClearDepth(&x->gpu, 0.75f);
+    GpuClearDepth(&x->gpu, CLEAR_DEPTH);
     GpuBeginPass(&x->gpu);
+    const DkViewport viewport = {
+        0.0f, 0.0f, (float)TARGET_WIDTH, (float)TARGET_HEIGHT, RANGE_NEAR, RANGE_FAR,
+    };
+    dkCmdBufSetViewports(x->gpu.cmdbuf, 0, &viewport, 1);
     DkRasterizerState rasterizer;
     dkRasterizerStateDefaults(&rasterizer);
     rasterizer.cullMode = DkFace_None;
@@ -513,39 +543,90 @@ static void OutsideNote(FixedContext *x, bool clamp) {
     depth.depthCompareOp = DkCompareOp_Always;
     depth.stencilTestEnable = 0;
     dkCmdBufBindDepthStencilState(x->gpu.cmdbuf, &depth);
-    GpuVertex left[6], right[6];
-    Rect(left, -1.0f, -1.0f, 0.0f, 1.0f, -0.5f, DRAWN_COLOUR, 1.0f, true);
-    Rect(right, 0.0f, -1.0f, 1.0f, 1.0f, 1.5f, OTHER_COLOUR, 1.0f, true);
-    const bool recorded = GpuDrawTriangles(&x->gpu, &x->vertex, &x->flat, left, 6) &&
-                          GpuDrawTriangles(&x->gpu, &x->vertex, &x->flat, right, 6);
-    GpuSubmit(&x->gpu);
-    const uint8_t *const pixels = recorded && x->gpu.ready ? GpuReadBack(&x->gpu) : NULL;
-    uint8_t colour_left[4] = { 0 }, colour_right[4] = { 0 };
-    if (pixels != NULL) {
-        memcpy(colour_left, GpuPixel(pixels, TARGET_WIDTH, 16, 32), 4);
-        memcpy(colour_right, GpuPixel(pixels, TARGET_WIDTH, 48, 32), 4);
+    bool recorded = true;
+    if (raw_clip) {
+        uint32_t words[3];
+        RawViewportClipZ(words, clip_min, clip_max);
+        recorded = GpuRawMethods(&x->gpu, words, 3);
     }
-    const uint8_t *const depths = pixels != NULL ? GpuReadBackDepth(&x->gpu) : NULL;
-    if (depths == NULL) {
-        ReportNote("fixed depth outside the range, clamp %s: no readback (%s)",
-                   clamp ? "on" : "off", x->gpu.failure);
+    for (size_t i = 0; i < 2 && recorded; ++i) {
+        GpuVertex rect[6];
+        const float x0 = i == 0 ? -1.0f : 0.0f;
+        Rect(rect, x0, -1.0f, x0 + 1.0f, 1.0f, half[i].z, DRAWN_COLOUR,
+             half[i].writes ? half[i].depth : 1.0f, true);
+        recorded = GpuDrawTriangles(&x->gpu, &x->vertex, half[i].writes ? &x->depth_out : &x->flat,
+                                    rect, 6);
+    }
+    GpuSubmit(&x->gpu);
+    if (Unready(x, name, recorded)) {
         return;
     }
-    float depth_left, depth_right;
-    memcpy(&depth_left, GpuPixel(depths, TARGET_WIDTH, 16, 32), 4);
-    memcpy(&depth_right, GpuPixel(depths, TARGET_WIDTH, 48, 32), 4);
-    ReportNote("fixed depth outside the range, clamp %s, depth from nought to one, buffer at "
-               "0.75: a quad at z -0.5 left %s and depth %.6f, one at z 1.5 left %s and depth "
-               "%.6f (drawn and 0 or 1 is clamped, the clear and 0.75 is clipped)",
-               clamp ? "on" : "off",
-               memcmp(colour_left, DRAWN_COLOUR, 4) == 0    ? "its colour"
-               : memcmp(colour_left, CLEAR_COLOUR, 4) == 0  ? "the clear"
-                                                            : "another colour",
-               (double)depth_left,
-               memcmp(colour_right, OTHER_COLOUR, 4) == 0   ? "its colour"
-               : memcmp(colour_right, CLEAR_COLOUR, 4) == 0 ? "the clear"
-                                                            : "another colour",
-               (double)depth_right);
+
+    const float low = raw_clip ? clip_min : RANGE_NEAR, high = raw_clip ? clip_max : RANGE_FAR;
+    bool kept[2];
+    float want[2];
+    for (size_t i = 0; i < 2; ++i) {
+        kept[i] = FixedDepthKept(clamp, half[i].z);
+        const float window = RANGE_NEAR + half[i].z * (RANGE_FAR - RANGE_NEAR);
+        const float fragment = half[i].writes ? half[i].depth : window;
+        want[i] = kept[i] ? FixedDepthClamped(clamp, fragment, low, high) : CLEAR_DEPTH;
+    }
+    // The colours first: the depth's readback lands where the colours' did.
+    const uint8_t *const colours = GpuReadBack(&x->gpu);
+    if (colours == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   x->gpu.failure[0] != '\0' ? x->gpu.failure : "the readback handed back nothing");
+        return;
+    }
+    static bool colour_right[PIXEL_COUNT];
+    uint32_t wrong_colour = 0;
+    bool drawn[2] = { false, false };
+    for (uint32_t y = 0; y < TARGET_HEIGHT; ++y) {
+        for (uint32_t xx = 0; xx < TARGET_WIDTH; ++xx) {
+            const size_t i = xx < TARGET_WIDTH / 2u ? 0u : 1u;
+            const uint8_t *const colour = GpuPixel(colours, TARGET_WIDTH, xx, y);
+            colour_right[y * TARGET_WIDTH + xx] =
+                memcmp(colour, kept[i] ? DRAWN_COLOUR : CLEAR_COLOUR, 4) == 0;
+            wrong_colour += !colour_right[y * TARGET_WIDTH + xx];
+            if (y == TARGET_HEIGHT / 2u && xx % (TARGET_WIDTH / 2u) == TARGET_WIDTH / 4u) {
+                drawn[i] = memcmp(colour, DRAWN_COLOUR, 4) == 0;
+            }
+        }
+    }
+    const uint8_t *const depths = GpuReadBackDepth(&x->gpu);
+    if (depths == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   x->gpu.failure[0] != '\0' ? x->gpu.failure
+                                               : "the depth readback handed back nothing");
+        return;
+    }
+    Picture *const picture = PictureBegin(TARGET_WIDTH, TARGET_HEIGHT, PICTURE_BITS, depths);
+    uint32_t wrong_depth = 0;
+    float got[2] = { 0.0f, 0.0f };
+    for (uint32_t y = 0; y < TARGET_HEIGHT; ++y) {
+        for (uint32_t xx = 0; xx < TARGET_WIDTH; ++xx) {
+            const size_t i = xx < TARGET_WIDTH / 2u ? 0u : 1u;
+            float have;
+            memcpy(&have, GpuPixel(depths, TARGET_WIDTH, xx, y), 4);
+            const bool right = memcmp(&have, &want[i], 4) == 0;
+            uint8_t want_bytes[4];
+            memcpy(want_bytes, &want[i], 4);
+            PictureSet(picture, xx, y, want_bytes,
+                       right && colour_right[y * TARGET_WIDTH + xx] ? PICTURE_MATCHED
+                                                                     : PICTURE_WRONG);
+            wrong_depth += !right;
+            if (y == TARGET_HEIGHT / 2u && xx % (TARGET_WIDTH / 2u) == TARGET_WIDTH / 4u) {
+                got[i] = have;
+            }
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong_depth == 0 && wrong_colour == 0,
+               "%u depths and %u colours of %u wrong; the left half is %s with depth %.6f, "
+               "expected %s with %.6f, the right %s with %.6f, expected %s with %.6f",
+               (unsigned)wrong_depth, (unsigned)wrong_colour, (unsigned)PIXEL_COUNT,
+               drawn[0] ? "drawn" : "not drawn", (double)got[0], kept[0] ? "drawn" : "clipped",
+               (double)want[0], drawn[1] ? "drawn" : "not drawn", (double)got[1],
+               kept[1] ? "drawn" : "clipped", (double)want[1]);
 }
 
 // ---- devices of their own
@@ -568,7 +649,9 @@ static bool OpenContext(FixedContext *x, const char *name, uint32_t device_flags
         GpuLoadShader(&x->gpu, &x->flat, ShaderData(SHADER_FLAT_FRAG),
                       ShaderSize(SHADER_FLAT_FRAG)) &&
         GpuLoadShader(&x->gpu, &x->point_coord, ShaderData(SHADER_POINT_COORD_FRAG),
-                      ShaderSize(SHADER_POINT_COORD_FRAG));
+                      ShaderSize(SHADER_POINT_COORD_FRAG)) &&
+        GpuLoadShader(&x->gpu, &x->depth_out, ShaderData(SHADER_DEPTH_OUT_FRAG),
+                      ShaderSize(SHADER_DEPTH_OUT_FRAG));
     CHECK_TRUE(SUITE, name, CHECK_NONE, loaded, "%s", x->gpu.failure);
     if (opened && !loaded) {
         GpuClose(&x->gpu);
@@ -684,8 +767,31 @@ void RunFixed(void) {
     FaceCase(x, "the swizzle that swaps x and y transposes the picture", FACE_SWAP, false, false,
              true, "two rectangles, the swizzle PositiveY into x and PositiveX into y, no culling");
 
-    OutsideNote(x, false);
-    OutsideNote(x, true);
+    // A depth past the viewport's range of 0.25 to 0.5: deko3d's clamp off clips the geometry and
+    // clamps a fragment's depth to nought to one, its clamp on clips nothing and clamps to the
+    // viewport's clip range.
+    {
+        static const DepthHalf SHADER_PAST[2] = { { 0.5f, true, 1.5f }, { 0.5f, true, 0.875f } };
+        static const DepthHalf SHADER_BOTH[2] = { { 0.5f, true, 1.5f }, { 0.5f, true, 0.125f } };
+        static const DepthHalf GEOMETRY[2] = { { 1.5f, false, 0.0f }, { 0.5f, false, 0.0f } };
+        static const DepthHalf GEOMETRY_PAST[2] = { { 1.5f, false, 0.0f }, { -0.5f, false, 0.0f } };
+        static const DepthHalf SHADER_CLIP[2] = { { 0.5f, true, 0.875f }, { 0.5f, true, 0.125f } };
+        DepthCase(x,
+                  "with the clamp off a depth the shader writes is clamped to nought to one, not "
+                  "to the viewport's range",
+                  false, SHADER_PAST, false, 0.0f, 0.0f);
+        DepthCase(x,
+                  "with the clamp on a depth the shader writes is clamped to the viewport's range",
+                  true, SHADER_BOTH, false, 0.0f, 0.0f);
+        DepthCase(x, "with the clamp off a quad past the far plane is clipped, one inside drawn",
+                  false, GEOMETRY, false, 0.0f, 0.0f);
+        DepthCase(x, "with the clamp on quads past both planes are drawn at the range's ends", true,
+                  GEOMETRY_PAST, false, 0.0f, 0.0f);
+        DepthCase(x,
+                  "with the clamp on the depth is clamped to the viewport's clip range, not to its "
+                  "transform's",
+                  true, SHADER_CLIP, true, 0.3125f, 0.4375f);
+    }
     GpuClose(&x->gpu);
 
     // A device with the lower left origin: clip space y of one is the target's last row, and the

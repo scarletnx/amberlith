@@ -47,6 +47,19 @@ void RunReferenceRaw(void) {
                    "got %u words, 0x%08x 0x%08x", (unsigned)count, (unsigned)scale[0],
                    (unsigned)scale[1]);
     }
+    // 0x302 | 2 << 16 | 1 << 29, then 0.3125 and 0.4375 as their bits.
+    {
+        uint32_t clip[3] = { 0, 0, 0 };
+        const size_t count = RawViewportClipZ(clip, 0.3125f, 0.4375f);
+        CHECK_TRUE(SUITE,
+                   "viewport 0's clip range of 0.3125 to 0.4375 is the words 0x20020302 0x3ea00000 "
+                   "0x3ee00000",
+                   CHECK_NONE,
+                   count == 3 && clip[0] == 0x20020302u && clip[1] == 0x3EA00000u &&
+                       clip[2] == 0x3EE00000u,
+                   "got %u words, 0x%08x 0x%08x 0x%08x", (unsigned)count, (unsigned)clip[0],
+                   (unsigned)clip[1], (unsigned)clip[2]);
+    }
     uint32_t words[3] = { 0, 0, 0 };
     RawIndexLimit(words, 0x12345678ABull);
     CHECK_TRUE(SUITE, "an index limit goes high word first", CHECK_NONE,

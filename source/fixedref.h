@@ -49,6 +49,22 @@ bool FixedBoundsPass(float stored, float min_bound, float max_bound);
 /// the viewport's z scale and offset to a half).
 float FixedWindowDepth(float z, bool minus_one_to_one);
 
+/// What the 3D class's view volume clip control (open-gpu-doc clb197.h,
+/// SET_VIEWPORT_CLIP_CONTROL) makes of a depth past the viewport's range, under the two words
+/// deko3d writes for its depth clamp (gpu_3d_state.cpp). Off, 0x181D: the geometry is clipped at
+/// the depth planes (GEOMETRY_CLIP FRUSTUM_XYZ_CLIP, a tight z guardband) and a fragment's depth,
+/// the bias's or the shader's, is clamped to nought to one (PIXEL_MIN_Z and PIXEL_MAX_Z CLAMP,
+/// MIN_Z_ZERO_MAX_Z_ONE, deko3d's ForceDepthRangeZeroToOne). On, 0x101A: nothing is clipped at
+/// the depth planes (FRUSTUM_XY_CLIP) and the depth is clamped to the viewport's clip range
+/// (SET_VIEWPORT_CLIP_MIN_Z and MAX_Z, which deko3d sets to the viewport's near and far, the
+/// smaller first). Whether a primitive at clip space depth @p z (w of one, depth from nought to
+/// one) is kept: always with the clamp on, from nought to one with it off.
+bool FixedDepthKept(bool clamp, float z);
+
+/// The depth stored for a fragment of depth @p depth: clamped to @p clip_min to @p clip_max with
+/// the clamp on, to nought to one with it off.
+float FixedDepthClamped(bool clamp, float depth, float clip_min, float clip_max);
+
 /// A rectangle of pixels, x0 and y0 included, x1 and y1 not, in the target's rows as memory holds
 /// them: y downwards from the first row.
 typedef struct {

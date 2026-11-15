@@ -36,6 +36,13 @@ size_t RawViewportScaleY(uint32_t out[2], float scale) {
     return 2;
 }
 
+size_t RawViewportClipZ(uint32_t out[3], float min_z, float max_z) {
+    out[0] = RawIncreasingHeader(RAW_SUBCHANNEL_3D, RAW_3D_VIEWPORT_CLIP_MIN_Z, 2);
+    memcpy(&out[1], &min_z, sizeof(min_z));
+    memcpy(&out[2], &max_z, sizeof(max_z));
+    return 3;
+}
+
 size_t RawDrawTexture(uint32_t out[13], uint32_t texture, uint32_t sampler, uint32_t dst_x,
                       uint32_t dst_y, uint32_t width, uint32_t height, int32_t src_x,
                       int32_t src_y) {
