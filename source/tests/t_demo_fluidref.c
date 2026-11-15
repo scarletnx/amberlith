@@ -530,55 +530,6 @@ static void CheckMachines(void) {
                (unsigned)wrong, first);
 }
 
-static void CheckNotes(void) {
-    Tally t = { 0, NULL };
-    static GameTimes times;
-    memset(&times, 0, sizeof(times));
-    times.frames = 3u;
-    times.warmup_present = 20000u;
-    times.warmup_main = 300u;
-    times.warmup_render = 5000u;
-    times.present.frames = 2u;
-    times.present.total = 50000u;
-    times.present.mean = 25000u;
-    times.present.p99 = 40000u;
-    times.present.longest = 40000u;
-    times.present.longest_at = 2u;
-    times.present.hitches = 1u;
-    times.present.hitch_at[0] = 2u;
-    times.main_part.mean = 10u;
-    times.main_part.p99 = 12u;
-    times.main_part.longest = 12u;
-    times.main_part.longest_at = 1u;
-    times.render_part.mean = 2000u;
-    times.render_part.p99 = 2500u;
-    times.render_part.longest = 2500u;
-    times.render_part.longest_at = 2u;
-    char note[512];
-    FluidDescribeFrames(note, sizeof(note), "fluid", &times);
-    Expect(&t, strcmp(note, "fluid: 3 frames in 0.07 s; frame 0, the warm-up, left out of the "
-                            "times (20000 us present to present, 300 us the main thread's part, "
-                            "5000 us the render thread's); the 2 past it; present to present: "
-                            "mean 25000 us, 99th percentile 40000 us, longest 40000 us at frame "
-                            "2, 1 over 33333 us, two frames at 60 Hz: frame 2") == 0,
-           "the frames' note");
-    FluidDescribeParts(note, sizeof(note), "fluid", &times);
-    Expect(&t, strcmp(note, "fluid: past the warm-up; the main thread's part: mean 10 us, 99th "
-                            "percentile 12 us, longest 12 us at frame 1; the render thread's "
-                            "part, the graphics unit's in it: mean 2000 us, 99th percentile 2500 "
-                            "us, longest 2500 us at frame 2") == 0,
-           "the parts' note");
-    times.present.frames = 0u;
-    FluidDescribeFrames(note, sizeof(note), "fluid", &times);
-    Expect(&t, strstr(note, "; no frame past it to time") != NULL, "a run of one frame");
-    char cut[24];
-    Expect(&t,
-           FluidDescribeFrames(cut, sizeof(cut), "fluid", &times) == strlen(cut) &&
-               strlen(cut) < 24u,
-           "a note cut short, terminated");
-    Report("fluid: the frames' and the parts' notes on times made to order", &t);
-}
-
 void RunReferenceFluid(void) {
     CheckScript();
     CheckPasses();
@@ -587,5 +538,4 @@ void RunReferenceFluid(void) {
     CheckAliasing();
     CheckCompare();
     CheckMachines();
-    CheckNotes();
 }

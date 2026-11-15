@@ -7,8 +7,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "gameref.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -310,14 +308,6 @@ bool FluidHandedOn(const FluidGrid *grid, const FluidFrame *before, const FluidF
 /// Holds @p frame to every check; @p budget is FluidDyeBudgets' for its frame.
 void FluidJudgeFrame(const FluidGrid *grid, const FluidFrame *frame, double budget,
                      FluidWork *work, FluidVerdict out[FLUID_CHECKS]);
-
-/// The frames' note of a timed run and its parts', as the game scene's are, @p suite where the
-/// game scene's say `game`. Each returns the length; the text is always terminated, and cut short
-/// rather than overrun.
-size_t FluidDescribeFrames(char *out, size_t out_size, const char *suite,
-                           const GameTimes *times);
-size_t FluidDescribeParts(char *out, size_t out_size, const char *suite,
-                          const GameTimes *times);
 
 #ifdef __cplusplus
 }
