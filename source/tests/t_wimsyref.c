@@ -602,6 +602,16 @@ static void CheckHeavy(void) {
     machine.frames_late = 1u;
     verdict = Verdict(3u, 300u, 600u, &machine);
     Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 500u, "level 3 a frame late is refused");
+    // A machine that draws the thin faces turned just away is as right as one that culls them.
+    // On frames 55 and 70 of 120 a far model's rim is such a face and one sample of a pixel is
+    // the rim's: a reference sure of every face's side refused that pixel, as it refused a
+    // desktop card's.
+    machine = WimsyMachineRight(3u);
+    machine.thin_faces = true;
+    verdict = Verdict(3u, 55u, 120u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 55");
+    verdict = Verdict(3u, 70u, 120u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 70");
     machine = WimsyMachineRight(4u);
     verdict = Verdict(4u, 599u, 600u, &machine);
     Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 800000u, "level 4's last frame as asked");

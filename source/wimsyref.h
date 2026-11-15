@@ -225,6 +225,10 @@ typedef struct {
     bool bias;
     /// The bits its depth buffer keeps, nought for all a float has.
     uint32_t depth_bits;
+    /// A face thinner than WIMSY_EDGE_MARGIN turned just away from the eye is drawn, as on a
+    /// machine whose own corners, a fraction of a pixel from the reference's, turn it towards it.
+    /// Not a fault: the judge has to pass it.
+    bool thin_faces;
 } WimsyMachine;
 
 /// The machine that draws a level as the level asks.
