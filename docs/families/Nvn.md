@@ -10,7 +10,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, seventeen cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, twenty one cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -54,7 +54,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, a hundred and
-  seven.
+  forty three.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -82,6 +82,25 @@ The reference is the graphics unit running what the layer recorded, never the of
   deko3d sends the copy and 2D engines for them. ScarletNX 9bef605 passes all seven; Eden 6a9235c22d passes five
   and fails the two mirrors, the copy suite's FlipY to a buffer (nothing lands) and the 2D engine's FlipX between
   images (the texels copied unmirrored), where ScarletNX's NVN copy does both.
+- **a texture builder gives back each number it was set** (exact): every setter of a builder that keeps a number
+  (the flags, the target, the format, the width, the height, the depth, the levels, the samples, the pool and the
+  offset), each with a number that is not the default, then the getters; and `nvnTextureBuilderSetSize2D` as the
+  width and the height. The builder makes no texture, so the numbers need not be one a machine has. The line names
+  the first getter that gave another number, with both.
+- **a texture view says which of its parts were set, and with what** (exact): a new view has no levels, layers,
+  format or target set and its getters say so; each part set comes back with what was set while the others stay
+  unset; `nvnTextureViewCompare` holds for two new views and for two set the same, and not for a view against a new
+  one or against one of another number of levels.
+- **a texture of three levels comes up and says what its builder had** (exact): a 64x64 RGBA8 texture with levels
+  down to 16x16, a page into a pool of its own, and its ten getters, the pool and the offset among them.
+- **a picture copied into each level of a texture through a view comes back from that level** (exact): a picture
+  of its own for each level, the first copied with no view and the others through a view of that level alone
+  (`nvnTextureViewSetLevels`), then each read back through its view. Every byte of the readback is judged, so a
+  level that took another's picture or kept nothing shows as the first byte wrong, with its level.
+
+  What a getter is held to is NVN's own word for it, that it gives what the setter took: on the console and in Eden
+  the layer answers from its record, so only ScarletNX's answers are news there. The levels are the graphics
+  unit's.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its

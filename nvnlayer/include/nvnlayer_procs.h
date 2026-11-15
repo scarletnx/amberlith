@@ -13,10 +13,51 @@
 /// lookup itself, which every build has whole.
 ///
 /// Three lists, by what each build of the layer does with them:
-/// - NVN_LAYER_PROCS_BASE and NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
+/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, a part of it written apart) and
+///   NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231: the functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
+
+// What a texture, its builder and a view answer of themselves, and the levels of a texture.
+#define NVN_LAYER_PROCS_TEXTURE(X)                                                                \
+    X(void, nvnTextureBuilderSetWidth, (NVNtextureBuilder * builder, int width))                  \
+    X(void, nvnTextureBuilderSetHeight, (NVNtextureBuilder * builder, int height))                \
+    X(void, nvnTextureBuilderSetDepth, (NVNtextureBuilder * builder, int depth))                  \
+    X(void, nvnTextureBuilderSetLevels, (NVNtextureBuilder * builder, int levels))                \
+    X(void, nvnTextureBuilderSetSamples, (NVNtextureBuilder * builder, int samples))              \
+    X(NVNdevice *, nvnTextureBuilderGetDevice, (const NVNtextureBuilder *builder))                \
+    X(NVNtextureFlags, nvnTextureBuilderGetFlags, (const NVNtextureBuilder *builder))             \
+    X(NVNtextureTarget, nvnTextureBuilderGetTarget, (const NVNtextureBuilder *builder))           \
+    X(NVNformat, nvnTextureBuilderGetFormat, (const NVNtextureBuilder *builder))                  \
+    X(int, nvnTextureBuilderGetWidth, (const NVNtextureBuilder *builder))                         \
+    X(int, nvnTextureBuilderGetHeight, (const NVNtextureBuilder *builder))                        \
+    X(int, nvnTextureBuilderGetDepth, (const NVNtextureBuilder *builder))                         \
+    X(int, nvnTextureBuilderGetLevels, (const NVNtextureBuilder *builder))                        \
+    X(int, nvnTextureBuilderGetSamples, (const NVNtextureBuilder *builder))                       \
+    X(NVNmemoryPool *, nvnTextureBuilderGetMemoryPool, (const NVNtextureBuilder *builder))        \
+    X(ptrdiff_t, nvnTextureBuilderGetMemoryOffset, (const NVNtextureBuilder *builder))            \
+    X(NVNtextureFlags, nvnTextureGetFlags, (const NVNtexture *texture))                           \
+    X(NVNtextureTarget, nvnTextureGetTarget, (const NVNtexture *texture))                         \
+    X(NVNformat, nvnTextureGetFormat, (const NVNtexture *texture))                                \
+    X(int, nvnTextureGetWidth, (const NVNtexture *texture))                                       \
+    X(int, nvnTextureGetHeight, (const NVNtexture *texture))                                      \
+    X(int, nvnTextureGetDepth, (const NVNtexture *texture))                                       \
+    X(int, nvnTextureGetLevels, (const NVNtexture *texture))                                      \
+    X(int, nvnTextureGetSamples, (const NVNtexture *texture))                                     \
+    X(NVNmemoryPool *, nvnTextureGetMemoryPool, (const NVNtexture *texture))                      \
+    X(ptrdiff_t, nvnTextureGetMemoryOffset, (const NVNtexture *texture))                          \
+    X(void, nvnTextureViewSetDefaults, (NVNtextureView * view))                                   \
+    X(void, nvnTextureViewSetLevels, (NVNtextureView * view, int base, int count))                \
+    X(void, nvnTextureViewSetLayers, (NVNtextureView * view, int first, int count))               \
+    X(void, nvnTextureViewSetFormat, (NVNtextureView * view, NVNformat format))                   \
+    X(void, nvnTextureViewSetTarget, (NVNtextureView * view, NVNtextureTarget target))            \
+    X(NVNboolean, nvnTextureViewGetLevels, (const NVNtextureView *view, int *base, int *count))   \
+    X(NVNboolean, nvnTextureViewGetLayers, (const NVNtextureView *view, int *first, int *count))  \
+    X(NVNboolean, nvnTextureViewGetFormat, (const NVNtextureView *view, NVNformat *format))       \
+    X(NVNboolean, nvnTextureViewGetTarget,                                                        \
+      (const NVNtextureView *view, NVNtextureTarget *target))                                     \
+    X(NVNboolean, nvnTextureViewCompare, (const NVNtextureView *a, const NVNtextureView *b))
 
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
@@ -100,7 +141,8 @@
     X(void, nvnWindowBuilderSetTextures,                                                          \
       (NVNwindowBuilder * builder, int count, NVNtexture *const *textures))                       \
     X(NVNboolean, nvnWindowInitialize, (NVNwindow * window, const NVNwindowBuilder *builder))     \
-    X(void, nvnWindowFinalize, (NVNwindow * window))
+    X(void, nvnWindowFinalize, (NVNwindow * window))                                              \
+    NVN_LAYER_PROCS_TEXTURE(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

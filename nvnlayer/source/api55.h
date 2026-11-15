@@ -81,6 +81,9 @@ typedef struct {
     NVNformat format;
     int width;
     int height;
+    int depth;
+    int levels;
+    int samples;
     NVNmemoryPool *pool;
     ptrdiff_t offset;
 } LayerTextureBuilder;
@@ -88,7 +91,34 @@ typedef struct {
 typedef struct {
     DkImage image; // first: deko3d wants it at its own alignment, which the object's start has
     uint32_t magic;
+    /// What the builder had when the texture was made: a texture answers for itself from then on.
+    int flags;
+    NVNtextureTarget target;
+    NVNformat format;
+    int width;
+    int height;
+    int depth;
+    int levels;
+    int samples;
+    NVNmemoryPool *pool;
+    ptrdiff_t offset;
 } LayerTexture;
+
+// The parts of a view a program set: a view says of each whether it has one.
+#define VIEW_LEVELS 0x1u
+#define VIEW_LAYERS 0x2u
+#define VIEW_FORMAT 0x4u
+#define VIEW_TARGET 0x8u
+
+typedef struct {
+    uint32_t set;
+    int base_level;
+    int levels;
+    int first_layer;
+    int layers;
+    NVNformat format;
+    NVNtextureTarget target;
+} LayerView;
 
 // The graphics stages, NVN's numbers: vertex, fragment, geometry and the two of tessellation.
 #define LAYER_STAGES 5
@@ -213,6 +243,7 @@ _Static_assert(sizeof(LayerPoolBuilder) <= sizeof(NVNmemoryPoolBuilder), "fits t
 _Static_assert(sizeof(LayerPool) <= sizeof(NVNmemoryPool), "fits NVNmemoryPool");
 _Static_assert(sizeof(LayerTextureBuilder) <= sizeof(NVNtextureBuilder), "fits the builder");
 _Static_assert(sizeof(LayerTexture) <= sizeof(NVNtexture), "fits NVNtexture");
+_Static_assert(sizeof(LayerView) <= sizeof(NVNtextureView), "fits NVNtextureView");
 _Static_assert(sizeof(LayerCommandBuffer) <= sizeof(NVNcommandBuffer), "fits NVNcommandBuffer");
 _Static_assert(sizeof(LayerWindowBuilder) <= sizeof(NVNwindowBuilder), "fits the builder");
 _Static_assert(sizeof(LayerWindow) <= sizeof(NVNwindow), "fits NVNwindow");
