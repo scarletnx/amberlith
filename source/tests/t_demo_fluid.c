@@ -390,7 +390,9 @@ static bool BringUp(char *why, size_t why_size) {
     GpuSpecDefaults(&spec, DYE_W, DYE_H);
     spec.code_size = 64u * 1024u;
     spec.data_size = (uint32_t)(region_bytes * judged_count) + 1024u * 1024u;
-    spec.image_size = 8u * 1024u * 1024u;
+    // The two presented images, 1280 by 720 with their compression, take near 8 MiB alone; the
+    // fields' seven targets 1.6 MiB more.
+    spec.image_size = 16u * 1024u * 1024u;
     spec.command_size = 512u * 1024u;
     if (!GpuOpenSpec(&gpu, &spec)) {
         snprintf(why, why_size, "the graphics device: %s", gpu.failure);
