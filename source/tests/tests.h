@@ -367,6 +367,9 @@ void GameSetTiming(bool on);
 /// The browser's run of the scene as a demo (demo.h), or NULL for a run from the mode file:
 /// B stops its frames, and the time its pause menu is up is left out of the frames' times.
 void GameSetDemo(const DemoRun *run);
+/// The browser's music for the scene: @p track streamed on its own renderer while @p wanted says
+/// so; MUSIC_TRACKS and NULL, none (every run from the mode file).
+void GameSetMusic(MusicTrack track, bool (*wanted)(void));
 
 /// The game family's levels: Wimsy, ScarletNX's mascot, drawn as a game draws a character, a
 /// level a scene, from sprites to her lit model and on to a game's heaviest frame; each level's

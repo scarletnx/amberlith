@@ -297,3 +297,21 @@ size_t BrowseDescribePick(char *out, size_t out_size, const UiPick *pick,
     }
     return used;
 }
+
+BrowseMusic BrowseMusicOf(const char *suite) {
+    static const struct {
+        const char *suite;
+        BrowseMusic music;
+    } MUSIC[] = {
+        { "game", { "wimsy", true } },        { "wimsy", { "wimsy", false } },
+        { "mandelbrot", { "fractal", false } }, { "julia", { "fractal", false } },
+        { "fluid", { "fluid", false } },      { "fluid-alias", { "fluid", false } },
+    };
+    for (size_t i = 0; suite != NULL && i < sizeof(MUSIC) / sizeof(MUSIC[0]); ++i) {
+        if (strcmp(MUSIC[i].suite, suite) == 0) {
+            return MUSIC[i].music;
+        }
+    }
+    const BrowseMusic none = { NULL, false };
+    return none;
+}

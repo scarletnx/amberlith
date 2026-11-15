@@ -21,17 +21,27 @@ extern "C" {
 
 /// A demo the browser lists, one line of the frontend's table as a step is one of its STEPS: its
 /// row's name, up to 24 characters; the suite its lines report under; a sentence or two for the
-/// box beside the list; the music it plays while it runs, by name, NULL for none; the family of its
-/// step (MODE_FAMILY_*); and its run (demo.h). Demos of one suite in consecutive lines are the levels
-/// its pause menu walks.
+/// box beside the list; the family of its step (MODE_FAMILY_*); and its run (demo.h). Demos of one
+/// suite in consecutive lines are the levels its pause menu walks. Its music is BrowseMusicOf's.
 typedef struct {
     const char *name;
     const char *suite;
     const char *description;
-    const char *track;
     uint32_t family;
     void (*run)(const DemoRun *run);
 } BrowseDemo;
+
+/// The music a demo plays in the browser: its track's name (music.h's MusicTrackNamed), NULL for
+/// none, and whether the demo streams it on its own audio renderer (MusicStreamOpen and
+/// MusicStreamFeed), as the game scene's audio thread steps one, rather than through the
+/// browser's player, which would open a second.
+typedef struct {
+    const char *track;
+    bool streams;
+} BrowseMusic;
+
+/// The music of the demo whose lines report under @p suite.
+BrowseMusic BrowseMusicOf(const char *suite);
 
 /// The track the browser plays between runs.
 #define BROWSE_MENU_TRACK "menu"

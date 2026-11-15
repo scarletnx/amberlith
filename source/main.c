@@ -258,7 +258,10 @@ static void DemoGame(const DemoRun *run) {
     GameSetFrames(run->frames);
     GameSetTiming(run->timing);
     GameSetDemo(run);
+    // Its track on its own renderer, as long as the browser's music option says so.
+    GameSetMusic(MusicTrackNamed(BrowseMusicOf("game").track), ViewerDemoMusic);
     RunGame();
+    GameSetMusic(MUSIC_TRACKS, NULL);
     GameSetDemo(NULL);
 }
 
@@ -291,39 +294,37 @@ static const BrowseDemo DEMOS[] = {
     { "Game scene", "game",
       "Everything a game asks at once: four threads over three cores, a silent tone, the card and "
       "the services, each frame's image held to what the processor works out.",
-      NULL, MODE_FAMILY_GAME, DemoGame },
+      MODE_FAMILY_GAME, DemoGame },
     { "Wimsy level 0", "wimsy",
       "Sprites: Wimsy flat, a sheet of her frames, as a game draws a character in two "
       "dimensions. Five frames are held to the ranges the processor works out.",
-      "wimsy", MODE_FAMILY_GAME, DemoWimsy0 },
+      MODE_FAMILY_GAME, DemoWimsy0 },
     { "Wimsy level 1", "wimsy",
       "Her lit model, turning: depth, culling and light, five frames held to the processor's "
       "ranges.",
-      "wimsy", MODE_FAMILY_GAME, DemoWimsy1 },
+      MODE_FAMILY_GAME, DemoWimsy1 },
     { "Wimsy level 2", "wimsy",
-      "A scene near and far: Wimsy on a mipmapped ground with plants around her.", "wimsy",
+      "A scene near and far: Wimsy on a mipmapped ground with plants around her.",
       MODE_FAMILY_GAME, DemoWimsy2 },
     { "Wimsy level 3", "wimsy",
       "A game's heavy frame: Wimsy among some fifteen hundred draws, each with its own uniform "
       "buffer, over a 4K ASTC ground.",
-      "wimsy", MODE_FAMILY_GAME, DemoWimsy3 },
-    { "Wimsy level 4", "wimsy", "Level 3 over an 8K ground.", "wimsy", MODE_FAMILY_GAME,
-      DemoWimsy4 },
+      MODE_FAMILY_GAME, DemoWimsy3 },
+    { "Wimsy level 4", "wimsy", "Level 3 over an 8K ground.", MODE_FAMILY_GAME, DemoWimsy4 },
     { "Mandelbrot", "mandelbrot",
       "A zoom into the Mandelbrot set: each frame a compute pass counts every pixel's "
       "iterations and a fragment pass colours them; six frames held to the processor's answer.",
-      "fractal", MODE_FAMILY_DEMO, RunMandelbrotDemo },
-    { "Julia", "julia", "The same zoom over a Julia set.", "fractal", MODE_FAMILY_DEMO,
-      RunJuliaDemo },
+      MODE_FAMILY_DEMO, RunMandelbrotDemo },
+    { "Julia", "julia", "The same zoom over a Julia set.", MODE_FAMILY_DEMO, RunJuliaDemo },
     { "Fluid", "fluid",
       "A 2D fluid, Stam's stable fluids, in fragment passes in ping-pong between two targets a "
       "field; its early frames held to the processor's simulation, every judged one to the "
       "invariants.",
-      "fluid", MODE_FAMILY_DEMO, FluidDemo },
+      MODE_FAMILY_DEMO, FluidDemo },
     { "Fluid, aliased", "fluid-alias",
       "The fluid with its targets drawn over their old selves and a compute pass's storage "
       "image over them, as a game's dynamic resolution leaves its pool.",
-      "fluid", MODE_FAMILY_DEMO, FluidAliasDemo },
+      MODE_FAMILY_DEMO, FluidAliasDemo },
 };
 
 #define DEMO_COUNT (sizeof(DEMOS) / sizeof(DEMOS[0]))
@@ -471,14 +472,16 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
             const BrowseDemo *const demo = &DEMOS[next];
             uint32_t level_count = 0;
             const uint32_t first = DemoLevels(next, &level_count);
-            if (options->music) {
-                // A demo with no track of its own (the game scene, whose audio thread steps a
-                // renderer of its own) plays none.
-                MusicTo(demo->track);
+            // The player plays the demo's track; a demo that streams it on its own renderer (the
+            // game scene) wants the player's closed first, or its own would be the second.
+            const BrowseMusic music = BrowseMusicOf(demo->suite);
+            if (options->music || music.streams) {
+                MusicTo(music.streams ? NULL : music.track);
             }
             const ViewerDemo shown = {
-                demo->name,     demo->track,       options->frames, options->hud,
+                demo->name,     music.track,       options->frames, options->hud,
                 options->music, &demo_rows[first], level_count,     next - first,
+                music.streams,
             };
             ViewerDemoBegin(&shown);
             DemoStep step = { demo, { true, options->frames, timing, DemoStopped, DemoPaused } };
@@ -548,7 +551,7 @@ static ViewerEnd BrowserSession(const RunMode *from_file, UiTab tab, const UiSta
                                 bool after_run) {
     for (uint32_t i = 0; i < DEMO_COUNT; ++i) {
         const UiDemoRow row = { DEMOS[i].name, DEMOS[i].suite, DEMOS[i].description,
-                                DEMOS[i].track };
+                                BrowseMusicOf(DEMOS[i].suite).track };
         demo_rows[i] = row;
     }
     static char heading[96];

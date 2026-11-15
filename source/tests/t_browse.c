@@ -8,6 +8,7 @@
 #include "../browse.h"
 #include "../check.h"
 #include "../mode.h"
+#include "../music.h"
 #include "../report.h"
 #include "../ui.h"
 #include "tests.h"
@@ -489,6 +490,38 @@ static void CheckFeet(void) {
     BrowseCatalogFree(&catalog);
 }
 
+/// Every demo's music is one of the music's tracks, and the game scene's goes through its own
+/// renderer, since its audio thread steps one; the others through the browser's player.
+static void CheckMusic(void) {
+    static const struct {
+        const char *suite;
+        const char *track;
+        bool streams;
+    } WANT[] = {
+        { "game", "wimsy", true },          { "wimsy", "wimsy", false },
+        { "mandelbrot", "fractal", false }, { "julia", "fractal", false },
+        { "fluid", "fluid", false },        { "fluid-alias", "fluid", false },
+    };
+    char said[200] = "";
+    for (size_t i = 0; i < sizeof(WANT) / sizeof(WANT[0]) && said[0] == '\0'; ++i) {
+        const BrowseMusic music = BrowseMusicOf(WANT[i].suite);
+        if (music.track == NULL || strcmp(music.track, WANT[i].track) != 0 ||
+            music.streams != WANT[i].streams || MusicTrackNamed(music.track) == MUSIC_TRACKS) {
+            snprintf(said, sizeof(said), "%s plays %s%s, where %s%s", WANT[i].suite,
+                     music.track != NULL ? music.track : "none",
+                     music.streams ? " on its own renderer" : "", WANT[i].track,
+                     WANT[i].streams ? " on its own renderer" : "");
+        }
+    }
+    const BrowseMusic none = BrowseMusicOf("clear");
+    if (said[0] == '\0' && none.track != NULL) {
+        snprintf(said, sizeof(said), "clear, no demo, plays %s", none.track);
+    }
+    CHECK_TRUE(SUITE, "every demo plays one of the music's tracks, the game scene's on its own "
+               "renderer",
+               CHECK_NONE, said[0] == '\0', "%s", said);
+}
+
 static void CheckScriptRuns(void) {
     // Every mode file a script or a runner writes keeps the browser closed, and with it the
     // music and everything the browser would read; the word opens it in a detailed run only.
@@ -708,6 +741,7 @@ void RunSupportBrowse(void) {
     CheckPick();
     CheckWalk();
     CheckFeet();
+    CheckMusic();
     CheckScriptRuns();
     if (pixels == NULL) {
         static const char *const NAMES[3] = {

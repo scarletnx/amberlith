@@ -71,7 +71,7 @@ how its chords are voiced.
 | track | for | mode | tempo | groove | lead, chords, bass | voicing | drums |
 |---|---|---|---|---|---|---|---|
 | menu | the demo browser | C mixolydian | 112 | straight eighths | quarter pulse, thin pulse plucked, triangle | fifth and ninth | a kit on the beat |
-| wimsy | Wimsy's levels | F lydian | 140 | shuffled | high quarter pulse, square stabs on the offbeats, square | triad | a kit, shuffled |
+| wimsy | Wimsy's levels and the game scene | F lydian | 140 | shuffled | high quarter pulse, square stabs on the offbeats, square | triad | a kit, shuffled |
 | fractal | the Mandelbrot and Julia zooms | E phrygian | 84 | slow, long notes | soft triangle that swells, organ held, sine | third and seventh | none: the lead's echo, three quarters of a beat later, across the stereo |
 | fluid | the fluid simulation | D dorian | 125 in twelve eight | rolling triplets | saw that glides into some notes, pulse swells, triangle | second and fifth | a kit in twelve eight |
 

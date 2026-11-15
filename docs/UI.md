@@ -116,13 +116,15 @@ They start as the mode file leaves them and hold for the session.
 
 ## Music
 
-The browser alone plays music (`source/musicplay.h`). While it is open the interactive mode is on (`MusicSetInteractive`,
-`source/music.h`); it plays the track `menu` between runs, stops it while a run's suites run, so nothing it does lands in
-a case's time or beside the audio family's own renderer, and switches to a demo's track (`wimsy`, `fractal`, `fluid`)
-while the demo runs. The game scene, whose audio thread steps a renderer of its own, plays none. A track that does not
-play is said in the report's next line, with the player's reason. A run from the mode file never turns the interactive
-mode on; in a browser's run where the music played, the case that holds the demos' music to nought skips as `asked`,
-with the frames, threads and voices it made.
+The browser alone plays music (`source/musicplay.h`). While it is open the interactive mode is on
+(`MusicSetInteractive`, `source/music.h`); it plays the track `menu` between runs, stops it while a run's suites run, so
+nothing it does lands in a case's time or beside the audio family's own renderer, and switches to a demo's track
+(`wimsy`, `fractal`, `fluid`) while the demo runs. The game scene's audio thread steps a renderer of its own, so the
+browser's player closes before it and the scene streams Wimsy's track on its own renderer (`MusicStreamOpen`,
+`MusicStreamFeed` before each step), into the final mix past the submix its tone's case records, switched to silence and
+back as the pause menu's music row says. A track that does not play is said in the report's next line, with the player's
+reason. A run from the mode file never turns the interactive mode on; in a browser's run where the music played, the
+case that holds the demos' music to nought skips as `asked`, with the frames, threads and voices it made.
 
 ## A run from the mode file
 
@@ -133,8 +135,9 @@ browser beside the others. The support suite holds every mode file a script writ
 ## Adding a demo
 
 One line in `DEMOS` in `source/main.c` (a `BrowseDemo`, `source/browse.h`), as a step is one line in `STEPS`: its name
-in the list, the suite its lines report under, a sentence or two for the box beside the list, its music's track (NULL
-for none), its family and its run. The run takes a `DemoRun` (`source/demo.h`): `interactive`, the `frames` and
+in the list, the suite its lines report under, a sentence or two for the box beside the list, its family and its run.
+Its music is a line in `BrowseMusicOf` (`source/browse.c`): its track, and whether it streams it on a renderer of its
+own. The run takes a `DemoRun` (`source/demo.h`): `interactive`, the `frames` and
 `timing` the options give, `stopped()`, looked at once a frame, and `paused()`, true while the pause menu is up. It
 shows each frame with `ViewerShowImage`, which draws the HUD and brings up the pause menu; paused, it shows its last
 frame again until `paused()` is false, judges nothing, and leaves that time out of its frame times. Demos of one suite
