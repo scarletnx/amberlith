@@ -85,6 +85,9 @@ static const RunnerStep STEPS[] = {
     { "eac", RunEac, MODE_FAMILY_GRAPHICS, true, true },
     { "etc2", RunEtc2, MODE_FAMILY_GRAPHICS, true, true },
     { "bcn", RunBcn, MODE_FAMILY_GRAPHICS, true, true },
+    // After bcn, whose blocks prove each format and mode one at a time: the same formats as whole
+    // textures, as the astcimage suite after astc.
+    { "bcnimage", RunBcnImage, MODE_FAMILY_GRAPHICS, true, true },
     { "zeta", RunZeta, MODE_FAMILY_GRAPHICS, true, true },
     { "swizzle", RunSwizzle, MODE_FAMILY_GRAPHICS, true, true },
     { "texel", RunTexel, MODE_FAMILY_GRAPHICS, true, true },

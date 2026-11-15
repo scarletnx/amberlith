@@ -206,6 +206,12 @@ void RunEtc2(void);
 /// mode, the BC6H ones signed too.
 void RunBcn(void);
 
+/// Whole BCn textures: the astcimage suite's picture in every BCn format, BC7's and BC6H's modes in
+/// turn and four in sRGB, sampled texel by texel and judged against source/bcnref.c's decode,
+/// the console's interpolants exact and another GPU's bound; then a 2048x2048 BC1 and BC7 upload
+/// and the BC7 one sampled 256 times.
+void RunBcnImage(void);
+
 /// Depth textures the processor writes, Z16, ZF32 and Z24S8, sampled texel by texel, stencil
 /// included; depth targets the graphics unit clears, read by the processor in memory; and a
 /// three layer target cleared a layer at a time.
