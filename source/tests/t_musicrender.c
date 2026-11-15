@@ -24,10 +24,10 @@ static const struct {
     uint64_t frames;
     uint64_t hash;
 } RENDERED[MUSIC_TRACKS] = {
-    [MUSIC_TRACK_MENU] = { 3916800u, 0xd7c7cd95ceb60219ull },
-    [MUSIC_TRACK_WIMSY] = { 2967272u, 0xdf51f208699c0cdeull },
+    [MUSIC_TRACK_MENU] = { 3916800u, 0x87756d82aa00e3c2ull },
+    [MUSIC_TRACK_WIMSY] = { 2967272u, 0xf10d38142733c45eull },
     [MUSIC_TRACK_FRACTAL] = { 4937142u, 0x639183ef4797b8c1ull },
-    [MUSIC_TRACK_FLUID] = { 3264000u, 0xa2d30b73417d8c13ull },
+    [MUSIC_TRACK_FLUID] = { 3264000u, 0xaa0d7442d30ca5fbull },
 };
 
 // A chunk at a time, so the longest track needs no buffer of its own: 0.1 s.

@@ -112,7 +112,7 @@ const MusicPatch MUSIC_PATCHES[] = {
       2, 0, 0, 0, 0 },
     // An electric piano: a half-sine modulator, a bell's attack and a soft tail.
     { "epiano",
-      { OP(1, 28, 15, 5, 7, 6, 1, 1, 0, 0), OP(1, 6, 15, 3, 5, 6, 0, 1, 0, 0) },
+      { OP(1, 16, 15, 6, 7, 6, 1, 1, 0, 0), OP(1, 6, 15, 3, 5, 6, 0, 1, 0, 0) },
       2, 0, 0, 0, 0 },
     // An organ: the two operators added, the second an octave up, swelling in.
     { "organ",
@@ -124,16 +124,16 @@ const MusicPatch MUSIC_PATCHES[] = {
       6, 0, 0, 0, 0 },
     // A square lead: the OPL3's square carrier under a modulator an octave up.
     { "chip",
-      { OP(2, 22, 15, 3, 4, 6, 0, 1, 0, 0), OP(1, 2, 15, 2, 2, 6, 6, 1, 0, 0) },
+      { OP(2, 30, 15, 3, 4, 6, 0, 1, 0, 0), OP(1, 2, 15, 2, 2, 6, 6, 1, 0, 0) },
       3, 0, 0, 0, 0 },
     // A flute: a breath of modulation, a soft attack, vibrato.
     { "flute",
       { OP(2, 46, 9, 1, 2, 6, 0, 1, 1, 0), OP(1, 0, 10, 1, 1, 6, 0, 1, 1, 0) },
       0, 0, 0, 0, 0 },
-    // A saw lead: the modulator fed back hard.
+    // A saw lead: the modulator fed back, short of the noise the chip's strongest feedback makes.
     { "saw",
-      { OP(1, 10, 13, 2, 3, 6, 0, 1, 0, 0), OP(1, 0, 13, 1, 1, 6, 0, 1, 0, 0) },
-      7, 0, 0, 0, 0 },
+      { OP(1, 18, 13, 2, 3, 6, 0, 1, 0, 0), OP(1, 0, 13, 1, 1, 6, 0, 1, 0, 0) },
+      5, 0, 0, 0, 0 },
     // A bell: a modulator at 3.5 times the carrier, both dying away.
     { "bell",
       { OP(7, 26, 15, 5, 10, 5, 0, 0, 0, 0), OP(2, 6, 15, 4, 15, 5, 0, 0, 0, 0) },
