@@ -14,7 +14,8 @@ const uint8_t WIMSY_CLEAR[4] = { 27u, 27u, 31u, 255u };
 
 const char *WimsyLevelName(uint32_t level) {
     static const char *const NAMES[WIMSY_LEVELS] = { "sprites", "one lit model",
-                                                     "a scene near and far" };
+                                                     "a scene near and far", "a heavy frame",
+                                                     "a heavy frame of 8K" };
     return level < WIMSY_LEVELS ? NAMES[level] : "no level";
 }
 
@@ -208,6 +209,10 @@ static void InstanceFacing(WimsyInstance *out, const float rows[3][3], float awa
 #define SCENE_MODELS 7u
 static const float SCENE_MODEL_Z[SCENE_MODELS] = { 0.0f,   -6.0f,   -14.0f, -30.0f,
                                                    -60.0f, -110.0f, -180.0f };
+/// Levels 3 and 4 add a crowd.
+#define CROWD_MODELS 160u
+#define CROWD_COLUMNS 8u
+_Static_assert(SCENE_MODELS + CROWD_MODELS <= WIMSY_INSTANCES_MAX, "the crowd fits");
 #define SCENE_MODEL_X 3.25f
 #define SCENE_MODEL_Y 1.125f
 /// The floor, from its edge nearest the camera's first place to its far one, in rows this deep.
@@ -221,7 +226,7 @@ static const float SCENE_MODEL_Z[SCENE_MODELS] = { 0.0f,   -6.0f,   -14.0f, -30.
 
 void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[16]) {
     memset(to_clip, 0, 16u * sizeof(float));
-    if (level != 2u) {
+    if (level < 2u || level >= WIMSY_LEVELS) {
         return;
     }
     const float along = (float)WimsyPathAt(frame, frames) / 65536.0f;
@@ -268,16 +273,27 @@ void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[
 
 /// Level 2's models: each stands on the floor at its place down the lane, left and right of it by
 /// turns, turning a two hundred and fortieth of a turn a frame from a seventh of a turn apart.
-static uint32_t SceneInstances(uint32_t frame, uint32_t frames, WimsyInstance *out) {
+static uint32_t SceneInstances(uint32_t level, uint32_t frame, uint32_t frames,
+                               WimsyInstance *out) {
     float view[16];
-    WimsyViewOf(2u, frame, frames, view);
-    for (uint32_t i = 0; i < SCENE_MODELS; ++i) {
+    WimsyViewOf(level, frame, frames, view);
+    const uint32_t count = level >= 3u ? SCENE_MODELS + CROWD_MODELS : SCENE_MODELS;
+    for (uint32_t i = 0; i < count; ++i) {
         int32_t s = 0, c = 0;
         WimsySinCos(frame * ALONE_TURN + i * 9362u, &s, &c);
+        float x = i % 2u == 0u ? -SCENE_MODEL_X : SCENE_MODEL_X;
+        float z = i < SCENE_MODELS ? SCENE_MODEL_Z[i] : 0.0f;
+        if (i >= SCENE_MODELS) {
+            // The crowd: twenty rows of eight, four each side of the lane, nine units apart.
+            const uint32_t member = i - SCENE_MODELS;
+            const uint32_t column = member % CROWD_COLUMNS;
+            x = (6.0f + 3.0f * (float)(column / 2u)) * (column % 2u == 0u ? -1.0f : 1.0f);
+            z = -3.0f - 9.0f * (float)(member / CROWD_COLUMNS);
+        }
         const float rows[3][4] = {
-            { FromQ30(c), 0.0f, FromQ30(s), i % 2u == 0u ? -SCENE_MODEL_X : SCENE_MODEL_X },
+            { FromQ30(c), 0.0f, FromQ30(s), x },
             { 0.0f, 1.0f, 0.0f, SCENE_MODEL_Y },
-            { -FromQ30(s), 0.0f, FromQ30(c), SCENE_MODEL_Z[i] },
+            { -FromQ30(s), 0.0f, FromQ30(c), z },
         };
         WimsyInstance *const instance = &out[i];
         memset(instance, 0, sizeof(*instance));
@@ -296,8 +312,14 @@ static uint32_t SceneInstances(uint32_t frame, uint32_t frames, WimsyInstance *o
             }
         }
         instance->tint[0] = instance->tint[1] = instance->tint[2] = instance->tint[3] = 1.0f;
+        if (i >= SCENE_MODELS) {
+            // Each of the crowd its own shade, so one drawn with another's uniform buffer shows.
+            instance->tint[0] = 1.0f - 0.125f * (float)(i % 3u);
+            instance->tint[1] = 1.0f - 0.125f * (float)(i % 4u);
+            instance->tint[2] = 1.0f - 0.125f * (float)(i % 5u);
+        }
     }
-    return SCENE_MODELS;
+    return count;
 }
 
 static WimsyWorldVertex WorldCorner(float x, float y, float z, float u, float v,
@@ -350,7 +372,7 @@ static void StandingQuad(WimsyWorldVertex *out, uint32_t *count, float x0, float
 uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vertex_count,
                       WimsyWorldDraw *draws) {
     *vertex_count = 0;
-    if (level != 2u) {
+    if (level < 2u || level >= WIMSY_LEVELS) {
         return 0;
     }
     static const uint8_t WHITE[3] = { 255, 255, 255 };
@@ -413,11 +435,38 @@ uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vert
 }
 
 uint32_t WimsyTextureSide(WimsyTexture texture) {
-    return texture == WIMSY_TEXTURE_FLOOR ? 2048u : 1024u;
+    static const uint32_t SIDES[WIMSY_TEXTURES] = { 2048u, 1024u, 4096u, 8192u };
+    return texture < WIMSY_TEXTURES ? SIDES[texture] : 1u;
 }
 
 uint32_t WimsyTextureLevels(WimsyTexture texture) {
-    return texture == WIMSY_TEXTURE_FLOOR ? 12u : 11u;
+    static const uint32_t LEVELS[WIMSY_TEXTURES] = { 12u, 11u, 13u, 14u };
+    return texture < WIMSY_TEXTURES ? LEVELS[texture] : 1u;
+}
+
+WimsyTexture WimsyFloorTexture(uint32_t level) {
+    return level == 3u ? WIMSY_TEXTURE_FLOOR_4K : level == 4u ? WIMSY_TEXTURE_FLOOR_8K
+                                                             : WIMSY_TEXTURE_FLOOR;
+}
+
+uint32_t WimsyTextureBlock(WimsyTexture texture) {
+    return texture == WIMSY_TEXTURE_FLOOR_4K || texture == WIMSY_TEXTURE_FLOOR_8K ? 8u : 0u;
+}
+
+void WimsyTextureBlockAt(WimsyTexture texture, uint32_t level, uint32_t bx, uint32_t by,
+                         uint8_t out[16]) {
+    uint8_t colour[4];
+    WimsyTexel(texture, level, bx * 8u, by * 8u, colour);
+    // A void extent of the LDR profile (the ASTC chapter of the Khronos Data Format
+    // Specification, 23.17): nine bits of 0x1FC, the dynamic range bit clear, two reserved ones
+    // set, four extent coordinates of thirteen ones for no extent, then the colour, sixteen bits
+    // a channel, each byte twice so every way of making eight bits of it gives the byte back.
+    static const uint8_t HEAD[8] = { 0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    memcpy(out, HEAD, 8u);
+    for (uint32_t k = 0; k < 4u; ++k) {
+        out[8u + k * 2u] = colour[k];
+        out[9u + k * 2u] = colour[k];
+    }
 }
 
 void WimsyTexel(WimsyTexture texture, uint32_t level, uint32_t x, uint32_t y, uint8_t out[4]) {
@@ -452,8 +501,8 @@ void WimsyTexel(WimsyTexture texture, uint32_t level, uint32_t x, uint32_t y, ui
 }
 
 uint32_t WimsyInstancesOf(uint32_t level, uint32_t frame, uint32_t frames, WimsyInstance *out) {
-    if (level == 2u) {
-        return SceneInstances(frame, frames, out);
+    if (level >= 2u && level < WIMSY_LEVELS) {
+        return SceneInstances(level, frame, frames, out);
     }
     if (level != 1u) {
         return 0;
@@ -799,8 +848,9 @@ static bool Coordinates(const Triangle *t, WimsyTexture texture, double x, doubl
 /// what any machine the specification allows may give.
 static void ShadeTexture(const Scene *scene, const Triangle *t, double x, double y, double low[3],
                          double high[3]) {
-    const WimsyTexture texture = t->material == WIMSY_MATERIAL_FLOOR ? WIMSY_TEXTURE_FLOOR
-                                                                    : WIMSY_TEXTURE_LANE;
+    const WimsyTexture texture = t->material == WIMSY_MATERIAL_FLOOR
+                                     ? WimsyFloorTexture(scene->level)
+                                     : WIMSY_TEXTURE_LANE;
     const double last = (double)(WimsyTextureLevels(texture) - 1u);
     double u = 0.0, v = 0.0, change[4];
     if (!Coordinates(t, texture, x, y, &u, &v, change)) {
@@ -851,6 +901,12 @@ static void ShadeTexture(const Scene *scene, const Triangle *t, double x, double
     to = to < 0.0 ? 0.0 : to > last ? last : to;
     if (texture != WIMSY_TEXTURE_LANE) {
         TexelRange(texture, u, v, from, to, low, high);
+        if (WimsyTextureBlock(texture) != 0u) {
+            for (uint32_t k = 0; k < 3u; ++k) {
+                low[k] = low[k] > WIMSY_ASTC_MARGIN ? low[k] - WIMSY_ASTC_MARGIN : 0.0;
+                high[k] = high[k] < 255.0 - WIMSY_ASTC_MARGIN ? high[k] + WIMSY_ASTC_MARGIN : 255.0;
+            }
+        }
         return;
     }
     // The lane's levels are each one colour, so a level between two is that far from one to the
@@ -1090,7 +1146,8 @@ static void PassRange(const Scene *scene, const Triangle *t, uint32_t x0, uint32
 /// centre, or the last one's when the machine has no depth test.
 static void PassDraw(const Scene *scene, const Triangle *t, uint32_t x0, uint32_t y0) {
     Span span;
-    if ((scene->machine.cull && !t->front) || !SpanOf(t, (double)x0, (double)y0, &span)) {
+    if ((scene->machine.cull && t->material == WIMSY_MATERIAL_MODEL && !t->front) ||
+        !SpanOf(t, (double)x0, (double)y0, &span)) {
         return;
     }
     for (uint32_t py = span.top; py <= span.bottom; ++py) {
