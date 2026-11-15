@@ -48,6 +48,21 @@
   widened with 0x80 below it (`astcenc_color_unquantize.cpp`; its comment says alpha is
   replicated, its code does not, and its decodes of the picture agree with the code).
 
+- **ScarletNX's BCn decoder test**, https://github.com/scarletnx/ScarletNX (GPL-3.0-or-later):
+  `source/bcnref.c`'s decoder is its `tests/support/bcn.c` written again in this program's C, the
+  BPTC tables and BC6H's mode fields as it has them, and NVIDIA's interpolants for BC1 to BC5 as it
+  measured them on an NVIDIA card.
+- **etcpak**, https://github.com/wolfpld/etcpak (BSD-3-Clause), through K0lb3's Python binding,
+  https://github.com/K0lb3/etcpak (MIT), 0.9.15, with Rich Geldreich's bc7enc inside it (MIT or
+  public domain): `source/bcnimages.c` carries the BC1, BC3, BC4, BC5 and BC7 blocks it made of the
+  astcimage suite's picture. None of its code is here.
+- **Pillow**, https://python-pillow.org (MIT-CMU), 12.3.0: `source/bcnimages.c` carries the BC2
+  blocks its DDS writer made of the picture and hashes of what its BCn decoder makes of every BC1
+  to BC5 and BC7 block there; `source/tex8kref.c`'s BC1 and BC7 blocks are held to its decode too.
+- **bcdec**, https://github.com/iOrange/bcdec (MIT or public domain, Sergii Kudlai), 0.985 through
+  imagecodecs 2026.11.11 (BSD-3-Clause): `source/bcnimages.c` carries hashes of the halves it
+  decodes every BC6H block there to, unsigned and signed.
+
 - **libvpx's test vectors**, https://storage.googleapis.com/downloads.webmproject.org/test_data/libvpx/
   (BSD-3-Clause, copyright 2010 The WebM Project authors): `source/vp9jobs.c` carries the frames of
   six of them (`vp90-2-03-deltaq`, `vp90-2-02-size-66x66`, `vp90-2-07-frame_parallel`,
