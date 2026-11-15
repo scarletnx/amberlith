@@ -13,8 +13,9 @@
 /// lookup itself, which every build has whole.
 ///
 /// Three lists, by what each build of the layer does with them:
-/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE and NVN_LAYER_PROCS_POOL, parts of it
-///   written apart) and NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
+/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL and
+///   NVN_LAYER_PROCS_SYNC, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231: the functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
@@ -69,6 +70,48 @@
     X(NVNmemoryPoolFlags, nvnMemoryPoolGetFlags, (const NVNmemoryPool *pool))                     \
     X(void, nvnMemoryPoolInvalidateMappedRange,                                                   \
       (const NVNmemoryPool *pool, ptrdiff_t offset, size_t size))
+
+// Syncs and what fences and waits for them, events as the processor signals them, a queue's
+// error and what a queue builder answers of itself.
+#define NVN_LAYER_PROCS_SYNC(X)                                                                   \
+    X(NVNboolean, nvnSyncInitialize, (NVNsync * sync, NVNdevice *device))                         \
+    X(void, nvnSyncFinalize, (NVNsync * sync))                                                    \
+    X(NVNsyncWaitResult, nvnSyncWait, (const NVNsync *sync, uint64_t timeout))                    \
+    X(void, nvnQueueFenceSync,                                                                    \
+      (NVNqueue * queue, NVNsync *sync, NVNsyncCondition condition, int flags))                   \
+    X(NVNboolean, nvnQueueWaitSync, (NVNqueue * queue, const NVNsync *sync))                      \
+    X(void, nvnCommandBufferFenceSync,                                                            \
+      (NVNcommandBuffer * cmd, NVNsync *sync, NVNsyncCondition condition, int flags))             \
+    X(void, nvnCommandBufferWaitSync, (NVNcommandBuffer * cmd, const NVNsync *sync))              \
+    X(void, nvnEventBuilderSetDefaults, (NVNeventBuilder * builder))                              \
+    X(void, nvnEventBuilderSetStorage,                                                            \
+      (NVNeventBuilder * builder, const NVNmemoryPool *pool, ptrdiff_t offset))                   \
+    X(const NVNmemoryPool *, nvnEventBuilderGetStorage,                                           \
+      (const NVNeventBuilder *builder, ptrdiff_t *offset))                                        \
+    X(const NVNmemoryPool *, nvnEventBuilderGetMemoryPool, (const NVNeventBuilder *builder))      \
+    X(ptrdiff_t, nvnEventBuilderGetMemoryOffset, (const NVNeventBuilder *builder))                \
+    X(NVNboolean, nvnEventInitialize, (NVNevent * event, const NVNeventBuilder *builder))         \
+    X(void, nvnEventFinalize, (NVNevent * event))                                                 \
+    X(uint32_t, nvnEventGetValue, (const NVNevent *event))                                        \
+    X(void, nvnEventSignal, (NVNevent * event, NVNeventSignalMode mode, uint32_t value))          \
+    X(const NVNmemoryPool *, nvnEventGetMemoryPool, (const NVNevent *event))                      \
+    X(ptrdiff_t, nvnEventGetMemoryOffset, (const NVNevent *event))                                \
+    X(NVNqueueGetErrorResult, nvnQueueGetError, (NVNqueue * queue, NVNqueueErrorInfo *info))      \
+    X(void, nvnQueueBuilderSetFlags, (NVNqueueBuilder * builder, int flags))                      \
+    X(void, nvnQueueBuilderSetCommandMemorySize, (NVNqueueBuilder * builder, size_t size))        \
+    X(void, nvnQueueBuilderSetComputeMemorySize, (NVNqueueBuilder * builder, size_t size))        \
+    X(void, nvnQueueBuilderSetControlMemorySize, (NVNqueueBuilder * builder, size_t size))        \
+    X(void, nvnQueueBuilderSetCommandFlushThreshold, (NVNqueueBuilder * builder, size_t size))    \
+    X(NVNdevice *, nvnQueueBuilderGetDevice, (const NVNqueueBuilder *builder))                    \
+    X(int, nvnQueueBuilderGetFlags, (const NVNqueueBuilder *builder))                             \
+    X(NVNboolean, nvnQueueBuilderGetCommandMemorySize,                                            \
+      (const NVNqueueBuilder *builder, int *size))                                                \
+    X(NVNboolean, nvnQueueBuilderGetComputeMemorySize,                                            \
+      (const NVNqueueBuilder *builder, int *size))                                                \
+    X(NVNboolean, nvnQueueBuilderGetControlMemorySize,                                            \
+      (const NVNqueueBuilder *builder, int *size))                                                \
+    X(NVNboolean, nvnQueueBuilderGetCommandFlushThreshold,                                        \
+      (const NVNqueueBuilder *builder, int *size))
 
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
@@ -154,7 +197,8 @@
     X(NVNboolean, nvnWindowInitialize, (NVNwindow * window, const NVNwindowBuilder *builder))     \
     X(void, nvnWindowFinalize, (NVNwindow * window))                                              \
     NVN_LAYER_PROCS_TEXTURE(X)                                                                    \
-    NVN_LAYER_PROCS_POOL(X)
+    NVN_LAYER_PROCS_POOL(X)                                                                       \
+    NVN_LAYER_PROCS_SYNC(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
