@@ -567,6 +567,92 @@ static void CheckAPixelNobodyLookedAt(void) {
                diff.bytes[hole - 3u], diff.bytes[hole - 2u], diff.bytes[hole - 1u]);
 }
 
+// A picture wider than the module's scratch holds, and of more pixels than its diff's does, so
+// the diff is written in two loads.
+#define OWN_WIDTH 130u
+#define OWN_HEIGHT 130u
+#define OWN_PIXELS (OWN_WIDTH * OWN_HEIGHT)
+_Static_assert(OWN_WIDTH > PICTURE_MAX_DIMENSION &&
+                   OWN_PIXELS > PICTURE_MAX_DIMENSION * PICTURE_MAX_DIMENSION,
+               "the picture is larger than the scratch every way");
+static uint8_t own_got[OWN_PIXELS * 4u];
+static uint8_t own_expected[OWN_PIXELS * 4u];
+static uint8_t own_verdicts[OWN_PIXELS];
+static uint8_t own_file[OWN_PIXELS * 4u + 128u];
+
+/// Whether the PAM at @p relative is OWN_WIDTH by OWN_HEIGHT of @p depth bytes a pixel holding
+/// exactly @p want, or, with @p want NULL, hands its pixels back in @p pixels.
+static bool OwnFileHolds(const char *relative, unsigned depth, const uint8_t *want,
+                         const uint8_t **pixels) {
+    char full[FULL_PATH_MAX];
+    if (!FullPath(full, sizeof(full), relative)) {
+        return false;
+    }
+    char header[96];
+    const int header_length =
+        snprintf(header, sizeof(header),
+                 "P7\nWIDTH %u\nHEIGHT %u\nDEPTH %u\nMAXVAL 255\nTUPLTYPE %s\nENDHDR\n",
+                 (unsigned)OWN_WIDTH, (unsigned)OWN_HEIGHT, depth, depth == 4u ? "RGB_ALPHA" : "RGB");
+    const size_t payload = (size_t)OWN_PIXELS * depth;
+    const size_t read = ReadWholeFile(full, own_file, sizeof(own_file));
+    if (read != (size_t)header_length + payload ||
+        memcmp(own_file, header, (size_t)header_length) != 0) {
+        return false;
+    }
+    if (pixels != NULL) {
+        *pixels = own_file + header_length;
+    }
+    return want == NULL || memcmp(own_file + header_length, want, payload) == 0;
+}
+
+/// A picture the judge keeps the expected pixels and verdicts of, as a suite with a target larger
+/// than the scratch does: its three files hold every pixel, and the detailed mode keeps none of it.
+static void CheckAPictureTheJudgeKeeps(void) {
+    static const char *const NAME = "a picture the judge keeps itself is written whole, "
+                                    "whatever its size, and not kept for the screens";
+    for (uint32_t i = 0; i < OWN_PIXELS; ++i) {
+        for (uint32_t channel = 0; channel < 4u; ++channel) {
+            own_got[i * 4u + channel] = (uint8_t)(i * 7u + channel * 31u);
+            own_expected[i * 4u + channel] = (uint8_t)(i * 5u + channel);
+        }
+        own_verdicts[i] = (uint8_t)PICTURE_MATCHED;
+    }
+    // One wrong pixel past what the diff's scratch holds in one load, and the last one unjudged.
+    const uint32_t first_load = PICTURE_MAX_DIMENSION * PICTURE_MAX_DIMENSION;
+    const uint32_t wrong_at = first_load + 116u;
+    own_verdicts[wrong_at] = (uint8_t)PICTURE_WRONG;
+    own_verdicts[OWN_PIXELS - 1u] = (uint8_t)PICTURE_UNJUDGED;
+    const size_t kept_before = PictureCount();
+    PictureRetain(true);
+    const bool opened = PictureBeginOwn(OWN_WIDTH, OWN_HEIGHT, PICTURE_COLOUR, own_got,
+                                        own_expected, own_verdicts) != NULL;
+    PicturePaths paths;
+    PictureFinish(SUITE, "a picture the judge keeps", "none", true, "", &paths);
+    PictureRetain(false);
+    Remember(&paths);
+    const bool kept_none = PictureCount() == kept_before;
+    const bool refused =
+        PictureBeginOwn(OWN_WIDTH, OWN_HEIGHT, PICTURE_COLOUR, own_got, NULL, own_verdicts) ==
+            NULL &&
+        PictureBeginOwn(OWN_WIDTH, OWN_HEIGHT, PICTURE_COLOUR, own_got, own_expected, NULL) == NULL &&
+        PictureBeginOwn(OWN_WIDTH, 0u, PICTURE_COLOUR, own_got, own_expected, own_verdicts) == NULL;
+    const bool drawn = OwnFileHolds(paths.image, 4u, own_got, NULL);
+    const bool expected = OwnFileHolds(paths.expected, 4u, own_expected, NULL);
+    const uint8_t *diff = NULL;
+    bool judged = OwnFileHolds(paths.diff, 3u, NULL, &diff);
+    for (uint32_t i = 0; judged && i < OWN_PIXELS; ++i) {
+        uint8_t colour[3];
+        PictureDiffColour(own_verdicts[i], colour);
+        judged = memcmp(diff + (size_t)i * 3u, colour, 3u) == 0;
+    }
+    CHECK_TRUE(SUITE, NAME, CHECK_NONE,
+               opened && kept_none && refused && drawn && expected && judged,
+               "opened %d, kept for the screens %d, a missing buffer refused %d; the drawn file "
+               "right %d (\"%s\"), the expected %d, the diff %d with its wrong pixel at %u",
+               (int)opened, (int)!kept_none, (int)refused, (int)drawn, paths.image, (int)expected,
+               (int)judged, (unsigned)wrong_at);
+}
+
 static void CheckBitsAndCollisions(void) {
     Picture *picture = BuildFixture(PICTURE_BITS);
     PicturePaths paths;
@@ -1996,6 +2082,7 @@ void RunSupport(void) {
     }
     CheckTheLongestRoot();
     CheckAPixelNobodyLookedAt();
+    CheckAPictureTheJudgeKeeps();
     CheckBitsAndCollisions();
     CheckReportLine();
     CheckLaunchAndMode();

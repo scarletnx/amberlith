@@ -34,5 +34,9 @@ The diff is the judge's verdict, not a comparison of two images: dark grey accep
 (the band an edge runs through). Magenta is a pixel no comparison looked at: every pixel starts magenta, and any left
 is a bug in this program. A pixel within its budget of units in the last place is not a difference here.
 
+A target larger than 128 by 128 gets no picture, unless its judge keeps the expected pixels and the
+verdicts itself (`PictureBeginOwn`): such a picture is written whole and never kept for the detailed mode's
+screens.
+
 The support suite writes a few 8x4 fixtures to `sdmc:/edenprobe/support-check/` while it runs and takes them away;
 a run that leaves the folder has failed that case.

@@ -7,11 +7,11 @@ family reports can be believed without them.
   apart and a zero budget rejects them; that an absolute budget is the same on both sides of the
   expected value; that a NaN equals nothing, itself included, whatever the budget; and that three
   units in the last place reach six representable values below a power of two and three above it.
-- **support**, two hundred and eleven cases, no hardware involved: what the program does
+- **support**, two hundred and twelve cases, no hardware involved: what the program does
   around a verdict rather than to reach one. First the way the run asks the services a machine may
   answer in a game's own code, by IPC or through the SDK's functions, and what answered them (see
   [The hooks mode](../Hooks.md)); then the pictures a failing case leaves and the names they
-  get, the detailed mode's store, screens and navigation, the start screen, the screen that asks
+  get, one larger than the scratch among them, the detailed mode's store, screens and navigation, the start screen, the screen that asks
   whether to go on with a run, the running screen, the listening screen, the pad screen and the
   touch suite's, a tap on each of them and the touch bar's boxes, the start screen's line on nvn's
   window case, the mode file and its words, `all` and `hooks` among them, the

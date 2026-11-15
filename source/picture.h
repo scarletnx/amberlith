@@ -121,6 +121,14 @@ void PictureRetain(bool on);
 /// to and none can leak onto the next case.
 Picture *PictureBegin(uint32_t width, uint32_t height, PictureFormat format, const uint8_t *got);
 
+/// Opens a picture of any size whose expected pixels and verdicts the judge keeps itself:
+/// @p expected, four bytes a pixel, and @p verdicts, a PictureVerdict a pixel, both the judge's
+/// to fill before the case reports and to keep until it has. For a target larger than
+/// PICTURE_MAX_DIMENSION, which the scratch here does not hold: it is written like any other, and
+/// never kept for the detailed mode, whose screens show the smaller ones. NULL when a pointer is.
+Picture *PictureBeginOwn(uint32_t width, uint32_t height, PictureFormat format,
+                         const uint8_t *got, uint8_t *expected, uint8_t *verdicts);
+
 /// Records what the judge decided about one pixel, and what it expected there. @p expected may
 /// be NULL for a pixel nobody judged, which stores the pixel the machine drew.
 static inline void PictureSet(Picture *picture, uint32_t x, uint32_t y,

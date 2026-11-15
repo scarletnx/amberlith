@@ -246,12 +246,25 @@ void PictureDiffColour(uint8_t verdict, uint8_t out[3]) {
            3u);
 }
 
-/// Turns the judge's verdicts into the three colours a reader can see.
-static void BuildDiff(const Picture *picture) {
-    const size_t count = (size_t)picture->width * picture->height;
-    for (size_t i = 0; i < count; ++i) {
-        PictureDiffColour(picture->verdict[i], diff_scratch + i * 3u);
+/// Writes the judge's verdicts as the three colours a reader can see, a scratch's worth at a
+/// time, so a picture of any size goes through the one static scratch.
+static bool WriteDiff(const char *path, const Picture *picture) {
+    FILE *file = fopen(path, "wb");
+    if (file == NULL) {
+        return false;
     }
+    fprintf(file, "P7\nWIDTH %u\nHEIGHT %u\nDEPTH 3\nMAXVAL 255\nTUPLTYPE RGB\nENDHDR\n",
+            (unsigned)picture->width, (unsigned)picture->height);
+    const size_t count = (size_t)picture->width * picture->height;
+    bool written = true;
+    for (size_t at = 0; at < count && written; at += MAX_PIXELS) {
+        const size_t piece = count - at < MAX_PIXELS ? count - at : MAX_PIXELS;
+        for (size_t i = 0; i < piece; ++i) {
+            PictureDiffColour(picture->verdict[at + i], diff_scratch + i * 3u);
+        }
+        written = fwrite(diff_scratch, 3u, piece, file) == piece;
+    }
+    return fclose(file) == 0 && written;
 }
 
 static void WriteFiles(const Picture *picture, const char *suite, const char *name,
@@ -292,10 +305,9 @@ static void WriteFiles(const Picture *picture, const char *suite, const char *na
         paths->expected[0] = '\0';
     }
 
-    BuildDiff(picture);
     snprintf(paths->diff, sizeof(paths->diff), "images/%s/%s-diff.pam", suite_stem, stem);
     snprintf(full, sizeof(full), "%s/%s", root, paths->diff);
-    if (!WritePam(full, picture->width, picture->height, 3, "RGB", diff_scratch)) {
+    if (!WriteDiff(full, picture)) {
         paths->diff[0] = '\0';
     }
 
@@ -317,7 +329,9 @@ static void Retain(const Picture *picture, const char *suite, const char *name, 
                    bool passed, const char *detail) {
     const size_t pixels = (size_t)picture->width * picture->height;
     const size_t bytes = pixels * 9u;
-    if (record_count >= PICTURE_MAX_RECORDS || retained_bytes + bytes > MAX_RETAINED_BYTES) {
+    // A picture the judge keeps itself is larger than the screens show: written, never kept.
+    if (picture->width > PICTURE_MAX_DIMENSION || picture->height > PICTURE_MAX_DIMENSION ||
+        record_count >= PICTURE_MAX_RECORDS || retained_bytes + bytes > MAX_RETAINED_BYTES) {
         return;
     }
     if (records == NULL) {
@@ -374,6 +388,21 @@ Picture *PictureBegin(uint32_t width, uint32_t height, PictureFormat format,
     // written is one no compare loop reached, and it says so in a colour nothing else uses.
     memset(verdict_scratch, PICTURE_UNSET, (size_t)width * height);
     memset(expected_scratch, 0, (size_t)width * height * 4u);
+    return &current;
+}
+
+Picture *PictureBeginOwn(uint32_t width, uint32_t height, PictureFormat format,
+                         const uint8_t *got, uint8_t *expected, uint8_t *verdicts) {
+    if (got == NULL || expected == NULL || verdicts == NULL || width == 0u || height == 0u) {
+        return NULL;
+    }
+    current.width = width;
+    current.height = height;
+    current.format = format;
+    current.got = got;
+    current.expected = expected;
+    current.verdict = verdicts;
+    current.open = true;
     return &current;
 }
 
