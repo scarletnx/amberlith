@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "coverageref.h"
+#include "fontvga.h"
 #include "wimsymesh.h"
 #include "wimsyref.h"
 
@@ -233,19 +234,94 @@ void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[
         return;
     }
     const float along = (float)WimsyPathAt(frame, frames) / 65536.0f;
-    const float eye[3] = { 0.0f, 1.625f + 5.0f * along * along, 6.0f + 30.0f * along * along };
-    const float target[3] = { 0.0f, 0.75f, -10.0f - 20.0f * along };
+    float eye[3], ahead[3];
+    if (level >= 3u) {
+        WimsyWalkAt(along, eye, ahead);
+    } else {
+        eye[0] = 0.0f;
+        eye[1] = 1.625f + 5.0f * along * along;
+        eye[2] = 6.0f + 30.0f * along * along;
+        const float target[3] = { 0.0f, 0.75f, -10.0f - 20.0f * along };
+        float length = 0.0f;
+        for (uint32_t k = 0; k < 3u; ++k) {
+            ahead[k] = target[k] - eye[k];
+            length += ahead[k] * ahead[k];
+        }
+        length = sqrtf(length);
+        for (uint32_t k = 0; k < 3u; ++k) {
+            ahead[k] /= length;
+        }
+    }
+    WimsyViewFrom(eye, ahead, to_clip);
+}
+
+void WimsyLookAt(uint32_t heading, int32_t pitch, float ahead[3]) {
+    int32_t sine = 0, cosine = 0, rise = 0, level = 0;
+    WimsySinCos(heading & 0xFFFFu, &sine, &cosine);
+    WimsySinCos((uint32_t)pitch & 0xFFFFu, &rise, &level);
+    ahead[0] = -FromQ30(sine) * FromQ30(level);
+    ahead[1] = FromQ30(rise);
+    ahead[2] = -FromQ30(cosine) * FromQ30(level);
+}
+
+void WimsyWalkAt(float along, float eye[3], float ahead[3]) {
+    // The walk's legs: where each ends, of the run's length, and what the camera does in it.
+    static const float LEG[8] = { 0.15f, 0.40f, 0.45f, 0.62f, 0.66f, 0.90f, 1.0f, 2.0f };
+    uint32_t leg = 0;
+    while (along >= LEG[leg]) {
+        ++leg;
+    }
+    const float from = leg == 0u ? 0.0f : LEG[leg - 1u];
+    const float part = leg >= 7u ? 1.0f : (along - from) / (LEG[leg] - from);
+    // A turn is 65536; a 360th of it is 182 and a bit.
+    const float degree = 65536.0f / 360.0f;
+    float heading = 0.0f, pitch = 0.0f;
+    eye[0] = 0.0f;
+    eye[1] = 4.5f;
+    eye[2] = -28.0f;
+    switch (leg) {
+    case 0u:
+        // Down the lane between the grass, rising to the screens' height, turning to the left.
+        eye[1] = 1.625f + 2.875f * part;
+        eye[2] = 6.0f - 34.0f * part;
+        heading = 30.0f * part * part;
+        pitch = -6.0f * (1.0f - part);
+        break;
+    case 1u:
+        // Along the left wall, the compute textures, from its far end to its near one.
+        heading = 30.0f + 120.0f * part;
+        break;
+    case 2u:
+        // Round by the way it came.
+        heading = 150.0f + 60.0f * part;
+        break;
+    case 3u:
+        // Along the right wall, the chains and the loads, from its near end to its far one.
+        heading = 210.0f + 120.0f * part;
+        break;
+    case 4u:
+        heading = 330.0f + 30.0f * part;
+        break;
+    case 5u:
+        // Down the lane again, lower, into the smoke and through it.
+        eye[1] = 4.5f - 2.0f * part;
+        eye[2] = -28.0f - 67.0f * part;
+        break;
+    default:
+        // Past the smoke it rises and turns round to look back through it at the whole scene.
+        eye[1] = 2.5f + 5.5f * part;
+        eye[2] = -95.0f;
+        heading = 180.0f * part;
+        pitch = -8.0f * part;
+        break;
+    }
+    WimsyLookAt((uint32_t)(heading * degree + 0.5f), (int32_t)(pitch * degree - 0.5f), ahead);
+}
+
+void WimsyViewFrom(const float eye[3], const float ahead[3], float to_clip[16]) {
+    memset(to_clip, 0, 16u * sizeof(float));
     // The camera's own axes in the world: where it looks, its right and its up.
-    float ahead[3], right[3], up[3];
-    float length = 0.0f;
-    for (uint32_t k = 0; k < 3u; ++k) {
-        ahead[k] = target[k] - eye[k];
-        length += ahead[k] * ahead[k];
-    }
-    length = sqrtf(length);
-    for (uint32_t k = 0; k < 3u; ++k) {
-        ahead[k] /= length;
-    }
+    float right[3], up[3];
     // It never looks along the world's up, so its right is level: ahead cross (0, 1, 0).
     const float level_length = sqrtf(ahead[0] * ahead[0] + ahead[2] * ahead[2]);
     right[0] = -ahead[2] / level_length;
@@ -471,12 +547,52 @@ static void StandingQuad(WimsyWorldVertex *out, uint32_t *count, float x0, float
     WorldQuad(out, count, corner);
 }
 
+/// The walls stand an eighth of a unit inside the floor's edges, from its near end 64 units down
+/// it, 7 units tall. A texture's screen is 2 units square with its top 5.5 units up, a texture
+/// every 3.25 units from 2 units down the wall; its plaque is half a unit tall under it.
+#define WALL_X 17.875f
+#define WALL_NEAR 2.0f
+#define WALL_LENGTH 64.0f
+#define WALL_HEIGHT 7.0f
+#define SCREEN_GAP 0.015625f
+#define SCREEN_FIRST (-2.0f)
+#define SCREEN_STEP 3.25f
+#define SCREEN_SIDE 2.0f
+#define SCREEN_TOP 5.5f
+#define PLAQUE_TOP 3.375f
+#define PLAQUE_HEIGHT 0.5f
+
+/// Whether the plaques are drawn.
+static bool legend_asked = true;
+
+/// A quad on wall @p side (0 the left, at -@p x, 1 the right, at +@p x) as someone in the lane
+/// reads it: from @p start down the lane, @p width wide, from @p top down to @p bottom, showing
+/// its texture from (part[0], part[1]) at its top left to (part[2], part[3]); no texture when
+/// @p part is NULL. On the left wall a reader's right is down the lane, on the right wall up it.
+static void WallQuad(WimsyWorldVertex *out, uint32_t *count, uint32_t side, float x, float start,
+                     float width, float top, float bottom, const float part[4],
+                     const uint8_t colour[3]) {
+    static const float NONE[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    const float *const uv = part != NULL ? part : NONE;
+    const float at = side == 0u ? -x : x;
+    const float first = side == 0u ? start : start - width;
+    const float second = side == 0u ? start - width : start;
+    const WimsyWorldVertex corner[4] = {
+        WorldCorner(at, top, first, uv[0], uv[1], colour),
+        WorldCorner(at, top, second, uv[2], uv[1], colour),
+        WorldCorner(at, bottom, second, uv[2], uv[3], colour),
+        WorldCorner(at, bottom, first, uv[0], uv[3], colour),
+    };
+    WorldQuad(out, count, corner);
+}
+
 uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vertex_count,
                       WimsyWorldDraw *draws) {
     *vertex_count = 0;
     if (level < 2u || level >= WIMSY_LEVELS) {
         return 0;
     }
+    memset(draws, 0, WIMSY_WORLD_DRAWS_MAX * sizeof(draws[0]));
     static const uint8_t WHITE[3] = { 255, 255, 255 };
     static const uint8_t WALL[3] = { 200, 40, 40 };
     static const uint8_t SIGN[3] = { 40, 200, 80 };
@@ -563,6 +679,82 @@ uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vert
         }
         draws[draw].count = count - draws[draw].first;
         draws[draw++].material = WIMSY_MATERIAL_FLAT;
+        // The two walls, one along each edge of the floor, facing the lane.
+        static const uint8_t WALL_COLOUR[3] = { 56, 60, 72 };
+        draws[draw].first = count;
+        for (uint32_t side = 0; side < 2u; ++side) {
+            WallQuad(vertices, &count, side, WALL_X, WALL_NEAR, WALL_LENGTH, WALL_HEIGHT, 0.0f,
+                     NULL, WALL_COLOUR);
+        }
+        draws[draw].count = count - draws[draw].first;
+        draws[draw++].material = WIMSY_MATERIAL_FLAT;
+        // The screens, a 64th of a unit in front of their wall, a draw each. On the left wall a
+        // compute texture every 3.25 units: its first level 2 units square, the others half
+        // the one before, in a column beside it.
+        static const uint8_t WHITE_SCREEN[3] = { 255, 255, 255 };
+        static const float WHOLE[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+        for (uint32_t texture = 0; texture < WIMSY_COMPUTE_TEXTURES; ++texture) {
+            const float start = SCREEN_FIRST - SCREEN_STEP * (float)texture;
+            float top = SCREEN_TOP;
+            for (uint32_t mip = 0; mip < WIMSY_COMPUTE_LEVELS; ++mip) {
+                const float size = SCREEN_SIDE / (float)(1u << mip);
+                WimsyWorldDraw *const screen = &draws[draw++];
+                screen->first = count;
+                WallQuad(vertices, &count, 0u, WALL_X - SCREEN_GAP,
+                         mip == 0u ? start : start - SCREEN_SIDE - 0.125f, size, top, top - size, WHOLE,
+                         WHITE_SCREEN);
+                screen->count = count - screen->first;
+                screen->material = WIMSY_MATERIAL_SCREEN;
+                screen->screen = WIMSY_SCREEN_COMPUTE;
+                screen->index = texture;
+                screen->mip = mip;
+                // Level 1 starts the column at the top again; each level after it sits a 16th
+                // of a unit under the one before.
+                top = mip == 0u ? SCREEN_TOP : top - size - 0.0625f;
+            }
+        }
+        // On the right wall every chain's last target, then the frame's two loads, the first 64
+        // texels of a load's 512 either way.
+        for (uint32_t shown = 0; shown < WIMSY_CHAINS + WIMSY_LOADS; ++shown) {
+            static const float PART[4] = { 0.0f, 0.0f, (float)WIMSY_LOAD_SHOWN / (float)WIMSY_LOAD_SIDE,
+                                           (float)WIMSY_LOAD_SHOWN / (float)WIMSY_LOAD_SIDE };
+            const bool load = shown >= WIMSY_CHAINS;
+            WimsyWorldDraw *const screen = &draws[draw++];
+            screen->first = count;
+            WallQuad(vertices, &count, 1u, WALL_X - SCREEN_GAP, SCREEN_FIRST - SCREEN_STEP * (float)shown,
+                     SCREEN_SIDE, SCREEN_TOP, SCREEN_TOP - SCREEN_SIDE, load ? PART : WHOLE,
+                     WHITE_SCREEN);
+            screen->count = count - screen->first;
+            screen->material = WIMSY_MATERIAL_SCREEN;
+            screen->screen = load ? WIMSY_SCREEN_LOAD : WIMSY_SCREEN_CHAIN;
+            screen->index = load ? shown - WIMSY_CHAINS : shown;
+            screen->mip = 0u;
+        }
+        if (legend_asked) {
+            // The plaques, one draw: under each compute texture, chain and load, its name.
+            WimsyWorldDraw *const plaques = &draws[draw++];
+            plaques->first = count;
+            for (uint32_t plaque = 0; plaque < WIMSY_PLAQUES; ++plaque) {
+                const uint32_t row = plaque / (WIMSY_PLAQUES_SIDE / WIMSY_PLAQUE_WIDTH);
+                const uint32_t column = plaque % (WIMSY_PLAQUES_SIDE / WIMSY_PLAQUE_WIDTH);
+                const float part[4] = {
+                    (float)(column * WIMSY_PLAQUE_WIDTH) / (float)WIMSY_PLAQUES_SIDE,
+                    (float)(row * WIMSY_PLAQUE_HEIGHT) / (float)WIMSY_PLAQUES_SIDE,
+                    (float)((column + 1u) * WIMSY_PLAQUE_WIDTH) / (float)WIMSY_PLAQUES_SIDE,
+                    (float)((row + 1u) * WIMSY_PLAQUE_HEIGHT) / (float)WIMSY_PLAQUES_SIDE,
+                };
+                const bool left = plaque < WIMSY_COMPUTE_TEXTURES;
+                const uint32_t place = left ? plaque : plaque - WIMSY_COMPUTE_TEXTURES;
+                WallQuad(vertices, &count, left ? 0u : 1u, WALL_X - SCREEN_GAP,
+                         SCREEN_FIRST - SCREEN_STEP * (float)place, SCREEN_SIDE, PLAQUE_TOP,
+                         PLAQUE_TOP - PLAQUE_HEIGHT, part, WHITE_SCREEN);
+            }
+            plaques->count = count - plaques->first;
+            plaques->material = WIMSY_MATERIAL_SCREEN;
+            plaques->screen = WIMSY_SCREEN_PLAQUES;
+            plaques->index = 0u;
+            plaques->mip = 0u;
+        }
     }
     *vertex_count = count;
     return draw;
@@ -844,76 +1036,52 @@ void WimsyLoadBlock(uint32_t load, uint32_t bx, uint32_t by, uint8_t out[16]) {
     }
 }
 
-uint32_t WimsyPanelsOf(uint32_t level, WimsyPanel *out) {
-    if (level < 3u || level >= WIMSY_LEVELS) {
-        return 0;
+/// A plaque's board and its letters.
+static const uint8_t PLAQUE_BOARD[4] = { 24, 28, 40, 255 };
+static const uint8_t PLAQUE_INK[4] = { 240, 236, 220, 255 };
+
+void WimsyPlaqueTexel(uint32_t x, uint32_t y, uint8_t out[4]) {
+    memcpy(out, PLAQUE_BOARD, 4u);
+    const uint32_t plaque = y / WIMSY_PLAQUE_HEIGHT * (WIMSY_PLAQUES_SIDE / WIMSY_PLAQUE_WIDTH) +
+                            x / WIMSY_PLAQUE_WIDTH;
+    if (x >= WIMSY_PLAQUES_SIDE || plaque >= WIMSY_PLAQUES) {
+        return;
     }
-    uint32_t count = 0;
-    for (uint32_t t = 0; t < WIMSY_COMPUTE_TEXTURES; ++t) {
-        // Two rows of six above the scene and four below it, a panel 192 wide: level nought,
-        // and the other levels in a column of 64 beside it.
-        const uint32_t left = t < 12u ? 64u + (t % 6u) * 192u : (t - 12u) * 192u;
-        const uint32_t top = t < 12u ? 8u + (t / 6u) * 136u : 536u;
-        uint32_t down = 0;
-        for (uint32_t mip = 0; mip < WIMSY_COMPUTE_LEVELS; ++mip) {
-            const WimsyPanel panel = { mip == 0u ? left : left + WIMSY_COMPUTE_SIDE,
-                                       mip == 0u ? top : top + down, WIMSY_COMPUTE_SIDE >> mip,
-                                       WIMSY_PANEL_COMPUTE, t, mip };
-            out[count++] = panel;
-            down += mip == 0u ? 0u : WIMSY_COMPUTE_SIDE >> mip;
-        }
+    char line[2][24] = { "", "" };
+    if (plaque < WIMSY_COMPUTE_TEXTURES) {
+        snprintf(line[0], sizeof(line[0]), "COMPUTE %02u", (unsigned)plaque);
+        snprintf(line[1], sizeof(line[1]), "%u LEVELS", (unsigned)WIMSY_COMPUTE_LEVELS);
+    } else if (plaque < WIMSY_COMPUTE_TEXTURES + WIMSY_CHAINS) {
+        snprintf(line[0], sizeof(line[0]), "CHAIN %02u", (unsigned)(plaque - WIMSY_COMPUTE_TEXTURES));
+        snprintf(line[1], sizeof(line[1]), "%u PASSES", (unsigned)WIMSY_CHAIN_STEPS);
+    } else {
+        snprintf(line[0], sizeof(line[0]), "LOAD %u",
+                 (unsigned)(plaque - WIMSY_COMPUTE_TEXTURES - WIMSY_CHAINS));
+        snprintf(line[1], sizeof(line[1]), "ASTC 8X8");
     }
-    for (uint32_t c = 0; c < WIMSY_CHAINS; ++c) {
-        // Two rows of eight beside the last four textures.
-        const WimsyPanel panel = { 768u + (c % 8u) * WIMSY_CHAIN_SIDE,
-                                   536u + (c / 8u) * WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE,
-                                   WIMSY_PANEL_CHAIN, c, 0u };
-        out[count++] = panel;
+    const uint32_t column = x % WIMSY_PLAQUE_WIDTH / FONTVGA_WIDTH;
+    const char *const text = line[y % WIMSY_PLAQUE_HEIGHT / FONTVGA_HEIGHT];
+    if (column >= strlen(text)) {
+        return;
     }
-    for (uint32_t l = 0; l < WIMSY_LOADS; ++l) {
-        // In the margin left of the textures' first rows.
-        const WimsyPanel panel = { 0u, 8u + l * 136u, WIMSY_LOAD_SHOWN, WIMSY_PANEL_LOAD, l, 0u };
-        out[count++] = panel;
+    const uint8_t row = FONTVGA[(uint8_t)text[column]][y % FONTVGA_HEIGHT];
+    if ((row >> (7u - x % FONTVGA_WIDTH) & 1u) != 0u) {
+        memcpy(out, PLAQUE_INK, 4u);
     }
-    return count;
 }
 
-/// The panel the pixel at (@p x, @p y) is in at @p level, with its bytes on frame @p frame, or
-/// NULL.
-static const WimsyPanel *PanelAt(uint32_t level, uint32_t frame, uint32_t x, uint32_t y,
-                                 uint8_t out[4]) {
-    static WimsyPanel panels[WIMSY_PANELS];
-    static uint32_t made_for = UINT32_MAX, count;
-    if (made_for != level) {
-        count = WimsyPanelsOf(level, panels);
-        made_for = level;
-    }
-    for (uint32_t i = 0; i < count; ++i) {
-        const WimsyPanel *const panel = &panels[i];
-        if (x < panel->x || x >= panel->x + panel->side || y < panel->y ||
-            y >= panel->y + panel->side) {
-            continue;
-        }
-        if (panel->kind == WIMSY_PANEL_CHAIN) {
-            WimsyChainTexel(panel->index, frame, x - panel->x, y - panel->y, out);
-        } else if (panel->kind == WIMSY_PANEL_LOAD) {
-            WimsyLoadTexel(frame * WIMSY_LOADS + panel->index, x - panel->x, y - panel->y, out);
-        } else {
-            WimsyComputeTexel(panel->index, panel->mip, frame, x - panel->x, y - panel->y, out);
-        }
-        return panel;
-    }
-    return NULL;
+void WimsyLegendAsk(bool on) {
+    legend_asked = on;
 }
 
-bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]) {
-    return PanelAt(level, frame, x, y, out) != NULL;
+bool WimsyLegendOf(void) {
+    return legend_asked;
 }
 
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
         level == 0u ? 1u : 4u, level != 0u, true, true, 0u,   0u,   true,
-        0u,                    true,        0u,   false, 0u,  true, true, true, 0u
+        0u,                    true,        0u,   false, 0u,  true, true, true, 0u,   true
     };
     return machine;
 }
@@ -936,6 +1104,8 @@ typedef struct {
     double normal[3];
     /// A world vertex's texture coordinates.
     double u, v;
+    /// Where it is in clip space, before the divide: what the near distance cuts by.
+    double clip[4];
 } Corner;
 
 /// A triangle set up for a tile: its three edge functions, positive inside whichever way it is
@@ -964,6 +1134,10 @@ typedef struct {
     /// Which surface it is a piece of: a model, the world, or a blade of grass by itself. The
     /// triangles of one meet edge to edge, so where one stops the next begins.
     uint32_t surface;
+    /// A screen's texture, as its draw says.
+    WimsyScreen screen;
+    uint32_t index;
+    uint32_t mip;
 } Triangle;
 
 /// The world's surface, and the first blade's; a model's is its number.
@@ -1069,12 +1243,27 @@ static void SamplePlace(const Scene *scene, uint32_t px, uint32_t py, uint32_t s
     *y = scene->place[py & 1u][px & 1u][s][1];
 }
 
+/// A corner's place on the target and its depth from its place in clip space. One behind the
+/// near distance has none that means anything: Emit cuts its triangle before any is read.
+static void Divide(Corner *corner) {
+    corner->over_w = 1.0 / corner->clip[3];
+    corner->x = (corner->clip[0] * corner->over_w + 1.0) * 0.5 * (double)WIMSY_WIDTH;
+    corner->y = (1.0 - corner->clip[1] * corner->over_w) * 0.5 * (double)WIMSY_HEIGHT;
+    corner->z = corner->clip[2] * corner->over_w;
+}
+
+/// Whether a corner is behind the near distance, where clip space's depth is under nought.
+static bool Behind(const Corner *corner) {
+    return corner->clip[2] < 0.0;
+}
+
 /// Turns instance @p index's model into the target.
 static void HoldInstance(Scene *scene, uint32_t index) {
     const WimsyInstance *const instance = &scene_instance[index];
     const float *const m = instance->to_clip;
     scene->left = scene->top = DBL_MAX;
     scene->right = scene->bottom = -DBL_MAX;
+    uint32_t behind = 0;
     for (uint32_t v = 0; v < WIMSY_MESH_VERTICES; ++v) {
         const WimsyMeshVertex *const vertex = &WIMSY_MESH_VERTEX[v];
         // The floats the vertex buffer holds, through the matrix the uniform buffer holds.
@@ -1086,10 +1275,12 @@ static void HoldInstance(Scene *scene, uint32_t index) {
         const double cz = (double)m[2] * x + (double)m[6] * y + (double)m[10] * z + (double)m[14];
         const double cw = (double)m[3] * x + (double)m[7] * y + (double)m[11] * z + (double)m[15];
         Corner *const corner = &corners[v];
-        corner->over_w = 1.0 / cw;
-        corner->x = (cx * corner->over_w + 1.0) * 0.5 * (double)WIMSY_WIDTH;
-        corner->y = (1.0 - cy * corner->over_w) * 0.5 * (double)WIMSY_HEIGHT;
-        corner->z = cz * corner->over_w;
+        corner->clip[0] = cx;
+        corner->clip[1] = cy;
+        corner->clip[2] = cz;
+        corner->clip[3] = cw;
+        Divide(corner);
+        behind += Behind(corner) ? 1u : 0u;
         const double n[3] = { (double)((float)vertex->nx / 127.0f),
                               (double)((float)vertex->ny / 127.0f),
                               (double)((float)vertex->nz / 127.0f) };
@@ -1098,10 +1289,18 @@ static void HoldInstance(Scene *scene, uint32_t index) {
                                   (double)instance->turn[row][1] * n[1] +
                                   (double)instance->turn[row][2] * n[2];
         }
-        scene->left = corner->x < scene->left ? corner->x : scene->left;
-        scene->right = corner->x > scene->right ? corner->x : scene->right;
-        scene->top = corner->y < scene->top ? corner->y : scene->top;
-        scene->bottom = corner->y > scene->bottom ? corner->y : scene->bottom;
+        if (!Behind(corner)) {
+            scene->left = corner->x < scene->left ? corner->x : scene->left;
+            scene->right = corner->x > scene->right ? corner->x : scene->right;
+            scene->top = corner->y < scene->top ? corner->y : scene->top;
+            scene->bottom = corner->y > scene->bottom ? corner->y : scene->bottom;
+        }
+    }
+    if (behind != 0u && behind != WIMSY_MESH_VERTICES) {
+        // The near distance cuts the model: what is left of it may land anywhere.
+        scene->left = scene->top = 0.0;
+        scene->right = (double)WIMSY_WIDTH;
+        scene->bottom = (double)WIMSY_HEIGHT;
     }
     scene->held = index;
 }
@@ -1351,6 +1550,99 @@ static void ShadeTexture(const Scene *scene, const Triangle *t, double x, double
     }
 }
 
+/// How many texels a side a screen's texture is.
+static uint32_t ScreenSide(const Triangle *t) {
+    return t->screen == WIMSY_SCREEN_COMPUTE
+               ? WIMSY_COMPUTE_SIDE >> t->mip
+               : t->screen == WIMSY_SCREEN_CHAIN
+                     ? WIMSY_CHAIN_SIDE
+                     : t->screen == WIMSY_SCREEN_LOAD ? WIMSY_LOAD_SIDE : WIMSY_PLAQUES_SIDE;
+}
+
+/// The texel of a screen's texture at (@p x, @p y), kept inside it as the sampler keeps it.
+static void ScreenTexel(const Scene *scene, const Triangle *t, int64_t x, int64_t y,
+                        uint8_t out[4]) {
+    const int64_t side = (int64_t)ScreenSide(t);
+    const uint32_t tx = (uint32_t)(x < 0 ? 0 : x >= side ? side - 1 : x);
+    const uint32_t ty = (uint32_t)(y < 0 ? 0 : y >= side ? side - 1 : y);
+    // The frame's textures, or the frame before's on a machine whose screens are late.
+    const uint32_t frame = scene->machine.screens || scene->shown == 0u ? scene->shown
+                                                                       : scene->shown - 1u;
+    if (t->screen == WIMSY_SCREEN_COMPUTE) {
+        WimsyComputeTexel(t->index, t->mip, frame, tx, ty, out);
+    } else if (t->screen == WIMSY_SCREEN_CHAIN) {
+        WimsyChainTexel(t->index, frame, tx, ty, out);
+    } else if (t->screen == WIMSY_SCREEN_LOAD) {
+        WimsyLoadTexel(frame * WIMSY_LOADS + t->index, tx, ty, out);
+    } else {
+        WimsyPlaqueTexel(tx, ty, out);
+    }
+}
+
+/// A screen's colour at (@p x, @p y). A machine's own: the texel under the place. The judge's:
+/// the range of the texels under the pixel the place is in, a 32nd of a pixel to spare, since a
+/// machine shades a pixel wherever in it it likes; any colour where that is more than sixteen
+/// texels a side, a screen too far or too slanted to hold to its texels.
+static void ShadeScreen(const Scene *scene, const Triangle *t, double x, double y, double low[3],
+                        double high[3]) {
+    const double side = (double)ScreenSide(t);
+    for (uint32_t k = 0; k < 3u; ++k) {
+        low[k] = 0.0;
+        high[k] = 255.0;
+    }
+    uint8_t texel[4];
+    if (!scene->judging) {
+        const double w = t->w_plane[0] * x + t->w_plane[1] * y + t->w_plane[2];
+        if (w <= 0.0) {
+            return;
+        }
+        const double u = (t->u_plane[0] * x + t->u_plane[1] * y + t->u_plane[2]) / w;
+        const double v = (t->v_plane[0] * x + t->v_plane[1] * y + t->v_plane[2]) / w;
+        ScreenTexel(scene, t, (int64_t)floor(u * side), (int64_t)floor(v * side), texel);
+        for (uint32_t k = 0; k < 3u; ++k) {
+            low[k] = high[k] = (double)texel[k];
+        }
+        return;
+    }
+    double least[2] = { DBL_MAX, DBL_MAX }, most[2] = { -DBL_MAX, -DBL_MAX };
+    for (uint32_t corner = 0; corner < 4u; ++corner) {
+        const double cx = floor(x) + (corner % 2u == 0u ? -WIMSY_EDGE_MARGIN : 1.0 + WIMSY_EDGE_MARGIN);
+        const double cy = floor(y) + (corner / 2u == 0u ? -WIMSY_EDGE_MARGIN : 1.0 + WIMSY_EDGE_MARGIN);
+        const double w = t->w_plane[0] * cx + t->w_plane[1] * cy + t->w_plane[2];
+        if (w <= 0.0) {
+            return;
+        }
+        const double at[2] = { (t->u_plane[0] * cx + t->u_plane[1] * cy + t->u_plane[2]) / w * side,
+                               (t->v_plane[0] * cx + t->v_plane[1] * cy + t->v_plane[2]) / w * side };
+        for (uint32_t k = 0; k < 2u; ++k) {
+            least[k] = at[k] < least[k] ? at[k] : least[k];
+            most[k] = at[k] > most[k] ? at[k] : most[k];
+        }
+    }
+    const int64_t first[2] = { (int64_t)floor(least[0] - 0.0625), (int64_t)floor(least[1] - 0.0625) };
+    const int64_t last[2] = { (int64_t)floor(most[0] + 0.0625), (int64_t)floor(most[1] + 0.0625) };
+    if (last[0] - first[0] >= 16 || last[1] - first[1] >= 16) {
+        return;
+    }
+    for (uint32_t k = 0; k < 3u; ++k) {
+        low[k] = 255.0;
+        high[k] = 0.0;
+    }
+    // An ASTC texel, which a machine may keep in a format of its own (WIMSY_ASTC_MARGIN).
+    const double margin = t->screen == WIMSY_SCREEN_LOAD ? (double)WIMSY_ASTC_MARGIN : 0.0;
+    for (int64_t ty = first[1]; ty <= last[1]; ++ty) {
+        for (int64_t tx = first[0]; tx <= last[0]; ++tx) {
+            ScreenTexel(scene, t, tx, ty, texel);
+            for (uint32_t k = 0; k < 3u; ++k) {
+                const double value = (double)texel[k];
+                low[k] = value - margin < low[k] ? (value - margin < 0.0 ? 0.0 : value - margin) : low[k];
+                high[k] = value + margin > high[k] ? (value + margin > 255.0 ? 255.0 : value + margin)
+                                                   : high[k];
+            }
+        }
+    }
+}
+
 /// The colour triangle @p t has at (@p x, @p y), nought to 255 a channel: its range, since a
 /// point too far outside a model's triangle to weigh its corners may get any shade of its colour,
 /// and a texture's level of detail is a machine's to pick within bounds.
@@ -1358,6 +1650,10 @@ static void Shade(const Scene *scene, const Triangle *t, double x, double y, dou
                   double high[3]) {
     if (t->material == WIMSY_MATERIAL_FLOOR || t->material == WIMSY_MATERIAL_LANE) {
         ShadeTexture(scene, t, x, y, low, high);
+        return;
+    }
+    if (t->material == WIMSY_MATERIAL_SCREEN) {
+        ShadeScreen(scene, t, x, y, low, high);
         return;
     }
     double dark = 1.0, lit = 1.0;
@@ -1437,6 +1733,27 @@ static bool PixelOutside(const Triangle *t, double x, double y) {
 }
 
 /// For every triangle of every instance that reaches the tile, @p each.
+/// The rectangle of the target three corners span, or the whole target when the near distance
+/// cuts between them, or none (left past right) when all three are behind it.
+static void SpanOfCorners(const Corner corner[3], double *left, double *right, double *top,
+                          double *bottom) {
+    const uint32_t behind = (Behind(&corner[0]) ? 1u : 0u) + (Behind(&corner[1]) ? 1u : 0u) +
+                            (Behind(&corner[2]) ? 1u : 0u);
+    if (behind == 3u) {
+        *left = *top = 1.0;
+        *right = *bottom = 0.0;
+    } else if (behind != 0u) {
+        *left = *top = 0.0;
+        *right = (double)WIMSY_WIDTH;
+        *bottom = (double)WIMSY_HEIGHT;
+    } else {
+        *left = Least(corner[0].x, corner[1].x, corner[2].x);
+        *right = Most(corner[0].x, corner[1].x, corner[2].x);
+        *top = Least(corner[0].y, corner[1].y, corner[2].y);
+        *bottom = Most(corner[0].y, corner[1].y, corner[2].y);
+    }
+}
+
 /// Where the world's place @p position lands on the target through @p view, into @p corner.
 static void Project(const float view[16], const float position[3], Corner *corner) {
     double clip[4];
@@ -1447,10 +1764,8 @@ static void Project(const float view[16], const float position[3], Corner *corne
         }
     }
     memset(corner, 0, sizeof(*corner));
-    corner->over_w = 1.0 / clip[3];
-    corner->x = (clip[0] * corner->over_w + 1.0) * 0.5 * (double)WIMSY_WIDTH;
-    corner->y = (1.0 - clip[1] * corner->over_w) * 0.5 * (double)WIMSY_HEIGHT;
-    corner->z = clip[2] * corner->over_w;
+    memcpy(corner->clip, clip, sizeof(clip));
+    Divide(corner);
 }
 
 /// The three corners of blade @p index as the scene's frame sees them.
@@ -1464,8 +1779,53 @@ static void BladeCorners(const Scene *scene, uint32_t index, Corner corner[3]) {
 
 typedef void (*EachTriangle)(const Scene *scene, const Triangle *t, uint32_t x0, uint32_t y0);
 
-static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) {
+/// The corner @p part of the way from @p a to @p b in clip space, where everything a vertex
+/// carries runs straight.
+static void Between(const Corner *a, const Corner *b, double part, Corner *out) {
+    for (uint32_t k = 0; k < 4u; ++k) {
+        out->clip[k] = a->clip[k] + (b->clip[k] - a->clip[k]) * part;
+    }
+    for (uint32_t k = 0; k < 3u; ++k) {
+        out->normal[k] = a->normal[k] + (b->normal[k] - a->normal[k]) * part;
+    }
+    out->u = a->u + (b->u - a->u) * part;
+    out->v = a->v + (b->v - a->v) * part;
+    Divide(out);
+}
+
+/// One triangle of the scene to a pass over the tile at (@p x0, @p y0): whole, or what the near
+/// distance leaves of it, one triangle or two, or nothing. @p draw is a world draw's, for a
+/// screen's texture, or NULL.
+static void Emit(const Scene *scene, const Corner *const v[3], const double colour[3],
+                 WimsyMaterial material, uint32_t surface, const WimsyWorldDraw *draw, uint32_t x0,
+                 uint32_t y0, EachTriangle each) {
     static Triangle triangle;
+    Corner kept[4];
+    uint32_t count = 0;
+    for (uint32_t k = 0; k < 3u; ++k) {
+        const Corner *const a = v[k];
+        const Corner *const b = v[(k + 1u) % 3u];
+        if (!Behind(a)) {
+            kept[count++] = *a;
+        }
+        if (Behind(a) != Behind(b)) {
+            Between(a, b, a->clip[2] / (a->clip[2] - b->clip[2]), &kept[count++]);
+        }
+    }
+    for (uint32_t i = 1; i + 1u < count; ++i) {
+        const Corner *const piece[3] = { &kept[0], &kept[i], &kept[i + 1u] };
+        if (!SetUp(scene, piece, colour, material, (double)x0, (double)y0, &triangle)) {
+            continue;
+        }
+        triangle.surface = surface;
+        triangle.screen = draw != NULL ? draw->screen : WIMSY_SCREEN_COMPUTE;
+        triangle.index = draw != NULL ? draw->index : 0u;
+        triangle.mip = draw != NULL ? draw->mip : 0u;
+        each(scene, &triangle, x0, y0);
+    }
+}
+
+static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) {
     for (uint32_t i = 0; i < scene->instances; ++i) {
         if (scene->span[i][1] + 1.0 < (double)x0 || scene->span[i][0] - 1.0 > (double)(x0 + TILE) ||
             scene->span[i][3] + 1.0 < (double)y0 || scene->span[i][2] - 1.0 > (double)(y0 + TILE)) {
@@ -1485,15 +1845,12 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
             const double colour[3] = { (double)((float)palette[0] / 255.0f) * (double)tint[0],
                                        (double)((float)palette[1] / 255.0f) * (double)tint[1],
                                        (double)((float)palette[2] / 255.0f) * (double)tint[2] };
-            if (SetUp(scene, v, colour, WIMSY_MATERIAL_MODEL, (double)x0, (double)y0, &triangle)) {
-                triangle.surface = i;
-                each(scene, &triangle, x0, y0);
-            }
+            Emit(scene, v, colour, WIMSY_MATERIAL_MODEL, i, NULL, x0, y0, each);
         }
     }
     for (uint32_t d = 0; d < scene->draws; ++d) {
         const WimsyWorldDraw *const draw = &world_draws[d];
-        if ((scene->machine.left_out >> d & 1u) != 0u) {
+        if (d < 30u && (scene->machine.left_out >> d & 1u) != 0u) {
             continue;
         }
         for (uint32_t t = draw->first; t + 2u < draw->first + draw->count; t += 3u) {
@@ -1501,14 +1858,11 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
                                          &world_corners[t + 2u] };
             const double colour[3] = { (double)world_vertices[t].r, (double)world_vertices[t].g,
                                        (double)world_vertices[t].b };
-            if (SetUp(scene, v, colour, draw->material, (double)x0, (double)y0, &triangle)) {
-                triangle.surface = SURFACE_WORLD;
-                each(scene, &triangle, x0, y0);
-            }
+            Emit(scene, v, colour, draw->material, SURFACE_WORLD, draw, x0, y0, each);
         }
     }
     // The grass, as its instanced draw leaves it: a triangle a blade, its instance's colour.
-    if ((scene->machine.left_out >> scene->draws & 1u) != 0u) {
+    if ((scene->machine.left_out & WIMSY_LEAVES_OUT_GRASS) != 0u) {
         return;
     }
     const uint32_t across = x0 / TILE, down = y0 / TILE;
@@ -1524,10 +1878,7 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
         const double colour[3] = { (double)((float)bytes[0] / 255.0f),
                                    (double)((float)bytes[1] / 255.0f),
                                    (double)((float)bytes[2] / 255.0f) };
-        if (SetUp(scene, v, colour, WIMSY_MATERIAL_FLAT, (double)x0, (double)y0, &triangle)) {
-            triangle.surface = SURFACE_BLADE + b;
-            each(scene, &triangle, x0, y0);
-        }
+        Emit(scene, v, colour, WIMSY_MATERIAL_FLAT, SURFACE_BLADE + b, NULL, x0, y0, each);
     }
 }
 
@@ -1755,12 +2106,15 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
         // blade off the target.
         Corner corner[3];
         BladeCorners(scene, b, corner);
-        const double left = Least(corner[0].x, corner[1].x, corner[2].x) - 1.0;
-        const double right = Most(corner[0].x, corner[1].x, corner[2].x) + 1.0;
-        const double top = Least(corner[0].y, corner[1].y, corner[2].y) - 1.0;
-        const double bottom = Most(corner[0].y, corner[1].y, corner[2].y) + 1.0;
+        double left, right, top, bottom;
+        SpanOfCorners(corner, &left, &right, &top, &bottom);
+        const bool none = left > right;
+        left -= 1.0;
+        right += 1.0;
+        top -= 1.0;
+        bottom += 1.0;
         uint8_t *const tiles = blade_tiles[b];
-        if (right < 0.0 || left >= (double)WIMSY_WIDTH || bottom < 0.0 ||
+        if (none || right < 0.0 || left >= (double)WIMSY_WIDTH || bottom < 0.0 ||
             top >= (double)WIMSY_HEIGHT) {
             tiles[0] = tiles[1] = 1u;
             tiles[2] = tiles[3] = 0u;
@@ -1772,34 +2126,6 @@ static void SceneOf(Scene *scene, uint32_t level, uint32_t frame, uint32_t frame
                              (double)TILE);
         tiles[3] = (uint8_t)((bottom >= (double)WIMSY_HEIGHT ? (double)(WIMSY_HEIGHT - 1u) : bottom) /
                              (double)TILE);
-    }
-}
-
-/// The panels' pixels of the tile at (@p x0, @p y0), drawn over what the scene left there: each
-/// its texel's bytes, into tile_low, and tile_high too when @p both.
-static void PanelsOver(const Scene *scene, uint32_t x0, uint32_t y0, bool both) {
-    if (scene->level < 3u) {
-        return;
-    }
-    for (uint32_t p = 0; p < TILE * TILE; ++p) {
-        uint8_t texel[4];
-        const WimsyPanel *const panel =
-            PanelAt(scene->level, scene->shown, x0 + p % TILE, y0 + p / TILE, texel);
-        if (panel == NULL) {
-            continue;
-        }
-        memcpy(tile_low[p], texel, 4u);
-        if (both) {
-            memcpy(tile_high[p], texel, 4u);
-        }
-        if (both && panel->kind == WIMSY_PANEL_LOAD) {
-            // An ASTC texel, which a machine may keep in a format of its own (WIMSY_ASTC_MARGIN).
-            for (uint32_t k = 0; k < 3u; ++k) {
-                const uint32_t margin = (uint32_t)WIMSY_ASTC_MARGIN;
-                tile_low[p][k] = (uint8_t)(texel[k] > margin ? texel[k] - margin : 0u);
-                tile_high[p][k] = (uint8_t)(texel[k] < 255u - margin ? texel[k] + margin : 255u);
-            }
-        }
     }
 }
 
@@ -1967,7 +2293,6 @@ static void TileRanges(Scene *scene, uint32_t x0, uint32_t y0) {
         }
         tile_low[p][3] = tile_high[p][3] = WIMSY_CLEAR[3];
     }
-    PanelsOver(scene, x0, y0, true);
 }
 
 void WimsyRender(uint32_t level, uint32_t frame, uint32_t frames, const WimsyMachine *machine,
@@ -2004,7 +2329,6 @@ void WimsyRender(uint32_t level, uint32_t frame, uint32_t frames, const WimsyMac
                     }
                     tile_low[p][3] = WIMSY_CLEAR[3];
                 }
-                PanelsOver(&scene, x0, y0, false);
             }
             for (uint32_t y = 0; y < TILE && y0 + y < WIMSY_HEIGHT; ++y) {
                 for (uint32_t x = 0; x < TILE; ++x) {

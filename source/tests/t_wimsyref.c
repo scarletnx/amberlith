@@ -625,15 +625,17 @@ static void CheckHeavy(void) {
     verdict = Verdict(3u, 300u, 600u, &machine);
     Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 500u, "level 3 a frame late is refused");
     // A machine that draws the thin faces turned just away is as right as one that culls them.
-    // On frames 55 and 70 of 120 a far model's rim is such a face and one sample of a pixel is
-    // the rim's: a reference sure of every face's side refused that pixel, as it refused a
-    // desktop card's.
+    // On frames 14 and 75 of 120, with no smoke to blur them, a far model's rim is such a face
+    // and one sample of a pixel is the rim's: a reference sure of every face's side refused
+    // that pixel, as it refused a desktop card's.
     machine = WimsyMachineRight(3u);
     machine.thin_faces = true;
-    verdict = Verdict(3u, 55u, 120u, &machine);
-    Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 55");
-    verdict = Verdict(3u, 70u, 120u, &machine);
-    Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 70");
+    WimsySmokeAsk(0u);
+    verdict = Verdict(3u, 14u, 120u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 14");
+    verdict = Verdict(3u, 75u, 120u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 75");
+    WimsySmokeAsk(WIMSY_SMOKE_DENSITIES);
     // So is a machine whose samples are a 64th of a pixel aside, half the edge margin. In a
     // field of grass two blades may each reach some of the places a sample may be and both miss
     // the sample itself, where a third shows through: a reference that took the two together
@@ -648,8 +650,10 @@ static void CheckHeavy(void) {
     verdict = Verdict(4u, 0u, 600u, &machine);
     Expect(&t, WimsyVerdictPasses(&verdict), "a 64th of a pixel aside passes at level 4");
     machine = WimsyMachineRight(4u);
+    // The last frame looks back at the scene through the smoke: under a puff a pixel is a
+    // range, so fewer are held to one colour there than in a frame without.
     verdict = Verdict(4u, 599u, 600u, &machine);
-    Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 800000u, "level 4's last frame as asked");
+    Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 200000u, "level 4's last frame as asked");
     Report("wimsy: the heavy levels' crowd, their floors' ASTC blocks, and the machine that draws "
            "them as asked",
            &t);
@@ -660,16 +664,16 @@ static void CheckLand(void) {
     static WimsyWorldVertex vertices[WIMSY_WORLD_VERTICES_MAX], again[WIMSY_WORLD_VERTICES_MAX];
     WimsyWorldDraw draws[WIMSY_WORLD_DRAWS_MAX];
     uint32_t count = 0, count_again = 0;
-    // A heavy level's world is level 2's and the hills, its last draw: either side, 8 columns
-    // by 34 rows of squares, two triangles each.
+    // A heavy level's world is level 2's, then the hills, its fifth draw: either side, 8 columns
+    // by 34 rows of squares, two triangles each; then the walls and what is on them.
     const uint32_t made = WimsyWorldOf(3u, vertices, &count, draws);
-    Expect(&t, made == 5u && made <= WIMSY_WORLD_DRAWS_MAX && count <= WIMSY_WORLD_VERTICES_MAX &&
+    Expect(&t, made == 153u && made <= WIMSY_WORLD_DRAWS_MAX && count <= WIMSY_WORLD_VERTICES_MAX &&
                    draws[4].material == WIMSY_MATERIAL_FLAT &&
                    draws[4].count == 2u * 8u * 34u * 6u && draws[4].count == WIMSY_HILL_VERTICES &&
                    draws[4].first == draws[3].first + draws[3].count &&
-                   draws[4].first + draws[4].count == count,
+                   draws[5].first == draws[4].first + draws[4].count,
            "the hills are the heavy world's fifth draw, 6528 vertices after level 2's");
-    Expect(&t, WimsyWorldOf(4u, again, &count_again, draws) == 5u && count_again == count &&
+    Expect(&t, WimsyWorldOf(4u, again, &count_again, draws) == 153u && count_again == count &&
                    memcmp(vertices, again, count * sizeof(vertices[0])) == 0,
            "level 4's world is level 3's, and asking twice gives the same");
     WimsyWorldOf(3u, vertices, &count, draws);
@@ -690,7 +694,7 @@ static void CheckLand(void) {
             differ += left != right ? 1u : 0u;
         }
     }
-    for (uint32_t i = draws[4].first; i + 2u < count; i += 3u) {
+    for (uint32_t i = draws[4].first; i + 2u < draws[4].first + draws[4].count; i += 3u) {
         for (uint32_t k = 0; k < 3u; ++k) {
             const WimsyWorldVertex *const vertex = &vertices[i + k];
             one_colour = one_colour && vertex->r == vertices[i].r && vertex->g == vertices[i].g &&
@@ -781,11 +785,13 @@ static void CheckLand(void) {
                    tip[1][0] == 8.0f + 0.125f - 0.09375f && tip[0][1] == 0.5f,
            "the wind's turn, and a tip worked out by hand at either end of its sway");
     // A machine that leaves the hills out, or the grass, is refused where the camera sees them.
+    // The hills from the lane past the walls, four fifths of the way through the walk; the grass
+    // from the walk's start.
     WimsyMachine machine = WimsyMachineRight(3u);
     machine.left_out = 1u << 4;
-    WimsyVerdict verdict = Verdict(3u, 0u, 600u, &machine);
+    WimsyVerdict verdict = Verdict(3u, 480u, 600u, &machine);
     Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u, "no hills is refused");
-    machine.left_out = 1u << 5;
+    machine.left_out = WIMSY_LEAVES_OUT_GRASS;
     verdict = Verdict(3u, 0u, 600u, &machine);
     Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200u, "no grass is refused");
     // And one whose grass stands still: right at frame nought, refused a quarter of a sway on.
@@ -885,36 +891,77 @@ static void CheckSmoke(void) {
            &t);
 }
 
-static void CheckPanels(void) {
+static void CheckScreens(void) {
     Tally t = { 0, NULL };
-    static WimsyPanel panels[WIMSY_PANELS];
-    Expect(&t, WimsyPanelsOf(2u, panels) == 0u, "level 2 has no panel");
-    const uint32_t count = WimsyPanelsOf(3u, panels);
-    Expect(&t, count == 16u * 8u + 16u + 2u && count == WIMSY_PANELS &&
-                   WimsyPanelsOf(4u, panels) == count,
-           "128 levels of compute textures, 16 chains and 2 loads at levels 3 and 4");
-    // No panel hangs off the target or over another, and each compute texture's levels halve.
-    bool apart = true, inside = true, halving = true;
-    for (uint32_t i = 0; i < count; ++i) {
-        inside = inside && panels[i].x + panels[i].side <= WIMSY_WIDTH &&
-                 panels[i].y + panels[i].side <= WIMSY_HEIGHT && panels[i].side >= 1u;
-        halving = halving && (panels[i].kind == WIMSY_PANEL_COMPUTE
-                                  ? panels[i].side == WIMSY_COMPUTE_SIDE >> panels[i].mip
-                                  : panels[i].side == 64u);
-        for (uint32_t j = 0; j < i; ++j) {
-            apart = apart && (panels[i].x + panels[i].side <= panels[j].x ||
-                              panels[j].x + panels[j].side <= panels[i].x ||
-                              panels[i].y + panels[i].side <= panels[j].y ||
-                              panels[j].y + panels[j].side <= panels[i].y);
+    static WimsyWorldVertex vertices[WIMSY_WORLD_VERTICES_MAX];
+    static WimsyWorldDraw draws[WIMSY_WORLD_DRAWS_MAX];
+    uint32_t count = 0;
+    // After the hills: the two walls, one draw; a screen a draw, the compute textures' 128
+    // levels, the 16 chains and the 2 loads; and the plaques, one draw of 34.
+    const uint32_t made = WimsyWorldOf(3u, vertices, &count, draws);
+    bool screens = made == 153u && draws[5].material == WIMSY_MATERIAL_FLAT && draws[5].count == 12u;
+    for (uint32_t d = 6; d < 152u && screens; ++d) {
+        const uint32_t shown = d - 6u;
+        screens = draws[d].material == WIMSY_MATERIAL_SCREEN && draws[d].count == 6u &&
+                  (shown < 128u
+                       ? draws[d].screen == WIMSY_SCREEN_COMPUTE && draws[d].index == shown / 8u &&
+                             draws[d].mip == shown % 8u
+                       : shown < 144u
+                             ? draws[d].screen == WIMSY_SCREEN_CHAIN && draws[d].index == shown - 128u
+                             : draws[d].screen == WIMSY_SCREEN_LOAD && draws[d].index == shown - 144u);
+    }
+    Expect(&t, screens, "the walls, then 128 compute screens, 16 chains' and 2 loads', a draw each");
+    Expect(&t, draws[152].material == WIMSY_MATERIAL_SCREEN &&
+                   draws[152].screen == WIMSY_SCREEN_PLAQUES && draws[152].count == 34u * 6u &&
+                   draws[152].first + draws[152].count == count && count <= WIMSY_WORLD_VERTICES_MAX,
+           "the plaques, the last draw, 34 of them");
+    // The first compute texture's first level: on the left wall a 64th of a unit in front of
+    // it, from 2 units down the lane to 4, its top 5.5 units up, read from the lane left to
+    // right; its second level beside it, half the side.
+    const WimsyWorldVertex *const first = &vertices[draws[6].first];
+    const WimsyWorldVertex *const second = &vertices[draws[7].first];
+    Expect(&t, first[0].x == -17.859375f && first[0].y == 5.5f && first[0].z == -2.0f &&
+                   first[0].u == 0.0f && first[0].v == 0.0f && first[1].z == -4.0f &&
+                   first[1].u == 1.0f && first[2].y == 3.5f && first[2].v == 1.0f &&
+                   second[0].z == -4.125f && second[1].z == -5.125f && second[2].y == 4.5f,
+           "the first compute texture's first two levels on the left wall");
+    // The first chain on the right wall, read left to right up the lane; the first load after
+    // the sixteenth chain, showing an eighth of its texture either way.
+    const WimsyWorldVertex *const chain = &vertices[draws[134].first];
+    const WimsyWorldVertex *const load = &vertices[draws[150].first];
+    Expect(&t, chain[0].x == 17.859375f && chain[0].z == -4.0f && chain[0].u == 0.0f &&
+                   chain[1].z == -2.0f && chain[1].u == 1.0f && load[0].z == -56.0f &&
+                   load[1].z == -54.0f && load[1].u == 0.125f && load[2].v == 0.125f,
+           "the first chain and the first load on the right wall");
+    // The walls themselves: 64 units from the floor's near end, 7 tall, an eighth inside its edge.
+    const WimsyWorldVertex *const wall = &vertices[draws[5].first];
+    Expect(&t, wall[0].x == -17.875f && wall[0].y == 7.0f && wall[0].z == 2.0f &&
+                   wall[1].z == -62.0f && wall[2].y == 0.0f && wall[6].x == 17.875f,
+           "the two walls along the floor's edges");
+    // Without the legend the plaques go and nothing else does.
+    WimsyLegendAsk(false);
+    uint32_t bare = 0;
+    const bool without = !WimsyLegendOf() && WimsyWorldOf(3u, vertices, &bare, draws) == 152u &&
+                         bare == count - 34u * 6u;
+    WimsyLegendAsk(true);
+    Expect(&t, without && WimsyLegendOf(), "the legend taken away is the plaques' draw gone");
+    // A plaque's texels: the board's colour past its text, ink in its first letter, another
+    // plaque's number another texel somewhere, and past the last plaque only board.
+    uint8_t board[4], ink[4], next[4];
+    WimsyPlaqueTexel(127u, 31u, board);
+    uint32_t inked = 0, differ = 0, beyond = 0;
+    for (uint32_t y = 0; y < 16u; ++y) {
+        for (uint32_t x = 0; x < 128u; ++x) {
+            WimsyPlaqueTexel(x, y, ink);
+            WimsyPlaqueTexel(x + 128u, y, next);
+            inked += x < 8u && memcmp(ink, board, 4u) != 0 ? 1u : 0u;
+            differ += memcmp(ink, next, 4u) != 0 ? 1u : 0u;
+            WimsyPlaqueTexel(x + 256u, y + 288u, next);
+            beyond += memcmp(next, board, 4u) != 0 ? 1u : 0u;
         }
     }
-    Expect(&t, inside, "every panel inside the target");
-    Expect(&t, apart, "no panel over another");
-    Expect(&t, halving, "a compute texture's level l is 128 >> l a side, a chain's or a load's 64");
-    Expect(&t, panels[0].x == 64u && panels[0].y == 8u && panels[1].x == 192u && panels[1].y == 8u &&
-                   panels[2].y == 72u && panels[8].x == 256u && panels[12u * 8u].y == 536u &&
-                   panels[128].x == 768u && panels[128].y == 536u && panels[136].y == 600u,
-           "the first texture at (64, 8), its levels beside it, the chains from (768, 536)");
+    Expect(&t, board[0] == 24u && board[3] == 255u && inked > 10u && differ > 4u && beyond == 0u,
+           "a plaque is its name in ink on its board");
     // A compute texel worked out by hand: texture 3, level 2, frame 10, texel (5, 9).
     uint8_t texel[4];
     WimsyComputeTexel(3u, 2u, 10u, 5u, 9u, texel);
@@ -949,14 +996,8 @@ static void CheckPanels(void) {
     WimsyChainTexel(0u, 0u, 63u, 63u, texel);
     Expect(&t, memcmp(texel, clear, 4u) == 0 && clear[0] == 16u && clear[3] == 255u,
            "a texel no square reaches is the chain's clear");
-    // A panel's pixel is its texel, and a pixel between panels is none's.
-    Expect(&t, WimsyPanelPixel(3u, 10u, 64u + 5u, 8u + 9u, texel) && !WimsyPanelPixel(3u, 10u, 0u, 300u, texel) &&
-                   !WimsyPanelPixel(2u, 10u, 70u, 20u, texel),
-           "a pixel in a panel, one outside, and none at level 2");
-    WimsyPanelPixel(3u, 0u, 768u + 2u, 536u + 13u, texel);
-    Expect(&t, memcmp(texel, last.colour, 4u) == 0, "the first chain's panel shows its last target");
     // A load: the frame's two differ, a block is one colour and a void extent the suite's decoder
-    // gives back, and its panel's ranges take what BC7 makes of it and no more.
+    // gives back.
     uint8_t other[4], same[4], block[16];
     WimsyLoadTexel(600u, 9u, 20u, texel);
     WimsyLoadTexel(601u, 9u, 20u, other);
@@ -969,31 +1010,31 @@ static void CheckPanels(void) {
     Expect(&t, AstcDecodeBlock(block, 8u, 8u, decoded) == ASTC_BLOCK_CONSTANT &&
                    decoded[63][0] == texel[0] * 257u && decoded[0][2] == texel[2] * 257u,
            "a load's block decodes to its colour");
-    Expect(&t, panels[144].kind == WIMSY_PANEL_LOAD && panels[144].x == 0u && panels[144].y == 8u &&
-                   panels[145].y == 144u && WimsyPanelPixel(3u, 300u, 9u, 8u + 20u, other) &&
-                   memcmp(other, texel, 4u) == 0,
-           "the loads' panels in the left margin, frame 300's first load number 600");
-    // The machine as asked is the panels' bytes; one whose compute and chains are a frame late is
-    // refused all over them.
+    // The machine as asked passes in front of each wall, a quarter and a half of the way through
+    // the walk; one whose screens show the frame before's textures is refused at both, and so
+    // is one whose every buffer is a frame late.
     const WimsyMachine right = WimsyMachineRight(3u);
-    WimsyVerdict verdict = Verdict(3u, 300u, 600u, &right);
-    Expect(&t, WimsyVerdictPasses(&verdict), "level 3 with its panels as asked");
-    uint8_t want[4];
-    WimsyComputeTexel(0u, 0u, 300u, 5u, 9u, want);
-    Expect(&t, memcmp(Pixel(69u, 17u), want, 4u) == 0, "a panel's pixel is its texel's bytes");
+    WimsyVerdict verdict = Verdict(3u, 150u, 600u, &right);
+    Expect(&t, WimsyVerdictPasses(&verdict), "level 3 before the compute wall, as asked");
+    verdict = Verdict(3u, 300u, 600u, &right);
+    Expect(&t, WimsyVerdictPasses(&verdict), "level 3 before the chains' wall, as asked");
     WimsyMachine late = right;
+    late.screens = false;
+    verdict = Verdict(3u, 150u, 600u, &late);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u,
+           "compute screens a frame late are refused");
+    verdict = Verdict(3u, 300u, 600u, &late);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u,
+           "chains' screens a frame late are refused");
+    late = right;
     late.frames_late = 1u;
     verdict = Verdict(3u, 300u, 600u, &late);
-    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 200000u,
-           "panels a frame late are refused, every texel of them");
-    // A load's panel three codes off is refused and two is not: the bound BC7 is given.
-    WimsyRender(3u, 300u, 600u, &right, frame);
-    frame[((size_t)28 * WIMSY_WIDTH + 9u) * 4u] = (uint8_t)(texel[0] + 2u);
-    WimsyJudge(3u, 300u, 600u, frame, NULL, verdicts, &verdict);
-    Expect(&t, WimsyVerdictPasses(&verdict), "a load's texel two codes off passes");
-    frame[((size_t)28 * WIMSY_WIDTH + 9u) * 4u] = (uint8_t)(texel[0] + 3u);
-    WimsyJudge(3u, 300u, 600u, frame, NULL, verdicts, &verdict);
-    Expect(&t, verdict.wrong == 1u, "a load's texel three codes off is refused");
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 2000u, "a frame late is refused");
+    // Without its plaques, as asked, it passes too.
+    WimsyLegendAsk(false);
+    verdict = Verdict(3u, 150u, 600u, &right);
+    WimsyLegendAsk(true);
+    Expect(&t, WimsyVerdictPasses(&verdict), "level 3 without the legend, as asked");
     // A thread's share of the models is the same models.
     static WimsyInstance whole[WIMSY_INSTANCES_MAX], part[WIMSY_INSTANCES_MAX];
     const uint32_t models = WimsyInstancesOf(3u, 77u, 600u, whole);
@@ -1003,8 +1044,8 @@ static void CheckPanels(void) {
                    memcmp(whole, part, sizeof(WimsyInstance) * 167u) == 0 &&
                    WimsyInstancesFrom(3u, 77u, 600u, 167u, 5u, part) == 0u,
            "the models in two shares are the models");
-    Report("wimsy: the heavy levels' panels: what a compute program stores, a chain of targets "
-           "comes to and the processor loads, a texel a pixel",
+    Report("wimsy: the heavy levels' walls: the screens of what a compute program stores, a "
+           "chain of targets comes to and the processor loads, and their plaques",
            &t);
 }
 
@@ -1065,6 +1106,6 @@ void RunReferenceWimsy(void) {
     CheckHeavy();
     CheckLand();
     CheckSmoke();
-    CheckPanels();
+    CheckScreens();
     CheckSaid();
 }

@@ -54,7 +54,14 @@ static const char *const SUITE = "wimsy";
 #define IMAGE_CHAIN (IMAGE_COMPUTE + WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS)
 #define IMAGE_STORE (IMAGE_CHAIN + WIMSY_CHAINS * WIMSY_CHAIN_STEPS)
 #define IMAGE_LOAD (IMAGE_STORE + WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS)
-#define IMAGE_DESCRIPTORS (IMAGE_LOAD + WIMSY_LOADS)
+#define IMAGE_PLAQUES (IMAGE_LOAD + WIMSY_LOADS)
+#define IMAGE_DESCRIPTORS (IMAGE_PLAQUES + 1u)
+/// What a judged frame of a heavy level reads back whole: every level of every compute texture,
+/// a texture's 21,845 texels one after the other, then every chain's last target.
+#define COMPUTE_TEXELS \
+    ((WIMSY_COMPUTE_SIDE * WIMSY_COMPUTE_SIDE * 4u - 1u) / 3u)
+#define SCREENS_BYTES \
+    ((WIMSY_COMPUTE_TEXTURES * COMPUTE_TEXELS + WIMSY_CHAINS * WIMSY_CHAIN_SIDE * WIMSY_CHAIN_SIDE) * 4u)
 // The textures a run loads, two a frame, each an image of its own up to this many: twenty
 // seconds' worth, after which the oldest are written again.
 #define LOAD_RING 1200u
@@ -138,9 +145,12 @@ static DkShader flat_fs;
 static DkShader fill_cs;
 static DkImage compute_textures[WIMSY_COMPUTE_TEXTURES];
 static DkImage chain_targets[WIMSY_CHAINS * WIMSY_CHAIN_STEPS];
-static WimsyPanel panels[WIMSY_PANELS];
-static uint32_t panel_count;
-static DkGpuAddr panel_quads;
+static DkImage plaque_texture;
+static DkImageLayout plaque_layout;
+static uint8_t *screens_cpu[SLOTS];
+static DkGpuAddr screens_gpu[SLOTS];
+/// Whether the frame being recorded is one the judge keeps, whose textures are read back whole.
+static bool frame_judged;
 static DkGpuAddr chain_quad;
 static DkImage level_textures[WIMSY_TEXTURES];
 static DkImageLayout level_texture_layouts[WIMSY_TEXTURES];
@@ -221,6 +231,11 @@ static struct {
     uint32_t peek_wrong;
     uint32_t peek_wrong_at;
     uint8_t peek_got[4];
+    /// The judged frames whose compute textures and chains were read back whole, the texels of
+    /// them that were not what the processor works out, and the first of those, said.
+    uint32_t screens_read;
+    uint32_t screens_wrong;
+    char screens_first[160];
 } render;
 
 static uint32_t Microseconds(uint64_t ticks) {
@@ -455,7 +470,68 @@ static void RecordFills(uint32_t slot) {
     const DkImageRect texel = { 0, 0, 0, 1, 1, 1 };
     const DkCopyBuf out = { peek_gpu[slot], 0, 0 };
     dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &texel, &out, 0);
+    if (frame_judged) {
+        // A judged frame's compute textures whole, level after level, for the processor to hold
+        // to what it works out itself: the wall's screens only show them.
+        DkGpuAddr at = screens_gpu[slot];
+        for (uint32_t f = 0; f < FILLS; ++f) {
+            const uint32_t side = WIMSY_COMPUTE_SIDE >> (f % WIMSY_COMPUTE_LEVELS);
+            dkImageViewDefaults(&view, &compute_textures[f / WIMSY_COMPUTE_LEVELS]);
+            view.mipLevelOffset = (uint8_t)(f % WIMSY_COMPUTE_LEVELS);
+            view.mipLevelCount = 1;
+            const DkImageRect whole = { 0, 0, 0, side, side, 1 };
+            const DkCopyBuf into = { at, 0, 0 };
+            dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &whole, &into, 0);
+            at += (DkGpuAddr)side * side * 4u;
+        }
+    }
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
+}
+
+/// A judged frame's chains read back: each one's last target, after the compute textures.
+static void RecordChainsBack(uint32_t slot) {
+    dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image | DkInvalidateFlags_L2Cache);
+    DkGpuAddr at = screens_gpu[slot] + (DkGpuAddr)WIMSY_COMPUTE_TEXTURES * COMPUTE_TEXELS * 4u;
+    for (uint32_t c = 0; c < WIMSY_CHAINS; ++c) {
+        DkImageView view;
+        dkImageViewDefaults(&view, &chain_targets[c * WIMSY_CHAIN_STEPS + WIMSY_CHAIN_STEPS - 1u]);
+        const DkImageRect whole = { 0, 0, 0, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, 1 };
+        const DkCopyBuf into = { at, 0, 0 };
+        dkCmdBufCopyImageToBuffer(gpu.cmdbuf, &view, &whole, &into, 0);
+        at += (DkGpuAddr)WIMSY_CHAIN_SIDE * WIMSY_CHAIN_SIDE * 4u;
+    }
+    dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
+}
+
+/// Holds what a judged frame read back to what the processor works out for frame @p k: counts
+/// the texels that differ and keeps the first.
+static void JudgeScreens(uint32_t k, uint32_t slot) {
+    const uint8_t *got = screens_cpu[slot];
+    ++render.screens_read;
+    for (uint32_t f = 0; f < FILLS + WIMSY_CHAINS; ++f) {
+        const bool chain = f >= FILLS;
+        const uint32_t which = chain ? f - FILLS : f / WIMSY_COMPUTE_LEVELS;
+        const uint32_t mip = chain ? 0u : f % WIMSY_COMPUTE_LEVELS;
+        const uint32_t side = chain ? WIMSY_CHAIN_SIDE : WIMSY_COMPUTE_SIDE >> mip;
+        for (uint32_t y = 0; y < side; ++y) {
+            for (uint32_t x = 0; x < side; ++x, got += 4u) {
+                uint8_t want[4];
+                if (chain) {
+                    WimsyChainTexel(which, k, x, y, want);
+                } else {
+                    WimsyComputeTexel(which, mip, k, x, y, want);
+                }
+                if (memcmp(got, want, 4u) != 0 && render.screens_wrong++ == 0u) {
+                    snprintf(render.screens_first, sizeof(render.screens_first),
+                             "frame %u, %s %u level %u at (%u,%u): read %02x %02x %02x %02x, "
+                             "worked out %02x %02x %02x %02x",
+                             (unsigned)k, chain ? "chain" : "compute texture", (unsigned)which,
+                             (unsigned)mip, (unsigned)x, (unsigned)y, got[0], got[1], got[2],
+                             got[3], want[0], want[1], want[2], want[3]);
+                }
+            }
+        }
+    }
 }
 
 /// A heavy frame's small targets: sixteen chains of eleven, each target a pass of its own, drawn
@@ -488,29 +564,6 @@ static void RecordChains(uint32_t slot) {
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, DkInvalidateFlags_Image);
 }
 
-/// A heavy frame's panels, last into the main target, a texel a pixel with no depth test: each
-/// level of each compute texture and each chain's last target.
-static void RecordPanels(void) {
-    DkDepthStencilState state;
-    dkDepthStencilStateDefaults(&state);
-    state.depthTestEnable = 0;
-    state.depthWriteEnable = 0;
-    state.stencilTestEnable = 0;
-    dkCmdBufBindDepthStencilState(gpu.cmdbuf, &state);
-    GpuBindVertices(&gpu, &common_vs, &texture_fs, panel_quads,
-                    panel_count * 6u * (uint32_t)sizeof(GpuVertex));
-    for (uint32_t i = 0; i < panel_count; ++i) {
-        const uint32_t image =
-            panels[i].kind == WIMSY_PANEL_CHAIN
-                ? IMAGE_CHAIN + panels[i].index * WIMSY_CHAIN_STEPS + WIMSY_CHAIN_STEPS - 1u
-                : panels[i].kind == WIMSY_PANEL_LOAD
-                      ? IMAGE_LOAD + panels[i].index
-                      : IMAGE_COMPUTE + panels[i].index * WIMSY_COMPUTE_LEVELS + panels[i].mip;
-        dkCmdBufBindTexture(gpu.cmdbuf, DkStage_Fragment, 0, dkMakeTextureHandle(image, 0));
-        dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, 6, 1, i * 6u, 0);
-    }
-}
-
 /// The world's draws, after the models, into the same target: none culled, the floor and the
 /// lane through their textures, every level of detail of them, and the marks with their bias.
 static void RecordWorld(uint32_t slot) {
@@ -523,9 +576,20 @@ static void RecordWorld(uint32_t slot) {
     dkCmdBufBindRasterizerState(gpu.cmdbuf, &rasterizer);
     for (uint32_t d = 0; d < world_draw_count; ++d) {
         const WimsyWorldDraw *const draw = &world_draws[d];
-        const bool textured =
-            draw->material == WIMSY_MATERIAL_FLOOR || draw->material == WIMSY_MATERIAL_LANE;
-        if (textured) {
+        const bool screen = draw->material == WIMSY_MATERIAL_SCREEN;
+        const bool textured = screen || draw->material == WIMSY_MATERIAL_FLOOR ||
+                              draw->material == WIMSY_MATERIAL_LANE;
+        if (screen) {
+            // A screen shows its texture as it is: the texel under the place, the first sampler.
+            const uint32_t image =
+                draw->screen == WIMSY_SCREEN_COMPUTE
+                    ? IMAGE_COMPUTE + draw->index * WIMSY_COMPUTE_LEVELS + draw->mip
+                    : draw->screen == WIMSY_SCREEN_CHAIN
+                          ? IMAGE_CHAIN + draw->index * WIMSY_CHAIN_STEPS + WIMSY_CHAIN_STEPS - 1u
+                          : draw->screen == WIMSY_SCREEN_LOAD ? IMAGE_LOAD + draw->index
+                                                              : IMAGE_PLAQUES;
+            dkCmdBufBindTexture(gpu.cmdbuf, DkStage_Fragment, 0, dkMakeTextureHandle(image, 0));
+        } else if (textured) {
             // Its descriptor, after the sprite's and the target's, with the second sampler.
             const uint32_t image = 2u + (uint32_t)(draw->material == WIMSY_MATERIAL_FLOOR
                                                        ? WimsyFloorTexture(level)
@@ -681,9 +745,6 @@ static void RecordModels(uint32_t slot) {
         }
     }
     RecordWorld(slot);
-    if (panel_count != 0u) {
-        RecordPanels();
-    }
 
     // The resolve runs on the 2D engine, which the 3D pipeline's own barriers do not order.
     dkCmdBufBarrier(gpu.cmdbuf, DkBarrier_Full, 0);
@@ -715,6 +776,7 @@ static uint32_t JudgedAt(uint32_t k) {
 /// the wait for an image is not; the present comes after it, and a judged frame's copy after
 /// that.
 static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
+    frame_judged = level >= 3u && JudgedAt(k) < WIMSY_JUDGED;
     const int image = on_screen ? 0 : dkQueueAcquireImage(gpu.queue, swapchain);
     const uint64_t began = armGetSystemTick();
     GpuBeginPass(&gpu);
@@ -730,6 +792,9 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
         if (level >= 3u) {
             RecordFills(slot);
             RecordChains(slot);
+            if (frame_judged) {
+                RecordChainsBack(slot);
+            }
             // Back to the whole target's viewport, which the last chain's pass left at its own.
             GpuSetTarget(&gpu, NULL, WIMSY_WIDTH, WIMSY_HEIGHT);
         }
@@ -780,6 +845,9 @@ static uint64_t DrawFrame(uint32_t k, uint32_t slot) {
         if (memcmp(peek_cpu[slot], want, 4u) != 0 && render.peek_wrong++ == 0u) {
             render.peek_wrong_at = k;
             memcpy(render.peek_got, peek_cpu[slot], 4u);
+        }
+        if (frame_judged) {
+            JudgeScreens(k, slot);
         }
     }
 
@@ -966,6 +1034,10 @@ static bool BringUp(char *why, size_t why_size) {
     }
     bool images = GpuCreateTexture(&gpu, &sprite_texture, &sprite_layout, DkImageFormat_RGBA8_Unorm,
                                    WIMSY_SPRITE, WIMSY_SPRITE);
+    if (images && level >= 3u) {
+        images = GpuCreateTexture(&gpu, &plaque_texture, &plaque_layout, DkImageFormat_RGBA8_Unorm,
+                                  WIMSY_PLAQUES_SIDE, WIMSY_PLAQUES_SIDE);
+    }
     if (images && level != 0u) {
         images = GpuCreateRenderImage(&gpu, &colour_samples, &colour_samples_layout,
                                       DkImageFormat_RGBA8_Unorm, WIMSY_WIDTH, WIMSY_HEIGHT,
@@ -1052,13 +1124,12 @@ static bool BringUp(char *why, size_t why_size) {
             &image_set[s], "the image descriptors", why, why_size);
         peek_cpu[s] = (uint8_t *)Scratch(DK_UNIFORM_BUF_ALIGNMENT, DK_UNIFORM_BUF_ALIGNMENT,
                                          &peek_gpu[s], "the texel read back", why, why_size);
+        screens_cpu[s] = (uint8_t *)Scratch(SCREENS_BYTES, 256u, &screens_gpu[s],
+                                            "the textures read back", why, why_size);
         if (peek_cpu[s] != NULL) {
             memset(peek_cpu[s], 0, DK_UNIFORM_BUF_ALIGNMENT);
         }
     }
-    GpuVertex *const panel_vertices = (GpuVertex *)Scratch(
-        WIMSY_PANELS * 6u * (uint32_t)sizeof(GpuVertex), 256u, &panel_quads, "the panels", why,
-        why_size);
     GpuVertex *const chain_vertices = (GpuVertex *)Scratch(
         6u * (uint32_t)sizeof(GpuVertex), 256u, &chain_quad, "a chain's quad", why, why_size);
     GpuVertex *const world = (GpuVertex *)Scratch(
@@ -1106,15 +1177,6 @@ static bool BringUp(char *why, size_t why_size) {
     puff_count = WimsyPuffCount(WimsySmokeOf(level));
     blade_count = WimsyBladesOf(0u, grass, blades);
     static const uint8_t WHITE[4] = { 255, 255, 255, 255 };
-    panel_count = WimsyPanelsOf(level, panels);
-    for (uint32_t i = 0; i < panel_count; ++i) {
-        // A load's panel shows its first 64 by 64 texels of 512, the others their whole texture.
-        PixelSquare(panel_vertices + i * 6u, panels[i].x, panels[i].y, panels[i].side, WIMSY_WIDTH,
-                    WIMSY_HEIGHT, WHITE,
-                    panels[i].kind == WIMSY_PANEL_LOAD
-                        ? (float)WIMSY_LOAD_SHOWN / (float)WIMSY_LOAD_SIDE
-                        : 1.0f);
-    }
     PixelSquare(chain_vertices, 0u, 0u, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, WIMSY_CHAIN_SIDE, WHITE,
                 1.0f);
 
@@ -1188,6 +1250,8 @@ static bool BringUp(char *why, size_t why_size) {
         dkImageViewDefaults(&view, &sprite_texture);
         dkImageDescriptorInitialize(&described[IMAGE_LOAD + l], &view, false, false);
     }
+    dkImageViewDefaults(&view, level >= 3u ? &plaque_texture : &sprite_texture);
+    dkImageDescriptorInitialize(&described[IMAGE_PLAQUES], &view, false, false);
     for (uint32_t s = 0; s < SLOTS; ++s) {
         memcpy(image_descriptors[s], described, sizeof(described));
     }
@@ -1198,6 +1262,20 @@ static bool BringUp(char *why, size_t why_size) {
                           WIMSY_SPRITE, texels)) {
         snprintf(why, why_size, "the sprite's upload: %s", gpu.failure);
         return false;
+    }
+    if (level >= 3u) {
+        // The plaques' names, drawn by the processor in the screens' font.
+        static uint8_t names[WIMSY_PLAQUES_SIDE * WIMSY_PLAQUES_SIDE * 4u];
+        for (uint32_t y = 0; y < WIMSY_PLAQUES_SIDE; ++y) {
+            for (uint32_t x = 0; x < WIMSY_PLAQUES_SIDE; ++x) {
+                WimsyPlaqueTexel(x, y, &names[((size_t)y * WIMSY_PLAQUES_SIDE + x) * 4u]);
+            }
+        }
+        if (!GpuUploadTexture(&gpu, &plaque_texture, DkImageFormat_RGBA8_Unorm, WIMSY_PLAQUES_SIDE,
+                              WIMSY_PLAQUES_SIDE, names)) {
+            snprintf(why, why_size, "the plaques' upload: %s", gpu.failure);
+            return false;
+        }
     }
 
     if (level >= 2u) {
@@ -1504,14 +1582,20 @@ static void RunLevel(void) {
                     WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL, render.peek_wrong_at,
                                       0u, 0u, want);
                     CHECK_TRUE(SUITE, peek_name, CHECK_EXACT,
-                               render.peeked == frames && render.peek_wrong == 0u,
+                               render.peeked == frames && render.peek_wrong == 0u &&
+                                   render.screens_read == judged_count &&
+                                   render.screens_wrong == 0u,
                                "%u of %u frames read back, %u of them another texel; the first, "
                                "frame %u, read %02x %02x %02x %02x where the program stored %02x "
-                               "%02x %02x %02x",
+                               "%02x %02x %02x; %u of %u judged frames read back whole, %u texels "
+                               "of them not what the processor works out%s%s",
                                (unsigned)render.peeked, (unsigned)frames,
                                (unsigned)render.peek_wrong, (unsigned)render.peek_wrong_at,
                                render.peek_got[0], render.peek_got[1], render.peek_got[2],
-                               render.peek_got[3], want[0], want[1], want[2], want[3]);
+                               render.peek_got[3], want[0], want[1], want[2], want[3],
+                               (unsigned)render.screens_read, (unsigned)judged_count,
+                               (unsigned)render.screens_wrong,
+                               render.screens_wrong != 0u ? ": " : "", render.screens_first);
                 }
                 if (timing) {
                     Times();

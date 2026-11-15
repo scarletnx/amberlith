@@ -201,8 +201,9 @@ family reports can be believed without them.
     asked; their hills and grass, each from its seed, the grass's five densities and its wind,
     and the machines that leave the hills or the grass out or keep the grass still refused;
     their smoke, its puffs by the frame's number, and the machines that draw none or draw it over
-    what is nearer refused; their panels, a compute texel and a chain of targets worked out by hand; then what a
-    line says of a verdict (see [The levels](Game.md#the-levels));
+    what is nearer refused; their walls, the screens and plaques on them, a compute texel and a
+    chain of targets worked out by hand, and the machine whose screens are a frame late
+    refused; then what a line says of a verdict (see [The levels](Game.md#the-levels));
   - one on the demo family's times, `source/demoref.c`: the warm-up left out, the means,
     percentiles, longest and hitches of a run made to order, the case names carrying the frames
     asked for, the note, and the run a step gives a demo (see [The demo family](Demo.md));
