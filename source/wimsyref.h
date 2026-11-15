@@ -23,14 +23,18 @@ extern "C" {
 /// light, turning a fixed angle a frame behind a depth buffer with four samples a pixel, while
 /// the camera backs away from near to far over the run. Level 2 is a scene: seven of her down a
 /// floor of two hundred units, textured with every level of detail, with a lane whose levels of
-/// detail are each a colour, signs a quarter of a unit in front of walls and marks painted on
-/// the floor, so a frame shows what a machine does with the same things near and far.
+/// detail are each a colour, signs 5/256 of a unit in front of walls and marks painted on the
+/// floor, so a frame shows what a machine does with the same things near and far. Level 3 is
+/// that scene as heavy as a game's frame: a crowd of a hundred and sixty more of her, every
+/// model drawn part by part, a draw and a uniform buffer each, fifteen hundred draws a frame,
+/// over a floor whose texture is ASTC, 4096 texels a side. Level 4 is level 3 with that texture
+/// 8192 a side.
 ///
 /// A level's frame is not held to a hash: two machines that are both right differ in a shaded
 /// frame's last bits and in which way a sample on an edge falls. Each judged frame is held to
 /// bounds a pixel, worked out here (WimsyJudge).
 
-#define WIMSY_LEVELS 3u
+#define WIMSY_LEVELS 5u
 
 /// What a level is called on a line.
 const char *WimsyLevelName(uint32_t level);
@@ -101,7 +105,7 @@ typedef struct {
     float shade[4];
 } WimsyLight;
 
-#define WIMSY_INSTANCES_MAX 8u
+#define WIMSY_INSTANCES_MAX 168u
 
 /// The models frame @p frame of a run of @p frames draws at @p level, in order. Returns how many.
 uint32_t WimsyInstancesOf(uint32_t level, uint32_t frame, uint32_t frames, WimsyInstance *out);
@@ -163,12 +167,32 @@ void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[
 typedef enum {
     WIMSY_TEXTURE_FLOOR,
     WIMSY_TEXTURE_LANE,
+    /// The floor's at levels 3 and 4: the same stones in ASTC blocks of 8 by 8, 4096 and 8192
+    /// texels a side.
+    WIMSY_TEXTURE_FLOOR_4K,
+    WIMSY_TEXTURE_FLOOR_8K,
     WIMSY_TEXTURES,
 } WimsyTexture;
 
 /// A side of level nought and how many levels.
 uint32_t WimsyTextureSide(WimsyTexture texture);
 uint32_t WimsyTextureLevels(WimsyTexture texture);
+
+/// The floor's texture at @p level, and the texels a side of a block of @p texture: 8 for the
+/// ASTC ones, nought for those of plain texels.
+WimsyTexture WimsyFloorTexture(uint32_t level);
+uint32_t WimsyTextureBlock(WimsyTexture texture);
+
+/// The ASTC block at (@p bx, @p by), in blocks, of level @p level of an ASTC @p texture: a void
+/// extent, every texel of it the colour WimsyTexel gives its first, which a stone's width makes
+/// the colour of them all. Sixteen bytes.
+void WimsyTextureBlockAt(WimsyTexture texture, uint32_t level, uint32_t bx, uint32_t by,
+                         uint8_t out[16]);
+
+/// How many codes more a channel of an ASTC texture's range gets each way: a machine whose host
+/// samples no ASTC keeps the texture in another compressed format, and BC7 holds a flat block's
+/// colour to within one.
+#define WIMSY_ASTC_MARGIN 2.0
 
 /// Texel (@p x, @p y) of level @p level of @p texture.
 void WimsyTexel(WimsyTexture texture, uint32_t level, uint32_t x, uint32_t y, uint8_t out[4]);

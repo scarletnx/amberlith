@@ -165,13 +165,15 @@ The scene above is one small frame, the same on every run. The `wimsy` suite dra
 ScarletNX's mascot, as a game draws a character, from the lightest frame a game makes upwards, a
 level a scene. A level runs when a word names it, `level=<n>`, one word a level
 ([the mode file](../ModeFile.md)); none runs without one, and `frames=<n>` is theirs as it is the
-scene's. Three levels so far:
+scene's. Five levels:
 
 | level | a frame |
 |---|---|
 | 0, sprites | 96 sprites of her, 128 texels a side, a pixel or four a texel, half of them mirrored, some hanging off the target: one batch of 576 vertices the main thread rewrites every frame as the scene's world moves them, drawn in one draw and blended over the clear colour, as a 2D game's are |
 | 1, one lit model | her model, 1680 triangles, turning a two hundred and fortieth of a turn a frame, while the camera backs away from 3 of her half widths to 48 over the run: a transform in a uniform buffer the main thread rewrites every frame, a normal a vertex and a colour of four normalised bytes, one light worked out a pixel, the faces turned away culled, a Z24S8 depth buffer, and four samples a pixel resolved before the frame is shown |
 | 2, a scene near and far | seven of her down a floor 204 units long, the camera backing away and up from 6 units to 36 from the nearest: the floor, 204 quads through a 2048 by 2048 texture of paving stones with its twelve levels of detail, a level between two weighed; a lane down its middle through a 1024 by 1024 texture whose eleven levels are each one colour; two walls 40 units down, a sign 5/256 of a unit in front of each, drawn before its wall on the left and after it on the right; and four marks painted in the floor's own plane, brought in front of it by a depth bias. Eleven draws |
+| 3, a heavy frame | level 2's scene with a crowd of 160 more of her, twenty rows of eight either side of the lane, each her own shade, and every model drawn as a game draws a character of several materials, a draw a part with its uniform buffer bound again: 1,507 draws a frame, 280,560 triangles of hers, 167 uniform buffers the main thread rewrites. The floor's texture is ASTC in blocks of 8 by 8, 4096 texels a side, thirteen levels |
+| 4, a heavy frame of 8K | level 3 with the floor's texture 8192 texels a side, fourteen levels, 22 MiB of blocks |
 
 **The model** is `source/wimsymesh.c`, which `tools/wimsy-mesh.py` makes from her drawing,
 `static/wimsy.svg`: each of its five leaves a slab with a white bevel where the drawing strokes
@@ -217,6 +219,12 @@ the uniform buffers held and works out the range each channel of each pixel may 
 - a pixel's range is the mean of its samples' ranges and two codes more each way, one for the
   byte a float rounds to and one for the mean's own rounding.
 
+The heavy levels' floor is ASTC a machine can be held to: each block is a void extent of its
+stone's colour, which every decoder gives back whichever way it makes eight bits of it (the
+reference suite holds the blocks to `source/astcref.c`), and a stone is whole blocks on every
+level. A machine whose host samples no ASTC keeps the texture in a format of its own; BC7 holds
+a flat block to within a code, so that floor's ranges are two codes wider each way.
+
 Level 2 is there for what a machine does with the same things near and far, and its frames
 show each. The lane's colour is the level of detail it was drawn at: red, green, blue, yellow,
 magenta, cyan, white, orange and on, a band blending into the next where a level between two is
@@ -249,6 +257,10 @@ What the ranges refuse is checked by the reference suite on machines made to ord
 it with one sample a pixel, with no depth test, with no light, a frame late, a pixel aside or
 not at all is refused, as is one that draws level 2 with the nearer level of detail alone, a
 level too coarse, no depth bias or 16 bits of depth.
+
+The heavy levels draw a frame's worth of a game's draws and textures and no more than that:
+no compute work, no target but the one, no texture the processor or the graphics unit rewrites
+while the frames run.
 
 **What is timed** is what the scene times: seven cases a level, named with it
 (`level 1, 600 frames, present to present: the mean`), and two notes. A judged frame's copy is

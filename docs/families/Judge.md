@@ -43,7 +43,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, four hundred and eighty five cases, no hardware involved either: the other half
+- **reference**, four hundred and eighty six cases, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the
@@ -168,7 +168,7 @@ family reports can be believed without them.
     1024 frames, the frame times' mean, 99th percentile, longest and hitches on runs made to order,
     the audio thread's limit, the timed cases the warm-up is left out of, and the notes they end on
     (see [The game family](Game.md));
-  - eleven on the game family's levels, `source/wimsyref.c`: the model's turn in whole numbers
+  - twelve on the game family's levels, `source/wimsyref.c`: the model's turn in whole numbers
     against the C library's sine and cosine, the frames of a run that are judged and the path that
     ends with it, the sprite as the model seen from the front, sprites over one another, mirrored,
     doubled and cut by the target's edges, level 0's frames bit for bit, the model's transform and
@@ -177,8 +177,9 @@ family reports can be believed without them.
     no depth test, no light, a frame late, a pixel aside or not at all refused; level 2's world,
     view and textures, the machine that draws it as asked inside every range near and far, and
     those that take the nearer level of detail alone or one too coarse, draw its marks with no
-    depth bias, have no depth test or keep 16 bits of depth refused; then what a line says of a
-    verdict (see [The levels](Game.md#the-levels));
+    depth bias, have no depth test or keep 16 bits of depth refused; the heavy levels' crowd,
+    their floors' ASTC blocks against the suite's ASTC decoder and the machine that draws them as
+    asked; then what a line says of a verdict (see [The levels](Game.md#the-levels));
   - eleven on the tex8k suite's judge, `source/tex8kref.c`: the graphics memory its textures want
     of a machine and what it says of one with less, its BC7 mode 6 and BC1 blocks against the
     bytes and texels Pillow 12.3.0 decodes them to, both ways a BC1 code may become eight bits, its

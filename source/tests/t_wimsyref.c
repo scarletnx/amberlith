@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../astcref.h"
 #include "../check.h"
 #include "../gameref.h"
 #include "../report.h"
@@ -532,6 +533,83 @@ static void CheckSceneFrames(void) {
            &t);
 }
 
+static void CheckHeavy(void) {
+    Tally t = { 0, NULL };
+    static WimsyInstance models[WIMSY_INSTANCES_MAX];
+    // The scene's seven and a crowd of 160: the first of the crowd 6 left of the lane and 3
+    // down it, the eighth 15 right, the ninth in the second row, 12 down.
+    Expect(&t, WimsyInstancesOf(3u, 0u, 600u, models) == 167u &&
+                   WimsyInstancesOf(4u, 0u, 600u, models) == 167u,
+           "167 models at levels 3 and 4");
+    float view[16];
+    WimsyViewOf(3u, 0u, 600u, view);
+    static const float PLACE[3][2] = { { -6.0f, -3.0f }, { 15.0f, -3.0f }, { -6.0f, -12.0f } };
+    static const uint32_t MEMBER[3] = { 7u, 14u, 15u };
+    for (uint32_t i = 0; i < 3u; ++i) {
+        const float w = view[3] * PLACE[i][0] + view[7] * 1.125f + view[11] * PLACE[i][1] + view[15];
+        Expect(&t, fabsf(models[MEMBER[i]].to_clip[15] - w) < 1e-3f, "a member of the crowd's place");
+    }
+    Expect(&t, models[7].tint[0] == 0.875f && models[7].tint[1] == 0.625f &&
+                   models[7].tint[2] == 0.75f && models[6].tint[0] == 1.0f,
+           "each of the crowd its own shade, the scene's seven their whole colour");
+    bool seen = true;
+    for (uint32_t i = 0; i < 167u; ++i) {
+        // A model's middle is its transform's last column: in front of the near distance by more
+        // than her reach, short of the far one.
+        seen = seen && models[i].to_clip[15] > 2.0f && models[i].to_clip[15] < 1000.0f;
+    }
+    Expect(&t, seen, "every model between the near and the far distance");
+    // The floors: 4096 and 8192 a side, ASTC blocks of 8 by 8, each block a void extent of its
+    // stone's colour, which the suite's ASTC decoder gives back for all 64 texels, every way of
+    // making eight bits of it.
+    Expect(&t, WimsyFloorTexture(2u) == WIMSY_TEXTURE_FLOOR && WimsyFloorTexture(3u) == WIMSY_TEXTURE_FLOOR_4K &&
+                   WimsyFloorTexture(4u) == WIMSY_TEXTURE_FLOOR_8K &&
+                   WimsyTextureSide(WIMSY_TEXTURE_FLOOR_4K) == 4096u &&
+                   WimsyTextureLevels(WIMSY_TEXTURE_FLOOR_4K) == 13u &&
+                   WimsyTextureSide(WIMSY_TEXTURE_FLOOR_8K) == 8192u &&
+                   WimsyTextureLevels(WIMSY_TEXTURE_FLOOR_8K) == 14u &&
+                   WimsyTextureBlock(WIMSY_TEXTURE_FLOOR_8K) == 8u &&
+                   WimsyTextureBlock(WIMSY_TEXTURE_FLOOR) == 0u && WimsyTextureBlock(WIMSY_TEXTURE_LANE) == 0u,
+           "the three floors' sides, levels and blocks");
+    bool decoded = true, flat = true;
+    static const uint32_t AT[4][3] = { { 0, 0, 0 }, { 0, 37, 501 }, { 3, 9, 2 }, { 12, 0, 0 } };
+    for (uint32_t i = 0; i < 4u; ++i) {
+        uint8_t block[16], want[4];
+        uint16_t texels[ASTC_MAX_TEXELS][4];
+        WimsyTextureBlockAt(WIMSY_TEXTURE_FLOOR_4K, AT[i][0], AT[i][1], AT[i][2], block);
+        WimsyTexel(WIMSY_TEXTURE_FLOOR_4K, AT[i][0], AT[i][1] * 8u, AT[i][2] * 8u, want);
+        decoded = decoded && AstcDecodeBlock(block, 8u, 8u, texels) == ASTC_BLOCK_CONSTANT;
+        for (uint32_t texel = 0; texel < 64u; ++texel) {
+            for (uint32_t k = 0; k < 4u; ++k) {
+                uint8_t rounded = 0, truncated = 0;
+                AstcUnorm8Answers(texels[texel][k], &rounded, &truncated);
+                decoded = decoded && rounded == want[k] && truncated == want[k] &&
+                          AstcUnorm8Fp16(texels[texel][k]) == want[k];
+            }
+        }
+        // Every texel of the block is the stone's: the last as the first.
+        uint8_t last[4];
+        WimsyTexel(WIMSY_TEXTURE_FLOOR_4K, AT[i][0], AT[i][1] * 8u + 7u, AT[i][2] * 8u + 7u, last);
+        flat = flat && (AT[i][0] > 4u || memcmp(last, want, 4u) == 0);
+    }
+    Expect(&t, decoded, "a block decodes to its stone's colour, every way of making eight bits");
+    Expect(&t, flat, "a block's texels are one colour");
+    // The machine that draws the heavy frame as asked passes, near at level 3 and far at level
+    // 4; one whose uniform buffers are a frame late is refused.
+    WimsyMachine machine = WimsyMachineRight(3u);
+    WimsyVerdict verdict = Verdict(3u, 0u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 500000u, "level 3's first frame as asked");
+    machine.frames_late = 1u;
+    verdict = Verdict(3u, 300u, 600u, &machine);
+    Expect(&t, !WimsyVerdictPasses(&verdict) && verdict.wrong > 500u, "level 3 a frame late is refused");
+    machine = WimsyMachineRight(4u);
+    verdict = Verdict(4u, 599u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 800000u, "level 4's last frame as asked");
+    Report("wimsy: the heavy levels' crowd, their floors' ASTC blocks, and the machine that draws "
+           "them as asked",
+           &t);
+}
+
 static void CheckSaid(void) {
     Tally t = { 0, NULL };
     char said[400];
@@ -568,6 +646,8 @@ static void CheckSaid(void) {
     Expect(&t, strcmp(WimsyLevelName(0u), "sprites") == 0 &&
                    strcmp(WimsyLevelName(1u), "one lit model") == 0 &&
                    strcmp(WimsyLevelName(2u), "a scene near and far") == 0 &&
+                   strcmp(WimsyLevelName(3u), "a heavy frame") == 0 &&
+                   strcmp(WimsyLevelName(4u), "a heavy frame of 8K") == 0 &&
                    strcmp(WimsyLevelName(WIMSY_LEVELS), "no level") == 0,
            "the levels' names");
     Report("wimsy: what a line says of a verdict", &t);
@@ -584,5 +664,6 @@ void RunReferenceWimsy(void) {
     CheckModelMachines();
     CheckScene();
     CheckSceneFrames();
+    CheckHeavy();
     CheckSaid();
 }
