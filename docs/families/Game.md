@@ -322,5 +322,5 @@ there for the processor once the queue is idle; and that a vertex buffer stepped
 gives each of the 2,048 instances of one draw its own blade, as the vertex suite's per instance
 attribute does nine. The compute program reads its uniform block's
 vector by fixed components alone, and works in whole numbers up to the one division by 255, so
-neither a vector's component picked at run time nor a denormal is in it. ScarletNX a97e2db on a
+neither a vector's component picked at run time nor a denormal is in it. ScarletNX f492ffb on a
 desktop card and on lavapipe is inside every range of the five levels.
