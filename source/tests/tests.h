@@ -472,6 +472,10 @@ void RunReferenceBlit2d(void);
 /// pixel gets.
 void RunReferenceScene(void);
 
+/// The nvn2 suite's Mandelbrot (mandelref.c): its counts and its picture, held to numbers worked
+/// out apart.
+void RunReferenceMandel(void);
+
 /// The service family's judge on answers made to order: part of the reference suite.
 void RunReferenceService(void);
 

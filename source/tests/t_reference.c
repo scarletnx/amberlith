@@ -2487,6 +2487,7 @@ void RunReference(void) {
     RunReferenceBinder();
     RunReferenceBlit2d();
     RunReferenceScene();
+    RunReferenceMandel();
     RunReferenceService();
     RunReferenceGame();
     RunReferenceWimsy();
