@@ -79,7 +79,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick game level=1` | the scene, then the lit model's level for 600 frames |
 | `quick game level=0 level=2 skip=game images` | those two levels alone, each judged frame leaving its pictures |
 | `quick demo` | the judge, cpu and the demo family's two zooms, 600 frames each, presented and timed, then exit |
-| `quick music` | the judge, cpu and the music family's twelve cases, then exit: about twelve seconds, five of them silent sound through the renderer |
+| `quick music` | the judge, cpu and the music family's twelve cases, then exit: about eighteen seconds, five of them silent sound through the renderer |
 | `quick skip=tex8k` | the families a file naming none runs, the tex8k suite's cases each a skip asked for |
 | `browse` | the browser, on its suites tab, and nothing until a person picks; ten seconds of nothing leaves |
 

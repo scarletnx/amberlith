@@ -130,8 +130,8 @@ high quality that is a filter of four or eight taps ([the audio family](Audio.md
 takes the nearest sample, which at a ratio of one is the sample itself, and the renderer's own
 volume of 1 changes nothing, so the recording is the voice's samples, moved by the few the renderer
 holds back. That is why the cases look for the loop at every sample rather than at a frame's edge:
-under ScarletNX a voice comes back four samples late. There the family takes about twelve seconds:
-seven rendering the tracks and the switches, five of sound through the renderer, silent (the last
+under ScarletNX a voice comes back four samples late. There the family takes about eighteen seconds:
+thirteen rendering the tracks and the switches, five of sound through the renderer, silent (the last
 note says which part took what). The synthesizer's arithmetic and what the composer writes for many
 seeds are pinned in [the reference suite](Judge.md), with no sample rendered there.
 
