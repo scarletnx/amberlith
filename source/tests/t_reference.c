@@ -2492,6 +2492,7 @@ void RunReference(void) {
     RunReferenceDemo();
     RunReferenceFractal();
     RunReferenceFluid();
+    RunReferenceMusic();
     RunReferenceTex8k();
     RunReferenceFixed();
     RunReferenceCoverage();

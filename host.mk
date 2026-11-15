@@ -15,7 +15,7 @@ HOSTFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -MMD -M
 HOSTOBJ  := $(patsubst source/%.c,build-host/%.o,$(HOSTSRC))
 HOSTDEP  := $(HOSTOBJ:.o=.d)
 
-.PHONY: host host-run host-clean
+.PHONY: host host-run host-clean music-wav
 
 # Where the fluid demo's budgets come from, measured on the processor (tools/fluid-envelope.c).
 FLUIDTOOL := build-host/fluid-envelope
@@ -46,6 +46,19 @@ host-run: $(HOSTOUT) $(FLUIDTOOL)
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts
 	bash android/tests/test-run-adb.sh
 	bash android/tests/test-run-scarletnx.sh
+
+# The demos' tracks as WAVs to listen to (tools/music-wav.c): one pass of each track's form and a
+# switch across the silence barrier, the samples the music family holds a machine to.
+MUSIC_WAV ?= build-host/music
+MUSICFLAGS := -std=c11 -Wall -Wextra -Werror -O2 -Isource
+
+music-wav: build-host/music-wav
+	@mkdir -p $(MUSIC_WAV)
+	./build-host/music-wav $(MUSIC_WAV)
+
+build-host/music-wav: tools/music-wav.c source/music.c source/music.h
+	@mkdir -p build-host
+	$(HOSTCC) $(MUSICFLAGS) tools/music-wav.c source/music.c -o $@
 
 host-clean:
 	rm -rf build-host

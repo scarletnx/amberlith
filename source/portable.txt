@@ -50,6 +50,7 @@ source/blit2dref.c
 source/serviceref.c
 source/gameref.c
 source/demo_fluidref.c
+source/music.c
 source/tex8kref.c
 source/wimsymesh.c
 source/wimsyref.c
@@ -90,6 +91,7 @@ source/tests/t_serviceref.c
 source/tests/t_baseline.c
 source/tests/t_gameref.c
 source/tests/t_demo_fluidref.c
+source/tests/t_musicref.c
 source/tests/t_tex8kref.c
 source/tests/t_wimsyref.c
 source/tests/t_demoref.c

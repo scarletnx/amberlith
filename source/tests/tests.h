@@ -451,6 +451,10 @@ void RunReferenceFractal(void);
 /// The fluid demo's script, passes, invariants and judge, on a small grid against answers worked
 /// out by hand and on machines made to order: part of the reference suite.
 void RunReferenceFluid(void);
+/// The demos' music: its tracker's periods, ticks, mix and filters, and what its composer writes
+/// (modes, chords, voicings, the lead on chord tones, A A B A, seeds, colours), against answers
+/// worked out by hand: part of the reference suite. No sample is rendered.
+void RunReferenceMusic(void);
 
 /// The coverage suite's sample patterns, edges, modulation table entries and modulated bytes,
 /// against answers worked out by hand: part of the reference suite.
