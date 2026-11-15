@@ -495,6 +495,7 @@ NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
     record->magic = MAGIC_POOL;
     record->block = pending.block;
     record->flags = from->flags;
+    record->size = from->size;
     if ((from->flags & NVN_MEMORY_POOL_FLAGS_SHADER_CODE) != 0 && !CodePoolAdd(pending.block)) {
         LayerComplain("nvnMemoryPoolInitialize: a shader code pool past the %d the layer keeps "
                       "track of at a time",
@@ -526,12 +527,64 @@ NVNbufferAddress Nvnl_nvnMemoryPoolGetBufferAddress(const NVNmemoryPool *pool) {
     return record != NULL ? dkMemBlockGetGpuAddr(record->block) : 0;
 }
 
+/// Whether @p size bytes at @p offset are inside @p record's pool; a complaint with the numbers
+/// when they are not.
+static bool InPool(const LayerPool *record, ptrdiff_t offset, size_t size, const char *what) {
+    if (offset < 0 || (size_t)offset > record->size || size > record->size - (size_t)offset) {
+        LayerComplain("%s: 0x%zx bytes at offset %lld, of a pool of 0x%zx", what, size,
+                      (long long)offset, record->size);
+        return false;
+    }
+    return true;
+}
+
 void Nvnl_nvnMemoryPoolFlushMappedRange(const NVNmemoryPool *pool, ptrdiff_t offset,
                                                size_t size) {
     LayerPool *const record = PoolOf(pool, "nvnMemoryPoolFlushMappedRange");
-    if (record != NULL) {
+    if (record != NULL && InPool(record, offset, size, "nvnMemoryPoolFlushMappedRange")) {
         dkMemBlockFlushCpuCache(record->block, (uint32_t)offset, (uint32_t)size);
     }
+}
+
+void Nvnl_nvnMemoryPoolInvalidateMappedRange(const NVNmemoryPool *pool, ptrdiff_t offset,
+                                             size_t size) {
+    // deko3d has the one call for the processor's cache of a block, which writes the range back
+    // and drops it: after it a read takes what the graphics unit wrote, which is what NVN's
+    // invalidate is for, and nothing of the program's is lost by the write back.
+    LayerPool *const record = PoolOf(pool, "nvnMemoryPoolInvalidateMappedRange");
+    if (record != NULL && InPool(record, offset, size, "nvnMemoryPoolInvalidateMappedRange")) {
+        dkMemBlockFlushCpuCache(record->block, (uint32_t)offset, (uint32_t)size);
+    }
+}
+
+NVNdevice *Nvnl_nvnMemoryPoolBuilderGetDevice(const NVNmemoryPoolBuilder *builder) {
+    const LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderGetDevice");
+    return record != NULL ? record->device : NULL;
+}
+
+void *Nvnl_nvnMemoryPoolBuilderGetMemory(const NVNmemoryPoolBuilder *builder) {
+    const LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderGetMemory");
+    return record != NULL ? record->storage : NULL;
+}
+
+size_t Nvnl_nvnMemoryPoolBuilderGetSize(const NVNmemoryPoolBuilder *builder) {
+    const LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderGetSize");
+    return record != NULL ? record->size : 0;
+}
+
+NVNmemoryPoolFlags Nvnl_nvnMemoryPoolBuilderGetFlags(const NVNmemoryPoolBuilder *builder) {
+    const LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderGetFlags");
+    return record != NULL ? (NVNmemoryPoolFlags)record->flags : 0;
+}
+
+size_t Nvnl_nvnMemoryPoolGetSize(const NVNmemoryPool *pool) {
+    const LayerPool *const record = PoolOf(pool, "nvnMemoryPoolGetSize");
+    return record != NULL ? record->size : 0;
+}
+
+NVNmemoryPoolFlags Nvnl_nvnMemoryPoolGetFlags(const NVNmemoryPool *pool) {
+    const LayerPool *const record = PoolOf(pool, "nvnMemoryPoolGetFlags");
+    return record != NULL ? (NVNmemoryPoolFlags)record->flags : 0;
 }
 
 // ---- textures

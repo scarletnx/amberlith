@@ -13,8 +13,8 @@
 /// lookup itself, which every build has whole.
 ///
 /// Three lists, by what each build of the layer does with them:
-/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, a part of it written apart) and
-///   NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
+/// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE and NVN_LAYER_PROCS_POOL, parts of it
+///   written apart) and NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231: the functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
@@ -58,6 +58,17 @@
     X(NVNboolean, nvnTextureViewGetTarget,                                                        \
       (const NVNtextureView *view, NVNtextureTarget *target))                                     \
     X(NVNboolean, nvnTextureViewCompare, (const NVNtextureView *a, const NVNtextureView *b))
+
+// What a memory pool and its builder answer of themselves, and the processor's cache of a pool.
+#define NVN_LAYER_PROCS_POOL(X)                                                                   \
+    X(NVNdevice *, nvnMemoryPoolBuilderGetDevice, (const NVNmemoryPoolBuilder *builder))          \
+    X(void *, nvnMemoryPoolBuilderGetMemory, (const NVNmemoryPoolBuilder *builder))               \
+    X(size_t, nvnMemoryPoolBuilderGetSize, (const NVNmemoryPoolBuilder *builder))                 \
+    X(NVNmemoryPoolFlags, nvnMemoryPoolBuilderGetFlags, (const NVNmemoryPoolBuilder *builder))    \
+    X(size_t, nvnMemoryPoolGetSize, (const NVNmemoryPool *pool))                                  \
+    X(NVNmemoryPoolFlags, nvnMemoryPoolGetFlags, (const NVNmemoryPool *pool))                     \
+    X(void, nvnMemoryPoolInvalidateMappedRange,                                                   \
+      (const NVNmemoryPool *pool, ptrdiff_t offset, size_t size))
 
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
@@ -142,7 +153,8 @@
       (NVNwindowBuilder * builder, int count, NVNtexture *const *textures))                       \
     X(NVNboolean, nvnWindowInitialize, (NVNwindow * window, const NVNwindowBuilder *builder))     \
     X(void, nvnWindowFinalize, (NVNwindow * window))                                              \
-    NVN_LAYER_PROCS_TEXTURE(X)
+    NVN_LAYER_PROCS_TEXTURE(X)                                                                    \
+    NVN_LAYER_PROCS_POOL(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
