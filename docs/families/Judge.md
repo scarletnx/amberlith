@@ -43,7 +43,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, five hundred and twelve cases, no hardware involved either: the other half
+- **reference**, five hundred and thirty four cases, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the
@@ -126,9 +126,17 @@ family reports can be believed without them.
     decoder (26.1.6) makes of the same eighteen blocks, eleven sets of texels worked out by hand,
     and the test that names a block uploaded as it is, which every block's bytes meet and no
     block's colours do;
-  - four on the bcn suite's layout, `source/bcnref.c`: where deko3d puts each level and layer of
-    a block linear array, against offsets worked out by hand from its layout rules, and the solid
-    BC4 block;
+  - twenty six on the bcn and bcnimage suites' answers, `source/bcnref.c`: where deko3d puts each
+    level and layer of a block linear array, against offsets worked out by hand from its layout
+    rules, and the solid BC4 block; the bcnimage suite's picture the astcimage suite's, and its
+    large textures' pictures BC1's and BC7's; every picture of `source/bcnimages.c` decoded as
+    Pillow 12.3.0 decodes it (bcdec 0.985 the BC6H one), and a block of every BC7 mode and every
+    BC6H mode and reserved code, unsigned and signed, as those two decode them; each interpolant
+    rule's BC1 thirds and midpoints, BC3 alphas and BC4 weights against numbers worked out by hand,
+    NVIDIA's the bcn suite's and BPTC's sixty-fourths what RADV read there; the byte a decoded value
+    reaches a target as; and the bcnimage judge on machines made to order, every picture: the
+    console's decode exact, the exact fractions rounded and the sixty-fourths bound on BC1 to BC5
+    and exact on BC6H and BC7, and a block read down its columns and a block a place aside refused;
   - fourteen on the audio family's answers: a tone's level read back from a recording, exact for a
     tone with whole periods in the run and blind to every other such tone; the frames the
     recordings are laid out in; the limiter's rule, held by hand to a steady input and to a sine,
