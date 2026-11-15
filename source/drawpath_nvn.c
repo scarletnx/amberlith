@@ -287,7 +287,10 @@ static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
 }
 
 static int NvTexture(DrawPath *path, uint32_t width, uint32_t height, const uint8_t *texels,
-                     bool linear) {
+                     const DrawSampler *how) {
+    static const NVNwrapMode WRAPS[] = { NVN_WRAP_MODE_CLAMP_TO_EDGE, NVN_WRAP_MODE_REPEAT,
+                                         NVN_WRAP_MODE_MIRRORED_REPEAT,
+                                         NVN_WRAP_MODE_CLAMP_TO_BORDER };
     NvnPath *const nv = Nv(path);
     const uint32_t index = nv->texture_count;
     if (index >= path->spec.textures) {
@@ -306,10 +309,11 @@ static int NvTexture(DrawPath *path, uint32_t width, uint32_t height, const uint
     nv->nvn.nvnSamplerBuilderSetDevice(&builder, &nv->device);
     nv->nvn.nvnSamplerBuilderSetDefaults(&builder);
     nv->nvn.nvnSamplerBuilderSetMinMagFilter(
-        &builder, linear ? NVN_MIN_FILTER_LINEAR : NVN_MIN_FILTER_NEAREST,
-        linear ? NVN_MAG_FILTER_LINEAR : NVN_MAG_FILTER_NEAREST);
-    nv->nvn.nvnSamplerBuilderSetWrapMode(&builder, NVN_WRAP_MODE_CLAMP_TO_EDGE,
-                                        NVN_WRAP_MODE_CLAMP_TO_EDGE, NVN_WRAP_MODE_CLAMP_TO_EDGE);
+        &builder, how->linear ? NVN_MIN_FILTER_LINEAR : NVN_MIN_FILTER_NEAREST,
+        how->linear ? NVN_MAG_FILTER_LINEAR : NVN_MAG_FILTER_NEAREST);
+    nv->nvn.nvnSamplerBuilderSetWrapMode(&builder, WRAPS[how->wrap], WRAPS[how->wrap],
+                                        WRAPS[how->wrap]);
+    nv->nvn.nvnSamplerBuilderSetBorderColor(&builder, how->border);
     if (!nv->nvn.nvnSamplerInitialize(&nv->samplers[index], &builder)) {
         nv->nvn.nvnTextureFinalize(&nv->textures[index]);
         DrawPathFail(path, "nvnSamplerInitialize: %s", Why("false"));

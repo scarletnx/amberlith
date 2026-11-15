@@ -6,11 +6,12 @@
 * [What a pass proves, and what it does not](#what-a-pass-proves-and-what-it-does-not)
 * [The cases](#the-cases)
 * [The scene, down three ways](#the-scene-down-three-ways)
+  * [A texture past its edges](#a-texture-past-its-edges)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, thirty cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, thirty six cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -53,8 +54,8 @@ The reference is the graphics unit running what the layer recorded, never the of
 
 ## The cases
 
-- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, a hundred and
-  eighty.
+- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
+  and nineteen.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -131,6 +132,17 @@ The reference is the graphics unit running what the layer recorded, never the of
 - **an event keeps what the processor signals: a write, an add and an add that wraps** (exact): an event in the
   last word of the readback pool's first page: where its builder and the event say it is, `nvnEventGetValue` after
   `nvnEventSignal` with a write, an add and an add of 0xffffffff, and that word read through the pool's mapping.
+- **a sampler builder gives back each number it was set** (exact): the filters, the three wrap modes, the compare
+  mode and function, the reduction filter, the level clamp, bias and snap, the greatest anisotropy and the border
+  colour, none of them a default and every float exact, so the bits are compared; then the signed and the unsigned
+  border colours, set and read back.
+- **a sampler says what its builder had, and is the same as another of that state alone** (exact): the same
+  getters on a sampler, its float border colour read as signed and unsigned words, and `nvnSamplerCompare`, which
+  holds for two samplers made from one builder and not for one with another level bias.
+- **the texture and sampler pools say where they are, and a builder registers as its sampler** (exact): a texture
+  pool and a sampler pool in the readback pool's memory give back their memory pool, offset and number of
+  descriptors; `nvnSamplerPoolRegisterSamplerBuilder` writes the 32 bytes `nvnSamplerPoolRegisterSampler` writes
+  for a sampler made from that builder, read through the pool's mapping.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
@@ -174,6 +186,26 @@ corner (the vertex stage read another draw's buffer).
 
 Under ScarletNX 3e9ad88 on RADV all three pass, and the three pictures are the same bytes. No console and no
 emulator of the graphics unit has run them yet.
+
+### A texture past its edges
+
+Three more cases draw a second scene the same three ways, with the first scene's shaders: one 4 by 4 texture in
+each quarter of the target, over coordinates from -1 to 3, so four of it across and down, two pixels a texel and
+every pixel centre a quarter of a texel from a texel's edge. Each quarter samples it nearest through a sampler of
+its own wrap mode (`DrawPathTextureSampled`):
+
+- top left, `REPEAT`: the texture four times each way;
+- top right, `MIRRORED_REPEAT`: every other one turned around;
+- bottom left, `CLAMP_TO_EDGE`: the texture once, its edge texels drawn out to the quarter's sides;
+- bottom right, `CLAMP_TO_BORDER`: the texture once in opaque green, the sampler's border colour
+  (`nvnSamplerBuilderSetBorderColor`).
+
+The cases are **a texture drawn past its edges through deko3d repeats, mirrors, holds its edge and shows its
+border**, **the same texture past its edges through the layer's own NVN functions does the same** and **the same
+texture past its edges through the NVN the program looks up does the same** (exact). What each pixel has to hold
+is worked out in `source/tests/t_nvnscene.c`, with no reference of the host build's. A failing case says what the
+first wrong pixel shows: another texel of the texture (another wrap mode), the border colour, or the clear
+colour.
 
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the
