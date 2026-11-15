@@ -154,3 +154,10 @@
   `static/wimsy.svg` is that drawing, unchanged, as ScarletNX has it at commit
   27a379c8a08a371e000350284aa72f61dd309ea8; `tools/wimsy-mesh.py` makes `source/wimsymesh.c`
   from it, the model and the sprite the game family's [levels](families/Game.md#the-levels) draw.
+  Four more of her drawings, unchanged, from wimsy-dist (https://github.com/scarletnx/wimsy-dist,
+  commit ce8c740c1a7d05fbc19e41a5efd3310ffa1de806), each GPL-3.0-or-later there, give the heavy
+  levels' crowd its other colours: `static/wimsy-fuddles.svg`, Fuddles' own Wimsy
+  (fuddlesworth); `static/wimsy-edenprobe.svg`, edenprobe's, in Eden's sunset colours;
+  `static/wimsy-accord.svg`, Accord's, DraVee's forge, and the Sepia theme's Wimsy there, the
+  same file; and `static/wimsy-default.svg`, Wimsy in the Default theme's colours. The fan drawings
+  there, under a non-commercial licence, are not used.

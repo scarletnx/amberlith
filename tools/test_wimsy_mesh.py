@@ -58,7 +58,8 @@ class Mesh(unittest.TestCase):
         with open(HEADER) as f:
             header = f.read()
         for name, count in (("VERTICES", len(self.mesh.vertices)), ("INDICES", len(self.mesh.indices)),
-                            ("COLOURS", len(self.mesh.palette)), ("PARTS", len(self.mesh.parts))):
+                            ("COLOURS", wimsy_mesh.COLOURS), ("PARTS", len(self.mesh.parts)),
+                            ("VARIANTS", len(self.mesh.palettes))):
             self.assertEqual(int(re.search(r"#define WIMSY_MESH_%s (\d+)u" % name, header).group(1)), count, name)
         self.assertEqual(int(re.search(r"#define WIMSY_MESH_SCALE (\d+)", header).group(1)), wimsy_mesh.SCALE)
 
@@ -111,10 +112,53 @@ class Mesh(unittest.TestCase):
             self.assertEqual(min(zs), head_front, name)
             self.assertGreater(max(zs), head_front, name)
 
-    def test_the_palette_is_the_drawings(self):
-        for rgb in ((0x0c, 0x86, 0x94), (0x11, 0xce, 0xa1), (0x11, 0xce, 0x87), (0x3a, 0xe8, 0xef), (0, 0, 0),
-                    (255, 255, 255)):
-            self.assertIn(rgb, self.mesh.palette)
+    def test_the_first_palette_is_the_drawings(self):
+        first = self.mesh.palettes[0]
+        self.assertEqual([first[i] for i in (0, 2, 4, 6, 8)],
+                         [(0x0c, 0x86, 0x94), (0x11, 0xce, 0xa1), (0x11, 0xce, 0x87), (0x11, 0xce, 0x87),
+                          (0x3a, 0xe8, 0xef)])
+        self.assertEqual(first[wimsy_mesh.COLOUR_WHITE], (255, 255, 255))
+        self.assertEqual(first[wimsy_mesh.COLOUR_BLACK], (0, 0, 0))
+        # A leaf's back is its front darkened.
+        self.assertEqual(first[1], tuple(c * wimsy_mesh.BACK_SHADE // 256 for c in first[0]))
+
+    def test_a_colour_is_a_leafs_front_or_back_the_rim_or_a_pupil(self):
+        for _, first, count in self.mesh.parts[:5]:
+            leaf = self.mesh.parts.index((_, first, count))
+            used = {self.mesh.vertices[i][6] for i in self.mesh.indices[first:first + count]}
+            self.assertEqual(used, {leaf * 2, leaf * 2 + 1, wimsy_mesh.COLOUR_WHITE})
+
+    def test_every_drawing_has_its_palette(self):
+        self.assertEqual(len(self.mesh.palettes), len(wimsy_mesh.VARIANTS))
+        for palette in self.mesh.palettes:
+            self.assertEqual(len(palette), wimsy_mesh.COLOURS)
+            self.assertEqual(palette[wimsy_mesh.COLOUR_WHITE], (255, 255, 255))
+        names = [name for name, _ in wimsy_mesh.VARIANTS]
+        # Fuddles' leaves are gradients: the mean of the first one's stops. The Default theme's are
+        # its six colours' teals and greens.
+        fuddles = self.mesh.palettes[names.index("fuddles")]
+        self.assertEqual(fuddles[wimsy_mesh.COLOUR_BLACK], (0x09, 0x0e, 0x1b))
+        self.assertNotEqual(fuddles[0], self.mesh.palettes[0][0])
+        default = self.mesh.palettes[names.index("default")]
+        self.assertEqual([default[i] for i in (0, 2, 4, 6, 8)],
+                         [(0, 170, 170), (85, 255, 85), (0, 170, 0), (0, 170, 0), (85, 255, 255)])
+
+    def test_no_two_drawings_are_one(self):
+        # wimsy-dist's Sepia theme's Wimsy is Accord's file, byte for byte: a drawing counted twice.
+        self.assertEqual(len({tuple(palette) for palette in self.mesh.palettes}), len(self.mesh.palettes))
+        folder = os.path.dirname(SVG)
+        files = [open(os.path.join(folder, name), "rb").read() for _, name in wimsy_mesh.VARIANTS]
+        self.assertEqual(len(set(files)), len(files))
+
+    def test_a_gradients_colour_is_the_mean_of_its_stops(self):
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(
+            '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'
+            '<linearGradient id="a"><stop stop-color="#000000"/><stop style="stop-color:#102030"/></linearGradient>'
+            '<linearGradient id="b" xlink:href="#a"/></svg>')
+        self.assertEqual(wimsy_mesh.paint(root, "url(#a)"), (8, 16, 24))
+        self.assertEqual(wimsy_mesh.paint(root, "url(#b)"), (8, 16, 24))
+        self.assertEqual(wimsy_mesh.paint(root, "#0a0B0c"), (10, 11, 12))
 
 
 if __name__ == "__main__":

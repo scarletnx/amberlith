@@ -21,8 +21,11 @@ extern "C" {
 
 #define WIMSY_MESH_VERTICES 1694u
 #define WIMSY_MESH_INDICES 5040u
-#define WIMSY_MESH_COLOURS 10u
+#define WIMSY_MESH_COLOURS 12u
 #define WIMSY_MESH_PARTS 9u
+/// Her drawings: the first the one the mesh is made of, the others (wimsy-dist's, by name) the
+/// same leaves and eyes in their own colours, each a palette.
+#define WIMSY_MESH_VARIANTS 5u
 
 /// A position's whole numbers to the model's units: 8192 to one.
 #define WIMSY_MESH_SCALE 8192
@@ -32,7 +35,9 @@ typedef struct {
     int16_t x, y, z;
     /// The normal, 127 to one: its length is one to within a hundredth.
     int8_t nx, ny, nz;
-    /// The colour, by its place in WIMSY_MESH_PALETTE. The three corners of a triangle share it.
+    /// The colour, by its place in a drawing's palette: a leaf's front is twice its number and
+    /// its back one more, then the rims' white and the pupils' black. The three corners of a
+    /// triangle share it.
     uint8_t colour;
 } WimsyMeshVertex;
 
@@ -43,7 +48,8 @@ typedef struct {
     uint32_t index_count;
 } WimsyMeshPart;
 
-extern const uint8_t WIMSY_MESH_PALETTE[WIMSY_MESH_COLOURS][3];
+extern const char *const WIMSY_MESH_VARIANT[WIMSY_MESH_VARIANTS];
+extern const uint8_t WIMSY_MESH_PALETTE[WIMSY_MESH_VARIANTS][WIMSY_MESH_COLOURS][3];
 extern const WimsyMeshPart WIMSY_MESH_PART[WIMSY_MESH_PARTS];
 extern const WimsyMeshVertex WIMSY_MESH_VERTEX[WIMSY_MESH_VERTICES];
 extern const uint16_t WIMSY_MESH_INDEX[WIMSY_MESH_INDICES];

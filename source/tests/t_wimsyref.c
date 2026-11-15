@@ -543,12 +543,34 @@ static void CheckHeavy(void) {
            "167 models at levels 3 and 4");
     float view[16];
     WimsyViewOf(3u, 0u, 600u, view);
+    // A member stands within a unit aside and three along of its place in the rows: its w, the
+    // distance along the camera's look, is within 3.2 of the place's.
     static const float PLACE[3][2] = { { -6.0f, -3.0f }, { 15.0f, -3.0f }, { -6.0f, -12.0f } };
     static const uint32_t MEMBER[3] = { 7u, 14u, 15u };
     for (uint32_t i = 0; i < 3u; ++i) {
         const float w = view[3] * PLACE[i][0] + view[7] * 1.125f + view[11] * PLACE[i][1] + view[15];
-        Expect(&t, fabsf(models[MEMBER[i]].to_clip[15] - w) < 1e-3f, "a member of the crowd's place");
+        Expect(&t, fabsf(models[MEMBER[i]].to_clip[15] - w) < 3.2f, "a member of the crowd's place");
     }
+    // Each member one of her five drawings, by the one seed: all five are there, the scene's seven
+    // are the first, level 2 has no other, and asking twice gives the same.
+    uint32_t drawn_as[WIMSY_MESH_VARIANTS] = { 0, 0, 0, 0, 0 };
+    bool known = true;
+    for (uint32_t i = 0; i < 167u; ++i) {
+        const uint32_t variant = WimsyInstanceVariant(3u, i);
+        known = known && variant < WIMSY_MESH_VARIANTS && (i >= 7u || variant == 0u) &&
+                variant == WimsyInstanceVariant(4u, i) && WimsyInstanceVariant(2u, i) == 0u;
+        drawn_as[variant < WIMSY_MESH_VARIANTS ? variant : 0u] += 1u;
+    }
+    bool every = true;
+    for (uint32_t variant = 0; variant < WIMSY_MESH_VARIANTS; ++variant) {
+        every = every && drawn_as[variant] >= 20u;
+    }
+    Expect(&t, known && every, "the crowd is all five drawings, twenty of each at least");
+    Expect(&t, strcmp(WIMSY_MESH_VARIANT[0], "wimsy") == 0 && strcmp(WIMSY_MESH_VARIANT[1], "fuddles") == 0 &&
+                   WIMSY_MESH_PALETTE[0][8][0] == 0x3a && WIMSY_MESH_PALETTE[0][10][0] == 255 &&
+                   WIMSY_MESH_PALETTE[4][0][1] == 0xaa && WIMSY_MESH_PALETTE[1][11][2] == 0x1b,
+           "the drawings' palettes: the first one's head, the rims' white, the Default theme's teal, "
+           "Fuddles' pupils");
     Expect(&t, models[7].tint[0] == 0.875f && models[7].tint[1] == 0.625f &&
                    models[7].tint[2] == 0.75f && models[6].tint[0] == 1.0f,
            "each of the crowd its own shade, the scene's seven their whole colour");

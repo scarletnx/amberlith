@@ -90,7 +90,7 @@ void WimsySpriteTexels(uint8_t *texels) {
         if (Edge(a->x, a->y, b->x, b->y, c->x, c->y) <= 0) {
             continue;
         }
-        const uint8_t *const colour = WIMSY_MESH_PALETTE[a->colour];
+        const uint8_t *const colour = WIMSY_MESH_PALETTE[0][a->colour];
         for (uint32_t row = 0; row < WIMSY_SPRITE; ++row) {
             const int64_t py = WIMSY_MESH_SCALE - ((int64_t)row * step + step / 2);
             for (uint32_t column = 0; column < WIMSY_SPRITE; ++column) {
@@ -212,6 +212,9 @@ static const float SCENE_MODEL_Z[SCENE_MODELS] = { 0.0f,   -6.0f,   -14.0f, -30.
 /// Levels 3 and 4 add a crowd.
 #define CROWD_MODELS 160u
 #define CROWD_COLUMNS 8u
+/// The seed of everything chance decides in a level: where a member of the crowd stands off its
+/// place and which drawing it is. One number, so two runs draw the same crowd.
+#define CROWD_SEED 0x57494D53u
 _Static_assert(SCENE_MODELS + CROWD_MODELS <= WIMSY_INSTANCES_MAX, "the crowd fits");
 #define SCENE_MODEL_X 3.25f
 #define SCENE_MODEL_Y 1.125f
@@ -271,6 +274,20 @@ void WimsyViewOf(uint32_t level, uint32_t frame, uint32_t frames, float to_clip[
     to_clip[12u + 3u] = -behind;
 }
 
+/// What chance gives model @p index, the same on every run: a whole number from the seed.
+static uint32_t Chance(uint32_t index) {
+    uint32_t chance = index * 2654435761u ^ CROWD_SEED;
+    chance ^= chance >> 15;
+    chance *= 0x2C1B3C6Du;
+    chance ^= chance >> 12;
+    return chance;
+}
+
+uint32_t WimsyInstanceVariant(uint32_t level, uint32_t index) {
+    // The scene's seven are the first drawing; each of the crowd one of the five, by chance.
+    return level >= 3u && index >= SCENE_MODELS ? Chance(index) % WIMSY_MESH_VARIANTS : 0u;
+}
+
 /// Level 2's models: each stands on the floor at its place down the lane, left and right of it by
 /// turns, turning a two hundred and fortieth of a turn a frame from a seventh of a turn apart.
 static uint32_t SceneInstances(uint32_t level, uint32_t frame, uint32_t frames, uint32_t first,
@@ -285,11 +302,15 @@ static uint32_t SceneInstances(uint32_t level, uint32_t frame, uint32_t frames, 
         float x = i % 2u == 0u ? -SCENE_MODEL_X : SCENE_MODEL_X;
         float z = i < SCENE_MODELS ? SCENE_MODEL_Z[i] : 0.0f;
         if (i >= SCENE_MODELS) {
-            // The crowd: twenty rows of eight, four each side of the lane, nine units apart.
+            // The crowd: twenty rows of eight, four each side of the lane, nine units apart, each
+            // member up to a unit aside and three along from its place by the run's one seed.
             const uint32_t member = i - SCENE_MODELS;
             const uint32_t column = member % CROWD_COLUMNS;
-            x = (6.0f + 3.0f * (float)(column / 2u)) * (column % 2u == 0u ? -1.0f : 1.0f);
-            z = -3.0f - 9.0f * (float)(member / CROWD_COLUMNS);
+            const uint32_t chance = Chance(i);
+            x = (6.0f + 3.0f * (float)(column / 2u)) * (column % 2u == 0u ? -1.0f : 1.0f) +
+                0.25f * ((float)(chance >> 8 & 0xFu) * 0.5f - 3.75f);
+            z = -3.0f - 9.0f * (float)(member / CROWD_COLUMNS) +
+                0.5f * ((float)(chance >> 16 & 0xFu) * 0.75f - 5.625f);
         }
         const float rows[3][4] = {
             { FromQ30(c), 0.0f, FromQ30(s), x },
@@ -1177,12 +1198,12 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
             HoldInstance(scene, i);
         }
         const float *const tint = scene_instance[i].tint;
+        const uint8_t (*const drawing)[3] = WIMSY_MESH_PALETTE[WimsyInstanceVariant(scene->level, i)];
         for (uint32_t t = 0; t + 2u < WIMSY_MESH_INDICES; t += 3u) {
             const Corner *const v[3] = { &corners[WIMSY_MESH_INDEX[t]],
                                          &corners[WIMSY_MESH_INDEX[t + 1u]],
                                          &corners[WIMSY_MESH_INDEX[t + 2u]] };
-            const uint8_t *const palette =
-                WIMSY_MESH_PALETTE[WIMSY_MESH_VERTEX[WIMSY_MESH_INDEX[t]].colour];
+            const uint8_t *const palette = drawing[WIMSY_MESH_VERTEX[WIMSY_MESH_INDEX[t]].colour];
             // The byte as the vertex buffer's normalised attribute gives it, times the tint.
             const double colour[3] = { (double)((float)palette[0] / 255.0f) * (double)tint[0],
                                        (double)((float)palette[1] / 255.0f) * (double)tint[1],
