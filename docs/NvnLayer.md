@@ -130,14 +130,21 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-A hundred and seven functions, each recording the deko3d commands that do what NVN says it does:
+A hundred and forty three functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
   mode, until the first object is made from the device. A mode set after that is refused, saying so.
 - **queues**, **memory pools** (shader code pools among them), **2D textures** of RGBA8, BGRA8, 32-bit float
-  depth and 24-bit depth with stencil, **command buffers** and **windows**;
-- **copies** between textures and buffers, with the mirror flags and a row stride;
+  depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**;
+- **what a texture and its builder answer of themselves**: the size, the levels, the samples, the format, the
+  target, the flags, the pool and the offset, each as it was set. A builder keeps any number, and one the layer
+  cannot make a texture of (a depth, more than one sample, a level too many) is refused when a size is asked or
+  the texture is made;
+- **texture views**: the levels, the layers, the format and the target, each set or left to the texture, with the
+  getters that say which, and the comparison;
+- **copies** between textures and buffers, with the mirror flags and a row stride, and through a view of levels,
+  whose first level is the one copied; a view with another part set is refused in a copy;
 - **programs** of the graphics stages, from DKSH modules (below);
 - **samplers** (the filters and the wrap modes), the **texture pool** and the **sampler pool**;
 - **the state objects**: blend, channel mask, colour, depth and stencil (the depth test, write and function),

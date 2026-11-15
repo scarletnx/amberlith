@@ -38,7 +38,8 @@ LAYER_HEADER = "nvnlayer/include/nvnlayer.h"
 DOC = "docs/NvnCoverage.md"
 
 # The layer's lists and the API versions whose build has each.
-LISTS = {"NVN_LAYER_PROCS_BASE": (55, 231), "NVN_LAYER_PROCS_DRAW": (55, 231), "NVN_LAYER_PROCS_231": (231,)}
+LISTS = {"NVN_LAYER_PROCS_BASE": (55, 231), "NVN_LAYER_PROCS_TEXTURE": (55, 231),
+         "NVN_LAYER_PROCS_DRAW": (55, 231), "NVN_LAYER_PROCS_231": (231,)}
 # What the layer carries outside its lists (nvnlayer_procs.h says why), in every build.
 BY_HAND = ("nvnBootstrapLoader", "nvnDeviceGetInteger", "nvnDeviceGetProcAddress")
 

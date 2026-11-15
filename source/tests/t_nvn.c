@@ -88,6 +88,15 @@ static struct {
     void *target_storage;
     void *read_storage;
     void *control;
+    _Alignas(8) NVNmemoryPool levels_pool;
+    _Alignas(8) NVNmemoryPool levels_read_pool;
+    _Alignas(8) NVNtexture levels;
+    bool levels_pool_up;
+    bool levels_read_pool_up;
+    bool levels_up;
+    void *levels_storage;
+    void *levels_read_storage;
+    ptrdiff_t levels_offset;
 } nvn;
 
 /// The reason a step failed: the layer's, when it gave one, else @p fallback. Under ScarletNX the
@@ -215,6 +224,12 @@ static void TearDown(void) {
     }
     DropPool(&nvn.copy_pool, &nvn.copy_storage, &nvn.copy_pool_up);
     DropPool(&nvn.stage_pool, &nvn.stage_storage, &nvn.stage_pool_up);
+    if (nvn.levels_up) {
+        nvn.nvn.nvnTextureFinalize(&nvn.levels);
+        nvn.levels_up = false;
+    }
+    DropPool(&nvn.levels_pool, &nvn.levels_storage, &nvn.levels_pool_up);
+    DropPool(&nvn.levels_read_pool, &nvn.levels_read_storage, &nvn.levels_read_pool_up);
     if (nvn.command_up) {
         nvn.nvn.nvnCommandBufferFinalize(&nvn.command);
         nvn.command_up = false;
@@ -575,6 +590,312 @@ static void CopyCase(const char *name, CopyKind kind) {
                (unsigned)(first % row), got[first], want_first, READ_PRESET);
 }
 
+// ---- what a texture, its builder and a view answer of themselves, and a texture's levels
+
+// A game asks its textures what they are (a size to make a view or a copy region from, the pool
+// to free) and addresses the levels of one through views. The getters are held to what the
+// setters took, which is all NVN says of them; the levels to a picture of its own in each, every
+// byte read back through the level's view.
+
+/// The levels texture: 64x64 with every level down to 16x16.
+#define LEVELS 3
+/// The bytes of all three levels' texels, one after another: where the case stages them and
+/// where it reads them back.
+#define LEVELS_BYTES (TARGET_BYTES + TARGET_BYTES / 4u + TARGET_BYTES / 16u)
+#define LEVELS_READ_BYTES ((LEVELS_BYTES + POOL_PAGE - 1u) / POOL_PAGE * POOL_PAGE)
+
+/// Keeps in @p why the first answer that is not the number given: true when @p got is @p want.
+static bool Gives(char *why, size_t why_size, const char *what, long long got, long long want) {
+    if (got != want && why[0] == '\0') {
+        snprintf(why, why_size, "%s is %lld (0x%llx), where %lld (0x%llx) was set", what, got,
+                 (unsigned long long)got, want, (unsigned long long)want);
+    }
+    return got == want;
+}
+
+/// Every setter of a builder that keeps a number, each with a number that is not the default,
+/// and what the getters then say. The builder makes no texture, so the numbers need not be a
+/// texture any machine has.
+static void TextureBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNtextureBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnTextureBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnTextureBuilderSetDefaults(&builder);
+    nvn.nvn.nvnTextureBuilderSetFlags(&builder, NVN_TEXTURE_FLAGS_COMPRESSIBLE);
+    nvn.nvn.nvnTextureBuilderSetTarget(&builder, NVN_TEXTURE_TARGET_2D_ARRAY);
+    nvn.nvn.nvnTextureBuilderSetFormat(&builder, NVN_FORMAT_BGRA8);
+    nvn.nvn.nvnTextureBuilderSetWidth(&builder, 48);
+    nvn.nvn.nvnTextureBuilderSetHeight(&builder, 24);
+    nvn.nvn.nvnTextureBuilderSetDepth(&builder, 5);
+    nvn.nvn.nvnTextureBuilderSetLevels(&builder, 3);
+    nvn.nvn.nvnTextureBuilderSetSamples(&builder, 4);
+    nvn.nvn.nvnTextureBuilderSetStorage(&builder, &nvn.target_pool, 0x3000);
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnTextureBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's flags", nvn.nvn.nvnTextureBuilderGetFlags(&builder),
+          NVN_TEXTURE_FLAGS_COMPRESSIBLE);
+    Gives(why, sizeof(why), "the builder's target", nvn.nvn.nvnTextureBuilderGetTarget(&builder),
+          NVN_TEXTURE_TARGET_2D_ARRAY);
+    Gives(why, sizeof(why), "the builder's format", nvn.nvn.nvnTextureBuilderGetFormat(&builder),
+          NVN_FORMAT_BGRA8);
+    Gives(why, sizeof(why), "the builder's width", nvn.nvn.nvnTextureBuilderGetWidth(&builder), 48);
+    Gives(why, sizeof(why), "the builder's height", nvn.nvn.nvnTextureBuilderGetHeight(&builder),
+          24);
+    Gives(why, sizeof(why), "the builder's depth", nvn.nvn.nvnTextureBuilderGetDepth(&builder), 5);
+    Gives(why, sizeof(why), "the builder's levels", nvn.nvn.nvnTextureBuilderGetLevels(&builder),
+          3);
+    Gives(why, sizeof(why), "the builder's samples", nvn.nvn.nvnTextureBuilderGetSamples(&builder),
+          4);
+    Gives(why, sizeof(why), "the builder's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnTextureBuilderGetMemoryPool(&builder),
+          (long long)(uintptr_t)&nvn.target_pool);
+    Gives(why, sizeof(why), "the builder's memory offset",
+          (long long)nvn.nvn.nvnTextureBuilderGetMemoryOffset(&builder), 0x3000);
+    // The size set in one call is the width and the height set apart.
+    nvn.nvn.nvnTextureBuilderSetSize2D(&builder, 40, 20);
+    Gives(why, sizeof(why), "the builder's width after nvnTextureBuilderSetSize2D",
+          nvn.nvn.nvnTextureBuilderGetWidth(&builder), 40);
+    Gives(why, sizeof(why), "the builder's height after nvnTextureBuilderSetSize2D",
+          nvn.nvn.nvnTextureBuilderGetHeight(&builder), 20);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// A view starts with no part set and says so; a part set is given back with what was set, the
+/// others still unset; two views are the same when the same parts are set the same.
+static void TextureViewCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNtextureView view, other;
+    memset(&view, 0xee, sizeof(view));
+    memset(&other, 0xee, sizeof(other));
+    nvn.nvn.nvnTextureViewSetDefaults(&view);
+    nvn.nvn.nvnTextureViewSetDefaults(&other);
+    int first = -1, count = -1;
+    NVNformat format = NVN_FORMAT_NONE;
+    NVNtextureTarget target = NVN_TEXTURE_TARGET_1D;
+    Gives(why, sizeof(why), "whether a new view has levels set",
+          nvn.nvn.nvnTextureViewGetLevels(&view, &first, &count), 0);
+    Gives(why, sizeof(why), "whether a new view has layers set",
+          nvn.nvn.nvnTextureViewGetLayers(&view, &first, &count), 0);
+    Gives(why, sizeof(why), "whether a new view has a format set",
+          nvn.nvn.nvnTextureViewGetFormat(&view, &format), 0);
+    Gives(why, sizeof(why), "whether a new view has a target set",
+          nvn.nvn.nvnTextureViewGetTarget(&view, &target), 0);
+    Gives(why, sizeof(why), "whether two new views are the same",
+          nvn.nvn.nvnTextureViewCompare(&view, &other), 1);
+
+    nvn.nvn.nvnTextureViewSetLevels(&view, 1, 2);
+    Gives(why, sizeof(why), "whether a view with levels set says so",
+          nvn.nvn.nvnTextureViewGetLevels(&view, &first, &count), 1);
+    Gives(why, sizeof(why), "the view's first level", first, 1);
+    Gives(why, sizeof(why), "the view's number of levels", count, 2);
+    Gives(why, sizeof(why), "whether a view with only levels set has layers set",
+          nvn.nvn.nvnTextureViewGetLayers(&view, &first, &count), 0);
+    Gives(why, sizeof(why), "whether a view with levels is the same as a new one",
+          nvn.nvn.nvnTextureViewCompare(&view, &other), 0);
+
+    nvn.nvn.nvnTextureViewSetLayers(&view, 3, 4);
+    nvn.nvn.nvnTextureViewSetFormat(&view, NVN_FORMAT_BGRA8);
+    nvn.nvn.nvnTextureViewSetTarget(&view, NVN_TEXTURE_TARGET_2D_ARRAY);
+    Gives(why, sizeof(why), "whether a view with layers set says so",
+          nvn.nvn.nvnTextureViewGetLayers(&view, &first, &count), 1);
+    Gives(why, sizeof(why), "the view's first layer", first, 3);
+    Gives(why, sizeof(why), "the view's number of layers", count, 4);
+    Gives(why, sizeof(why), "whether a view with a format set says so",
+          nvn.nvn.nvnTextureViewGetFormat(&view, &format), 1);
+    Gives(why, sizeof(why), "the view's format", format, NVN_FORMAT_BGRA8);
+    Gives(why, sizeof(why), "whether a view with a target set says so",
+          nvn.nvn.nvnTextureViewGetTarget(&view, &target), 1);
+    Gives(why, sizeof(why), "the view's target", target, NVN_TEXTURE_TARGET_2D_ARRAY);
+
+    nvn.nvn.nvnTextureViewSetLevels(&other, 1, 2);
+    nvn.nvn.nvnTextureViewSetLayers(&other, 3, 4);
+    nvn.nvn.nvnTextureViewSetFormat(&other, NVN_FORMAT_BGRA8);
+    nvn.nvn.nvnTextureViewSetTarget(&other, NVN_TEXTURE_TARGET_2D_ARRAY);
+    Gives(why, sizeof(why), "whether two views set the same are the same",
+          nvn.nvn.nvnTextureViewCompare(&view, &other), 1);
+    nvn.nvn.nvnTextureViewSetLevels(&other, 1, 1);
+    Gives(why, sizeof(why), "whether two views of 2 levels and of 1 are the same",
+          nvn.nvn.nvnTextureViewCompare(&view, &other), 0);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The levels texture, at an offset of its own in its pool, and the pool its levels are read
+/// back into; then what the texture says of itself. False with the first thing wrong in @p why.
+static bool BringLevels(char *why, size_t why_size) {
+    _Alignas(8) NVNtextureBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    TextureBuilder(&builder, TARGET_SIZE, TARGET_SIZE, 0);
+    nvn.nvn.nvnTextureBuilderSetDepth(&builder, 1);
+    nvn.nvn.nvnTextureBuilderSetLevels(&builder, LEVELS);
+    nvn.nvn.nvnTextureBuilderSetSamples(&builder, 0);
+    const size_t size = nvn.nvn.nvnTextureBuilderGetStorageSize(&builder);
+    const size_t alignment = nvn.nvn.nvnTextureBuilderGetStorageAlignment(&builder);
+    if (size == 0u || alignment == 0u || alignment > POOL_PAGE) {
+        snprintf(why, why_size, "a texture of %d levels has a storage of %zu bytes at an "
+                 "alignment of %zu: %s",
+                 LEVELS, size, alignment, Why("an answer no pool here can hold"));
+        return false;
+    }
+    // Past the pool's start, so that the offset the texture gives back is a number of its own.
+    nvn.levels_offset = (ptrdiff_t)POOL_PAGE;
+    nvn.levels_pool_up =
+        MakePool(&nvn.levels_pool, &nvn.levels_storage, POOL_PAGE + RoundUp(size, POOL_PAGE),
+                 NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+    nvn.levels_read_pool_up =
+        MakePool(&nvn.levels_read_pool, &nvn.levels_read_storage, LEVELS_READ_BYTES,
+                 NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+    if (!nvn.levels_pool_up || !nvn.levels_read_pool_up) {
+        snprintf(why, why_size, "the levels texture's pools: %s", Why("no memory, or false"));
+        return false;
+    }
+    nvn.nvn.nvnTextureBuilderSetStorage(&builder, &nvn.levels_pool, nvn.levels_offset);
+    if (!(nvn.levels_up = nvn.nvn.nvnTextureInitialize(&nvn.levels, &builder))) {
+        snprintf(why, why_size, "nvnTextureInitialize of a texture of %d levels: %s", LEVELS,
+                 Why("false"));
+        return false;
+    }
+    why[0] = '\0';
+    Gives(why, why_size, "the texture's width", nvn.nvn.nvnTextureGetWidth(&nvn.levels),
+          TARGET_SIZE);
+    Gives(why, why_size, "the texture's height", nvn.nvn.nvnTextureGetHeight(&nvn.levels),
+          TARGET_SIZE);
+    Gives(why, why_size, "the texture's depth", nvn.nvn.nvnTextureGetDepth(&nvn.levels), 1);
+    Gives(why, why_size, "the texture's levels", nvn.nvn.nvnTextureGetLevels(&nvn.levels), LEVELS);
+    Gives(why, why_size, "the texture's samples", nvn.nvn.nvnTextureGetSamples(&nvn.levels), 0);
+    Gives(why, why_size, "the texture's format", nvn.nvn.nvnTextureGetFormat(&nvn.levels),
+          NVN_FORMAT_RGBA8);
+    Gives(why, why_size, "the texture's target", nvn.nvn.nvnTextureGetTarget(&nvn.levels),
+          NVN_TEXTURE_TARGET_2D);
+    Gives(why, why_size, "the texture's flags", nvn.nvn.nvnTextureGetFlags(&nvn.levels), 0);
+    Gives(why, why_size, "the texture's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnTextureGetMemoryPool(&nvn.levels),
+          (long long)(uintptr_t)&nvn.levels_pool);
+    Gives(why, why_size, "the texture's memory offset",
+          (long long)nvn.nvn.nvnTextureGetMemoryOffset(&nvn.levels), (long long)nvn.levels_offset);
+    return why[0] == '\0';
+}
+
+/// Level @p level's texel (x, y): the copy cases' picture, its blue moved by the level, so no
+/// level's picture is a part of another's.
+static void LevelTexel(uint32_t level, uint32_t x, uint32_t y, uint8_t out[4]) {
+    Pattern(x, y, out);
+    out[2] = (uint8_t)(out[2] + 0x51u * level);
+}
+
+/// Where level @p level's texels start among LEVELS_BYTES, and its side in texels.
+static uint32_t LevelStart(uint32_t level, uint32_t *side) {
+    uint32_t start = 0;
+    for (uint32_t i = 0; i < level; ++i) {
+        start += (TARGET_SIZE >> i) * (TARGET_SIZE >> i) * 4u;
+    }
+    *side = TARGET_SIZE >> level;
+    return start;
+}
+
+/// A picture of its own copied into each level of the levels texture, the first with no view and
+/// the others through a view of that level alone, then each level read back through its view.
+/// Every byte of the readback is judged: a level that took another's picture, or kept nothing,
+/// shows in the first byte wrong.
+static void LevelsCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    uint8_t *const stage = nvn.nvn.nvnMemoryPoolMap(&nvn.stage_pool);
+    uint8_t *const read = nvn.nvn.nvnMemoryPoolMap(&nvn.levels_read_pool);
+    if (stage == NULL || read == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    for (uint32_t level = 0; level < LEVELS; ++level) {
+        uint32_t side;
+        const uint32_t start = LevelStart(level, &side);
+        for (uint32_t y = 0; y < side; ++y) {
+            for (uint32_t x = 0; x < side; ++x) {
+                LevelTexel(level, x, y, stage + start + ((size_t)y * side + x) * 4u);
+            }
+        }
+    }
+    memset(read, READ_PRESET, LEVELS_READ_BYTES);
+    const NVNbufferAddress picture = nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.stage_pool);
+    const NVNbufferAddress readback = nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.levels_read_pool);
+    _Alignas(8) NVNtextureView views[LEVELS];
+    NVNcommandBuffer *const cmd = &nvn.command;
+    nvn.nvn.nvnCommandBufferBeginRecording(cmd);
+    nvn.nvn.nvnCommandBufferSetCopyRowStride(cmd, 0);
+    for (uint32_t level = 0; level < LEVELS; ++level) {
+        uint32_t side;
+        const uint32_t start = LevelStart(level, &side);
+        nvn.nvn.nvnTextureViewSetDefaults(&views[level]);
+        nvn.nvn.nvnTextureViewSetLevels(&views[level], (int)level, 1);
+        const NVNcopyRegion region = { 0, 0, 0, (int)side, (int)side, 1 };
+        // No view is the first level, as every copy of the cases above has it.
+        nvn.nvn.nvnCommandBufferCopyBufferToTexture(cmd, picture + start, &nvn.levels,
+                                                    level == 0u ? NULL : &views[level], &region,
+                                                    NVN_COPY_FLAGS_NONE);
+    }
+    nvn.nvn.nvnCommandBufferBarrier(cmd, NVN_BARRIER_ORDER_PRIMITIVES_BIT |
+                                             NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    for (uint32_t level = 0; level < LEVELS; ++level) {
+        uint32_t side;
+        const uint32_t start = LevelStart(level, &side);
+        const NVNcopyRegion region = { 0, 0, 0, (int)side, (int)side, 1 };
+        nvn.nvn.nvnCommandBufferCopyTextureToBuffer(cmd, &nvn.levels, &views[level], &region,
+                                                    readback + start, NVN_COPY_FLAGS_NONE);
+    }
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(cmd);
+    if (list == 0u) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnCommandBufferEndRecording gave no list"));
+        return;
+    }
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    if (NvnLayerError()[0] != '\0') {
+        ReportCase(SUITE, name, CHECK_NONE, false, NvnLayerError());
+        return;
+    }
+    uint32_t wrong = 0, first = 0, first_level = 0;
+    uint8_t want_first = 0;
+    for (uint32_t at = 0; at < LEVELS_READ_BYTES; ++at) {
+        uint8_t want = READ_PRESET;
+        uint32_t in_level = LEVELS;
+        for (uint32_t level = 0; level < LEVELS; ++level) {
+            uint32_t side;
+            const uint32_t start = LevelStart(level, &side);
+            if (at >= start && at < start + side * side * 4u) {
+                const uint32_t texel = (at - start) / 4u;
+                uint8_t bytes[4];
+                LevelTexel(level, texel % side, texel / side, bytes);
+                want = bytes[(at - start) % 4u];
+                in_level = level;
+            }
+        }
+        if (read[at] != want && wrong++ == 0u) {
+            first = at;
+            first_level = in_level;
+            want_first = want;
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
+               "%u of %u bytes wrong; the first, byte %u (level %u of %u; %u is past the last "
+               "level), is 0x%02x, expected 0x%02x (0x%02x is a byte nothing copied)",
+               (unsigned)wrong, (unsigned)LEVELS_READ_BYTES, (unsigned)first,
+               (unsigned)first_level, (unsigned)LEVELS, (unsigned)LEVELS, read[first], want_first,
+               READ_PRESET);
+}
+
 /// The cases on the suite's own device, from the lookup to the window.
 static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
@@ -592,9 +913,17 @@ static void LayerCases(void) {
     static const char *const MIRROR_X = "a texture copied into another with MIRROR_X lands mirrored";
     static const char *const STRIDED = "a copy to a buffer with a row stride of 288 keeps the bytes "
                                        "between rows";
+    static const char *const BUILDER = "a texture builder gives back each number it was set";
+    static const char *const VIEW = "a texture view says which of its parts were set, and with "
+                                    "what";
+    static const char *const LEVELS_UP = "a texture of three levels comes up and says what its "
+                                         "builder had";
+    static const char *const LEVELS_COPY = "a picture copied into each level of a texture "
+                                           "through a view comes back from that level";
     const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
-                                         STRIDED,  WINDOW };
+                                         STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
+                                         WINDOW };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
@@ -692,6 +1021,20 @@ static void LayerCases(void) {
                 ReportSkip(SUITE, after[i], REPORT_REASON_DEPENDS,
                            "the copy textures or the staging pool did not come up");
             }
+        }
+    }
+
+    TextureBuilderCase(BUILDER);
+    TextureViewCase(VIEW);
+    if (ReportStart(SUITE, LEVELS_UP)) {
+        NvnLayerClearError();
+        const bool levels = BringLevels(why, sizeof(why));
+        CHECK_TRUE(SUITE, LEVELS_UP, CHECK_EXACT, levels, "%s", why);
+        if (!levels || !nvn.stage_pool_up) {
+            ReportSkip(SUITE, LEVELS_COPY, REPORT_REASON_DEPENDS,
+                       "the texture of three levels or the staging pool did not come up");
+        } else {
+            LevelsCase(LEVELS_COPY);
         }
     }
 
