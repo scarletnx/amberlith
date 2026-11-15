@@ -60,12 +60,18 @@ void MusicStreamClose(void);
 /// feeding and stepping it. False, with @p error saying why: the music may not play, the name is
 /// no track's, the renderer is open already (MusicStreamOpen is the way in then), or it failed.
 bool MusicPlayStart(const char *track, char *error, size_t error_size);
+/// MusicPlayStart into @p mix at @p gain: the music family's case plays it into the submix the
+/// speakers hear at a gain of nought.
+bool MusicPlayStartInto(const char *track, unsigned mix, float gain, char *error,
+                        size_t error_size);
 /// The player's next track, after the fade and the barrier. False, with @p error saying why, for
 /// a name no track has or a player that is not running.
 bool MusicPlaySwitch(const char *track, char *error, size_t error_size);
 /// Fades the player out, stops its thread and closes the renderer. Nothing when it is not running.
 void MusicPlayStop(void);
 bool MusicPlayOn(void);
+/// The switches the player's thread took since it started, read once it has stopped.
+uint32_t MusicPlaySwitches(void);
 
 #ifdef __cplusplus
 }
