@@ -25,7 +25,8 @@ extern "C" {
 /// floor of two hundred units, textured with every level of detail, with a lane whose levels of
 /// detail are each a colour, signs 5/256 of a unit in front of walls and marks painted on the
 /// floor, so a frame shows what a machine does with the same things near and far. Level 3 is
-/// that scene as heavy as a game's frame: a crowd of a hundred and sixty more of her, every
+/// that scene as heavy as a game's frame: a crowd of a hundred and sixty more of her, each one
+/// of her five drawings and a little off its place by one fixed seed, every
 /// model drawn part by part, a draw and a uniform buffer each, fifteen hundred draws a frame,
 /// over a floor whose texture is ASTC, 4096 texels a side. Level 4 is level 3 with that texture
 /// 8192 a side.
@@ -109,6 +110,11 @@ typedef struct {
 
 /// The models frame @p frame of a run of @p frames draws at @p level, in order. Returns how many.
 uint32_t WimsyInstancesOf(uint32_t level, uint32_t frame, uint32_t frames, WimsyInstance *out);
+
+/// Which of her drawings (wimsymesh.h, WIMSY_MESH_VARIANT) model @p index of @p level is: the
+/// first for every model but the heavy levels' crowd, whose members are each one of them all, by
+/// the level's seed.
+uint32_t WimsyInstanceVariant(uint32_t level, uint32_t index);
 
 /// The same for the models from @p first on, @p count of them at most, into @p out from its
 /// start: a thread's share of a frame. Returns how many it wrote.

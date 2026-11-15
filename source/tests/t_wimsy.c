@@ -140,7 +140,7 @@ static uint8_t *peek_cpu[SLOTS];
 static DkGpuAddr peek_gpu[SLOTS];
 static DkGpuAddr sampler_set;
 static DkGpuAddr shown_quad;
-static DkGpuAddr model_vertices;
+static DkGpuAddr model_vertices[WIMSY_MESH_VARIANTS];
 static DkGpuAddr model_indices;
 static DkGpuAddr light_block;
 
@@ -543,13 +543,14 @@ static void RecordModels(uint32_t slot) {
     static const DkVtxBufferState buffer = { sizeof(ModelVertex), 0 };
     dkCmdBufBindVtxAttribState(gpu.cmdbuf, attributes, sizeof(attributes) / sizeof(attributes[0]));
     dkCmdBufBindVtxBufferState(gpu.cmdbuf, &buffer, 1);
-    dkCmdBufBindVtxBuffer(gpu.cmdbuf, 0, model_vertices,
-                          WIMSY_MESH_VERTICES * (uint32_t)sizeof(ModelVertex));
     dkCmdBufBindIdxBuffer(gpu.cmdbuf, DkIdxFormat_Uint16, model_indices);
     dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Fragment, 0, light_block,
                               DK_UNIFORM_BUF_ALIGNMENT);
     for (uint32_t i = 0; i < instance_count[slot]; ++i) {
         const DkGpuAddr block = instance_gpu[slot] + (DkGpuAddr)i * INSTANCE_STRIDE;
+        // Her vertices in the colours of the drawing this model is.
+        dkCmdBufBindVtxBuffer(gpu.cmdbuf, 0, model_vertices[WimsyInstanceVariant(level, i)],
+                              WIMSY_MESH_VERTICES * (uint32_t)sizeof(ModelVertex));
         if (level < 3u) {
             dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Vertex, 0, block, INSTANCE_STRIDE);
             dkCmdBufDrawIndexed(gpu.cmdbuf, DkPrimitive_Triangles, WIMSY_MESH_INDICES, 1, 0, 0, 0);
@@ -888,9 +889,12 @@ static bool BringUp(char *why, size_t why_size) {
         "the world's vertices", why, why_size);
     GpuVertex *const shown = (GpuVertex *)Scratch(6u * (uint32_t)sizeof(GpuVertex), 256u,
                                                   &shown_quad, "the quad shown", why, why_size);
-    ModelVertex *const vertices = (ModelVertex *)Scratch(
-        WIMSY_MESH_VERTICES * (uint32_t)sizeof(ModelVertex), 256u, &model_vertices,
-        "the model's vertices", why, why_size);
+    ModelVertex *vertices[WIMSY_MESH_VARIANTS];
+    for (uint32_t variant = 0; variant < WIMSY_MESH_VARIANTS; ++variant) {
+        vertices[variant] = (ModelVertex *)Scratch(
+            WIMSY_MESH_VERTICES * (uint32_t)sizeof(ModelVertex), 256u, &model_vertices[variant],
+            "the model's vertices", why, why_size);
+    }
     uint16_t *const indices = (uint16_t *)Scratch(
         WIMSY_MESH_INDICES * (uint32_t)sizeof(uint16_t), 256u, &model_indices,
         "the model's indices", why, why_size);
@@ -921,17 +925,20 @@ static bool BringUp(char *why, size_t why_size) {
                 1.0f);
 
     Rectangle(shown, -1.0f, 1.0f, 1.0f, -1.0f, 0.0f, 1.0f);
-    for (uint32_t v = 0; v < WIMSY_MESH_VERTICES; ++v) {
-        const WimsyMeshVertex *const from = &WIMSY_MESH_VERTEX[v];
-        // The floats the reference reads the mesh as (wimsyref.c, HoldInstance).
-        vertices[v].position[0] = (float)from->x / (float)WIMSY_MESH_SCALE;
-        vertices[v].position[1] = (float)from->y / (float)WIMSY_MESH_SCALE;
-        vertices[v].position[2] = (float)from->z / (float)WIMSY_MESH_SCALE;
-        vertices[v].normal[0] = (float)from->nx / 127.0f;
-        vertices[v].normal[1] = (float)from->ny / 127.0f;
-        vertices[v].normal[2] = (float)from->nz / 127.0f;
-        memcpy(vertices[v].colour, WIMSY_MESH_PALETTE[from->colour], 3u);
-        vertices[v].colour[3] = 255u;
+    for (uint32_t variant = 0; variant < WIMSY_MESH_VARIANTS; ++variant) {
+        for (uint32_t v = 0; v < WIMSY_MESH_VERTICES; ++v) {
+            const WimsyMeshVertex *const from = &WIMSY_MESH_VERTEX[v];
+            ModelVertex *const to = &vertices[variant][v];
+            // The floats the reference reads the mesh as (wimsyref.c, HoldInstance).
+            to->position[0] = (float)from->x / (float)WIMSY_MESH_SCALE;
+            to->position[1] = (float)from->y / (float)WIMSY_MESH_SCALE;
+            to->position[2] = (float)from->z / (float)WIMSY_MESH_SCALE;
+            to->normal[0] = (float)from->nx / 127.0f;
+            to->normal[1] = (float)from->ny / 127.0f;
+            to->normal[2] = (float)from->nz / 127.0f;
+            memcpy(to->colour, WIMSY_MESH_PALETTE[variant][from->colour], 3u);
+            to->colour[3] = 255u;
+        }
     }
     memcpy(indices, WIMSY_MESH_INDEX, WIMSY_MESH_INDICES * sizeof(uint16_t));
     memset(light, 0, DK_UNIFORM_BUF_ALIGNMENT);

@@ -18,6 +18,13 @@ that are far from a half, so every machine writes the same file.
 
 The triangles are in painting order: leaf by leaf as the drawing has them, each leaf's back, wall, bevel and front,
 then the eyes. Drawn in that order with no depth test, the ones that face the eye give the drawing.
+
+Her other drawings (wimsy-dist's, the GPL-3.0-or-later ones: Fuddles', edenprobe's, Accord's, which is its Sepia
+theme's too, the same file, and the Default theme's) are the same five leaves and eyes in other colours, with
+details inside the leaves that the mesh leaves out. Each is a palette for the one mesh: a leaf's colour is its path's fill, the mean of its stops where the
+fill is a gradient; the eyes' black is the first pupil's. The Default theme's drawing is 32 by 32 squares in six
+colours, which name the palette by themselves: the two teals for the first leaf and the head, the light green for
+the second leaf and the dark one for the two below.
 """
 
 import argparse
@@ -44,6 +51,20 @@ EYE_WHITE = 0.018
 BACK_SHADE = 154
 MITER_LIMIT = 3.0
 WHITE = (255, 255, 255)
+# The drawings, the first the one the mesh is made of: a name and its file in static/.
+VARIANTS = (("wimsy", "wimsy.svg"), ("fuddles", "wimsy-fuddles.svg"), ("edenprobe", "wimsy-edenprobe.svg"),
+            ("accord", "wimsy-accord.svg"), ("default", "wimsy-default.svg"))
+# Where each leaf's path starts in every drawing but the Default theme's, and a pupil's radius.
+LEAF_STARTS = ((192.28931, 12.793038), (283.32464, 18.471579), (3.1326032, 310.41929), (80.650839, 503.85583),
+               (508.04553, 190.77006))
+PUPIL_RADIUS = 23.114985
+# The Default theme's six colours, and the leaves' and the pupils' among them.
+DEFAULT_COLOURS = {"#000000", "#00aa00", "#00aaaa", "#55ff55", "#55ffff", "#ffffff"}
+DEFAULT_LEAVES = ("#00aaaa", "#55ff55", "#00aa00", "#00aa00", "#55ffff")
+# The palette: a leaf's front and back, two each, then the white of the rims and the pupils' black.
+COLOUR_WHITE = 10
+COLOUR_BLACK = 11
+COLOURS = 12
 
 
 def style_of(element):
@@ -173,22 +194,85 @@ def star_shaped(centre, points):
     return True
 
 
+def shade(rgb):
+    return tuple(c * BACK_SHADE // 256 for c in rgb)
+
+
+def palette_of(leaves, black):
+    """The palette of a drawing whose leaves are filled @p leaves and whose pupils are @p black."""
+    palette = []
+    for rgb in leaves:
+        palette.extend((rgb, shade(rgb)))
+    return palette + [WHITE, black]
+
+
+def fill_of(element):
+    return (element.get("fill") or style_of(element).get("fill") or "").strip()
+
+
+def paint(root, fill):
+    """The colour a fill gives: its own, or the mean of the stops of the gradient it names."""
+    named = re.fullmatch(r"url\(#([^)]+)\)", fill)
+    if not named:
+        return colour_of(fill)
+    by_id = {e.get("id"): e for e in root.iter() if e.get("id")}
+    gradient = by_id[named.group(1)]
+    for _ in range(4):
+        stops = [e for e in gradient if e.tag == SVG_NS + "stop"]
+        linked = gradient.get("{http://www.w3.org/1999/xlink}href") or gradient.get("href")
+        if stops or not linked:
+            break
+        gradient = by_id[linked.lstrip("#")]
+    colours = [colour_of(e.get("stop-color") or style_of(e)["stop-color"]) for e in stops]
+    if not colours:
+        raise ValueError("a gradient with no stops: %r" % fill)
+    return tuple(round(sum(c[k] for c in colours) / len(colours)) for k in range(3))
+
+
+def variant_palette(svg_path):
+    """The palette of one of her drawings: its five leaves' fills, in the order the first drawing paints them."""
+    root = ET.parse(svg_path).getroot()
+    fills = {fill_of(e).lower() for e in root.iter() if fill_of(e)}
+    if fills == DEFAULT_COLOURS:
+        return palette_of([colour_of(c) for c in DEFAULT_LEAVES], (0, 0, 0))
+    paths = [e for e in root.iter(SVG_NS + "path") if e.get("d")]
+    uses = [e for e in root.iter(SVG_NS + "use")]
+    leaves = []
+    for start in LEAF_STARTS:
+        colour = None
+        for path in paths:
+            numbers = re.findall(r"-?\d+(?:\.\d+)?", path.get("d"))[:2]
+            if len(numbers) < 2 or math.dist(start, (float(numbers[0]), float(numbers[1]))) > 0.01:
+                continue
+            # The leaf's own fill, or the fill of the element that draws it by its name.
+            candidates = [path] + [u for u in uses if (u.get("{http://www.w3.org/1999/xlink}href") or
+                                                       u.get("href") or "").lstrip("#") == path.get("id")]
+            for candidate in candidates:
+                if fill_of(candidate) not in ("", "none"):
+                    colour = paint(root, fill_of(candidate))
+                    break
+            if colour:
+                break
+        if colour is None:
+            raise ValueError("%s: no filled leaf starts at %r" % (svg_path, start))
+        leaves.append(colour)
+    pupils = [e for e in root.iter(SVG_NS + "circle") if abs(float(e.get("r")) - PUPIL_RADIUS) < 0.01]
+    if not pupils:
+        raise ValueError("%s: no pupil" % svg_path)
+    return palette_of(leaves, paint(root, fill_of(pupils[0])))
+
+
 class Mesh:
     def __init__(self):
-        self.palette = []
+        self.palettes = []
         self.vertices = []
         self.indices = []
         self.parts = []
 
-    def colour(self, rgb):
-        if rgb not in self.palette:
-            self.palette.append(rgb)
-        return self.palette.index(rgb)
-
-    def vertex(self, x, y, z, normal, rgb):
+    def vertex(self, x, y, z, normal, colour):
         nx, ny, nz = unit(normal)
         self.vertices.append((round(x * SCALE), round(y * SCALE), round(z * SCALE), round(nx * 127), round(ny * 127),
-                              round(nz * 127), self.colour(rgb)))
+                              round(nz * 127), colour))
         return len(self.vertices) - 1
 
     def fan(self, centre, ring, z, up, rgb):
@@ -247,28 +331,33 @@ def build(svg_path):
         if not star_shaped(centre, face) or not star_shaped(centre, outline):
             raise ValueError("leaf %u is not covered by a fan from its middle" % number)
         normals = vertex_normals(outline)
-        shaded = tuple(c * BACK_SHADE // 256 for c in rgb)
-        mesh.fan(centre, outline, back, False, shaded)
-        mesh.band(outline, front - BEVEL, outline, back, [(nx, ny, 0.0) for nx, ny in normals], WHITE)
-        mesh.band(face, front, outline, front - BEVEL, [(nx, ny, 1.0) for nx, ny in normals], WHITE)
-        mesh.fan(centre, face, front, True, rgb)
+        mesh.fan(centre, outline, back, False, number * 2 + 1)
+        mesh.band(outline, front - BEVEL, outline, back, [(nx, ny, 0.0) for nx, ny in normals], COLOUR_WHITE)
+        mesh.band(face, front, outline, front - BEVEL, [(nx, ny, 1.0) for nx, ny in normals], COLOUR_WHITE)
+        mesh.fan(centre, face, front, True, number * 2)
         mesh.part("leaf %u" % number, first)
         front_of_last = front
     # The black ones first, as the drawing has them, so the white ones paint over them.
     for number, (centre, radius, rgb) in enumerate(eyes):
         first = len(mesh.indices)
         height = EYE_BLACK if rgb == (0, 0, 0) else EYE_WHITE
+        colour = COLOUR_BLACK if rgb == (0, 0, 0) else COLOUR_WHITE
         ring = [(centre[0] + radius * math.cos(2.0 * math.pi * i / EYE_SIDES),
                  centre[1] + radius * math.sin(2.0 * math.pi * i / EYE_SIDES)) for i in range(EYE_SIDES)]
         mesh.band(ring, front_of_last + height, ring, front_of_last,
-                  [(x - centre[0], y - centre[1], 0.0) for x, y in ring], rgb)
-        mesh.fan(centre, ring, front_of_last + height, True, rgb)
+                  [(x - centre[0], y - centre[1], 0.0) for x, y in ring], colour)
+        mesh.fan(centre, ring, front_of_last + height, True, colour)
         mesh.part("eye %u" % number, first)
     for x, y, z, *_ in mesh.vertices:
         if max(abs(x), abs(y), abs(z)) > 32767:
             raise ValueError("a vertex outside what sixteen bits hold")
     if len(mesh.vertices) > 65535:
         raise ValueError("%u vertices, more than a sixteen bit index reaches" % len(mesh.vertices))
+    # The first drawing's palette from the fills the mesh was made of, then each other drawing's.
+    mesh.palettes = [palette_of([rgb for _, rgb, _ in leaves], (0, 0, 0))]
+    folder = os.path.dirname(os.path.abspath(svg_path))
+    for _, name in VARIANTS[1:]:
+        mesh.palettes.append(variant_palette(os.path.join(folder, name)))
     return mesh
 
 
@@ -283,12 +372,18 @@ def c_file(mesh):
         "",
         "_Static_assert(WIMSY_MESH_VERTICES == %uu, \"the header's vertex count is the table's\");" % len(mesh.vertices),
         "_Static_assert(WIMSY_MESH_INDICES == %uu, \"the header's index count is the table's\");" % len(mesh.indices),
-        "_Static_assert(WIMSY_MESH_COLOURS == %uu, \"the header's palette is the table's\");" % len(mesh.palette),
+        "_Static_assert(WIMSY_MESH_COLOURS == %uu, \"the header's palette is the table's\");" % COLOURS,
+        "_Static_assert(WIMSY_MESH_VARIANTS == %uu, \"the header's drawings are the table's\");" % len(mesh.palettes),
         "_Static_assert(WIMSY_MESH_PARTS == %uu, \"the header's part count is the table's\");" % len(mesh.parts),
         "",
-        "const uint8_t WIMSY_MESH_PALETTE[WIMSY_MESH_COLOURS][3] = {",
+        "const char *const WIMSY_MESH_VARIANT[WIMSY_MESH_VARIANTS] = {",
+        "    " + " ".join('"%s",' % name for name, _ in VARIANTS),
+        "};",
+        "",
+        "const uint8_t WIMSY_MESH_PALETTE[WIMSY_MESH_VARIANTS][WIMSY_MESH_COLOURS][3] = {",
     ]
-    lines.extend("    { %u, %u, %u }," % rgb for rgb in mesh.palette)
+    for palette in mesh.palettes:
+        lines.append("    { " + " ".join("{ %u, %u, %u }," % rgb for rgb in palette) + " },")
     lines.extend(["};", "", "const WimsyMeshPart WIMSY_MESH_PART[WIMSY_MESH_PARTS] = {"])
     lines.extend('    { "%s", %u, %u },' % part for part in mesh.parts)
     lines.extend(["};", "", "const WimsyMeshVertex WIMSY_MESH_VERTEX[WIMSY_MESH_VERTICES] = {"])
@@ -309,8 +404,8 @@ def main():
     mesh = build(args.svg)
     with open(args.out, "w") as f:
         f.write(c_file(mesh))
-    print("%u vertices, %u triangles, %u colours, %u parts" %
-          (len(mesh.vertices), len(mesh.indices) // 3, len(mesh.palette), len(mesh.parts)))
+    print("%u vertices, %u triangles, %u parts, %u drawings of %u colours" %
+          (len(mesh.vertices), len(mesh.indices) // 3, len(mesh.parts), len(mesh.palettes), COLOURS))
     return 0
 
 
