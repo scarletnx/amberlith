@@ -1,0 +1,23 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; One warp multiplies a 16 by 16 matrix of halves by a 16 by 8 one with the matrix instruction, sums in floats. A
+; lane's 32 bytes of storage buffer 0 hold its part of A (four words, two halves each) and of B (two words), laid
+; out as ounce/t_nvn2.c's HmmaCase lays them; its four floats of the product go 0x400 bytes on.
+.stage compute
+.local 32 1 1
+        S2R R0, SR_TID.X                        ; the lane
+        SHF.L.U32 R1, R0, 5, RZ
+        ULDC.64 UR4, c[0][0x310]                ; storage buffer 0's address, from the driver's table
+        LDG.E R8, [R1 + UR4]                    ; A
+        LDG.E R9, [R1 + UR4 + 0x4]
+        LDG.E R10, [R1 + UR4 + 0x8]
+        LDG.E R11, [R1 + UR4 + 0xc]
+        LDG.E R12, [R1 + UR4 + 0x10]            ; B
+        LDG.E R13, [R1 + UR4 + 0x14]
+        HMMA.16816.F32 R16, R8, R12, RZ         ; D = A * B
+        STG.E [R1 + UR4 + 0x400], R16
+        STG.E [R1 + UR4 + 0x404], R17
+        STG.E [R1 + UR4 + 0x408], R18
+        STG.E [R1 + UR4 + 0x40c], R19
+        EXIT

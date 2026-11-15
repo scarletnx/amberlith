@@ -232,6 +232,13 @@ class Programs(unittest.TestCase):
         self.assertEqual(one("FSETP.GT.FTZ.AND P1, PT, R2, c[3][0x10], P0"),
                          alu(0x00B, 5, 255, 2, b38_16=0x10, b54_5=3, b76_4=4, b80_1=1, b81_3=1, b84_3=7, b87_3=0))
         self.assertEqual(one("SEL R1, R2, R3, !P4"), alu(0x007, 1, 1, 2, b32_8=3, b87_3=4, b90_1=1))
+        # the warp's matrix multiply, as tests/shader_sm86.c's test_warp_matrix sets it: A at 24, B at 32, C at 64,
+        # and at 72 the variant, 8 for 16 by 8 by 16 and 16 for sums in floats
+        for line, dst, c, variant in (("HMMA.16816.F16 R16, R8, R12, R14", 16, 14, 0x08),
+                                      ("HMMA.16816.F32 R20, R8, R12, R24", 20, 24, 0x18),
+                                      ("HMMA.1688.F16 R28, R8, R12, RZ", 28, 255, 0x00),
+                                      ("HMMA.1688.F32 R32, R8, R12, R36", 32, 36, 0x10)):
+            self.assertEqual(one(line), fix(0x23C, b16_8=dst, b24_8=8, b32_8=12, b64_8=c, b72_19=variant))
         self.assertEqual(one("LDC R6, c[1][R1 + 0x10]"), fix(0xB82, b16_8=6, b24_8=1, b38_16=0x10, b54_5=1, b73_3=4))
 
     def test_a_repeat_writes_its_lines_out(self):
@@ -294,6 +301,9 @@ class Refusals(unittest.TestCase):
         self.refused("BRA nowhere\nEXIT\n", "BRA to nowhere, which is no label of the program")
         self.refused("S2R R0, SR_CLOCK\nEXIT\n", "S2R of SR_CLOCK: the special registers the assembler names are")
         self.refused("LDG R2, [R0 + UR4]\nEXIT\n", "LDG needs .E")
+        self.refused("HMMA.F32 R16, R8, R12, RZ\nEXIT\n", "HMMA needs its shape, .16816 or .1688")
+        self.refused("HMMA.16816 R16, R8, R12, RZ\nEXIT\n", "HMMA needs its sums' type, .F16 or .F32")
+        self.refused("HMMA.16816.F32 R16, R8, 1.0f, RZ\nEXIT\n", "HMMA has no form 4 in sm86.decode")
         self.refused("STG.E [R0 + UR4 + 0x800000], R2\nEXIT\n", "the offset 8388608")
         self.refused("MOV R1, c[32][0]\nEXIT\n", "the constant buffer's bank 32 (0x20) does not fit the 5 bits at 54")
         self.refused("MOV R1, R2 ! 200:4=1\nEXIT\n", "the field 200:4 is past the instruction's 128 bits")
