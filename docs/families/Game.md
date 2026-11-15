@@ -291,7 +291,5 @@ Nor the levels. What they expect of one: that the resolve of a target of four sa
 mean of each pixel's four, as the msaa suite's resolve case holds it; that a second device and a
 second swapchain on the default window come up after the first were closed; that the shadow
 RAM's replay puts the window origin back after a present, as Eden's does; and that a channel is
-never more than two codes from what the reference's arithmetic gives. ScarletNX 04befe5 on a
-desktop card and on lavapipe is inside every range of the five levels once the presented images
-are not compressed, and with them compressed, as the levels present, draws a model's faces
-turned away from a level's second frame on.
+never more than two codes from what the reference's arithmetic gives. ScarletNX 3e9ad88 on a
+desktop card and on lavapipe is inside every range of the five levels.
