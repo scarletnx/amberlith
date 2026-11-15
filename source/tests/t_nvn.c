@@ -569,7 +569,8 @@ static void CopyCase(const char *name, CopyKind kind) {
                (unsigned)(first % row), got[first], want_first, READ_PRESET);
 }
 
-void RunNvn(void) {
+/// The cases on the suite's own device, from the lookup to the window.
+static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
     static const char *const DEVICE = "the device initializes";
     static const char *const VERSION = "the device answers the layer's API version";
@@ -700,4 +701,14 @@ void RunNvn(void) {
         CHECK_TRUE(SUITE, WINDOW, CHECK_NONE, presented, "%s", why);
     }
     TearDown();
+}
+
+void RunNvn(void) {
+    // Before the first lookup: a runtime that runs a game's NVN itself takes each function at
+    // the address its name resolves to, the layer's own from then on with it.
+    NvnSceneFirst();
+    LayerCases();
+    // With the suite's own device down, whatever the cases above came to: the scene's way
+    // makes its own.
+    NvnSceneLast();
 }

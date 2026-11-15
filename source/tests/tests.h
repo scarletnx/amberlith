@@ -295,6 +295,13 @@ void Tex8kSetVram(uint32_t mib);
 /// same calls reach ScarletNX's NVN instead of the layer.
 void RunNvn(void);
 
+/// The nvn suite's scene (drawpath.h), judged alike down each way (sceneref.h): through deko3d
+/// and through the layer's own NVN functions, which RunNvn runs before anything looks the
+/// program's NVN up, and through the NVN the program looks up, once the suite's own objects are
+/// down.
+void NvnSceneFirst(void);
+void NvnSceneLast(void);
+
 /// Reads from the memory card through FsFile, in the patterns a game reads its files: sequential
 /// in five block sizes, random, backwards, the same place again, many small files, and the edges.
 /// Every byte is checked; the times are the point.
@@ -460,6 +467,10 @@ void RunReferenceBinder(void);
 /// The blit2d suite's model and command words, held to tools/blit2d-expect.py: part of the
 /// reference suite.
 void RunReferenceBlit2d(void);
+
+/// The nvn suite's scene (sceneref.c): where each part of its picture is, and the name a wrong
+/// pixel gets.
+void RunReferenceScene(void);
 
 /// The service family's judge on answers made to order: part of the reference suite.
 void RunReferenceService(void);

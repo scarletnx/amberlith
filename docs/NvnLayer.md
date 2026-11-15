@@ -204,7 +204,8 @@ void main() { outColor = texture(sampler2D(handles.pair[0].zw), inUv) * paint.co
 ```
 
 A program that draws through deko3d alone with such a shader binds the handles itself, as a uniform buffer at id 0
-of the stage; through the layer, `nvnCommandBufferBindTexture` is that bind.
+of the stage (`source/drawpath.c`'s deko3d way does); through the layer, `nvnCommandBufferBindTexture` is that
+bind.
 
 A slot's handle is a constant component of a constant element, as above. uam 1.1.0 compiles a vector's component
 chosen at run time (`pair[i >> 1][2 * (i & 1)]`) to a read of the vector's first word, and the console runs that
@@ -256,7 +257,7 @@ The layer's reference is the graphics unit running what the layer recorded, neve
 - **The layer's own functions under ScarletNX** (`NvnLayerOwnProcs`) go down ScarletNX's engine methods path, as
   deko3d's own calls do: a pass there says the layer chose commands that draw what the case expects, on
   ScarletNX's reading of those commands. No console and no emulator of the graphics unit has run the API 55
-  build's draws yet.
+  build's draws yet; the nvn family's three scene cases are what would say so there.
 - **API 231** has no machine that runs its graphics unit from homebrew, so a case there has no console answer at
   all: its reference is what the program works out on the processor, and a pass says ScarletNX agrees with that.
 
@@ -270,7 +271,8 @@ The layer's reference is the graphics unit running what the layer recorded, neve
   keeps the first complaint, the guard. For API 231, every body stops with its own name and calls the hook once.
   For API 55, a DKSH's control section holds each field at the offset ScarletNX reads it at and meets the
   conditions ScarletNX asks of a section, and ten kinds of module are refused, each naming the value.
-- The nvn family, in the NRO: the layer's functions on the console and in Eden, ScarletNX's NVN under ScarletNX.
+- The nvn family, in the NRO: the layer's functions on the console and in Eden, ScarletNX's NVN under ScarletNX,
+  and one scene down three ways, the layer's own functions among them, which run its bodies under ScarletNX too.
 - `tools/nvn-lookups.py edenprobe.elf`, which the CI runs on the NRO: `nvnBootstrapLoader` is exported, every
   lookup in `NvnLoadProcs` is a call through a pointer, and nothing reaches an entry point by name. ScarletNX
   takes a function when a call of the lookup returns its address, and a compiler that can tell which function a
