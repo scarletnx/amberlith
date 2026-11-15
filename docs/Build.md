@@ -33,10 +33,11 @@ make -f host.mk host-run
 
 It builds what touches no console and runs it here: the three judge suites, the screens and their navigation (on
 frames composed in memory from a fixture), the picture writer, the mode file's words and the time a case reports,
-and the [libc](families/Libc.md) family's cases on this machine's C library. Then the tools' tests (`tools/perf.py`,
+and the [libc](families/Libc.md) family's cases on this machine's C library. Then [the NVN layer](NvnLayer.md)'s
+own test, built for each of its API versions, and the tools' tests (`tools/perf.py`,
 `tools/run.py`, `tools/validate.py`, `tools/libc-math.py`, `tools/dksh-handles.py`, `tools/astc-blocks.py`,
-`tools/astc-images.py`, `tools/wimsy-mesh.py`, `tools/vic-expect.py`, `tools/blit2d-expect.py` and
-`tools/vp9-jobs.py`), which need
+`tools/astc-images.py`, `tools/wimsy-mesh.py`, `tools/vic-expect.py`, `tools/blit2d-expect.py`,
+`tools/vp9-jobs.py` and `tools/nvn-lookups.py`), which need
 Python 3, the CI scripts' tests in `.github/scripts`, against a fake GitHub and a fake Discord, which also need
 git (and bash and jq for the pull request comment's tests, skipped and said so without them), and the APK's runners'
 (`android/tests`), against a fake adb and a fake ScarletNX driver, in bash. Writing the nvdec

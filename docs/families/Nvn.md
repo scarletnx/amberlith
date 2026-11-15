@@ -6,11 +6,11 @@ row for it, and a file that names it keeps it whatever the screen changes. Its o
 
 ## Why a layer
 
-A homebrew program has no NVN: each game carries its own driver. `source/nvnlayer.c` is one, built on deko3d: the
-NVN functions a game gets by name from `nvnBootstrapLoader` and the `nvnDeviceGetProcAddress` it hands back, each
-recording the deko3d commands that do what NVN says it does. The program exports `nvnBootstrapLoader` (the
-Makefile's `--export-dynamic-symbol`), as a game's driver does, and a case looks up every function through it
-(`NvnLoadProcs`), never by name.
+A homebrew program has no NVN: each game carries its own driver. `nvnlayer/` is one, a module of its own
+([The NVN layer](../NvnLayer.md)), built here for API 55, on deko3d: the NVN functions a game gets by name from
+`nvnBootstrapLoader` and the `nvnDeviceGetProcAddress` it hands back, each recording the deko3d commands that do
+what NVN says it does. The program exports `nvnBootstrapLoader` (the layer's link flag), as a game's driver does,
+and a case looks up every function through it (`NvnLoadProcs`), never by name.
 
 - **On the console and in Eden**, the layer runs: its deko3d commands reach the graphics unit, and what the unit does
   with them is the answer the case holds.
@@ -42,7 +42,8 @@ The reference is the graphics unit running what the layer recorded, never the of
 
 ## The cases
 
-- **the program's NVN functions resolve** (none tier): the lookup gives every function the suite uses, sixty one with `nvnDeviceGetInteger`.
+- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, a hundred and
+  seven.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -78,7 +79,5 @@ The reference is the graphics unit running what the layer recorded, never the of
 
 ## Where nvn/nvn.h comes from
 
-`source/nvn/nvn.h` is h1k421's reconstruction of NVN's types from one game's debug information (MIT, 2020), as
-ScarletNX carries it (`src/nx/gpu/nvn/nvn.h`, from nxnative's `dm/gfx/nvn/include/nvn.h`), with the format numbers
-written out from ScarletNX's `nvn_tic_format.inc`. The prototypes of `NVN_LAYER_PROCS` follow ScarletNX's
-`gpu/nvn/nvn.hook`. Neither holds driver code: names, numbers, sizes and argument types.
+[The NVN layer](../NvnLayer.md#where-its-numbers-come-from) says where its types, its prototypes and its offsets
+come from. None holds driver code: names, numbers, sizes and argument types.

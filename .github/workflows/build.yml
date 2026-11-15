@@ -97,6 +97,10 @@ jobs:
       # A machine that answers a game's SDK functions itself takes the program's by these symbols (docs/Hooks.md)
       - name: Check the NRO exports the SDK functions sdk.h declares
         run: python3 tools/sdk-exports.py edenprobe.elf
+      # A runtime that runs NVN itself takes a function when a call of the lookup returns it: each lookup has to be
+      # a call through a pointer, which a compiler that can tell the target turns into a call by name
+      - name: Check the NRO looks its NVN up through pointers
+        run: python3 tools/nvn-lookups.py edenprobe.elf
       - name: Name the NRO after its commit
         run: cp edenprobe.nro "edenprobe-${{ steps.commit.outputs.short }}.nro"
       # Not zipped: the artifact is the NRO itself, named after it
