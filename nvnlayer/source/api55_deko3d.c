@@ -784,6 +784,156 @@ NVNmemoryPoolFlags Nvnl_nvnMemoryPoolGetFlags(const NVNmemoryPool *pool) {
     return record != NULL ? (NVNmemoryPoolFlags)record->flags : 0;
 }
 
+// ---- buffers
+
+void Nvnl_nvnBufferBuilderSetDefaults(NVNbufferBuilder *builder) {
+    // The device stays, as NVN's own builder keeps it.
+    LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderSetDefaults");
+    if (record == NULL) {
+        return;
+    }
+    NVNdevice *const device = record->device;
+    memset(builder, 0, sizeof(*builder));
+    record->device = device;
+}
+
+void Nvnl_nvnBufferBuilderSetDevice(NVNbufferBuilder *builder, NVNdevice *device) {
+    LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderSetDevice");
+    if (record != NULL) {
+        record->device = device;
+    }
+}
+
+void Nvnl_nvnBufferBuilderSetStorage(NVNbufferBuilder *builder, NVNmemoryPool *pool,
+                                     ptrdiff_t offset, size_t size) {
+    LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderSetStorage");
+    if (record != NULL) {
+        record->pool = pool;
+        record->offset = offset;
+        record->size = size;
+    }
+}
+
+NVNdevice *Nvnl_nvnBufferBuilderGetDevice(const NVNbufferBuilder *builder) {
+    const LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderGetDevice");
+    return record != NULL ? record->device : NULL;
+}
+
+NVNmemoryPool *Nvnl_nvnBufferBuilderGetMemoryPool(const NVNbufferBuilder *builder) {
+    const LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderGetMemoryPool");
+    return record != NULL ? record->pool : NULL;
+}
+
+ptrdiff_t Nvnl_nvnBufferBuilderGetMemoryOffset(const NVNbufferBuilder *builder) {
+    const LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderGetMemoryOffset");
+    return record != NULL ? record->offset : 0;
+}
+
+size_t Nvnl_nvnBufferBuilderGetSize(const NVNbufferBuilder *builder) {
+    const LayerBufferBuilder *const record = Record(builder, "nvnBufferBuilderGetSize");
+    return record != NULL ? record->size : 0;
+}
+
+NVNboolean Nvnl_nvnBufferInitialize(NVNbuffer *buffer, const NVNbufferBuilder *builder) {
+    LayerBuffer *const record = Record(buffer, "nvnBufferInitialize");
+    const LayerBufferBuilder *const from = Record(builder, "nvnBufferInitialize");
+    if (record == NULL || from == NULL) {
+        return 0;
+    }
+    const LayerPool *const pool = PoolOf(from->pool, "nvnBufferInitialize");
+    if (pool == NULL || !InPool(pool, from->offset, from->size, "nvnBufferInitialize")) {
+        return 0;
+    }
+    memset(buffer, 0, sizeof(*buffer));
+    record->magic = MAGIC_BUFFER;
+    record->pool = from->pool;
+    record->offset = from->offset;
+    record->size = from->size;
+    return 1;
+}
+
+/// The record of @p buffer with its pool's, or NULL with a complaint.
+static const LayerBuffer *BufferOf(const NVNbuffer *buffer, const LayerPool **pool,
+                                   const char *what) {
+    const LayerBuffer *const record = Record(buffer, what);
+    if (record == NULL) {
+        return NULL;
+    }
+    if (record->magic != MAGIC_BUFFER) {
+        LayerComplain("%s: the buffer was not initialized", what);
+        return NULL;
+    }
+    *pool = PoolOf(record->pool, what);
+    return *pool != NULL ? record : NULL;
+}
+
+void Nvnl_nvnBufferFinalize(NVNbuffer *buffer) {
+    LayerBuffer *const record = Record(buffer, "nvnBufferFinalize");
+    if (record != NULL && record->magic == MAGIC_BUFFER) {
+        record->magic = 0;
+    }
+}
+
+void *Nvnl_nvnBufferMap(const NVNbuffer *buffer) {
+    const LayerPool *pool = NULL;
+    const LayerBuffer *const record = BufferOf(buffer, &pool, "nvnBufferMap");
+    if (record == NULL) {
+        return NULL;
+    }
+    uint8_t *const base = dkMemBlockGetCpuAddr(pool->block);
+    return base != NULL ? base + record->offset : NULL;
+}
+
+NVNbufferAddress Nvnl_nvnBufferGetAddress(const NVNbuffer *buffer) {
+    const LayerPool *pool = NULL;
+    const LayerBuffer *const record = BufferOf(buffer, &pool, "nvnBufferGetAddress");
+    return record != NULL ? dkMemBlockGetGpuAddr(pool->block) + (uint64_t)record->offset : 0;
+}
+
+NVNmemoryPool *Nvnl_nvnBufferGetMemoryPool(const NVNbuffer *buffer) {
+    const LayerPool *pool = NULL;
+    const LayerBuffer *const record = BufferOf(buffer, &pool, "nvnBufferGetMemoryPool");
+    return record != NULL ? record->pool : NULL;
+}
+
+ptrdiff_t Nvnl_nvnBufferGetMemoryOffset(const NVNbuffer *buffer) {
+    const LayerPool *pool = NULL;
+    const LayerBuffer *const record = BufferOf(buffer, &pool, "nvnBufferGetMemoryOffset");
+    return record != NULL ? record->offset : 0;
+}
+
+size_t Nvnl_nvnBufferGetSize(const NVNbuffer *buffer) {
+    const LayerPool *pool = NULL;
+    const LayerBuffer *const record = BufferOf(buffer, &pool, "nvnBufferGetSize");
+    return record != NULL ? record->size : 0;
+}
+
+/// deko3d's one call for the processor's cache, over @p size bytes at @p offset of @p buffer:
+/// what both of a buffer's cache calls come to, as both of a pool's do.
+static void BufferCache(const NVNbuffer *buffer, ptrdiff_t offset, size_t size,
+                        const char *what) {
+    const LayerPool *pool = NULL;
+    const LayerBuffer *const record = BufferOf(buffer, &pool, what);
+    if (record == NULL) {
+        return;
+    }
+    if (offset < 0 || (size_t)offset > record->size || size > record->size - (size_t)offset) {
+        LayerComplain("%s: 0x%zx bytes at offset %lld, of a buffer of 0x%zx", what, size,
+                      (long long)offset, record->size);
+        return;
+    }
+    dkMemBlockFlushCpuCache(pool->block, (uint32_t)(record->offset + offset), (uint32_t)size);
+}
+
+void Nvnl_nvnBufferFlushMappedRange(const NVNbuffer *buffer, ptrdiff_t offset, size_t size) {
+    BufferCache(buffer, offset, size, "nvnBufferFlushMappedRange");
+}
+
+void Nvnl_nvnBufferInvalidateMappedRange(const NVNbuffer *buffer, ptrdiff_t offset,
+                                         size_t size) {
+    BufferCache(buffer, offset, size, "nvnBufferInvalidateMappedRange");
+}
+
 // ---- events
 
 void Nvnl_nvnEventBuilderSetDefaults(NVNeventBuilder *builder) {

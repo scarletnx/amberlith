@@ -1510,6 +1510,136 @@ static void DescriptorPoolsCase(const char *name) {
                why[0] != '\0' ? why : NvnLayerError());
 }
 
+// ---- buffers
+
+// A game's vertices, indices and uniforms are in buffers: a range of a pool, with the range's
+// own address and mapping. The two here are in the cached pool of the pool cases, one written
+// through its mapping and one a copy by the graphics unit fills.
+
+#define BUFFER_BYTES 0x800u
+#define BUFFER_FROM_AT 0x400
+#define BUFFER_TO_AT 0x1400
+
+/// A buffer of BUFFER_BYTES at @p offset of the cached pool.
+static bool MakeBuffer(NVNbuffer *buffer, NVNbufferBuilder *builder, ptrdiff_t offset) {
+    memset(builder, 0, sizeof(*builder));
+    nvn.nvn.nvnBufferBuilderSetDevice(builder, &nvn.device);
+    nvn.nvn.nvnBufferBuilderSetDefaults(builder);
+    nvn.nvn.nvnBufferBuilderSetStorage(builder, &nvn.cached_pool, offset, BUFFER_BYTES);
+    return nvn.nvn.nvnBufferInitialize(buffer, builder);
+}
+
+/// What a buffer and its builder say, and that its address and its mapping are the pool's,
+/// moved by the buffer's offset.
+static void BufferCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNbufferBuilder builder;
+    static _Alignas(8) NVNbuffer buffer;
+    if (!MakeBuffer(&buffer, &builder, BUFFER_FROM_AT)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnBufferInitialize answered false"));
+        return;
+    }
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnBufferBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnBufferBuilderGetMemoryPool(&builder),
+          (long long)(uintptr_t)&nvn.cached_pool);
+    Gives(why, sizeof(why), "the builder's memory offset",
+          (long long)nvn.nvn.nvnBufferBuilderGetMemoryOffset(&builder), BUFFER_FROM_AT);
+    Gives(why, sizeof(why), "the builder's size",
+          (long long)nvn.nvn.nvnBufferBuilderGetSize(&builder), BUFFER_BYTES);
+    Gives(why, sizeof(why), "the buffer's memory pool",
+          (long long)(uintptr_t)nvn.nvn.nvnBufferGetMemoryPool(&buffer),
+          (long long)(uintptr_t)&nvn.cached_pool);
+    Gives(why, sizeof(why), "the buffer's memory offset",
+          (long long)nvn.nvn.nvnBufferGetMemoryOffset(&buffer), BUFFER_FROM_AT);
+    Gives(why, sizeof(why), "the buffer's size", (long long)nvn.nvn.nvnBufferGetSize(&buffer),
+          BUFFER_BYTES);
+    Gives(why, sizeof(why), "the buffer's address, its pool's and the offset",
+          (long long)nvn.nvn.nvnBufferGetAddress(&buffer),
+          (long long)(nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.cached_pool) + BUFFER_FROM_AT));
+    Gives(why, sizeof(why), "the buffer's mapping, its pool's and the offset",
+          (long long)(uintptr_t)nvn.nvn.nvnBufferMap(&buffer),
+          (long long)((uintptr_t)nvn.nvn.nvnMemoryPoolMap(&nvn.cached_pool) + BUFFER_FROM_AT));
+    nvn.nvn.nvnBufferFinalize(&buffer);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// Bytes written through one buffer's mapping and flushed, copied by the graphics unit to the
+/// other's address, and read through that one's mapping after an invalidate. The whole pool is
+/// judged: the bytes around each buffer keep the preset.
+static void BufferCopyCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    _Alignas(8) NVNbufferBuilder builder;
+    static _Alignas(8) NVNbuffer from, to;
+    uint8_t *const pool = nvn.nvn.nvnMemoryPoolMap(&nvn.cached_pool);
+    const bool from_up = pool != NULL && MakeBuffer(&from, &builder, BUFFER_FROM_AT);
+    const bool to_up = from_up && MakeBuffer(&to, &builder, BUFFER_TO_AT);
+    if (!to_up) {
+        if (from_up) {
+            nvn.nvn.nvnBufferFinalize(&from);
+        }
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("nvnMemoryPoolMap gave no address, or nvnBufferInitialize answered false"));
+        return;
+    }
+    memset(pool, READ_PRESET, CACHED_BYTES);
+    nvn.nvn.nvnMemoryPoolFlushMappedRange(&nvn.cached_pool, 0, CACHED_BYTES);
+    uint8_t *const written = nvn.nvn.nvnBufferMap(&from);
+    for (uint32_t at = 0; written != NULL && at < BUFFER_BYTES; ++at) {
+        written[at] = CachedByte(at);
+    }
+    nvn.nvn.nvnBufferFlushMappedRange(&from, 0, BUFFER_BYTES);
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    nvn.nvn.nvnCommandBufferCopyBufferToBuffer(&nvn.command, nvn.nvn.nvnBufferGetAddress(&from),
+                                               nvn.nvn.nvnBufferGetAddress(&to), BUFFER_BYTES,
+                                               NVN_COPY_FLAGS_NONE);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnBufferInvalidateMappedRange(&to, 0, BUFFER_BYTES);
+    const uint8_t *const read = nvn.nvn.nvnBufferMap(&to);
+    uint32_t wrong = 0, first = 0;
+    uint8_t want_first = 0;
+    for (uint32_t at = 0; at < CACHED_BYTES; ++at) {
+        uint8_t want = READ_PRESET;
+        if (at >= BUFFER_FROM_AT && at < BUFFER_FROM_AT + BUFFER_BYTES) {
+            want = CachedByte(at - BUFFER_FROM_AT);
+        } else if (at >= BUFFER_TO_AT && at < BUFFER_TO_AT + BUFFER_BYTES) {
+            want = CachedByte(at - BUFFER_TO_AT);
+        }
+        if (pool[at] != want && wrong++ == 0u) {
+            first = at;
+            want_first = want;
+        }
+    }
+    const bool mapped = written == pool + BUFFER_FROM_AT && read == pool + BUFFER_TO_AT;
+    nvn.nvn.nvnBufferFinalize(&from);
+    nvn.nvn.nvnBufferFinalize(&to);
+    if (NvnLayerError()[0] != '\0' || list == 0u) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnCommandBufferEndRecording gave no list"));
+        return;
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, mapped && wrong == 0u,
+               "the buffers' mappings are %s the pool's at their offsets; %u of %u bytes of the "
+               "pool wrong, the first, byte 0x%x (the written buffer is 0x%x to 0x%x, the "
+               "copied one 0x%x to 0x%x), is 0x%02x, expected 0x%02x (0x%02x is a byte nothing "
+               "wrote)",
+               mapped ? "" : "not ", (unsigned)wrong, (unsigned)CACHED_BYTES, (unsigned)first,
+               (unsigned)BUFFER_FROM_AT, (unsigned)(BUFFER_FROM_AT + BUFFER_BYTES),
+               (unsigned)BUFFER_TO_AT, (unsigned)(BUFFER_TO_AT + BUFFER_BYTES), pool[first],
+               want_first, READ_PRESET);
+}
+
 /// The cases on the suite's own device, from the lookup to the window.
 static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
@@ -1551,6 +1681,10 @@ static void LayerCases(void) {
                                              "which of its sizes were set";
     static const char *const EVENT = "an event keeps what the processor signals: a write, an "
                                      "add and an add that wraps";
+    static const char *const BUFFER_RANGE = "a buffer is a range of its pool: its address, its "
+                                            "mapping, and what it and its builder say";
+    static const char *const BUFFER_COPY = "bytes flushed from one buffer and copied to "
+                                           "another are there after an invalidate";
     static const char *const SAMPLER_BUILDER = "a sampler builder gives back each number it "
                                                "was set";
     static const char *const SAMPLER = "a sampler says what its builder had, and is the same "
@@ -1562,7 +1696,8 @@ static void LayerCases(void) {
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
                                          UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT,
-                                         SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS, WINDOW };
+                                         SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
+                                         BUFFER_RANGE, BUFFER_COPY, WINDOW };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
@@ -1702,6 +1837,15 @@ static void LayerCases(void) {
     SamplerBuilderCase(SAMPLER_BUILDER);
     SamplerCase(SAMPLER);
     DescriptorPoolsCase(DESCRIPTOR_POOLS);
+    if (!nvn.cached_pool_up) {
+        ReportSkip(SUITE, BUFFER_RANGE, REPORT_REASON_DEPENDS,
+                   "the pool cached to the processor did not come up");
+        ReportSkip(SUITE, BUFFER_COPY, REPORT_REASON_DEPENDS,
+                   "the pool cached to the processor did not come up");
+    } else {
+        BufferCase(BUFFER_RANGE);
+        BufferCopyCase(BUFFER_COPY);
+    }
 
 #if NVN_LAYER_API < 231
     const bool screen_up = ViewerScreenUp();
