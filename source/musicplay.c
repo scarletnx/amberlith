@@ -35,7 +35,7 @@ static void Render(uint32_t slot) {
     }
     AudioSync(left, MUSIC_STREAM_CHUNK * sizeof(int16_t));
     AudioSync(right, MUSIC_STREAM_CHUNK * sizeof(int16_t));
-    g_stream.queued += MUSIC_STREAM_CHUNK;
+    __atomic_add_fetch(&g_stream.queued, MUSIC_STREAM_CHUNK, __ATOMIC_RELEASE);
 }
 
 bool MusicStreamOpen(MusicTrack track, unsigned mix, float gain, bool barrier_first,
@@ -123,7 +123,7 @@ const MusicPlayer *MusicStreamPlayer(void) {
 }
 
 uint64_t MusicStreamQueued(void) {
-    return g_stream.queued;
+    return __atomic_load_n(&g_stream.queued, __ATOMIC_ACQUIRE);
 }
 
 uint32_t MusicStreamDry(void) {
@@ -157,6 +157,7 @@ static struct {
     // whether to stop.
     uint32_t next;
     bool stop;
+    uint32_t switches;
 } g_play;
 
 static void PlayMain(void *argument) {
@@ -166,6 +167,7 @@ static void PlayMain(void *argument) {
             __atomic_exchange_n(&g_play.next, MUSIC_TRACKS + 1u, __ATOMIC_ACQ_REL);
         if (next <= MUSIC_TRACKS) {
             MusicStreamSwitch((MusicTrack)next);
+            ++g_play.switches;
         }
         MusicStreamFeed();
         if (!AudioStep()) {
@@ -200,6 +202,11 @@ static bool Track(const char *name, MusicTrack *track, char *error, size_t error
 }
 
 bool MusicPlayStart(const char *name, char *error, size_t error_size) {
+    return MusicPlayStartInto(name, AUDIO_FINAL_MIX, MUSIC_PLAY_GAIN, error, error_size);
+}
+
+bool MusicPlayStartInto(const char *name, unsigned mix, float gain, char *error,
+                        size_t error_size) {
     MusicTrack track = MUSIC_TRACKS;
     if (!Track(name, &track, error, error_size)) {
         return false;
@@ -225,12 +232,13 @@ bool MusicPlayStart(const char *name, char *error, size_t error_size) {
         snprintf(error, error_size, "the audio renderer: %s", why);
         return false;
     }
-    if (!MusicStreamOpen(track, AUDIO_FINAL_MIX, MUSIC_PLAY_GAIN, false, error, error_size)) {
+    if (!MusicStreamOpen(track, mix, gain, false, error, error_size)) {
         AudioClose();
         return false;
     }
     __atomic_store_n(&g_play.next, MUSIC_TRACKS + 1u, __ATOMIC_RELEASE);
     __atomic_store_n(&g_play.stop, false, __ATOMIC_RELEASE);
+    g_play.switches = 0;
     Result rc = threadCreate(&g_play.thread, PlayMain, NULL, NULL, PLAY_STACK, PLAY_PRIORITY,
                              PLAY_CORE);
     if (R_SUCCEEDED(rc)) {
@@ -278,4 +286,8 @@ void MusicPlayStop(void) {
 
 bool MusicPlayOn(void) {
     return g_play.on;
+}
+
+uint32_t MusicPlaySwitches(void) {
+    return g_play.switches;
 }

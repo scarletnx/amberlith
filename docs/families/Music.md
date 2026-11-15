@@ -17,12 +17,13 @@ build's, then what the audio renderer plays of it to that render. Only the word 
 ([the mode file](../ModeFile.md)), and `all` leaves it out: outside its cases and the interactive
 mode the music makes no thread, no voice and no sample ([When it plays](#when-it-plays)).
 
-- **music**, eleven cases. Four hold each track's 32 bars, rendered on this machine, to the host's
+- **music**, twelve cases. Four hold each track's 32 bars, rendered on this machine, to the host's
   samples, one a switch between two tracks to the tracks rendered alone, and one a switch and a
   stop inside the silence (the host build runs these six too: their hashes are its own). Four play
   an excerpt of each track through the renderer and one the interactive mode's own stream across a
-  switch, each held sample for sample to what the tracker rendered. If the renderer does not open,
-  those five are skipped as `unavailable`, with what it answered.
+  switch, each held sample for sample to what the tracker rendered; the last starts the browser's
+  player, switches it and stops it. If the renderer does not open, those six are skipped as
+  `unavailable`, with what it answered.
 
 ## The tracker
 
@@ -110,6 +111,7 @@ only what follows it, and a stop there ends it in silence; from silence a track 
 | a switch inside the silence keeps it and starts the newer track after it, and a stop there stays silent | a switch to Wimsy's track, then 1000 frames into the barrier one to the fluid's: the rest of the barrier is nought and the fluid's track follows it, as it renders alone; the same with a stop instead, and two seconds of nought after it | exact |
 | the *track*, looped on two voices at the output rate, comes back from the renderer sample for sample (four) | 9600 frames of the track from its first second, left and right on two voices looping into the audio family's submix at a gain of nought: once they have played 100 renderer frames, both channels the submix's aux effect recorded are that loop, one for one, from some sample of it | exact |
 | the player's stream through the renderer's wave buffers comes back sample for sample, past a switch and its silence | the browser's track through the stream the interactive mode plays (below), switched to Wimsy's after 0.4 s and played to 0.15 s past the barrier: the aux's last 9600 frames, read from wherever its ring was last written, are a stretch of the stream as the tracker renders it alone, one for one, and not silent | exact |
+| the browser's player starts on a renderer of its own, takes a switch and fades out, the renderer closed after it | `MusicPlayStart`'s thread and renderer, into the silent submix: half a second of the browser's track, a switch to Wimsy's that its thread takes, a name no track has refused with that name, then a stop that fades out, joins the thread and closes the renderer; one thread and two voices counted, the stream never dry | exact |
 
 The renderer converts a voice to its output rate even when the rates are one, and at default and
 high quality that is a filter of four or eight taps ([the audio family](Audio.md)). Low quality

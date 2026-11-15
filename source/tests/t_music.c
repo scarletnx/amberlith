@@ -105,6 +105,9 @@ static void ReadRing(void) {
 static const char STREAM_NAME[] = "the player's stream through the renderer's wave buffers "
                                   "comes back sample for sample, past a switch and its silence";
 
+static const char THREADED_NAME[] = "the browser's player starts on a renderer of its own, takes "
+                                    "a switch and fades out, the renderer closed after it";
+
 static void ExcerptName(char *name, size_t size, MusicTrack track) {
     snprintf(name, size,
              "the %s track, looped on two voices at the output rate, comes back from the "
@@ -270,6 +273,62 @@ static void Stream(void) {
     }
 }
 
+/// Waits on the player's thread until its stream has queued @p frames, at most @p limit_ms.
+static bool QueuedPast(uint64_t frames, uint64_t limit_ms) {
+    const uint64_t start = AudioNowMs();
+    while (MusicStreamQueued() < frames) {
+        if (AudioNowMs() - start > limit_ms) {
+            return false;
+        }
+        svcSleepThread(10000000ll);
+    }
+    return true;
+}
+
+/// The player the browser starts, with a thread and a renderer of its own, played here into the
+/// submix the speakers hear at a gain of nought: it starts, a switch reaches its thread, a name no
+/// track has is refused saying so, and a stop fades it out, joins the thread and closes the
+/// renderer; one thread and two voices counted, and its stream never ran dry.
+static void Threaded(void) {
+    if (!ReportStart(SUITE, THREADED_NAME)) {
+        return;
+    }
+    const MusicMade before = MusicMadeSoFar();
+    char error[200] = "";
+    char refused[200] = "";
+    const bool started = MusicPlayStartInto("menu", AUDIO_SUBMIX, 1.0f, error, sizeof(error));
+    bool switched = false;
+    bool wrong = true;
+    bool played = false;
+    if (started) {
+        played = QueuedPast(MUSIC_RATE / 2u, 3000u);
+        switched = MusicPlaySwitch("wimsy", error, sizeof(error));
+        wrong = MusicPlaySwitch("nothing", refused, sizeof(refused));
+        // Past the four buffers queued before the switch, the fade and a chunk of the barrier.
+        const uint64_t at = MusicStreamQueued();
+        played = QueuedPast(at + (MUSIC_STREAM_BUFFERS + 1u) * MUSIC_STREAM_CHUNK +
+                                MUSIC_FADE_FRAMES,
+                            3000u) &&
+                 played;
+        MusicPlayStop();
+    }
+    const MusicMade after = MusicMadeSoFar();
+    const uint32_t threads = after.threads - before.threads;
+    const uint32_t voices = after.voices - before.voices;
+    const bool silent = MusicStreamPlayer()->state == MUSIC_SILENT;
+    CHECK_TRUE(SUITE, THREADED_NAME, CHECK_EXACT,
+               started && played && switched && !wrong && strstr(refused, "\"nothing\"") != NULL &&
+                   MusicPlaySwitches() == 1u && silent && !MusicPlayOn() && !AudioIsOpen() &&
+                   threads == 1u && voices == 2u && MusicStreamDry() == 0u,
+               "started %d (%s), played on %d, switched %d, a wrong name refused %d (\"%.60s\"), "
+               "%u switches taken, faded out %d, still on %d, the renderer open %d, %u threads "
+               "and %u voices counted, %u times dry",
+               (int)started, error[0] != '\0' ? error : "no error", (int)played, (int)switched,
+               (int)!wrong, refused, (unsigned)MusicPlaySwitches(), (int)silent,
+               (int)MusicPlayOn(), (int)AudioIsOpen(), (unsigned)threads, (unsigned)voices,
+               (unsigned)MusicStreamDry());
+}
+
 void RunMusic(void) {
     MusicSetAsked(true);
     const uint64_t start = AudioNowMs();
@@ -277,15 +336,16 @@ void RunMusic(void) {
     const uint64_t rendered = AudioNowMs();
     char error[160] = "";
     const bool open = AudioOpen(error, sizeof(error));
-    const char *names[MUSIC_TRACKS + 1u];
+    const char *names[MUSIC_TRACKS + 2u];
     static char excerpt_names[MUSIC_TRACKS][128];
     for (unsigned t = 0; t < MUSIC_TRACKS; ++t) {
         ExcerptName(excerpt_names[t], sizeof(excerpt_names[t]), (MusicTrack)t);
         names[t] = excerpt_names[t];
     }
     names[MUSIC_TRACKS] = STREAM_NAME;
+    names[MUSIC_TRACKS + 1u] = THREADED_NAME;
     if (!open) {
-        for (unsigned i = 0; i <= MUSIC_TRACKS; ++i) {
+        for (unsigned i = 0; i <= MUSIC_TRACKS + 1u; ++i) {
             ReportSkip(SUITE, names[i], REPORT_REASON_UNAVAILABLE, error);
         }
         MusicSetAsked(false);
@@ -312,6 +372,7 @@ void RunMusic(void) {
         ReportNote("music: the renderer said: %s", AudioError());
     }
     AudioClose();
+    Threaded();
     const uint64_t end = AudioNowMs();
     ReportNote("music: the family took %llu ms: %llu rendering the tracks and the switch, %llu "
                "through the renderer",
