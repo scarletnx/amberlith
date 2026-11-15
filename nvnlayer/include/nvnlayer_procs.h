@@ -14,7 +14,8 @@
 ///
 /// Three lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
-///   NVN_LAYER_PROCS_SYNC and NVN_LAYER_PROCS_SAMPLER, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER and NVN_LAYER_PROCS_BUFFER, parts of it
+///   written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231: the functions only the API 231 build has, compute's among them, which
@@ -169,6 +170,28 @@
     X(const NVNmemoryPool *, nvnTexturePoolGetMemoryPool, (const NVNtexturePool *pool))           \
     X(ptrdiff_t, nvnTexturePoolGetMemoryOffset, (const NVNtexturePool *pool))
 
+// Buffers: a range of a memory pool with an address and a mapping of its own.
+#define NVN_LAYER_PROCS_BUFFER(X)                                                                 \
+    X(void, nvnBufferBuilderSetDefaults, (NVNbufferBuilder * builder))                            \
+    X(void, nvnBufferBuilderSetDevice, (NVNbufferBuilder * builder, NVNdevice *device))           \
+    X(void, nvnBufferBuilderSetStorage,                                                           \
+      (NVNbufferBuilder * builder, NVNmemoryPool *pool, ptrdiff_t offset, size_t size))           \
+    X(NVNdevice *, nvnBufferBuilderGetDevice, (const NVNbufferBuilder *builder))                  \
+    X(NVNmemoryPool *, nvnBufferBuilderGetMemoryPool, (const NVNbufferBuilder *builder))          \
+    X(ptrdiff_t, nvnBufferBuilderGetMemoryOffset, (const NVNbufferBuilder *builder))              \
+    X(size_t, nvnBufferBuilderGetSize, (const NVNbufferBuilder *builder))                         \
+    X(NVNboolean, nvnBufferInitialize, (NVNbuffer * buffer, const NVNbufferBuilder *builder))     \
+    X(void, nvnBufferFinalize, (NVNbuffer * buffer))                                              \
+    X(void *, nvnBufferMap, (const NVNbuffer *buffer))                                            \
+    X(NVNbufferAddress, nvnBufferGetAddress, (const NVNbuffer *buffer))                           \
+    X(NVNmemoryPool *, nvnBufferGetMemoryPool, (const NVNbuffer *buffer))                         \
+    X(ptrdiff_t, nvnBufferGetMemoryOffset, (const NVNbuffer *buffer))                             \
+    X(size_t, nvnBufferGetSize, (const NVNbuffer *buffer))                                        \
+    X(void, nvnBufferFlushMappedRange,                                                            \
+      (const NVNbuffer *buffer, ptrdiff_t offset, size_t size))                                   \
+    X(void, nvnBufferInvalidateMappedRange,                                                       \
+      (const NVNbuffer *buffer, ptrdiff_t offset, size_t size))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -255,7 +278,8 @@
     NVN_LAYER_PROCS_TEXTURE(X)                                                                    \
     NVN_LAYER_PROCS_POOL(X)                                                                       \
     NVN_LAYER_PROCS_SYNC(X)                                                                       \
-    NVN_LAYER_PROCS_SAMPLER(X)
+    NVN_LAYER_PROCS_SAMPLER(X)                                                                    \
+    NVN_LAYER_PROCS_BUFFER(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
