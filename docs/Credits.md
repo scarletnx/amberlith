@@ -151,3 +151,6 @@
   `static/icon.svg`, the cover, draws her as edenprobe, in Eden's sunset colours (Eden's
   `dist/dev.eden_emu.eden.svg`) with a test probe. wimsy-dist's `tools/make_edenprobe.py`
   (https://github.com/scarletnx/wimsy-dist) makes it from her shapes, as it makes her other designs.
+  `static/wimsy.svg` is that drawing, unchanged, as ScarletNX has it at commit
+  27a379c8a08a371e000350284aa72f61dd309ea8; `tools/wimsy-mesh.py` makes `source/wimsymesh.c`
+  from it, the model and the sprite the game family's [levels](families/Game.md#the-levels) draw.
