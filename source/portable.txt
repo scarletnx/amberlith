@@ -37,6 +37,8 @@ source/eacref.c
 source/etc2ref.c
 source/etc2blocks.c
 source/bcnref.c
+source/bcnimages.c
+source/bcnimageref.c
 source/audioref.c
 source/vicref.c
 source/padref.c
