@@ -308,5 +308,13 @@ Nor the levels. What they expect of one: that the resolve of a target of four sa
 mean of each pixel's four, as the msaa suite's resolve case holds it; that a second device and a
 second swapchain on the default window come up after the first were closed; that the shadow
 RAM's replay puts the window origin back after a present, as Eden's does; and that a channel is
-never more than two codes from what the reference's arithmetic gives. ScarletNX 3e9ad88 on a
+never more than two codes from what the reference's arithmetic gives. And of the heavy levels:
+that a compute program's store through a view of one level lands in that level and is what a
+view of the whole texture samples later in the same frame, past a full barrier; that an image's
+memory the processor wrote in the block linear order, a tile of eight gobs, is what the unit
+samples with no copy between, as the coherency family's cases expect of a smaller image; that an
+ASTC block of one colour decodes to that colour; and that a copy of a texel to a buffer is
+there for the processor once the queue is idle. The compute program reads its uniform block's
+vector by fixed components alone, and works in whole numbers up to the one division by 255, so
+neither a vector's component picked at run time nor a denormal is in it. ScarletNX 3e9ad88 on a
 desktop card and on lavapipe is inside every range of the five levels.
