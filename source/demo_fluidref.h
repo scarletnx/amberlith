@@ -146,12 +146,31 @@ void FluidStep(FluidArith arith, const FluidGrid *grid, uint32_t frame, const fl
 /// FNV-1a over the bits of @p count floats, for a field pinned to a value.
 uint32_t FluidHashFloats(const float *values, size_t count);
 
+/// The aliasing level: every FLUID_ALIAS_EVERY frames from FLUID_ALIAS_FIRST, the dye's splat
+/// target and the divergence, laid one after the other in the memory the dye's own target follows,
+/// are drawn FLUID_ALIAS_SHIFT bytes further on for that frame alone, over their old selves and the
+/// dye's first bytes; and every frame a compute pass writes a FLUID_ALIAS_SIDE square R32_Uint
+/// storage image laid at that same shift, through bytes the splat target and its shifted self both
+/// cover (t_demo_fluid.c has the layout). The judged frames of the first FLUID_ALIAS_JUDGED shifts
+/// are the shift's, the one after and the one after that.
+#define FLUID_ALIAS_FIRST 20u
+#define FLUID_ALIAS_EVERY 40u
+#define FLUID_ALIAS_SHIFT 0x8000u
+#define FLUID_ALIAS_SIDE 32u
+#define FLUID_ALIAS_JUDGED 3u
+
+/// Whether frame @p frame draws the shifted pair.
+bool FluidAliasShifted(uint32_t frame);
+
+/// The word the compute pass stores at (@p x, @p y) of its image in frame @p frame.
+uint32_t FluidAliasWord(uint32_t frame, uint32_t x, uint32_t y);
+
 /// The frames a run of @p frames judges, lowest first: the early ones, 2^n - 1 up to
-/// FLUID_EARLY_LAST, held to the whole simulation; then each quarter's last frame, the run's last
-/// among them. Hands back how many.
-#define FLUID_JUDGED_MAX 12u
+/// FLUID_EARLY_LAST, held to the whole simulation; each quarter's last frame, the run's last among
+/// them; and with @p alias the first shifts' frames. Hands back how many.
+#define FLUID_JUDGED_MAX 20u
 #define FLUID_EARLY_LAST 63u
-uint32_t FluidJudgedFrames(uint32_t frames, uint32_t out[FLUID_JUDGED_MAX]);
+uint32_t FluidJudgedFrames(uint32_t frames, bool alias, uint32_t out[FLUID_JUDGED_MAX]);
 
 /// What a comparison of a machine's field with the one expected found: how many floats were off
 /// by more than the budget (a NaN or an infinity among them), the first of them and the
@@ -282,15 +301,23 @@ typedef struct {
 /// The read a pass's check holds to the pass worked out again; FLUID_READS for an invariant.
 FluidRead FluidCheckOutput(FluidCheck check);
 
+/// Whether judged frame @p after, the frame right after @p before, starts from the very fields
+/// @p before left: its velocity, pressure and dye, bit for bit. Where one differs, the read of
+/// @p after and the float in it go to @p read and @p at.
+bool FluidHandedOn(const FluidGrid *grid, const FluidFrame *before, const FluidFrame *after,
+                   FluidRead *read, uint32_t *at);
+
 /// Holds @p frame to every check; @p budget is FluidDyeBudgets' for its frame.
 void FluidJudgeFrame(const FluidGrid *grid, const FluidFrame *frame, double budget,
                      FluidWork *work, FluidVerdict out[FLUID_CHECKS]);
 
-/// The frames' note of a timed run and its parts', as the game scene's are, `fluid:` where the
-/// game scene's say `game:`. Each returns the length; the text is always terminated, and cut
-/// short rather than overrun.
-size_t FluidDescribeFrames(char *out, size_t out_size, const GameTimes *times);
-size_t FluidDescribeParts(char *out, size_t out_size, const GameTimes *times);
+/// The frames' note of a timed run and its parts', as the game scene's are, @p suite where the
+/// game scene's say `game`. Each returns the length; the text is always terminated, and cut short
+/// rather than overrun.
+size_t FluidDescribeFrames(char *out, size_t out_size, const char *suite,
+                           const GameTimes *times);
+size_t FluidDescribeParts(char *out, size_t out_size, const char *suite,
+                          const GameTimes *times);
 
 #ifdef __cplusplus
 }

@@ -150,8 +150,10 @@ No console has run the zooms. What they expect of one, besides what the order an
 the compiled program's single precision operations round as IEEE 754 does, to nearest, ties to even, a fused
 multiply and add once, and that a compute program keeps denormals, as its compiled instructions say.
 
-## fluid
+## fluid and fluid-alias
 
 A 2D Navier-Stokes fluid, Stam's stable fluids in forty seven fragment passes a frame in ping-pong between two
 targets a field: each judged frame's passes worked out again from the fields the machine left, the early frames held
-to the processor's whole simulation. Its page: [The fluid demo](Fluid.md).
+to the processor's whole simulation; and **fluid-alias**, the same with its targets drawn over their old selves now
+and then and a compute pass's storage image over them, as a game's dynamic resolution leaves its pool. Their page:
+[The fluid demo](Fluid.md).

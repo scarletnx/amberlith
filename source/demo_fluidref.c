@@ -359,17 +359,50 @@ uint32_t FluidHashFloats(const float *values, size_t count) {
     return hash;
 }
 
-uint32_t FluidJudgedFrames(uint32_t frames, uint32_t out[FLUID_JUDGED_MAX]) {
-    uint32_t count = 0;
-    for (uint32_t k = 1; k - 1u <= FLUID_EARLY_LAST && k - 1u < frames; k *= 2u) {
-        out[count++] = k - 1u;
+bool FluidAliasShifted(uint32_t frame) {
+    return frame >= FLUID_ALIAS_FIRST && (frame - FLUID_ALIAS_FIRST) % FLUID_ALIAS_EVERY == 0u;
+}
+
+uint32_t FluidAliasWord(uint32_t frame, uint32_t x, uint32_t y) {
+    return frame * (FLUID_ALIAS_SIDE * FLUID_ALIAS_SIDE) + y * FLUID_ALIAS_SIDE + x + 1u;
+}
+
+/// Adds @p k to the @p count sorted frames in @p out unless it is there or past the run.
+static void AddFrame(uint32_t *out, uint32_t *count, uint32_t k, uint32_t frames) {
+    if (k >= frames || *count >= FLUID_JUDGED_MAX) {
+        return;
     }
+    uint32_t at = 0;
+    while (at < *count && out[at] < k) {
+        ++at;
+    }
+    if (at < *count && out[at] == k) {
+        return;
+    }
+    memmove(out + at + 1, out + at, (*count - at) * sizeof(uint32_t));
+    out[at] = k;
+    ++*count;
+}
+
+uint32_t FluidJudgedFrames(uint32_t frames, bool alias, uint32_t out[FLUID_JUDGED_MAX]) {
+    uint32_t count = 0;
+    for (uint32_t k = 1; k - 1u <= FLUID_EARLY_LAST; k *= 2u) {
+        AddFrame(out, &count, k - 1u, frames);
+    }
+    uint32_t last = count > 0u ? out[count - 1u] : 0u;
     for (uint32_t q = 1; q <= 4u; ++q) {
         const uint32_t k = (uint32_t)(((uint64_t)frames * q) / 4u);
-        if (k == 0u || k - 1u <= out[count - 1u]) {
-            continue;
+        // A quarter's last frame among the early ones adds nothing they do not judge.
+        if (k > 0u && k - 1u > last) {
+            AddFrame(out, &count, k - 1u, frames);
+            last = k - 1u;
         }
-        out[count++] = k - 1u;
+    }
+    for (uint32_t n = 0; alias && n < FLUID_ALIAS_JUDGED; ++n) {
+        const uint32_t shift = FLUID_ALIAS_FIRST + n * FLUID_ALIAS_EVERY;
+        for (uint32_t after = 0; after < 3u; ++after) {
+            AddFrame(out, &count, shift + after, frames);
+        }
     }
     return count;
 }
@@ -523,6 +556,29 @@ FluidRead FluidCheckOutput(FluidCheck check) {
     return (unsigned)check < FLUID_CHECKS ? OUTPUTS[check] : FLUID_READS;
 }
 
+bool FluidHandedOn(const FluidGrid *grid, const FluidFrame *before, const FluidFrame *after,
+                   FluidRead *read, uint32_t *at) {
+    static const FluidRead PAIRS[3][2] = {
+        { FLUID_READ_VELOCITY, FLUID_READ_VELOCITY_IN },
+        { FLUID_READ_PRESSURE, FLUID_READ_PRESSURE_IN },
+        { FLUID_READ_DYE, FLUID_READ_DYE_IN },
+    };
+    for (uint32_t p = 0; p < 3u; ++p) {
+        const float *const left = before->read[PAIRS[p][0]];
+        const float *const started = after->read[PAIRS[p][1]];
+        const size_t count = FluidReadFloats(grid, PAIRS[p][0]);
+        for (size_t i = 0; i < count; ++i) {
+            // Bits, not values: a NaN handed on is the same NaN, and a nought keeps its sign.
+            if (memcmp(&left[i], &started[i], sizeof(float)) != 0) {
+                *read = PAIRS[p][1];
+                *at = (uint32_t)i;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 /// A pass's output @p got against @p want, @p count floats, within the pass budget.
 static void PassVerdict(const float *got, const float *want, size_t count, FluidVerdict *out) {
     FluidCompare(got, want, count, FLUID_PASS_ABSOLUTE, FLUID_PASS_RELATIVE, &out->diff);
@@ -611,20 +667,21 @@ static void AppendMeasure(char *out, size_t out_size, const char *what,
            (unsigned)stats->longest_at);
 }
 
-size_t FluidDescribeFrames(char *out, size_t out_size, const GameTimes *times) {
+size_t FluidDescribeFrames(char *out, size_t out_size, const char *suite,
+                           const GameTimes *times) {
     if (out == NULL || out_size == 0u) {
         return 0;
     }
     out[0] = '\0';
-    if (times == NULL) {
+    if (times == NULL || suite == NULL) {
         return 0;
     }
     const GameFrameStats *const present = &times->present;
     const uint64_t total = present->total + times->warmup_present;
     Append(out, out_size,
-           "fluid: %u frame%s in %.2f s; frame 0, the warm-up, left out of the times (%u us "
+           "%s: %u frame%s in %.2f s; frame 0, the warm-up, left out of the times (%u us "
            "present to present, %u us the main thread's part, %u us the render thread's)",
-           (unsigned)times->frames, times->frames == 1u ? "" : "s", (double)total / 1e6,
+           suite, (unsigned)times->frames, times->frames == 1u ? "" : "s", (double)total / 1e6,
            (unsigned)times->warmup_present, (unsigned)times->warmup_main,
            (unsigned)times->warmup_render);
     if (present->frames == 0u) {
@@ -651,15 +708,16 @@ size_t FluidDescribeFrames(char *out, size_t out_size, const GameTimes *times) {
     return strlen(out);
 }
 
-size_t FluidDescribeParts(char *out, size_t out_size, const GameTimes *times) {
+size_t FluidDescribeParts(char *out, size_t out_size, const char *suite,
+                          const GameTimes *times) {
     if (out == NULL || out_size == 0u) {
         return 0;
     }
     out[0] = '\0';
-    if (times == NULL) {
+    if (times == NULL || suite == NULL) {
         return 0;
     }
-    Append(out, out_size, "fluid: past the warm-up");
+    Append(out, out_size, "%s: past the warm-up", suite);
     if (times->present.frames == 0u) {
         Append(out, out_size, ", no frame to time");
         return strlen(out);

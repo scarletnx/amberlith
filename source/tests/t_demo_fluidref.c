@@ -265,9 +265,9 @@ static void CheckSameEverywhere(void) {
            &t);
 }
 
-static bool Frames(uint32_t frames, const uint32_t *want, uint32_t count) {
+static bool Frames(uint32_t frames, bool alias, const uint32_t *want, uint32_t count) {
     uint32_t got[FLUID_JUDGED_MAX];
-    const uint32_t n = FluidJudgedFrames(frames, got);
+    const uint32_t n = FluidJudgedFrames(frames, alias, got);
     return n == count && memcmp(got, want, count * sizeof(uint32_t)) == 0;
 }
 
@@ -279,13 +279,83 @@ static void CheckJudgedFrames(void) {
     static const uint32_t HUNDRED[] = { 0, 1, 3, 7, 15, 31, 63, 74, 99 };
     static const uint32_t DEFAULT[] = { 0, 1, 3, 7, 15, 31, 63, 149, 299, 449, 599 };
     static const uint32_t MOST[] = { 0, 1, 3, 7, 15, 31, 63, 8999, 17999, 26999, 35999 };
-    Expect(&t, Frames(1u, ONE, 1u), "a run of one frame");
-    Expect(&t, Frames(2u, TWO, 2u), "a run of two");
-    Expect(&t, Frames(64u, SIXTY_FOUR, 7u), "a run of 64, its quarters among the early ones");
-    Expect(&t, Frames(100u, HUNDRED, 9u), "a run of 100");
-    Expect(&t, Frames(600u, DEFAULT, 11u), "the default run of 600");
-    Expect(&t, Frames(36000u, MOST, 11u), "the longest run");
-    Report("fluid: the frames a run of 1, 2, 64, 100, 600 and 36000 frames judges", &t);
+    Expect(&t, Frames(1u, false, ONE, 1u), "a run of one frame");
+    Expect(&t, Frames(2u, false, TWO, 2u), "a run of two");
+    Expect(&t, Frames(64u, false, SIXTY_FOUR, 7u),
+           "a run of 64, its quarters among the early ones");
+    Expect(&t, Frames(100u, false, HUNDRED, 9u), "a run of 100");
+    Expect(&t, Frames(600u, false, DEFAULT, 11u), "the default run of 600");
+    Expect(&t, Frames(36000u, false, MOST, 11u), "the longest run");
+    // The aliasing level adds the first three shifts, at 20, 60 and 100, and the two frames after
+    // each: twenty in a run of 600, the most a run judges; a run of 21 has the first shift for its
+    // last frame, and none after it.
+    static const uint32_t ALIAS_DEFAULT[] = { 0,  1,  3,  7,   15,  20,  21,  22,  31,  60,
+                                              61, 62, 63, 100, 101, 102, 149, 299, 449, 599 };
+    static const uint32_t ALIAS_SHORT[] = { 0, 1, 3, 7, 15, 20 };
+    static const uint32_t ALIAS_MOST[] = { 0,  1,  3,  7,   15,  20,   21,    22,    31,    60,
+                                           61, 62, 63, 100, 101, 102, 8999, 17999, 26999, 35999 };
+    Expect(&t, Frames(600u, true, ALIAS_DEFAULT, 20u), "the aliasing level's run of 600");
+    Expect(&t, Frames(21u, true, ALIAS_SHORT, 6u), "the aliasing level's run of 21");
+    Expect(&t, Frames(36000u, true, ALIAS_MOST, 20u), "the aliasing level's longest run");
+    Report("fluid: the frames a run of 1, 2, 64, 100, 600 and 36000 frames judges, on each level",
+           &t);
+}
+
+static void CheckAliasing(void) {
+    Tally t = { 0, NULL };
+    Expect(&t, !FluidAliasShifted(0u) && !FluidAliasShifted(19u) && FluidAliasShifted(20u) &&
+                   !FluidAliasShifted(21u) && FluidAliasShifted(60u) && FluidAliasShifted(100u) &&
+                   !FluidAliasShifted(99u),
+           "the shifts at 20, 60, 100 and none between");
+    // Frame 3's words: 3 * 1024 + 32 y + x + 1, never nought, so a store that never landed shows.
+    Expect(&t, FluidAliasWord(3u, 0u, 0u) == 3073u && FluidAliasWord(3u, 31u, 0u) == 3104u &&
+                   FluidAliasWord(3u, 0u, 1u) == 3105u && FluidAliasWord(0u, 0u, 0u) == 1u,
+           "the storage image's words");
+    // The hand-on check on frames made to order: the same fields pass; a velocity bit, a pressure
+    // bit, a nought's sign and a dye float each fail, naming the read and the float.
+    const FluidGrid grid = { 2u, 1u };
+    float velocity[4] = { 1.0f, 2.0f, 3.0f, 4.0f };
+    float pressure[2] = { 0.5f, 0.0f };
+    float dye[32];
+    for (uint32_t i = 0; i < 32u; ++i) {
+        dye[i] = (float)i * 0.25f;
+    }
+    float velocity_in[4];
+    float pressure_in[2];
+    float dye_in[32];
+    memcpy(velocity_in, velocity, sizeof(velocity));
+    memcpy(pressure_in, pressure, sizeof(pressure));
+    memcpy(dye_in, dye, sizeof(dye));
+    FluidFrame before;
+    FluidFrame after;
+    memset(&before, 0, sizeof(before));
+    memset(&after, 0, sizeof(after));
+    before.read[FLUID_READ_VELOCITY] = velocity;
+    before.read[FLUID_READ_PRESSURE] = pressure;
+    before.read[FLUID_READ_DYE] = dye;
+    after.read[FLUID_READ_VELOCITY_IN] = velocity_in;
+    after.read[FLUID_READ_PRESSURE_IN] = pressure_in;
+    after.read[FLUID_READ_DYE_IN] = dye_in;
+    FluidRead read = FLUID_READS;
+    uint32_t at = 99u;
+    Expect(&t, FluidHandedOn(&grid, &before, &after, &read, &at), "the same fields");
+    velocity_in[2] = nextafterf(3.0f, 4.0f);
+    Expect(&t, !FluidHandedOn(&grid, &before, &after, &read, &at) &&
+                   read == FLUID_READ_VELOCITY_IN && at == 2u,
+           "a velocity a bit off");
+    velocity_in[2] = 3.0f;
+    pressure_in[1] = -0.0f;
+    Expect(&t, !FluidHandedOn(&grid, &before, &after, &read, &at) &&
+                   read == FLUID_READ_PRESSURE_IN && at == 1u,
+           "a nought that lost its sign");
+    pressure_in[1] = 0.0f;
+    dye_in[31] = 0.0f;
+    Expect(&t, !FluidHandedOn(&grid, &before, &after, &read, &at) && read == FLUID_READ_DYE_IN &&
+                   at == 31u,
+           "the last dye float");
+    Report("fluid: the aliasing level's shifts and storage words, and a frame's fields handed to "
+           "the next, on frames made to order",
+           &t);
 }
 
 static void CheckCompare(void) {
@@ -485,24 +555,26 @@ static void CheckNotes(void) {
     times.render_part.longest = 2500u;
     times.render_part.longest_at = 2u;
     char note[512];
-    FluidDescribeFrames(note, sizeof(note), &times);
+    FluidDescribeFrames(note, sizeof(note), "fluid", &times);
     Expect(&t, strcmp(note, "fluid: 3 frames in 0.07 s; frame 0, the warm-up, left out of the "
                             "times (20000 us present to present, 300 us the main thread's part, "
                             "5000 us the render thread's); the 2 past it; present to present: "
                             "mean 25000 us, 99th percentile 40000 us, longest 40000 us at frame "
                             "2, 1 over 33333 us, two frames at 60 Hz: frame 2") == 0,
            "the frames' note");
-    FluidDescribeParts(note, sizeof(note), &times);
+    FluidDescribeParts(note, sizeof(note), "fluid", &times);
     Expect(&t, strcmp(note, "fluid: past the warm-up; the main thread's part: mean 10 us, 99th "
                             "percentile 12 us, longest 12 us at frame 1; the render thread's "
                             "part, the graphics unit's in it: mean 2000 us, 99th percentile 2500 "
                             "us, longest 2500 us at frame 2") == 0,
            "the parts' note");
     times.present.frames = 0u;
-    FluidDescribeFrames(note, sizeof(note), &times);
+    FluidDescribeFrames(note, sizeof(note), "fluid", &times);
     Expect(&t, strstr(note, "; no frame past it to time") != NULL, "a run of one frame");
     char cut[24];
-    Expect(&t, FluidDescribeFrames(cut, sizeof(cut), &times) == strlen(cut) && strlen(cut) < 24u,
+    Expect(&t,
+           FluidDescribeFrames(cut, sizeof(cut), "fluid", &times) == strlen(cut) &&
+               strlen(cut) < 24u,
            "a note cut short, terminated");
     Report("fluid: the frames' and the parts' notes on times made to order", &t);
 }
@@ -512,6 +584,7 @@ void RunReferenceFluid(void) {
     CheckPasses();
     CheckSameEverywhere();
     CheckJudgedFrames();
+    CheckAliasing();
     CheckCompare();
     CheckMachines();
     CheckNotes();
