@@ -77,9 +77,10 @@ music-wav: build-host/music-wav
 	@mkdir -p $(MUSIC_WAV)
 	./build-host/music-wav $(MUSIC_WAV)
 
-build-host/music-wav: tools/music-wav.c source/music.c source/music.h
+build-host/music-wav: tools/music-wav.c source/music.c source/music.h source/musicscore.c \
+		source/musicscore.h
 	@mkdir -p build-host
-	$(HOSTCC) $(MUSICFLAGS) tools/music-wav.c source/music.c -o $@
+	$(HOSTCC) $(MUSICFLAGS) tools/music-wav.c source/music.c source/musicscore.c -o $@
 
 host-clean:
 	rm -rf build-host

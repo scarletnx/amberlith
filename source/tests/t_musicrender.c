@@ -14,20 +14,20 @@
 // The music family's first cases, the ones that need no renderer: each track rendered whole on
 // this machine and held to the samples the host build renders, and a switch between two tracks
 // held to the tracks rendered alone. The host build runs them too, so the hashes below are the
-// host's own and a change to the tracker or the composer moves them here, in the same commit.
+// host's own and a change to the synthesizer or the scores moves them here, in the same commit.
 
 static const char *const SUITE = "music";
 
-/// One pass of each track's form as the host renders it: its frames and the FNV-1a of its
-/// samples, left then right, each low byte first.
+/// One pass of each track, its intro and its form, as the host renders it: its frames and the
+/// FNV-1a of its samples, left then right, each low byte first.
 static const struct {
     uint64_t frames;
     uint64_t hash;
 } RENDERED[MUSIC_TRACKS] = {
-    [MUSIC_TRACK_MENU] = { 3291428u, 0x38b9f042892ab13cull },
-    [MUSIC_TRACK_WIMSY] = { 2633142u, 0x82bfd13edd47c126ull },
-    [MUSIC_TRACK_FRACTAL] = { 4388571u, 0x330d69cbc7415604ull },
-    [MUSIC_TRACK_FLUID] = { 2949120u, 0x6b82c89566e849dfull },
+    [MUSIC_TRACK_MENU] = { 3916800u, 0xd7c7cd95ceb60219ull },
+    [MUSIC_TRACK_WIMSY] = { 2967272u, 0xdf51f208699c0cdeull },
+    [MUSIC_TRACK_FRACTAL] = { 4937142u, 0x639183ef4797b8c1ull },
+    [MUSIC_TRACK_FLUID] = { 3264000u, 0xa2d30b73417d8c13ull },
 };
 
 // A chunk at a time, so the longest track needs no buffer of its own: 0.1 s.
@@ -39,10 +39,10 @@ static int16_t chunk[CHUNK * 2u];
 static int16_t want[CHUNK * 2u];
 
 static void RenderTrack(MusicTrack track) {
-    const MusicColour *colour = MusicColourOf(track);
+    const MusicScore *score = MusicScoreOf(track);
     char name[96];
-    snprintf(name, sizeof(name), "the %s track's 32 bars render to the host's samples",
-             colour->name);
+    snprintf(name, sizeof(name),
+             "the %s track, its intro and its form, renders to the host's samples", score->name);
     if (!ReportStart(SUITE, name)) {
         return;
     }
@@ -61,7 +61,7 @@ static void RenderTrack(MusicTrack track) {
         done += n;
     }
     ReportNote("music: %s, %s: %llu frames, %.1f s, hash %016llx, peak %u, %llu samples clipped",
-               colour->name, colour->demo, (unsigned long long)frames,
+               score->name, score->demo, (unsigned long long)frames,
                (double)frames / MUSIC_RATE, (unsigned long long)hash, (unsigned)peak,
                (unsigned long long)player.clipped);
     CHECK_TRUE(SUITE, name, CHECK_EXACT,
@@ -103,10 +103,10 @@ static uint64_t Compare(uint64_t frames, bool fade, uint32_t fade_at, uint64_t *
 }
 
 /// A switch from the browser's track to Wimsy's: the first fades out over MUSIC_FADE_FRAMES as
-/// it would have played on, then MUSIC_BARRIER_FRAMES of nought, then Wimsy's from its first row.
+/// it would have played on, then MUSIC_BARRIER_FRAMES of nought, then Wimsy's from its first bar.
 static void RenderSwitch(void) {
     static const char NAME[] = "a switch fades the track out over 50 ms, keeps a second of "
-                               "silence, then starts the next one from its first row";
+                               "silence, then starts the next one from its first bar";
     if (!ReportStart(SUITE, NAME)) {
         return;
     }

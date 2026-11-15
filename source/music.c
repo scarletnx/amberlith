@@ -5,12 +5,75 @@
 
 #include "music.h"
 
-// Integers only, from the composer's choices to the last sample: a float rounds as the
-// compiler pleases (a fused multiply on one processor, two roundings on another), and the music
-// family holds a machine's samples to the host's one for one.
+// Integers only, from the score to the last sample: a float rounds as the compiler pleases (a fused
+// multiply on one processor, two roundings on another), and the music family holds a machine's
+// samples to the host's one for one.
 
 // ---------------------------------------------------------------------------------------------
-// The tables
+// The chip's tables
+
+// round(-log2(sin((i + 0.5) / 256 * pi / 2)) * 256): a quarter of a sine as attenuation, in 256ths
+// of an octave. And round(4095 * 2^(-k / 256)): the amplitude of an attenuation's fraction.
+static const uint16_t LOGSIN[256] = {
+    2137, 1731, 1543, 1419, 1326, 1252, 1190, 1137, 1091, 1050, 1013, 979, 949, 920, 894, 869,
+    846, 825, 804, 785, 767, 749, 732, 717, 701, 687, 672, 659, 646, 633, 621, 609,
+    598, 587, 576, 566, 556, 546, 536, 527, 518, 509, 501, 492, 484, 476, 468, 461,
+    453, 446, 439, 432, 425, 418, 411, 405, 399, 392, 386, 380, 375, 369, 363, 358,
+    352, 347, 341, 336, 331, 326, 321, 316, 311, 307, 302, 297, 293, 289, 284, 280,
+    276, 271, 267, 263, 259, 255, 251, 248, 244, 240, 236, 233, 229, 226, 222, 219,
+    215, 212, 209, 205, 202, 199, 196, 193, 190, 187, 184, 181, 178, 175, 172, 169,
+    167, 164, 161, 159, 156, 153, 151, 148, 146, 143, 141, 138, 136, 134, 131, 129,
+    127, 125, 122, 120, 118, 116, 114, 112, 110, 108, 106, 104, 102, 100, 98, 96,
+    94, 92, 91, 89, 87, 85, 83, 82, 80, 78, 77, 75, 74, 72, 70, 69,
+    67, 66, 64, 63, 62, 60, 59, 57, 56, 55, 53, 52, 51, 49, 48, 47,
+    46, 45, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30,
+    29, 28, 27, 26, 25, 24, 23, 23, 22, 21, 20, 20, 19, 18, 17, 17,
+    16, 15, 15, 14, 13, 13, 12, 12, 11, 10, 10, 9, 9, 8, 8, 7,
+    7, 7, 6, 6, 5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2,
+    2, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+static const uint16_t EXP[256] = {
+    4095, 4084, 4073, 4062, 4051, 4040, 4029, 4018, 4007, 3996, 3986, 3975, 3964, 3953, 3943, 3932,
+    3921, 3911, 3900, 3890, 3879, 3869, 3858, 3848, 3837, 3827, 3817, 3806, 3796, 3786, 3776, 3765,
+    3755, 3745, 3735, 3725, 3715, 3705, 3695, 3685, 3675, 3665, 3655, 3645, 3635, 3625, 3615, 3606,
+    3596, 3586, 3577, 3567, 3557, 3548, 3538, 3528, 3519, 3509, 3500, 3490, 3481, 3472, 3462, 3453,
+    3443, 3434, 3425, 3416, 3406, 3397, 3388, 3379, 3370, 3361, 3351, 3342, 3333, 3324, 3315, 3306,
+    3297, 3289, 3280, 3271, 3262, 3253, 3244, 3236, 3227, 3218, 3209, 3201, 3192, 3183, 3175, 3166,
+    3158, 3149, 3141, 3132, 3124, 3115, 3107, 3098, 3090, 3082, 3073, 3065, 3057, 3048, 3040, 3032,
+    3024, 3016, 3007, 2999, 2991, 2983, 2975, 2967, 2959, 2951, 2943, 2935, 2927, 2919, 2911, 2903,
+    2896, 2888, 2880, 2872, 2864, 2857, 2849, 2841, 2834, 2826, 2818, 2811, 2803, 2795, 2788, 2780,
+    2773, 2765, 2758, 2750, 2743, 2736, 2728, 2721, 2713, 2706, 2699, 2691, 2684, 2677, 2670, 2662,
+    2655, 2648, 2641, 2634, 2627, 2620, 2612, 2605, 2598, 2591, 2584, 2577, 2570, 2563, 2557, 2550,
+    2543, 2536, 2529, 2522, 2515, 2509, 2502, 2495, 2488, 2481, 2475, 2468, 2461, 2455, 2448, 2442,
+    2435, 2428, 2422, 2415, 2409, 2402, 2396, 2389, 2383, 2376, 2370, 2363, 2357, 2351, 2344, 2338,
+    2332, 2325, 2319, 2313, 2307, 2300, 2294, 2288, 2282, 2276, 2269, 2263, 2257, 2251, 2245, 2239,
+    2233, 2227, 2221, 2215, 2209, 2203, 2197, 2191, 2185, 2179, 2173, 2167, 2161, 2156, 2150, 2144,
+    2138, 2132, 2127, 2121, 2115, 2109, 2104, 2098, 2092, 2087, 2081, 2075, 2070, 2064, 2059, 2053,
+};
+
+// The frames a decay at each rate takes to fall 96 dB are 39.28 s over 2^(rate - 1), as the chip's
+// rate table halves; each entry is 4096 << 16 over that many frames at 48 kHz. An attack at each
+// rate takes 2.826 s over 2^(rate - 1) to rise the same, exponentially: each entry, in 65536ths,
+// is the share of the attenuation left that a frame takes off, 1 - 4095^(-1 / frames), so the
+// attack reaches its top in those frames; 15 is at once.
+static const uint32_t DECAY[16] = {
+    0,      142,    285,    569,    1139,   2278,   4556,    9112,
+    18224,  36447,  72895,  145790, 291580, 583159, 1166318, 2332637,
+};
+static const uint32_t ATTACK[16] = {
+    0, 4, 8, 16, 32, 64, 128, 257, 512, 1021, 2025, 3988, 7734, 14555, 25878, 65536,
+};
+
+// round(f * 2^32 / 48000) for the eighth octave's notes, C8 (4186.01 Hz) to B8: each octave below
+// halves it.
+static const uint32_t STEP8[12] = {
+    374557749, 396830112, 420426858, 445426740, 471913192, 499974611,
+    529704648, 561202526, 594573365, 629928537, 667386037, 707070876,
+};
+
+// An operator's multiple, twice over: 0 is a half, and 11, 13 and 15 repeat 10, 12 and 15 as the
+// chip's do.
+static const uint8_t MULT2[16] = { 1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30 };
 
 static const uint8_t MODE_STEPS[MUSIC_MODES][7] = {
     [MUSIC_IONIAN] = { 0, 2, 4, 5, 7, 9, 11 },     [MUSIC_DORIAN] = { 0, 2, 3, 5, 7, 9, 10 },
@@ -24,29 +87,6 @@ static const char *const MODE_NAMES[MUSIC_MODES] = {
     [MUSIC_AEOLIAN] = "aeolian",
 };
 
-// round(856 * 2^(-n/12)): 856 is the lowest note's period, the octaves halve it.
-static const uint16_t PERIODS[MUSIC_NOTES] = {
-    856, 808, 763, 720, 679, 641, 605, 571, 539, 509, 480, 453,
-    428, 404, 381, 360, 340, 321, 303, 286, 270, 254, 240, 227,
-    214, 202, 191, 180, 170, 160, 151, 143, 135, 127, 120, 113,
-};
-#define PERIOD_MIN 113u
-#define PERIOD_MAX 856u
-
-// round(127 * sin(i * pi / 128)) for i from 0 to 64: a quarter of a sine of 256 steps.
-static const int8_t QUARTER[65] = {
-    0,   3,   6,   9,   12,  16,  19,  22,  25,  28,  31,  34,  37,  40,  43,  46,  49,
-    51,  54,  57,  60,  63,  65,  68,  71,  73,  76,  78,  81,  83,  85,  88,  90,  92,
-    94,  96,  98,  100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116, 117, 118, 120,
-    121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127, 127,
-};
-
-// round(255 * sin(i * pi / 32)) for i from 0 to 31: half a sine, the vibrato's shape.
-static const uint8_t VIBRATO[32] = {
-    0,   25,  50,  74,  98,  120, 142, 162, 180, 197, 212, 225, 236, 244, 250, 254,
-    255, 254, 250, 244, 236, 225, 212, 197, 180, 162, 142, 120, 98,  74,  50,  25,
-};
-
 const uint8_t *MusicModeSteps(MusicMode mode) {
     return MODE_STEPS[(unsigned)mode < MUSIC_MODES ? mode : MUSIC_IONIAN];
 }
@@ -55,43 +95,191 @@ const char *MusicModeName(MusicMode mode) {
     return (unsigned)mode < MUSIC_MODES ? MODE_NAMES[mode] : "none";
 }
 
-uint32_t MusicPeriod(uint32_t note) {
-    if (note < 1u) {
-        return PERIODS[0];
+// ---------------------------------------------------------------------------------------------
+// The instruments
+
+// Each one's two operators: mult, tl, ar, dr, sl, rr, wave, sustain, vib, am.
+#define OP(mult, tl, ar, dr, sl, rr, wave, sustain, vib, am)                                       \
+    { mult, tl, ar, dr, sl, rr, wave, sustain, vib, am }
+const MusicPatch MUSIC_PATCHES[] = {
+    // A slapped bass: a bright modulator that dies faster than the note.
+    { "slap",
+      { OP(1, 24, 15, 5, 5, 7, 0, 1, 0, 0), OP(1, 0, 15, 3, 3, 7, 0, 1, 0, 0) },
+      5, 0, 0, 0, 0 },
+    // A round, deep bass, little modulation.
+    { "deep",
+      { OP(1, 40, 11, 2, 4, 5, 0, 1, 0, 0), OP(1, 2, 12, 1, 1, 5, 0, 1, 0, 0) },
+      2, 0, 0, 0, 0 },
+    // An electric piano: a half-sine modulator, a bell's attack and a soft tail.
+    { "epiano",
+      { OP(1, 28, 15, 5, 7, 6, 1, 1, 0, 0), OP(1, 6, 15, 3, 5, 6, 0, 1, 0, 0) },
+      2, 0, 0, 0, 0 },
+    // An organ: the two operators added, the second an octave up, swelling in.
+    { "organ",
+      { OP(1, 8, 6, 0, 0, 5, 0, 1, 1, 0), OP(2, 14, 6, 0, 0, 5, 1, 1, 1, 0) },
+      3, 1, 0, 0, 0 },
+    // Brass: a fed-back modulator, a slower attack.
+    { "brass",
+      { OP(1, 18, 11, 2, 3, 6, 0, 1, 0, 0), OP(1, 0, 12, 1, 1, 6, 0, 1, 0, 0) },
+      6, 0, 0, 0, 0 },
+    // A square lead: the OPL3's square carrier under a modulator an octave up.
+    { "chip",
+      { OP(2, 22, 15, 3, 4, 6, 0, 1, 0, 0), OP(1, 2, 15, 2, 2, 6, 6, 1, 0, 0) },
+      3, 0, 0, 0, 0 },
+    // A flute: a breath of modulation, a soft attack, vibrato.
+    { "flute",
+      { OP(2, 46, 9, 1, 2, 6, 0, 1, 1, 0), OP(1, 0, 10, 1, 1, 6, 0, 1, 1, 0) },
+      0, 0, 0, 0, 0 },
+    // A saw lead: the modulator fed back hard.
+    { "saw",
+      { OP(1, 10, 13, 2, 3, 6, 0, 1, 0, 0), OP(1, 0, 13, 1, 1, 6, 0, 1, 0, 0) },
+      7, 0, 0, 0, 0 },
+    // A bell: a modulator at 3.5 times the carrier, both dying away.
+    { "bell",
+      { OP(7, 26, 15, 5, 10, 5, 0, 0, 0, 0), OP(2, 6, 15, 4, 15, 5, 0, 0, 0, 0) },
+      0, 0, 0, 0, 0 },
+    // A pluck: a short, bright modulator over a half-sine.
+    { "pluck",
+      { OP(3, 24, 15, 6, 15, 6, 0, 0, 0, 0), OP(1, 4, 15, 4, 15, 6, 1, 0, 0, 0) },
+      3, 0, 0, 0, 0 },
+    // The drums. A kick: a sine falling from two and a half octaves up to A1.
+    { "kick",
+      { OP(1, 34, 15, 8, 15, 8, 0, 0, 0, 0), OP(1, 0, 15, 7, 15, 8, 0, 0, 0, 0) },
+      0, 0, 7680, 24, 33 },
+    // A snare: noise and a falling tone, added.
+    { "snare",
+      { OP(1, 6, 15, 8, 15, 8, 8, 0, 0, 0), OP(1, 8, 15, 8, 15, 8, 0, 0, 0, 0) },
+      0, 1, 1792, 40, 50 },
+    // A closed hat and an open one: the chip's metallic noise.
+    { "hat",
+      { OP(1, 63, 15, 15, 15, 15, 0, 0, 0, 0), OP(8, 10, 15, 10, 15, 10, 9, 0, 0, 0) },
+      0, 1, 0, 0, 84 },
+    { "hatopen",
+      { OP(1, 63, 15, 15, 15, 15, 0, 0, 0, 0), OP(8, 10, 15, 7, 15, 9, 9, 0, 0, 0) },
+      0, 1, 0, 0, 84 },
+};
+#undef OP
+const size_t MUSIC_PATCH_COUNT = sizeof(MUSIC_PATCHES) / sizeof(MUSIC_PATCHES[0]);
+
+const MusicPatch *MusicPatchNamed(const char *name) {
+    for (size_t i = 0; name != NULL && i < MUSIC_PATCH_COUNT; ++i) {
+        if (strcmp(MUSIC_PATCHES[i].name, name) == 0) {
+            return &MUSIC_PATCHES[i];
+        }
     }
-    return PERIODS[(note > MUSIC_NOTES ? MUSIC_NOTES : note) - 1u];
+    return NULL;
 }
 
-uint32_t MusicStep(uint32_t period) {
-    const uint64_t p = period < PERIOD_MIN ? PERIOD_MIN : period > PERIOD_MAX ? PERIOD_MAX : period;
-    return (uint32_t)(((uint64_t)MUSIC_PAULA_CLOCK << 16) / (p * MUSIC_RATE));
+// Each part's own attenuation, in 256ths of an octave (43 a dB), so the mix sits: the chord's three
+// voices and the arpeggio under the lead, the hats under the kick.
+#define DB(x) ((int32_t)((x) * 43))
+// Each channel hard to one side or in the middle, as the OPL3 sets them: the bass, kick and snare
+// in the middle, the chord across both, the lead to the right and the rest against it on the left.
+static const uint8_t PANS[MUSIC_FM_CHANNELS] = {
+    [MUSIC_CH_BASS] = MUSIC_CENTRE,  [MUSIC_CH_CHORD1] = MUSIC_LEFT,
+    [MUSIC_CH_CHORD2] = MUSIC_RIGHT, [MUSIC_CH_CHORD3] = MUSIC_LEFT,
+    [MUSIC_CH_LEAD] = MUSIC_RIGHT,   [MUSIC_CH_COUNTER] = MUSIC_LEFT,
+    [MUSIC_CH_ARP] = MUSIC_LEFT,     [MUSIC_CH_KICK] = MUSIC_CENTRE,
+    [MUSIC_CH_SNARE] = MUSIC_CENTRE, [MUSIC_CH_HATS] = MUSIC_LEFT,
+};
+static const int32_t LEVELS[MUSIC_FM_CHANNELS] = {
+    [MUSIC_CH_BASS] = DB(2),   [MUSIC_CH_CHORD1] = DB(4), [MUSIC_CH_CHORD2] = DB(4),
+    [MUSIC_CH_CHORD3] = DB(4), [MUSIC_CH_LEAD] = DB(0),   [MUSIC_CH_COUNTER] = DB(3),
+    [MUSIC_CH_ARP] = DB(4),    [MUSIC_CH_KICK] = DB(0),   [MUSIC_CH_SNARE] = DB(0),
+    [MUSIC_CH_HATS] = DB(2),
+};
+
+uint32_t MusicPanOf(uint32_t channel) {
+    return channel < MUSIC_FM_CHANNELS ? PANS[channel] : 0u;
 }
 
-uint32_t MusicTickFrames(uint32_t bpm, uint32_t *carry) {
-    // A tick lasts 2.5 / bpm seconds: 120000 frames over the bpm, the remainder carried so the
-    // ticks keep the tempo exactly over a whole track.
-    const uint32_t total = 120000u + *carry;
-    *carry = total % bpm;
-    return total / bpm;
+// ---------------------------------------------------------------------------------------------
+// The chip's arithmetic
+
+uint32_t MusicPitchStep(uint32_t pitch) {
+    const uint32_t note = pitch >> 8;
+    const uint32_t fraction = pitch & 255u;
+    const uint32_t semitone = note % 12u;
+    const uint32_t octave = note / 12u;
+    const uint32_t low = STEP8[semitone];
+    const uint32_t high = semitone == 11u ? STEP8[0] * 2u : STEP8[semitone + 1u];
+    const uint32_t step = low + (uint32_t)(((uint64_t)(high - low) * fraction) >> 8);
+    // MIDI's ninth octave starts at C8, the table's; each one below halves it.
+    return octave >= 9u ? step : step >> (9u - octave);
 }
 
-static int32_t Sine256(uint32_t i) {
-    i &= 255u;
-    const uint32_t half = i & 127u;
-    const int32_t value = half <= 64u ? QUARTER[half] : QUARTER[128u - half];
-    return i < 128u ? value : -value;
+static uint32_t LogSin(uint32_t phase) {
+    const uint32_t quarter = phase & 255u;
+    return LOGSIN[(phase & 256u) != 0u ? 255u - quarter : quarter];
 }
 
-void MusicPan(const int32_t channels[MUSIC_CHANNELS], int32_t *left, int32_t *right) {
-    const int32_t a = channels[0] + channels[3];
-    const int32_t b = channels[1] + channels[2];
-    *left = a + ((b * 3) >> 3);
-    *right = b + ((a * 3) >> 3);
+int32_t MusicWave(uint32_t wave, uint32_t phase, uint32_t attenuation, uint32_t noise) {
+    phase &= 1023u;
+    uint32_t log = 0;
+    bool negative = false;
+    switch (wave) {
+    case MUSIC_WAVE_SINE:
+        log = LogSin(phase);
+        negative = (phase & 512u) != 0u;
+        break;
+    case MUSIC_WAVE_HALF_SINE:
+        if ((phase & 512u) != 0u) {
+            return 0;
+        }
+        log = LogSin(phase);
+        break;
+    case MUSIC_WAVE_ABS_SINE:
+        log = LogSin(phase);
+        break;
+    case MUSIC_WAVE_QUARTER_SINE:
+        if ((phase & 256u) != 0u) {
+            return 0;
+        }
+        log = LogSin(phase);
+        break;
+    case MUSIC_WAVE_ALT_SINE:
+        if ((phase & 512u) != 0u) {
+            return 0;
+        }
+        log = LogSin(phase << 1);
+        negative = (phase & 256u) != 0u;
+        break;
+    case MUSIC_WAVE_CAMEL_SINE:
+        if ((phase & 512u) != 0u) {
+            return 0;
+        }
+        log = LogSin(phase << 1);
+        break;
+    case MUSIC_WAVE_SQUARE:
+        negative = (phase & 512u) != 0u;
+        break;
+    case MUSIC_WAVE_LOG_SAW:
+        log = (phase & 511u) << 3;
+        negative = (phase & 512u) != 0u;
+        break;
+    case MUSIC_WAVE_NOISE:
+        negative = (noise & 1u) != 0u;
+        break;
+    case MUSIC_WAVE_METAL:
+        negative = ((noise ^ (phase >> 9)) & 1u) != 0u;
+        break;
+    default:
+        return 0;
+    }
+    const uint32_t total = log + attenuation;
+    if (total >= 13u * 256u) {
+        return 0;
+    }
+    const int32_t value = (int32_t)(EXP[total & 255u] >> (total >> 8));
+    return negative ? -value : value;
 }
 
-int32_t MusicFilterStep(int32_t state, int32_t input, uint32_t coefficient) {
-    const int64_t distance = ((int64_t)input << 8) - state;
-    return state + (int32_t)((distance * (int64_t)coefficient) >> 16);
+uint32_t MusicDecayStep(uint32_t rate) {
+    return DECAY[rate & 15u];
+}
+
+uint32_t MusicAttackShare(uint32_t rate) {
+    return ATTACK[rate & 15u];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -138,1104 +326,500 @@ bool MusicMayPlay(void) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The tracks' colours
+// The tracks
 
-static const MusicColour COLOURS[MUSIC_TRACKS] = {
-    [MUSIC_TRACK_MENU] = {
-        .name = "menu",
-        .demo = "the demo browser",
-        .colour = "C mixolydian, a major with its seventh lowered: unhurried, plucked eighths "
-                  "over a triangle bass, open fifths and ninths, a kit on the beat",
-        .seed = 0x6D656E75u,
-        .tonic = 0,
-        .mode = MUSIC_MIXOLYDIAN,
-        .bpm = 112,
-        .speed = 6,
-        .swing = 0,
-        .rows_per_beat = 4,
-        .beats_per_bar = 4,
-        .lead_base = 12,
-        .chord_base = 0,
-        .bass_base = 0,
-        .lead = { MUSIC_WAVE_PULSE32, 44, 255, 6, 150, 24 },
-        .chord = { MUSIC_WAVE_THIN32, 30, 255, 22, 0, 40 },
-        .bass = { MUSIC_WAVE_TRIANGLE64, 60, 255, 2, 200, 32 },
-        .voicing = MUSIC_VOICING_OPEN,
-        .groove = MUSIC_GROOVE_CALM,
-        .drums = MUSIC_DRUMS_STRAIGHT,
-        .filter = MUSIC_FILTER_A500,
-        .vibrato = 0x42,
-        .glide = false,
-    },
-    [MUSIC_TRACK_WIMSY] = {
-        .name = "wimsy",
-        .demo = "Wimsy's levels",
-        .colour = "F lydian, a major with its fourth raised: bright and playful, a high pulse "
-                  "lead, shuffled eighths, chords as fast arpeggios on the offbeats, a bouncing "
-                  "square bass",
-        .seed = 0x57494D53u,
-        .tonic = 5,
-        .mode = MUSIC_LYDIAN,
-        .bpm = 140,
-        .speed = 6,
-        .swing = 1,
-        .rows_per_beat = 4,
-        .beats_per_bar = 4,
-        .lead_base = 0,
-        .chord_base = 12,
-        .bass_base = 0,
-        .lead = { MUSIC_WAVE_PULSE16, 40, 255, 10, 120, 30 },
-        .chord = { MUSIC_WAVE_SQUARE32, 22, 255, 30, 0, 48 },
-        .bass = { MUSIC_WAVE_SQUARE64, 44, 255, 8, 110, 40 },
-        .voicing = MUSIC_VOICING_TRIAD,
-        .groove = MUSIC_GROOVE_BOUNCE,
-        .drums = MUSIC_DRUMS_SHUFFLE,
-        .filter = MUSIC_FILTER_A500,
-        .vibrato = 0x62,
-        .glide = false,
-    },
-    [MUSIC_TRACK_FRACTAL] = {
-        .name = "fractal",
-        .demo = "the Mandelbrot and Julia zooms",
-        .colour = "E phrygian, a minor with its second lowered: dark and slow, a soft triangle "
-                  "lead that swells, its echo for drums, seventh chords held on an organ, a sine "
-                  "bass, the power light's filter on",
-        .seed = 0x46524143u,
-        .tonic = 4,
-        .mode = MUSIC_PHRYGIAN,
-        .bpm = 84,
-        .speed = 6,
-        .swing = 0,
-        .rows_per_beat = 4,
-        .beats_per_bar = 4,
-        .lead_base = 12,
-        .chord_base = 0,
-        .bass_base = 0,
-        .lead = { MUSIC_WAVE_TRIANGLE32, 50, 40, 2, 200, 8 },
-        .chord = { MUSIC_WAVE_ORGAN32, 26, 16, 1, 170, 6 },
-        .bass = { MUSIC_WAVE_SINE64, 62, 64, 1, 220, 10 },
-        .voicing = MUSIC_VOICING_SHELL,
-        .groove = MUSIC_GROOVE_SLOW,
-        .drums = MUSIC_DRUMS_ECHO,
-        .filter = MUSIC_FILTER_LED,
-        .vibrato = 0x33,
-        .glide = false,
-    },
-    [MUSIC_TRACK_FLUID] = {
-        .name = "fluid",
-        .demo = "the fluid simulation",
-        .colour = "D dorian, a minor with its sixth raised: twelve eight, a saw lead that "
-                  "glides between notes, suspended chords that swell, a rolling triangle bass",
-        .seed = 0x464C5549u,
-        .tonic = 2,
-        .mode = MUSIC_DORIAN,
-        .bpm = 125,
-        .speed = 4,
-        .swing = 0,
-        .rows_per_beat = 6,
-        .beats_per_bar = 4,
-        .lead_base = 12,
-        .chord_base = 0,
-        .bass_base = 0,
-        .lead = { MUSIC_WAVE_SAW32, 38, 96, 4, 170, 16 },
-        .chord = { MUSIC_WAVE_PULSE32, 22, 24, 2, 140, 10 },
-        .bass = { MUSIC_WAVE_TRIANGLE64, 58, 255, 6, 140, 20 },
-        .voicing = MUSIC_VOICING_SUS2,
-        .groove = MUSIC_GROOVE_FLOW,
-        .drums = MUSIC_DRUMS_TWELVE,
-        .filter = MUSIC_FILTER_A500,
-        .vibrato = 0x52,
-        .glide = true,
-    },
-};
+const MusicScore *MusicScoreOf(MusicTrack track) {
+    return (unsigned)track < MUSIC_TRACKS && (size_t)track < MUSIC_SCORE_COUNT
+               ? &MUSIC_SCORES[track]
+               : NULL;
+}
 
-const MusicColour *MusicColourOf(MusicTrack track) {
-    return (unsigned)track < MUSIC_TRACKS ? &COLOURS[track] : NULL;
+const char *MusicTrackName(MusicTrack track) {
+    const MusicScore *score = MusicScoreOf(track);
+    return score != NULL ? score->name : "none";
 }
 
 MusicTrack MusicTrackNamed(const char *name) {
     for (unsigned i = 0; name != NULL && i < MUSIC_TRACKS; ++i) {
-        if (strcmp(COLOURS[i].name, name) == 0) {
+        if (strcmp(MusicTrackName((MusicTrack)i), name) == 0) {
             return (MusicTrack)i;
         }
     }
     return MUSIC_TRACKS;
 }
 
-// ---------------------------------------------------------------------------------------------
-// The samples
-
-// The drums are played at the third octave's C, whose period, 214, reads 16574 samples a second.
-#define DRUM_NOTE 25u
-#define KICK_LENGTH 4096u
-#define SNARE_LENGTH 3072u
-#define HAT_LENGTH 1024u
-
-static uint32_t Noise(uint32_t *state) {
-    uint32_t x = *state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    *state = x;
-    return x;
-}
-
-static int8_t Clamp8(int32_t v) {
-    return (int8_t)(v > 127 ? 127 : v < -127 ? -127 : v);
-}
-
-/// Writes @p wave into @p out, @p length samples, and says whether it loops.
-static uint32_t MakeWave(MusicWave wave, int8_t *out, bool *loops) {
-    *loops = true;
-    switch (wave) {
-    case MUSIC_WAVE_SQUARE32:
-    case MUSIC_WAVE_SQUARE64: {
-        const uint32_t n = wave == MUSIC_WAVE_SQUARE32 ? 32u : 64u;
-        const int8_t level = wave == MUSIC_WAVE_SQUARE32 ? 88 : 80;
-        for (uint32_t i = 0; i < n; ++i) {
-            out[i] = i < n / 2u ? level : (int8_t)-level;
-        }
-        return n;
+static const char *Grid(MusicLane lane, const char *name, bool fill) {
+    char wanted[48];
+    size_t length = strlen(name);
+    if (length + 5u > sizeof(wanted)) {
+        return NULL;
     }
-    case MUSIC_WAVE_PULSE16:
-    case MUSIC_WAVE_PULSE32: {
-        // A quarter of the cycle high: three times as far above nought as the rest is below, so
-        // the wave has no constant part to thump with.
-        const uint32_t n = wave == MUSIC_WAVE_PULSE16 ? 16u : 32u;
-        for (uint32_t i = 0; i < n; ++i) {
-            out[i] = i < n / 4u ? 96 : -32;
-        }
-        return n;
-    }
-    case MUSIC_WAVE_THIN32:
-        for (uint32_t i = 0; i < 32u; ++i) {
-            out[i] = i < 4u ? 112 : -16;
-        }
-        return 32u;
-    case MUSIC_WAVE_TRIANGLE32:
-    case MUSIC_WAVE_TRIANGLE64: {
-        const uint32_t n = wave == MUSIC_WAVE_TRIANGLE32 ? 32u : 64u;
-        for (uint32_t i = 0; i < n; ++i) {
-            const int32_t up = (int32_t)(i * 4u * 127u / n);
-            out[i] = Clamp8(i < n / 4u        ? up
-                            : i < 3u * n / 4u ? 254 - up
-                                              : up - 508);
-        }
-        return n;
-    }
-    case MUSIC_WAVE_SAW16:
-    case MUSIC_WAVE_SAW32: {
-        const uint32_t n = wave == MUSIC_WAVE_SAW16 ? 16u : 32u;
-        for (uint32_t i = 0; i < n; ++i) {
-            out[i] = Clamp8((int32_t)(i * 240u / (n - 1u)) - 120);
-        }
-        return n;
-    }
-    case MUSIC_WAVE_SINE64:
-        for (uint32_t i = 0; i < 64u; ++i) {
-            out[i] = (int8_t)Sine256(i * 4u);
-        }
-        return 64u;
-    case MUSIC_WAVE_ORGAN32:
-        // The first, second and fourth harmonics at 4, 2 and 1 parts in 7.
-        for (uint32_t i = 0; i < 32u; ++i) {
-            const int32_t sum = 4 * Sine256(i * 8u) + 2 * Sine256(i * 16u) + Sine256(i * 32u);
-            out[i] = Clamp8(sum * 6 / 49);
-        }
-        return 32u;
-    case MUSIC_WAVE_KICK: {
-        // A sine that falls from 160 Hz to 48 Hz, its amplitude dying away.
-        *loops = false;
-        const uint64_t per_hz = 259137u; // 2^32 over 16574
-        uint64_t increment = 160u * per_hz;
-        const uint64_t end = 48u * per_hz;
-        uint32_t phase = 0;
-        uint64_t amplitude = 65536u;
-        for (uint32_t i = 0; i < KICK_LENGTH; ++i) {
-            out[i] = Clamp8((int32_t)((Sine256(phase >> 24) * (int64_t)amplitude) >> 16));
-            phase += (uint32_t)increment;
-            increment = end + (((increment - end) * 65180u) >> 16);
-            amplitude = (amplitude * 65460u) >> 16;
-        }
-        return KICK_LENGTH;
-    }
-    case MUSIC_WAVE_SNARE: {
-        // Noise and a 185 Hz tone, the tone dying first.
-        *loops = false;
-        uint32_t state = 0x534E4152u;
-        uint32_t phase = 0;
-        uint64_t noise = 52000u;
-        uint64_t tone = 40000u;
-        for (uint32_t i = 0; i < SNARE_LENGTH; ++i) {
-            const int32_t n = (int32_t)(Noise(&state) >> 24) - 128;
-            const int64_t sum = n * (int64_t)noise + Sine256(phase >> 24) * (int64_t)tone;
-            out[i] = Clamp8((int32_t)(sum >> 16));
-            phase += 185u * 259137u;
-            noise = (noise * 65400u) >> 16;
-            tone = (tone * 65200u) >> 16;
-        }
-        return SNARE_LENGTH;
-    }
-    case MUSIC_WAVE_HAT: {
-        // Noise less the sample before it: its low end taken off, a short decay.
-        *loops = false;
-        uint32_t state = 0x48415421u;
-        int32_t previous = 0;
-        uint64_t amplitude = 65536u;
-        for (uint32_t i = 0; i < HAT_LENGTH; ++i) {
-            const int32_t n = (int32_t)(Noise(&state) >> 24) - 128;
-            out[i] = Clamp8((int32_t)(((int64_t)(n - previous) * (int64_t)amplitude) >> 17));
-            previous = n;
-            amplitude = (amplitude * 65000u) >> 16;
-        }
-        return HAT_LENGTH;
-    }
-    case MUSIC_WAVES:
-        break;
-    }
-    out[0] = 0;
-    return 1u;
-}
-
-static void Instrument(MusicSong *song, unsigned slot, MusicVoice voice) {
-    // A wave already in the bank is shared: the echo plays the lead's.
-    for (unsigned i = 1; i <= MUSIC_INSTRUMENTS; ++i) {
-        const MusicInstrument *other = &song->instruments[i];
-        if (i != slot && other->length > 0u && other->voice.wave == voice.wave) {
-            song->instruments[slot] = *other;
-            song->instruments[slot].voice = voice;
-            return;
+    memcpy(wanted, name, length);
+    memcpy(wanted + length, fill ? "fill" : "", fill ? 5u : 1u);
+    for (size_t i = 0; i < MUSIC_SCORE_PATTERN_COUNT; ++i) {
+        const MusicScorePattern *pattern = &MUSIC_SCORE_PATTERNS[i];
+        if (pattern->lane == lane && strcmp(pattern->name, wanted) == 0) {
+            return pattern->grid;
         }
     }
-    bool loops = true;
-    MusicInstrument *instrument = &song->instruments[slot];
-    instrument->offset = song->bank_used;
-    instrument->length = MakeWave((MusicWave)voice.wave, song->bank + song->bank_used, &loops);
-    instrument->loop_start = loops ? 0u : instrument->length;
-    instrument->voice = voice;
-    song->bank_used += instrument->length;
+    return NULL;
 }
 
 // ---------------------------------------------------------------------------------------------
-// The composer
+// A channel
 
 enum {
-    PATTERN_HEAD,
-    PATTERN_OPEN,
-    PATTERN_CLOSED,
-    PATTERN_BRIDGE_HEAD,
-    PATTERN_BRIDGE_TAIL,
+    STAGE_IDLE,
+    STAGE_ATTACK,
+    STAGE_DECAY,
+    STAGE_SUSTAIN,
+    STAGE_RELEASE,
 };
 
-// The channels: the bass and the drums (or the lead's echo) to the left, the lead and the chords
-// to the right.
-enum {
-    CH_BASS = 0,
-    CH_LEAD = 1,
-    CH_CHORD = 2,
-    CH_DRUMS = 3,
-};
+#define ATTENUATION_MAX ((int32_t)(4095 << 16))
 
-static const uint8_t FORM[MUSIC_ORDER] = {
-    PATTERN_HEAD, PATTERN_OPEN,        PATTERN_HEAD,        PATTERN_CLOSED,
-    PATTERN_BRIDGE_HEAD, PATTERN_BRIDGE_TAIL, PATTERN_HEAD, PATTERN_CLOSED,
-};
-static const char SECTIONS[MUSIC_ORDER] = { 'A', 'A', 'A', 'A', 'B', 'B', 'A', 'A' };
-
-/// Each mode's progressions, a degree a bar: A's eight bars as the open A ends them, the
-/// bridge's eight ending on the chord that leads home, and that chord. No degree whose triad is
-/// diminished in its mode appears.
-typedef struct {
-    uint8_t a[3][8];
-    uint8_t b[2][8];
-    uint8_t home;
-} Progressions;
-
-static const Progressions PROGRESSIONS[MUSIC_MODES] = {
-    [MUSIC_IONIAN] = { { { 0, 5, 3, 4, 0, 5, 3, 4 }, { 0, 4, 5, 3, 0, 4, 3, 4 },
-                         { 0, 3, 0, 4, 0, 3, 1, 4 } },
-                       { { 3, 4, 2, 5, 3, 4, 1, 4 }, { 5, 3, 0, 4, 5, 3, 1, 4 } },
-                       4 },
-    [MUSIC_DORIAN] = { { { 0, 3, 0, 3, 0, 3, 6, 3 }, { 0, 2, 3, 0, 0, 2, 6, 3 },
-                         { 0, 6, 3, 0, 0, 6, 2, 3 } },
-                       { { 6, 2, 3, 4, 6, 2, 4, 3 }, { 4, 3, 6, 2, 4, 3, 6, 3 } },
-                       3 },
-    [MUSIC_PHRYGIAN] = { { { 0, 1, 0, 1, 0, 1, 6, 1 }, { 0, 6, 5, 1, 0, 6, 5, 1 },
-                           { 0, 1, 2, 1, 0, 1, 6, 1 } },
-                         { { 5, 6, 5, 2, 5, 6, 2, 1 }, { 3, 5, 2, 6, 3, 5, 6, 1 } },
-                         1 },
-    [MUSIC_LYDIAN] = { { { 0, 1, 5, 1, 0, 1, 4, 1 }, { 0, 1, 2, 1, 0, 1, 5, 1 },
-                         { 0, 6, 1, 0, 0, 6, 5, 1 } },
-                       { { 5, 2, 1, 4, 5, 2, 4, 1 }, { 2, 5, 4, 1, 2, 5, 4, 1 } },
-                       1 },
-    [MUSIC_MIXOLYDIAN] = { { { 0, 6, 3, 0, 0, 6, 3, 6 }, { 0, 3, 6, 0, 0, 3, 4, 6 },
-                             { 0, 4, 6, 3, 0, 4, 3, 6 } },
-                           { { 3, 0, 4, 5, 3, 0, 4, 6 }, { 5, 4, 3, 0, 5, 4, 3, 6 } },
-                           6 },
-    [MUSIC_AEOLIAN] = { { { 0, 5, 2, 6, 0, 5, 2, 6 }, { 0, 6, 5, 6, 0, 6, 5, 4 },
-                          { 0, 3, 5, 6, 0, 3, 4, 6 } },
-                        { { 3, 3, 5, 5, 2, 2, 6, 6 }, { 5, 6, 2, 5, 3, 6, 3, 6 } },
-                        6 },
-};
-
-#define END 0xFFu
-#define CELLS 5u
-
-/// The lead's rhythms, the rows its notes start on in a bar, per groove; the last row of each
-/// list ends it.
-static const uint8_t LEAD_CELLS[4][CELLS][9] = {
-    [MUSIC_GROOVE_CALM] = { { 0, 4, 6, 8, 12, END }, { 0, 2, 4, 8, 12, END },
-                            { 0, 6, 8, 12, 14, END }, { 0, 4, 8, 10, 12, END },
-                            { 0, 4, 8, 12, END } },
-    [MUSIC_GROOVE_BOUNCE] = { { 0, 2, 4, 6, 8, 12, END }, { 0, 3, 6, 8, 10, 12, 14, END },
-                              { 0, 4, 6, 8, 12, 14, END }, { 0, 2, 6, 8, 10, 14, END },
-                              { 0, 2, 4, 8, 10, 12, END } },
-    [MUSIC_GROOVE_SLOW] = { { 0, 8, END }, { 0, 6, 8, 12, END }, { 0, 4, 8, END },
-                            { 0, 12, 14, END }, { 0, 8, 12, END } },
-    [MUSIC_GROOVE_FLOW] = { { 0, 6, 10, 12, 18, END }, { 0, 4, 6, 12, 16, 18, 22, END },
-                            { 0, 6, 12, 18, END }, { 0, 2, 4, 6, 12, 18, END },
-                            { 0, 8, 12, 20, END } },
-};
-
-/// The bar that answers a phrase, sparser than the cells.
-static const uint8_t ANSWER_CELLS[4][6] = {
-    [MUSIC_GROOVE_CALM] = { 0, 4, 8, END },
-    [MUSIC_GROOVE_BOUNCE] = { 0, 4, 8, 12, END },
-    [MUSIC_GROOVE_SLOW] = { 0, END },
-    [MUSIC_GROOVE_FLOW] = { 0, 6, 12, END },
-};
-
-/// The bass's rows and what it plays on each: the root, the fifth, the octave, or a step into the
-/// next bar's root.
-enum { BASS_ROOT, BASS_FIFTH, BASS_OCTAVE, BASS_APPROACH };
-typedef struct {
-    uint8_t row;
-    uint8_t tone;
-} BassHit;
-static const BassHit BASS_HITS[4][8] = {
-    [MUSIC_GROOVE_CALM] = { { 0, BASS_ROOT }, { 4, BASS_ROOT }, { 6, BASS_FIFTH },
-                            { 8, BASS_ROOT }, { 12, BASS_OCTAVE }, { 14, BASS_APPROACH },
-                            { END, 0 } },
-    [MUSIC_GROOVE_BOUNCE] = { { 0, BASS_ROOT }, { 4, BASS_OCTAVE }, { 6, BASS_ROOT },
-                              { 8, BASS_FIFTH }, { 12, BASS_OCTAVE }, { 14, BASS_APPROACH },
-                              { END, 0 } },
-    [MUSIC_GROOVE_SLOW] = { { 0, BASS_ROOT }, { 12, BASS_FIFTH }, { END, 0 } },
-    [MUSIC_GROOVE_FLOW] = { { 0, BASS_ROOT }, { 4, BASS_FIFTH }, { 8, BASS_OCTAVE },
-                            { 12, BASS_ROOT }, { 16, BASS_FIFTH }, { 20, BASS_APPROACH },
-                            { END, 0 } },
-};
-
-/// The drums: a row each, what it strikes and how loud.
-typedef struct {
-    uint8_t row;
-    uint8_t instrument;
-    uint8_t volume;
-} DrumHit;
-#define K MUSIC_INSTRUMENT_KICK
-#define S MUSIC_INSTRUMENT_SNARE
-#define H MUSIC_INSTRUMENT_HAT
-static const DrumHit DRUM_BARS[3][3][13] = {
-    // The bar, the fill that ends a pattern, and the bridge's half time.
-    [MUSIC_DRUMS_STRAIGHT] = {
-        { { 0, K, 64 }, { 2, H, 24 }, { 4, S, 50 }, { 6, H, 24 }, { 8, K, 64 }, { 10, H, 24 },
-          { 12, S, 50 }, { 14, H, 24 }, { END, 0, 0 } },
-        { { 0, K, 64 }, { 2, H, 24 }, { 4, S, 50 }, { 6, H, 24 }, { 8, K, 64 }, { 10, H, 24 },
-          { 12, S, 44 }, { 14, S, 48 }, { 15, S, 54 }, { END, 0, 0 } },
-        { { 0, K, 64 }, { 4, H, 24 }, { 8, S, 50 }, { 12, H, 24 }, { END, 0, 0 } },
-    },
-    [MUSIC_DRUMS_SHUFFLE] = {
-        { { 0, K, 64 }, { 2, H, 26 }, { 4, S, 52 }, { 6, H, 26 }, { 8, K, 64 }, { 10, K, 56 },
-          { 12, S, 52 }, { 14, H, 26 }, { END, 0, 0 } },
-        { { 0, K, 64 }, { 2, H, 26 }, { 4, S, 52 }, { 6, H, 26 }, { 8, K, 64 }, { 10, S, 40 },
-          { 12, S, 44 }, { 13, S, 48 }, { 14, S, 52 }, { 15, S, 56 }, { END, 0, 0 } },
-        { { 0, K, 64 }, { 4, H, 26 }, { 8, S, 52 }, { 12, H, 26 }, { 14, K, 56 },
-          { END, 0, 0 } },
-    },
-    [MUSIC_DRUMS_TWELVE] = {
-        { { 0, K, 64 }, { 2, H, 20 }, { 4, H, 24 }, { 6, S, 46 }, { 8, H, 20 }, { 10, H, 24 },
-          { 12, K, 60 }, { 14, H, 20 }, { 16, H, 24 }, { 18, S, 46 }, { 20, H, 20 },
-          { 22, H, 24 }, { END, 0, 0 } },
-        { { 0, K, 64 }, { 2, H, 20 }, { 4, H, 24 }, { 6, S, 46 }, { 8, H, 20 }, { 10, H, 24 },
-          { 12, K, 60 }, { 14, H, 20 }, { 16, H, 24 }, { 18, S, 40 }, { 20, S, 46 },
-          { 22, S, 52 }, { END, 0, 0 } },
-        { { 0, K, 64 }, { 6, H, 24 }, { 12, S, 46 }, { 18, H, 24 }, { END, 0, 0 } },
-    },
-};
-#undef K
-#undef S
-#undef H
-
-/// The lead's next step from the last: the first bar of a motif rises more than it falls, the
-/// second the other way round.
-static const int8_t RISING[10] = { -1, 1, 1, 2, 0, -1, 1, 3, -2, 1 };
-static const int8_t FALLING[10] = { 1, -1, -1, -2, 0, 1, -1, -3, 2, -1 };
-
-/// The lead's range in steps of the mode above its register's tonic.
-#define LEAD_LOW 0
-#define LEAD_HIGH 11
-#define LEAD_ANCHOR_A 4
-#define LEAD_ANCHOR_B 7
-
-typedef struct {
-    uint8_t cell[2];
-    int8_t delta[2][9];
-} Motif;
-
-typedef struct {
-    MusicSong *song;
-    uint32_t random;
-    uint32_t rows_per_beat;
-    uint32_t rows_per_bar;
-    uint8_t groove;
-} Composer;
-
-static uint32_t Pick(Composer *c, uint32_t n) {
-    return Noise(&c->random) % n;
-}
-
-static MusicCell *Cell(MusicSong *song, unsigned pattern, uint32_t row, unsigned channel) {
-    return &song->cells[pattern][row][channel];
-}
-
-/// The note, 1 to MUSIC_NOTES, of the mode's @p step above @p base's tonic; steps may run past
-/// the octave either way.
-static uint32_t NoteOf(const MusicSong *song, uint32_t base, int32_t step) {
-    const int32_t octave = step >= 0 ? step / 7 : -((-step + 6) / 7);
-    const int32_t degree = step - octave * 7;
-    const int32_t semitone =
-        (int32_t)base + song->colour.tonic + octave * 12 + song->scale[degree];
-    if (semitone < 0) {
-        return 1u;
+static void KeyOn(MusicChannel *ch, const MusicPatch *patch, int32_t pitch, int32_t level,
+                  bool glide, uint32_t glide_frames, uint32_t gate) {
+    if (patch == NULL) {
+        return;
     }
-    return semitone >= (int32_t)MUSIC_NOTES ? MUSIC_NOTES : (uint32_t)semitone + 1u;
-}
-
-/// Semitones from the root of @p degree up to its chord tone @p above degrees higher.
-static uint32_t Interval(const MusicSong *song, uint32_t degree, uint32_t above) {
-    const uint32_t top = degree + above;
-    return song->scale[top % 7u] + (top >= 7u ? 12u : 0u) - song->scale[degree];
-}
-
-static uint8_t Arpeggio(const MusicSong *song, uint32_t degree) {
-    uint32_t x = 0;
-    uint32_t y = 0;
-    switch ((MusicVoicing)song->colour.voicing) {
-    case MUSIC_VOICING_TRIAD:
-        x = Interval(song, degree, 2u);
-        y = Interval(song, degree, 4u);
-        break;
-    case MUSIC_VOICING_SHELL:
-        x = Interval(song, degree, 2u);
-        y = Interval(song, degree, 6u);
-        break;
-    case MUSIC_VOICING_SUS2:
-        x = Interval(song, degree, 1u);
-        y = Interval(song, degree, 4u);
-        break;
-    case MUSIC_VOICING_OPEN:
-        x = Interval(song, degree, 4u);
-        y = Interval(song, degree, 1u) + 12u;
-        break;
-    }
-    return (uint8_t)((x << 4) | y);
-}
-
-static bool IsChordTone(int32_t step, uint32_t degree) {
-    const int32_t d = ((step % 7) + 7) % 7;
-    return d == (int32_t)degree || d == (int32_t)((degree + 2u) % 7u) ||
-           d == (int32_t)((degree + 4u) % 7u);
-}
-
-/// The chord tone of @p degree nearest @p step inside the lead's range, upward on a tie.
-static int32_t NearestChordTone(int32_t step, uint32_t degree) {
-    for (int32_t distance = 0; distance < 7; ++distance) {
-        if (step + distance <= LEAD_HIGH && IsChordTone(step + distance, degree)) {
-            return step + distance;
-        }
-        if (step - distance >= LEAD_LOW && IsChordTone(step - distance, degree)) {
-            return step - distance;
-        }
-    }
-    return step;
-}
-
-static int32_t Clamp(int32_t v, int32_t low, int32_t high) {
-    return v < low ? low : v > high ? high : v;
-}
-
-static void PutLead(Composer *c, unsigned pattern, uint32_t row, int32_t step) {
-    MusicCell *cell = Cell(c->song, pattern, row, CH_LEAD);
-    cell->note = (uint8_t)NoteOf(c->song, c->song->colour.lead_base, step);
-    cell->instrument = MUSIC_INSTRUMENT_LEAD;
-}
-
-/// The next chord tone of @p degree from @p step toward @p direction, or the other way at the
-/// edge of the lead's range.
-static int32_t NextChordTone(int32_t step, uint32_t degree, int32_t direction) {
-    for (int32_t pass = 0; pass < 2; ++pass, direction = -direction) {
-        for (int32_t s = step + direction; s >= LEAD_LOW && s <= LEAD_HIGH; s += direction) {
-            if (IsChordTone(s, degree)) {
-                return s;
-            }
-        }
-    }
-    return step;
-}
-
-/// One bar of the lead from a rhythm and its steps: a chord tone on every beat, the rest moving
-/// by the motif's steps, all inside the lead's range. A step the snap to a chord tone undid, or
-/// a note a third time, moves on instead.
-static int32_t LeadBar(Composer *c, unsigned pattern, uint32_t bar, uint32_t degree,
-                       const uint8_t *rows, const int8_t *delta, int32_t step, int32_t *again) {
-    for (uint32_t k = 0; rows[k] != END; ++k) {
-        const bool strong = rows[k] % c->rows_per_beat == 0u;
-        int32_t next = Clamp(step + delta[k], LEAD_LOW, LEAD_HIGH);
-        if (strong) {
-            next = NearestChordTone(next, degree);
-        }
-        if (next == step && (delta[k] != 0 || *again >= 1)) {
-            const int32_t direction = delta[k] < 0 ? -1 : 1;
-            next = strong ? NextChordTone(step, degree, direction)
-                          : Clamp(step + direction, LEAD_LOW, LEAD_HIGH);
-            if (next == step) {
-                next = Clamp(step - direction, LEAD_LOW, LEAD_HIGH);
-            }
-        }
-        *again = next == step ? *again + 1 : 0;
-        PutLead(c, pattern, bar * c->rows_per_bar + rows[k], next);
-        step = next;
-    }
-    return step;
-}
-
-/// The last bar of a phrase: one long note from the bar's first row, on @p goal's nearest chord
-/// tone (the tonic itself when @p tonic), released before the next phrase.
-static int32_t LongNote(Composer *c, unsigned pattern, uint32_t bar, uint32_t degree,
-                        int32_t step, bool tonic) {
-    int32_t goal = NearestChordTone(step, degree);
-    if (tonic) {
-        goal = step >= 4 ? 7 : 0;
-    } else if (((goal % 7) + 7) % 7 == 0) {
-        // An open ending stays off the tonic: the chord's third instead.
-        goal = Clamp(goal + 2, LEAD_LOW, LEAD_HIGH);
-        goal = NearestChordTone(goal, degree);
-    }
-    PutLead(c, pattern, bar * c->rows_per_bar, goal);
-    MusicCell *off = Cell(c->song, pattern,
-                          bar * c->rows_per_bar + c->rows_per_bar - c->rows_per_beat, CH_LEAD);
-    off->note = MUSIC_NOTE_OFF;
-    return goal;
-}
-
-static void MakeMotif(Composer *c, Motif *m) {
-    for (unsigned b = 0; b < 2u; ++b) {
-        m->cell[b] = (uint8_t)Pick(c, CELLS);
-        for (unsigned k = 0; k < 9u; ++k) {
-            m->delta[b][k] = b == 0u ? RISING[Pick(c, 10u)] : FALLING[Pick(c, 10u)];
-        }
-    }
-}
-
-/// A pattern's lead: two bars of the motif, the first again, then an answer; or, for a tail,
-/// the motif's two bars, a new bar and the phrase's last note.
-static void LeadPattern(Composer *c, unsigned pattern, const Motif *m, const uint8_t *chords,
-                        int32_t anchor, int ending) {
-    const uint8_t(*cells)[9] = LEAD_CELLS[c->groove];
-    int32_t step = anchor;
-    int32_t again = 0;
-    step = LeadBar(c, pattern, 0, chords[0], cells[m->cell[0]], m->delta[0], step, &again);
-    step = LeadBar(c, pattern, 1, chords[1], cells[m->cell[1]], m->delta[1], step, &again);
-    if (ending < 0) {
-        step = LeadBar(c, pattern, 2, chords[2], cells[m->cell[0]], m->delta[0], step, &again);
-        int8_t answer[9];
-        for (unsigned k = 0; k < 9u; ++k) {
-            answer[k] = FALLING[Pick(c, 10u)];
-        }
-        LeadBar(c, pattern, 3, chords[3], ANSWER_CELLS[c->groove], answer, step, &again);
-        // The phrase breathes before the next one.
-        MusicCell *off = Cell(c->song, pattern, 3u * c->rows_per_bar + c->rows_per_bar -
-                                                    c->rows_per_beat / 2u, CH_LEAD);
-        if (off->note == 0u) {
-            off->note = MUSIC_NOTE_OFF;
+    ch->gate = gate;
+    ch->level = level;
+    if (glide && ch->active && ch->key && ch->patch == patch && glide_frames > 0u) {
+        // A glide keeps the note sounding and moves its pitch.
+        ch->target = pitch;
+        ch->glide = (pitch - ch->pitch) / (int32_t)glide_frames;
+        if (ch->glide == 0) {
+            ch->pitch = pitch;
         }
         return;
     }
-    int8_t fresh[9];
-    for (unsigned k = 0; k < 9u; ++k) {
-        fresh[k] = RISING[Pick(c, 10u)];
+    const bool fresh = !ch->active || ch->patch != patch;
+    ch->patch = patch;
+    ch->pitch = pitch;
+    ch->target = pitch;
+    ch->glide = 0;
+    ch->drop = patch->drop;
+    ch->drop_left = patch->drop_rate;
+    ch->key = true;
+    ch->active = true;
+    ch->age = 0;
+    ch->stepped_pitch = -1;
+    for (unsigned k = 0; k < 2u; ++k) {
+        MusicOperatorState *op = &ch->op[k];
+        if (fresh) {
+            op->phase = 0;
+            op->out[0] = 0;
+            op->out[1] = 0;
+            op->attenuation = ATTENUATION_MAX;
+        }
+        // An attack starts from where the operator is, as the chip's does.
+        op->stage = STAGE_ATTACK;
     }
-    step = LeadBar(c, pattern, 2, chords[2], cells[Pick(c, CELLS)], fresh, step, &again);
-    LongNote(c, pattern, 3, chords[3], step, ending == 1);
 }
 
-/// Vibrato on the lead's long notes, from their second beat; a glide into some of its steps.
-static void LeadEffects(Composer *c, unsigned pattern) {
-    MusicSong *song = c->song;
-    const uint32_t rows = song->rows;
-    int32_t last = -1;
-    for (uint32_t row = 0; row < rows; ++row) {
-        MusicCell *cell = Cell(song, pattern, row, CH_LEAD);
-        if (cell->note == 0u || cell->note == MUSIC_NOTE_OFF) {
-            continue;
+static void KeyOff(MusicChannel *ch) {
+    ch->key = false;
+    ch->gate = 0;
+    for (unsigned k = 0; k < 2u; ++k) {
+        if (ch->op[k].stage != STAGE_IDLE) {
+            ch->op[k].stage = STAGE_RELEASE;
         }
-        uint32_t end = row + 1u;
-        while (end < rows && Cell(song, pattern, end, CH_LEAD)->note == 0u) {
-            ++end;
+    }
+}
+
+static void Envelope(MusicOperatorState *op, const MusicOperator *set) {
+    switch (op->stage) {
+    case STAGE_ATTACK: {
+        const int64_t take = ((int64_t)op->attenuation * ATTACK[set->ar]) >> 16;
+        op->attenuation -= (int32_t)take + (set->ar != 0u ? 1 : 0);
+        if (op->attenuation < (1 << 16) || set->ar == 15u) {
+            op->attenuation = 0;
+            op->stage = STAGE_DECAY;
         }
-        if (song->colour.vibrato != 0u && end - row >= 2u * c->rows_per_beat) {
-            for (uint32_t r = row + c->rows_per_beat; r < end; ++r) {
-                Cell(song, pattern, r, CH_LEAD)->effect = MUSIC_FX_VIBRATO;
-                Cell(song, pattern, r, CH_LEAD)->param = song->colour.vibrato;
+        break;
+    }
+    case STAGE_DECAY: {
+        const int32_t floor = set->sl >= 15u ? ATTENUATION_MAX : (int32_t)(set->sl * 128u) << 16;
+        op->attenuation += (int32_t)DECAY[set->dr];
+        if (op->attenuation >= floor) {
+            op->attenuation = floor;
+            op->stage = set->sustain != 0u ? STAGE_SUSTAIN : STAGE_RELEASE;
+        }
+        break;
+    }
+    case STAGE_RELEASE:
+        op->attenuation += (int32_t)DECAY[set->rr];
+        if (op->attenuation >= ATTENUATION_MAX) {
+            op->attenuation = ATTENUATION_MAX;
+            op->stage = STAGE_IDLE;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+uint32_t MusicEnvelopeFrames(uint32_t rate, bool attack) {
+    MusicOperator set = { 1, 0, 15, 0, 15, 0, 0, 0, 0, 0 };
+    MusicOperatorState op = { 0 };
+    if (attack) {
+        set.ar = (uint8_t)(rate & 15u);
+        op.attenuation = ATTENUATION_MAX;
+        op.stage = STAGE_ATTACK;
+    } else {
+        set.dr = (uint8_t)(rate & 15u);
+        op.stage = STAGE_DECAY;
+    }
+    // A limit past the slowest rate's 39 s, for rate nought, which never moves.
+    uint32_t frames = 0;
+    while (op.stage == (attack ? STAGE_ATTACK : STAGE_DECAY) && frames < 4000000u) {
+        Envelope(&op, &set);
+        ++frames;
+    }
+    return frames;
+}
+
+// The vibrato a patch asks for, 14 cents either way, and the one a lead's long note grows after
+// half a second, to 16 cents over the next half; and the tremolo, 1 dB.
+#define VIB_DEPTH 36
+#define LATE_DEPTH 40
+#define LATE_START 24000u
+#define LATE_RAMP 24000u
+
+static int32_t ChannelSample(MusicChannel *ch, bool late, int32_t vib, int32_t am, uint32_t noise) {
+    const MusicPatch *patch = ch->patch;
+    if (ch->glide != 0) {
+        ch->pitch += ch->glide;
+        if ((ch->glide > 0 && ch->pitch >= ch->target) ||
+            (ch->glide < 0 && ch->pitch <= ch->target)) {
+            ch->pitch = ch->target;
+            ch->glide = 0;
+        }
+    }
+    if (ch->drop > 0 && --ch->drop_left == 0u) {
+        ch->drop -= (ch->drop >> 6) + 1;
+        ch->drop_left = patch->drop_rate;
+        if (ch->drop < 0) {
+            ch->drop = 0;
+        }
+    }
+    int32_t pitch = ch->pitch + ch->drop;
+    if (patch->op[1].vib != 0u) {
+        pitch += vib * VIB_DEPTH / 64;
+    }
+    if (late && ch->age > LATE_START) {
+        const uint32_t into = ch->age - LATE_START;
+        const int32_t depth =
+            into >= LATE_RAMP ? LATE_DEPTH : (int32_t)((uint32_t)LATE_DEPTH * into / LATE_RAMP);
+        pitch += vib * depth / 64;
+    }
+    if (pitch != ch->stepped_pitch) {
+        const uint32_t base = MusicPitchStep(pitch < 0 ? 0u : (uint32_t)pitch);
+        for (unsigned k = 0; k < 2u; ++k) {
+            ch->op[k].step = (uint32_t)(((uint64_t)base * MULT2[patch->op[k].mult & 15u]) >> 1);
+        }
+        ch->stepped_pitch = pitch;
+    }
+    int32_t attenuation[2];
+    for (unsigned k = 0; k < 2u; ++k) {
+        const MusicOperator *set = &patch->op[k];
+        Envelope(&ch->op[k], set);
+        attenuation[k] = (ch->op[k].attenuation >> 16) + set->tl * 32 + (set->am != 0u ? am : 0);
+    }
+    // The level of the part reaches what is heard: the carrier, or both when they are added.
+    attenuation[1] += ch->level;
+    if (patch->additive != 0u) {
+        attenuation[0] += ch->level;
+    }
+    MusicOperatorState *mod = &ch->op[0];
+    MusicOperatorState *car = &ch->op[1];
+    const int32_t feedback =
+        patch->feedback != 0u ? (mod->out[0] + mod->out[1]) >> (9u - patch->feedback) : 0;
+    const int32_t m = MusicWave(patch->op[0].wave, (mod->phase >> 22) + (uint32_t)feedback,
+                                (uint32_t)attenuation[0], noise);
+    mod->out[1] = mod->out[0];
+    mod->out[0] = m;
+    mod->phase += mod->step;
+    const uint32_t moved = patch->additive != 0u ? 0u : (uint32_t)m;
+    const int32_t c =
+        MusicWave(patch->op[1].wave, (car->phase >> 22) + moved, (uint32_t)attenuation[1], noise);
+    car->out[1] = car->out[0];
+    car->out[0] = c;
+    car->phase += car->step;
+    ++ch->age;
+    if (ch->gate != 0u && --ch->gate == 0u) {
+        KeyOff(ch);
+    }
+    if (mod->stage == STAGE_IDLE && car->stage == STAGE_IDLE) {
+        ch->active = false;
+    }
+    return patch->additive != 0u ? m + c : c;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The score
+
+static const MusicScoreSection *Section(const MusicPlayer *p, uint32_t position) {
+    const MusicScore *score = p->song.score;
+    return &score->sections[score->form[position % score->form_count]];
+}
+
+static uint32_t NextPosition(const MusicScore *score, uint32_t position) {
+    return position + 1u < score->form_count ? position + 1u : score->form_count > 1u ? 1u : 0u;
+}
+
+static void EnterSection(MusicPlayer *p) {
+    const MusicScoreSection *s = Section(p, p->position);
+    p->grid[0] = Grid(MUSIC_LANE_BASS, s->parts.bass, false);
+    p->grid[1] = Grid(MUSIC_LANE_DRUMS, s->parts.drums, false);
+    p->grid[2] = s->fill ? Grid(MUSIC_LANE_DRUMS, s->parts.drums, true) : p->grid[1];
+    p->grid[3] = Grid(MUSIC_LANE_HATS, s->parts.drums, false);
+    p->grid[4] = Grid(MUSIC_LANE_COMP, s->parts.comp, false);
+    p->grid[5] = Grid(MUSIC_LANE_ARP, s->parts.arp, false);
+    p->note_index[0] = 0;
+    p->note_index[1] = 0;
+    p->note_left[0] = 0;
+    p->note_left[1] = 0;
+}
+
+/// The frames step @p step of a bar lasts, the swing moving frames from each pair's second step to
+/// its first, the fraction carried in @p carry.
+static uint32_t StepFrames(const MusicScore *score, uint32_t step, uint32_t *carry) {
+    const uint32_t beat = score->steps / 4u;
+    const uint64_t base = ((uint64_t)MUSIC_RATE * 60u << 16) / ((uint64_t)score->tempo * beat);
+    const uint64_t swung = (step & 1u) == 0u ? base * (64u + score->swing) / 64u
+                                             : base * (64u - score->swing) / 64u;
+    const uint64_t total = swung + *carry;
+    *carry = (uint32_t)(total & 0xFFFFu);
+    return (uint32_t)(total >> 16);
+}
+
+static uint32_t BaseStepFrames(const MusicScore *score) {
+    return (uint32_t)((uint64_t)MUSIC_RATE * 60u / ((uint64_t)score->tempo * (score->steps / 4u)));
+}
+
+/// The chord of bar @p bar of the form's entry @p position: its root's pitch class and whether it
+/// is minor.
+static MusicScoreChord ChordAt(const MusicPlayer *p, uint32_t position, uint32_t bar) {
+    const MusicScoreSection *s = Section(p, position);
+    if (bar >= s->bars) {
+        return ChordAt(p, NextPosition(p->song.score, position), 0);
+    }
+    return s->chords[bar];
+}
+
+/// The chord's three voices in close position between G3 and E5, the inversion nearest the chord
+/// before; the six notes an arpeggio climbs from the root near C5; and the bass's root from C2.
+static void Voice(MusicPlayer *p, MusicScoreChord chord) {
+    const int32_t tones[3] = { (int32_t)chord.root, (int32_t)chord.root + (chord.minor ? 3 : 4),
+                               (int32_t)chord.root + 7 };
+    int32_t best[3] = { 0, 0, 0 };
+    int32_t best_distance = -1;
+    for (unsigned inversion = 0; inversion < 3u; ++inversion) {
+        int32_t v[3];
+        for (unsigned i = 0; i < 3u; ++i) {
+            const int32_t pc = tones[(inversion + i) % 3u] % 12;
+            int32_t note = 55 + ((pc - 55 % 12 + 12) % 12);
+            while (i > 0u && note <= v[i - 1u]) {
+                note += 12;
             }
+            v[i] = note;
         }
-        if (song->colour.glide && last >= 0 && row % c->rows_per_beat != 0u &&
-            Pick(c, 3u) == 0u) {
-            const int32_t apart = (int32_t)cell->note - last;
-            if (apart != 0 && apart >= -4 && apart <= 4) {
-                cell->effect = MUSIC_FX_PORTAMENTO;
-                cell->param = 0x20;
-            }
+        int32_t distance = 0;
+        for (unsigned i = 0; i < 3u; ++i) {
+            const int32_t was = p->voicing[i] != 0 ? p->voicing[i] : 60 + 4 * (int32_t)i;
+            distance += v[i] > was ? v[i] - was : was - v[i];
         }
-        last = cell->note;
+        if (best_distance < 0 || distance < best_distance) {
+            best_distance = distance;
+            memcpy(best, v, sizeof(best));
+        }
+    }
+    memcpy(p->voicing, best, sizeof(best));
+    int32_t root = 67 + (((int32_t)chord.root - 67 % 12 + 12) % 12);
+    const int32_t steps[6] = { 0, chord.minor ? 3 : 4, 7, 12, chord.minor ? 15 : 16, 19 };
+    for (unsigned i = 0; i < 6u; ++i) {
+        p->arpeggio[i] = root + steps[i];
+    }
+    p->root = 36 + (int32_t)chord.root;
+}
+
+/// How many steps a grid's mark at @p step lasts: itself and the holds after it.
+static uint32_t Held(const char *grid, uint32_t step, uint32_t steps) {
+    uint32_t length = 1;
+    while (step + length < steps && grid[step + length] == '-') {
+        ++length;
+    }
+    return length;
+}
+
+/// The frames a note of @p steps steps sounds before its key comes up: a quarter step short.
+static uint32_t Gate(const MusicScore *score, uint32_t steps) {
+    const uint32_t step = BaseStepFrames(score);
+    return steps * step - step / 4u;
+}
+
+static void Melody(MusicPlayer *p, unsigned part) {
+    const MusicScoreSection *s = Section(p, p->position);
+    const MusicScoreNote *notes = part == 0u ? s->lead : s->counter;
+    const uint32_t count = part == 0u ? s->lead_count : s->counter_count;
+    MusicChannel *ch = &p->channels[part == 0u ? MUSIC_CH_LEAD : MUSIC_CH_COUNTER];
+    if (p->note_left[part] == 0u && p->note_index[part] < count) {
+        const MusicScoreNote *n = &notes[p->note_index[part]++];
+        p->note_left[part] = n->steps;
+        if (n->note == 0u) {
+            KeyOff(ch);
+        } else {
+            const MusicScore *score = p->song.score;
+            const uint32_t glide = n->glide != 0u ? BaseStepFrames(score) : 0u;
+            KeyOn(ch, p->song.patch[part == 0u ? MUSIC_VOICE_LEAD : MUSIC_VOICE_COUNTER],
+                  (int32_t)n->note << 8, LEVELS[part == 0u ? MUSIC_CH_LEAD : MUSIC_CH_COUNTER],
+                  n->glide != 0u, glide, Gate(score, n->steps));
+        }
+    }
+    if (p->note_left[part] > 0u) {
+        --p->note_left[part];
     }
 }
 
-/// The echo: the lead three quarters of a beat later on the drums' channel, softer, across the
-/// stereo from it.
-static void Echo(Composer *c, unsigned pattern) {
-    const uint32_t delay = c->rows_per_beat * 3u / 4u;
-    for (uint32_t row = delay; row < c->song->rows; ++row) {
-        const MusicCell *lead = Cell(c->song, pattern, row - delay, CH_LEAD);
-        MusicCell *echo = Cell(c->song, pattern, row, CH_DRUMS);
-        echo->note = lead->note;
-        echo->instrument = lead->instrument != 0u ? MUSIC_INSTRUMENT_ECHO : 0u;
-        if (lead->effect == MUSIC_FX_VIBRATO) {
-            echo->effect = lead->effect;
-            echo->param = lead->param;
-        }
+/// What every part does on the step that starts now.
+static void Sequence(MusicPlayer *p) {
+    const MusicScore *score = p->song.score;
+    const MusicScoreSection *s = Section(p, p->position);
+    const uint32_t steps = score->steps;
+    const uint32_t step = p->step;
+    if (step == 0u) {
+        Voice(p, s->chords[p->bar]);
     }
-}
+    Melody(p, 0);
+    Melody(p, 1);
 
-static void BassBar(Composer *c, unsigned pattern, uint32_t bar, uint32_t degree,
-                    uint32_t next_degree) {
-    MusicSong *song = c->song;
-    const BassHit *hits = BASS_HITS[c->groove];
-    const uint32_t base = song->colour.bass_base;
-    for (unsigned k = 0; hits[k].row != END; ++k) {
-        int32_t step = (int32_t)degree;
-        switch (hits[k].tone) {
-        case BASS_FIFTH:
-            step = (int32_t)degree + 4;
+    const char *bass = p->grid[0];
+    if (bass != NULL) {
+        const char mark = bass[step];
+        int32_t note = -1;
+        bool glide = false;
+        switch (mark) {
+        case 'R':
+            note = p->root;
             break;
-        case BASS_OCTAVE:
-            step = (int32_t)degree + 7;
+        case '3':
+            note = p->root + (s->chords[p->bar].minor ? 3 : 4);
             break;
-        case BASS_APPROACH:
-            // A step below the next root, an octave up when that is below the register; the
-            // fifth when the chord stays.
-            step = next_degree != degree ? (int32_t)next_degree - 1 : (int32_t)degree + 4;
-            step += step < 0 ? 7 : 0;
+        case '5':
+            note = p->root + 7;
+            break;
+        case '7':
+            note = p->root + 10;
+            break;
+        case '8':
+            note = p->root + 12;
+            break;
+        case 'A':
+            note = 36 + (int32_t)ChordAt(p, p->position, p->bar + 1u).root - 1;
+            glide = true;
+            break;
+        case '.':
+            KeyOff(&p->channels[MUSIC_CH_BASS]);
             break;
         default:
             break;
         }
-        MusicCell *cell = Cell(song, pattern, bar * c->rows_per_bar + hits[k].row, CH_BASS);
-        cell->note = (uint8_t)NoteOf(song, base, step);
-        cell->instrument = MUSIC_INSTRUMENT_BASS;
-    }
-}
-
-static void ChordBar(Composer *c, unsigned pattern, uint32_t bar, uint32_t degree, bool held) {
-    MusicSong *song = c->song;
-    const uint8_t arp = Arpeggio(song, degree);
-    uint32_t root = NoteOf(song, song->colour.chord_base, (int32_t)degree);
-    const uint32_t reach = (arp >> 4) > (arp & 15u) ? (arp >> 4) : (arp & 15u);
-    if (root + reach > MUSIC_NOTES && root > 12u) {
-        root -= 12u;
-    }
-    const uint32_t first = bar * c->rows_per_bar;
-    uint32_t every = 0;
-    uint32_t start = 0;
-    uint32_t hold = 2u;
-    switch (c->groove) {
-    case MUSIC_GROOVE_CALM:
-        every = 2u;
-        break;
-    case MUSIC_GROOVE_BOUNCE:
-        every = 4u;
-        start = 2u;
-        break;
-    default:
-        every = c->rows_per_bar / 2u;
-        hold = every;
-        break;
-    }
-    if (held) {
-        // The bridge holds its chords: struck on the bar and halfway, sounding throughout.
-        every = c->rows_per_bar / 2u;
-        start = 0u;
-        hold = every;
-    }
-    for (uint32_t row = start; row < c->rows_per_bar; row += every) {
-        MusicCell *cell = Cell(song, pattern, first + row, CH_CHORD);
-        cell->note = (uint8_t)root;
-        cell->instrument = MUSIC_INSTRUMENT_CHORD;
-        for (uint32_t r = row; r < row + hold && r < c->rows_per_bar; ++r) {
-            MusicCell *sounding = Cell(song, pattern, first + r, CH_CHORD);
-            sounding->effect = MUSIC_FX_ARPEGGIO;
-            sounding->param = arp;
-        }
-    }
-}
-
-static void DrumBar(Composer *c, unsigned pattern, uint32_t bar, unsigned kind) {
-    const DrumHit *hits = DRUM_BARS[c->song->colour.drums][kind];
-    for (unsigned k = 0; hits[k].row != END; ++k) {
-        MusicCell *cell = Cell(c->song, pattern, bar * c->rows_per_bar + hits[k].row, CH_DRUMS);
-        cell->note = DRUM_NOTE;
-        cell->instrument = hits[k].instrument;
-        cell->effect = MUSIC_FX_VOLUME;
-        cell->param = hits[k].volume;
-    }
-}
-
-void MusicCompose(MusicSong *song, MusicTrack track, uint32_t seed) {
-    memset(song, 0, sizeof(*song));
-    const MusicColour *colour = MusicColourOf(track);
-    if (colour == NULL) {
-        track = MUSIC_TRACK_MENU;
-        colour = &COLOURS[track];
-    }
-    song->track = track;
-    song->seed = seed;
-    song->colour = *colour;
-    song->rows_per_bar = (uint32_t)colour->rows_per_beat * colour->beats_per_bar;
-    song->rows = song->rows_per_bar * MUSIC_PATTERN_BARS;
-    for (unsigned d = 0; d < 7u; ++d) {
-        song->scale[d] = MusicModeSteps((MusicMode)colour->mode)[d];
-    }
-    MusicVoice echo = colour->lead;
-    echo.volume = (uint8_t)(colour->lead.volume * 2u / 5u);
-    Instrument(song, MUSIC_INSTRUMENT_LEAD, colour->lead);
-    Instrument(song, MUSIC_INSTRUMENT_CHORD, colour->chord);
-    Instrument(song, MUSIC_INSTRUMENT_BASS, colour->bass);
-    if (colour->drums == MUSIC_DRUMS_ECHO) {
-        Instrument(song, MUSIC_INSTRUMENT_ECHO, echo);
-    } else {
-        Instrument(song, MUSIC_INSTRUMENT_KICK,
-                   (MusicVoice){ MUSIC_WAVE_KICK, 64, 255, 0, 255, 0 });
-        Instrument(song, MUSIC_INSTRUMENT_SNARE,
-                   (MusicVoice){ MUSIC_WAVE_SNARE, 64, 255, 0, 255, 0 });
-        Instrument(song, MUSIC_INSTRUMENT_HAT, (MusicVoice){ MUSIC_WAVE_HAT, 64, 255, 0, 255, 0 });
-    }
-
-    Composer c = {
-        .song = song,
-        .random = (seed != 0u ? seed : 1u) ^ ((uint32_t)track * 0x9E3779B9u),
-        .rows_per_beat = colour->rows_per_beat,
-        .rows_per_bar = song->rows_per_bar,
-        .groove = colour->groove,
-    };
-    if (c.random == 0u) {
-        c.random = 1u;
-    }
-    // Warm the generator, so seeds that differ in a bit or two part at once.
-    for (unsigned i = 0; i < 8u; ++i) {
-        (void)Noise(&c.random);
-    }
-
-    const Progressions *table = &PROGRESSIONS[colour->mode];
-    const uint8_t *a = table->a[Pick(&c, 3u)];
-    const uint8_t *b = table->b[Pick(&c, 2u)];
-    uint8_t chords[MUSIC_PATTERNS][MUSIC_PATTERN_BARS];
-    memcpy(chords[PATTERN_HEAD], a, 4u);
-    memcpy(chords[PATTERN_OPEN], a + 4, 4u);
-    memcpy(chords[PATTERN_CLOSED], a + 4, 4u);
-    chords[PATTERN_CLOSED][2] = table->home;
-    chords[PATTERN_CLOSED][3] = 0;
-    memcpy(chords[PATTERN_BRIDGE_HEAD], b, 4u);
-    memcpy(chords[PATTERN_BRIDGE_TAIL], b + 4, 4u);
-
-    for (unsigned position = 0; position < MUSIC_ORDER; ++position) {
-        song->order[position] = FORM[position];
-        song->section[position] = SECTIONS[position];
-        for (unsigned bar = 0; bar < MUSIC_PATTERN_BARS; ++bar) {
-            const uint8_t degree = chords[FORM[position]][bar];
-            song->chord[position * MUSIC_PATTERN_BARS + bar] = degree;
-            song->arp[position * MUSIC_PATTERN_BARS + bar] = Arpeggio(song, degree);
+        if (note >= 0) {
+            KeyOn(&p->channels[MUSIC_CH_BASS], p->song.patch[MUSIC_VOICE_BASS], note << 8,
+                  LEVELS[MUSIC_CH_BASS], glide, BaseStepFrames(score) / 2u,
+                  Gate(score, Held(bass, step, steps)));
         }
     }
 
-    Motif motif_a;
-    Motif motif_b;
-    MakeMotif(&c, &motif_a);
-    MakeMotif(&c, &motif_b);
-    LeadPattern(&c, PATTERN_HEAD, &motif_a, chords[PATTERN_HEAD], LEAD_ANCHOR_A, -1);
-    LeadPattern(&c, PATTERN_OPEN, &motif_a, chords[PATTERN_OPEN], LEAD_ANCHOR_A, 0);
-    LeadPattern(&c, PATTERN_CLOSED, &motif_a, chords[PATTERN_CLOSED], LEAD_ANCHOR_A, 1);
-    LeadPattern(&c, PATTERN_BRIDGE_HEAD, &motif_b, chords[PATTERN_BRIDGE_HEAD], LEAD_ANCHOR_B,
-                -1);
-    LeadPattern(&c, PATTERN_BRIDGE_TAIL, &motif_b, chords[PATTERN_BRIDGE_TAIL], LEAD_ANCHOR_B, 0);
+    const bool last = p->bar + 1u == s->bars;
+    const char *drums = last ? p->grid[2] : p->grid[1];
+    if (drums != NULL) {
+        const char mark = drums[step];
+        if (mark == 'K') {
+            const MusicPatch *kick = MusicPatchNamed("kick");
+            KeyOn(&p->channels[MUSIC_CH_KICK], kick, kick->note << 8, LEVELS[MUSIC_CH_KICK], false,
+                  0, Gate(score, 2));
+        } else if (mark == 'S' || mark == 's') {
+            const MusicPatch *snare = MusicPatchNamed("snare");
+            KeyOn(&p->channels[MUSIC_CH_SNARE], snare, snare->note << 8,
+                  LEVELS[MUSIC_CH_SNARE] + (mark == 's' ? DB(7) : 0), false, 0, Gate(score, 2));
+        }
+    }
+    const char *hats = p->grid[3];
+    if (hats != NULL && hats[step] != '.') {
+        const char mark = hats[step];
+        const MusicPatch *hat = MusicPatchNamed(mark == 'o' ? "hatopen" : "hat");
+        KeyOn(&p->channels[MUSIC_CH_HATS], hat, hat->note << 8,
+              LEVELS[MUSIC_CH_HATS] + (mark == 'h' ? DB(3) : 0), false, 0,
+              Gate(score, mark == 'o' ? 3 : 1));
+    }
 
-    for (unsigned pattern = 0; pattern < MUSIC_PATTERNS; ++pattern) {
-        const bool bridge = pattern == PATTERN_BRIDGE_HEAD || pattern == PATTERN_BRIDGE_TAIL;
-        LeadEffects(&c, pattern);
-        for (unsigned bar = 0; bar < MUSIC_PATTERN_BARS; ++bar) {
-            const uint32_t degree = chords[pattern][bar];
-            // The bar after a pattern's last is the next pattern's first, whichever plays.
-            const uint32_t next = bar + 1u < MUSIC_PATTERN_BARS ? chords[pattern][bar + 1u]
-                                  : pattern == PATTERN_BRIDGE_TAIL || pattern == PATTERN_OPEN
-                                      ? chords[PATTERN_HEAD][0]
-                                  : pattern == PATTERN_BRIDGE_HEAD ? chords[PATTERN_BRIDGE_TAIL][0]
-                                  : pattern == PATTERN_HEAD        ? chords[PATTERN_OPEN][0]
-                                                                   : chords[PATTERN_BRIDGE_HEAD][0];
-            BassBar(&c, pattern, bar, degree, next);
-            ChordBar(&c, pattern, bar, degree, bridge && colour->groove != MUSIC_GROOVE_SLOW);
-            if (colour->drums != MUSIC_DRUMS_ECHO) {
-                // A fill ends each eight bars, where a section or its half closes.
-                const bool fill = bar == MUSIC_PATTERN_BARS - 1u && pattern != PATTERN_HEAD &&
-                                  pattern != PATTERN_BRIDGE_HEAD;
-                const unsigned kind = bridge && !fill ? 2u : fill ? 1u : 0u;
-                DrumBar(&c, pattern, bar, kind);
+    const char *comp = p->grid[4];
+    if (comp != NULL) {
+        if (comp[step] == 'X') {
+            const uint32_t gate = Gate(score, Held(comp, step, steps));
+            for (unsigned i = 0; i < 3u; ++i) {
+                KeyOn(&p->channels[MUSIC_CH_CHORD1 + i], p->song.patch[MUSIC_VOICE_CHORDS],
+                      p->voicing[i] << 8, LEVELS[MUSIC_CH_CHORD1 + i], false, 0, gate);
+            }
+        } else if (comp[step] == '.') {
+            for (unsigned i = 0; i < 3u; ++i) {
+                KeyOff(&p->channels[MUSIC_CH_CHORD1 + i]);
             }
         }
-        if (colour->drums == MUSIC_DRUMS_ECHO) {
-            Echo(&c, pattern);
-        }
+    }
+    const char *arp = p->grid[5];
+    if (arp != NULL && arp[step] >= '1' && arp[step] <= '6') {
+        KeyOn(&p->channels[MUSIC_CH_ARP], p->song.patch[MUSIC_VOICE_ARP],
+              p->arpeggio[arp[step] - '1'] << 8, LEVELS[MUSIC_CH_ARP], false, 0, Gate(score, 2));
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// The tracker
-
-static const MusicInstrument *InstrumentOf(const MusicPlayer *p, const MusicChannel *ch) {
-    return ch->instrument >= 1u && ch->instrument <= MUSIC_INSTRUMENTS &&
-                   p->song.instruments[ch->instrument].length > 0u
-               ? &p->song.instruments[ch->instrument]
-               : NULL;
-}
-
-static void Trigger(MusicPlayer *p, MusicChannel *ch, uint32_t note) {
-    ch->note = note;
-    ch->period = MusicPeriod(note);
-    ch->target_period = ch->period;
-    ch->position = 0;
-    ch->playing = InstrumentOf(p, ch) != NULL;
-    ch->envelope = 0;
-    ch->attacking = true;
-    ch->released = false;
-    ch->vibrato_position = 0;
-}
-
-static uint32_t RowTicks(const MusicPlayer *p) {
-    const MusicColour *colour = &p->song.colour;
-    const uint32_t in_beat = p->row % colour->rows_per_beat;
-    const uint32_t speed = colour->speed;
-    if (colour->swing == 0u) {
-        return speed;
-    }
-    return in_beat < colour->rows_per_beat / 2u ? speed + colour->swing : speed - colour->swing;
-}
-
-static void Envelope(const MusicPlayer *p, MusicChannel *ch) {
-    const MusicInstrument *instrument = InstrumentOf(p, ch);
-    if (instrument == NULL) {
+/// Moves to the next step, the next bar and the next section as each ends.
+static void Advance(MusicPlayer *p) {
+    const MusicScore *score = p->song.score;
+    if (++p->step < score->steps) {
         return;
     }
-    const MusicVoice *v = &instrument->voice;
-    if (ch->released) {
-        ch->envelope = ch->envelope > v->release ? ch->envelope - v->release : 0;
-    } else if (ch->attacking) {
-        ch->envelope += v->attack;
-        if (ch->envelope >= 255) {
-            ch->envelope = 255;
-            ch->attacking = false;
-        }
-    } else if (ch->envelope > v->sustain) {
-        ch->envelope =
-            ch->envelope - v->decay > (int32_t)v->sustain ? ch->envelope - v->decay : v->sustain;
+    p->step = 0;
+    if (++p->bar < Section(p, p->position)->bars) {
+        return;
     }
+    p->bar = 0;
+    p->position = NextPosition(score, p->position);
+    EnterSection(p);
 }
 
-/// What a channel's cell asks on the row's first tick.
-static void RowCell(MusicPlayer *p, MusicChannel *ch, const MusicCell *cell) {
-    ch->cell = *cell;
-    if (cell->instrument != 0u) {
-        ch->instrument = cell->instrument;
-        const MusicInstrument *instrument = InstrumentOf(p, ch);
-        ch->volume = instrument != NULL ? instrument->voice.volume : 0;
+static void Begin(MusicPlayer *p, MusicTrack track) {
+    memset(&p->song, 0, sizeof(p->song));
+    p->song.track = (unsigned)track < MUSIC_TRACKS ? track : MUSIC_TRACK_MENU;
+    p->song.score = MusicScoreOf(p->song.track);
+    for (unsigned i = 0; i < MUSIC_SCORE_VOICES; ++i) {
+        p->song.patch[i] = MusicPatchNamed(p->song.score->voice[i]);
     }
-    const uint32_t ext = cell->effect == MUSIC_FX_EXTENDED ? cell->param >> 4 : 0u;
-    if (cell->note == MUSIC_NOTE_OFF) {
-        ch->released = true;
-    } else if (cell->note != 0u) {
-        if (cell->effect == MUSIC_FX_PORTAMENTO && ch->playing) {
-            ch->target_period = MusicPeriod(cell->note);
-            ch->note = cell->note;
-            if (cell->param != 0u) {
-                ch->portamento = cell->param;
-            }
-            ch->released = false;
-        } else if (!(ext == 0xDu && (cell->param & 15u) != 0u)) {
-            Trigger(p, ch, cell->note);
-        }
-    }
-    if (cell->effect == MUSIC_FX_VOLUME) {
-        ch->volume = cell->param > 64u ? 64 : cell->param;
-    }
-    if (cell->effect == MUSIC_FX_VIBRATO && cell->param != 0u) {
-        const uint8_t speed = cell->param & 0xF0u ? cell->param & 0xF0u : ch->vibrato & 0xF0u;
-        const uint8_t depth = cell->param & 0x0Fu ? cell->param & 0x0Fu : ch->vibrato & 0x0Fu;
-        ch->vibrato = (uint8_t)(speed | depth);
-    }
-    if (ext == 0xCu && (cell->param & 15u) == 0u) {
-        ch->volume = 0;
-    }
-}
-
-/// The period a channel sounds at on this tick: its own, moved by an arpeggio or a vibrato.
-static uint32_t SoundingPeriod(const MusicPlayer *p, MusicChannel *ch) {
-    const MusicCell *cell = &ch->cell;
-    if (cell->effect == MUSIC_FX_ARPEGGIO && cell->param != 0u) {
-        const uint32_t phase = p->tick % 3u;
-        const uint32_t add = phase == 0u ? 0u : phase == 1u ? cell->param >> 4 : cell->param & 15u;
-        return add == 0u ? ch->period : MusicPeriod(ch->note + add);
-    }
-    if (cell->effect == MUSIC_FX_VIBRATO && p->tick > 0u) {
-        const uint32_t depth = ch->vibrato & 15u;
-        const int32_t delta = (int32_t)((VIBRATO[ch->vibrato_position & 31u] * depth) >> 7);
-        const int32_t period =
-            (int32_t)ch->period + ((ch->vibrato_position & 32u) != 0u ? -delta : delta);
-        ch->vibrato_position = (ch->vibrato_position + (ch->vibrato >> 4)) & 63u;
-        return (uint32_t)Clamp(period, PERIOD_MIN, PERIOD_MAX);
-    }
-    return ch->period;
-}
-
-/// What a channel's cell does on the ticks after the first.
-static void LaterTick(MusicPlayer *p, MusicChannel *ch) {
-    const MusicCell *cell = &ch->cell;
-    const uint32_t x = cell->param >> 4;
-    const uint32_t y = cell->param & 15u;
-    switch (cell->effect) {
-    case MUSIC_FX_SLIDE_UP:
-        ch->period = ch->period > PERIOD_MIN + cell->param ? ch->period - cell->param : PERIOD_MIN;
-        break;
-    case MUSIC_FX_SLIDE_DOWN:
-        ch->period = ch->period + cell->param < PERIOD_MAX ? ch->period + cell->param : PERIOD_MAX;
-        break;
-    case MUSIC_FX_PORTAMENTO:
-        if (ch->period < ch->target_period) {
-            const uint32_t up = ch->period + ch->portamento;
-            ch->period = up < ch->target_period ? up : ch->target_period;
-        } else if (ch->period > ch->target_period) {
-            ch->period = ch->period > ch->target_period + ch->portamento
-                             ? ch->period - ch->portamento
-                             : ch->target_period;
-        }
-        break;
-    case MUSIC_FX_VOLUME_SLIDE:
-        ch->volume = x != 0u ? (ch->volume + (int32_t)x > 64 ? 64 : ch->volume + (int32_t)x)
-                             : (ch->volume > (int32_t)y ? ch->volume - (int32_t)y : 0);
-        break;
-    case MUSIC_FX_EXTENDED:
-        if (x == 0xCu && p->tick == y) {
-            ch->volume = 0;
-        } else if (x == 0xDu && p->tick == y && cell->note != 0u && cell->note != MUSIC_NOTE_OFF) {
-            Trigger(p, ch, cell->note);
-        } else if (x == 0x9u && y != 0u && p->tick % y == 0u) {
-            Trigger(p, ch, ch->note);
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-/// The next tick: a new row on its first, its cells read; then every channel's effects and
-/// envelope, and the gain and step it plays at until the tick after.
-static void Tick(MusicPlayer *p) {
-    if (p->row_ticks == 0u) {
-        // The first tick of the track.
-        p->row_ticks = RowTicks(p);
-    } else if (++p->tick >= p->row_ticks) {
-        p->tick = 0;
-        if (++p->row >= p->song.rows) {
-            p->row = 0;
-            p->position = (p->position + 1u) % MUSIC_ORDER;
-        }
-        p->row_ticks = RowTicks(p);
-    }
-    const unsigned pattern = p->song.order[p->position];
-    for (unsigned c = 0; c < MUSIC_CHANNELS; ++c) {
-        MusicChannel *ch = &p->channels[c];
-        if (p->tick == 0u) {
-            RowCell(p, ch, &p->song.cells[pattern][p->row][c]);
-        } else {
-            LaterTick(p, ch);
-        }
-        Envelope(p, ch);
-        ch->step = MusicStep(SoundingPeriod(p, ch));
-        ch->gain_was = ch->gain;
-        ch->gain = ch->playing ? ch->volume * ch->envelope : 0;
-    }
-    p->tick_left = MusicTickFrames(p->song.colour.bpm, &p->tick_carry);
-    p->tick_elapsed = 0;
-}
-
-// The frames over which a channel's gain moves from one tick's to the next's, so a step in
-// volume does not click.
-#define RAMP 32u
-
-static int32_t ChannelSample(const MusicPlayer *p, MusicChannel *ch, uint32_t into_tick) {
-    const MusicInstrument *instrument = InstrumentOf(p, ch);
-    if (!ch->playing || instrument == NULL) {
-        ch->playing = false;
-        return 0;
-    }
-    uint32_t index = ch->position >> 16;
-    if (index >= instrument->length) {
-        if (instrument->loop_start >= instrument->length) {
-            ch->playing = false;
-            return 0;
-        }
-        const uint32_t loop = instrument->length - instrument->loop_start;
-        index = instrument->loop_start + (index - instrument->loop_start) % loop;
-        ch->position = (index << 16) | (ch->position & 0xFFFFu);
-    }
-    const int32_t gain = into_tick < RAMP ? ch->gain_was + (ch->gain - ch->gain_was) *
-                                                               (int32_t)into_tick / (int32_t)RAMP
-                                          : ch->gain;
-    ch->position += ch->step;
-    return (p->song.bank[instrument->offset + index] * gain) >> 8;
-}
-
-static void Begin(MusicPlayer *p, MusicTrack track, uint32_t seed) {
-    MusicCompose(&p->song, track, seed);
     memset(p->channels, 0, sizeof(p->channels));
-    memset(p->filter, 0, sizeof(p->filter));
-    memset(p->led, 0, sizeof(p->led));
+    memset(p->voicing, 0, sizeof(p->voicing));
+    memset(p->coupling, 0, sizeof(p->coupling));
     p->state = MUSIC_PLAYING;
     p->position = 0;
-    p->row = 0;
-    p->tick = 0;
-    p->row_ticks = 0;
-    p->tick_left = 0;
-    p->tick_elapsed = 0;
-    p->tick_carry = 0;
+    p->bar = 0;
+    p->step = 0;
+    p->step_left = 0;
+    p->step_carry = 0;
+    p->started = false;
+    p->lfo = 0;
+    p->noise = 0x1F35A7BDu;
     p->track_frames = 0;
     p->next = MUSIC_TRACKS;
-}
-
-void MusicStartSeeded(MusicPlayer *player, MusicTrack track, uint32_t seed) {
-    player->frames = 0;
-    player->clipped = 0;
-    Begin(player, track, seed);
+    EnterSection(p);
 }
 
 void MusicStart(MusicPlayer *player, MusicTrack track) {
-    const MusicColour *colour = MusicColourOf(track);
-    MusicStartSeeded(player, track, colour != NULL ? colour->seed : COLOURS[0].seed);
+    player->frames = 0;
+    player->clipped = 0;
+    Begin(player, track);
 }
 
 void MusicStartAfterBarrier(MusicPlayer *player, MusicTrack track) {
@@ -1250,7 +834,7 @@ void MusicStartAfterBarrier(MusicPlayer *player, MusicTrack track) {
 void MusicSwitch(MusicPlayer *player, MusicTrack track) {
     if (player->state == MUSIC_SILENT) {
         if ((unsigned)track < MUSIC_TRACKS) {
-            Begin(player, track, COLOURS[track].seed);
+            Begin(player, track);
         }
         return;
     }
@@ -1272,6 +856,20 @@ static int16_t Clip(MusicPlayer *p, int32_t v) {
     return (int16_t)v;
 }
 
+// The tremolo's and the vibrato's triangles: 3.7 Hz and 6.07 Hz, as the chip's.
+#define AM_PERIOD 12972u
+#define VIB_PERIOD 7908u
+
+/// The card's coupling: a high pass near 6 Hz, so no constant part of a half-sine thumps. Its state
+/// keeps 8 bits below the sample and rounds, so the arithmetic leaves no constant of its own.
+static int32_t Couple(int32_t *state, int32_t x) {
+    const int64_t kept = ((int64_t)state[1] * 65483 + 32768) >> 16;
+    const int32_t y = ((x - state[0]) << 8) + (int32_t)kept;
+    state[0] = x;
+    state[1] = y;
+    return (y + 128) >> 8;
+}
+
 void MusicRender(MusicPlayer *p, int16_t *out, size_t frames) {
     for (size_t f = 0; f < frames; ++f) {
         if (p->state == MUSIC_SILENT || p->state == MUSIC_BARRIER) {
@@ -1279,7 +877,7 @@ void MusicRender(MusicPlayer *p, int16_t *out, size_t frames) {
             out[2u * f + 1u] = 0;
             if (p->state == MUSIC_BARRIER && --p->barrier_left == 0u) {
                 if ((unsigned)p->next < MUSIC_TRACKS) {
-                    Begin(p, p->next, COLOURS[p->next].seed);
+                    Begin(p, p->next);
                 } else {
                     p->state = MUSIC_SILENT;
                 }
@@ -1287,39 +885,54 @@ void MusicRender(MusicPlayer *p, int16_t *out, size_t frames) {
             ++p->frames;
             continue;
         }
-        if (p->tick_left == 0u) {
-            Tick(p);
+        const MusicScore *score = p->song.score;
+        if (p->step_left == 0u) {
+            if (p->started) {
+                Advance(p);
+            }
+            p->started = true;
+            Sequence(p);
+            p->step_left = StepFrames(score, p->step, &p->step_carry);
         }
-        int32_t values[MUSIC_CHANNELS];
-        const uint32_t into = p->tick_elapsed;
-        for (unsigned c = 0; c < MUSIC_CHANNELS; ++c) {
-            values[c] = ChannelSample(p, &p->channels[c], into);
-        }
+        --p->step_left;
+        const uint32_t vib_at = p->lfo % VIB_PERIOD;
+        const uint32_t half = VIB_PERIOD / 2u;
+        const int32_t vib = vib_at < half ? (int32_t)(vib_at * 128u / half) - 64
+                                          : 64 - (int32_t)((vib_at - half) * 128u / half);
+        const uint32_t am_at = p->lfo % AM_PERIOD;
+        const int32_t am = am_at < AM_PERIOD / 2u
+                               ? (int32_t)(am_at * 43u / (AM_PERIOD / 2u))
+                               : 43 - (int32_t)((am_at - AM_PERIOD / 2u) * 43u / (AM_PERIOD / 2u));
+        ++p->lfo;
+        uint32_t n = p->noise;
+        n ^= n << 13;
+        n ^= n >> 17;
+        n ^= n << 5;
+        p->noise = n;
         int32_t left = 0;
         int32_t right = 0;
-        MusicPan(values, &left, &right);
-        left = left * 11 / 8;
-        right = right * 11 / 8;
-        p->filter[0] = MusicFilterStep(p->filter[0], left, MUSIC_FILTER_A500_Q16);
-        p->filter[1] = MusicFilterStep(p->filter[1], right, MUSIC_FILTER_A500_Q16);
-        int32_t l = p->filter[0] >> 8;
-        int32_t r = p->filter[1] >> 8;
-        if (p->song.colour.filter == MUSIC_FILTER_LED) {
-            p->led[0] = MusicFilterStep(p->led[0], l, MUSIC_FILTER_LED_Q16);
-            p->led[1] = MusicFilterStep(p->led[1], p->led[0] >> 8, MUSIC_FILTER_LED_Q16);
-            p->led[2] = MusicFilterStep(p->led[2], r, MUSIC_FILTER_LED_Q16);
-            p->led[3] = MusicFilterStep(p->led[3], p->led[2] >> 8, MUSIC_FILTER_LED_Q16);
-            l = p->led[1] >> 8;
-            r = p->led[3] >> 8;
+        for (unsigned c = 0; c < MUSIC_FM_CHANNELS; ++c) {
+            MusicChannel *ch = &p->channels[c];
+            if (!ch->active) {
+                continue;
+            }
+            const int32_t v =
+                ChannelSample(ch, c == MUSIC_CH_LEAD || c == MUSIC_CH_COUNTER, vib, am, n >> 31);
+            if ((PANS[c] & MUSIC_LEFT) != 0u) {
+                left += v;
+            }
+            if ((PANS[c] & MUSIC_RIGHT) != 0u) {
+                right += v;
+            }
         }
+        int32_t l = Couple(&p->coupling[0], left * (int32_t)score->gain / 32);
+        int32_t r = Couple(&p->coupling[2], right * (int32_t)score->gain / 32);
         if (p->state == MUSIC_FADING) {
             l = l * (int32_t)p->fade_left / (int32_t)MUSIC_FADE_FRAMES;
             r = r * (int32_t)p->fade_left / (int32_t)MUSIC_FADE_FRAMES;
         }
         out[2u * f] = Clip(p, l);
         out[2u * f + 1u] = Clip(p, r);
-        ++p->tick_elapsed;
-        --p->tick_left;
         ++p->frames;
         ++p->track_frames;
         if (p->state == MUSIC_FADING && --p->fade_left == 0u) {
@@ -1335,18 +948,14 @@ void MusicRender(MusicPlayer *p, int16_t *out, size_t frames) {
 }
 
 uint64_t MusicFormFrames(const MusicSong *song) {
+    const MusicScore *score = song->score;
     uint64_t frames = 0;
     uint32_t carry = 0;
-    const MusicColour *colour = &song->colour;
-    for (unsigned position = 0; position < MUSIC_ORDER; ++position) {
-        for (uint32_t row = 0; row < song->rows; ++row) {
-            const uint32_t in_beat = row % colour->rows_per_beat;
-            const uint32_t ticks = colour->swing == 0u ? colour->speed
-                                   : in_beat < colour->rows_per_beat / 2u
-                                       ? colour->speed + colour->swing
-                                       : colour->speed - colour->swing;
-            for (uint32_t t = 0; t < ticks; ++t) {
-                frames += MusicTickFrames(colour->bpm, &carry);
+    for (uint32_t position = 0; position < score->form_count; ++position) {
+        const MusicScoreSection *s = &score->sections[score->form[position]];
+        for (uint32_t bar = 0; bar < s->bars; ++bar) {
+            for (uint32_t step = 0; step < score->steps; ++step) {
+                frames += StepFrames(score, step, &carry);
             }
         }
     }

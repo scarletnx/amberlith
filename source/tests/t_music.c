@@ -112,11 +112,11 @@ static void ExcerptName(char *name, size_t size, MusicTrack track) {
     snprintf(name, size,
              "the %s track, looped on two voices at the output rate, comes back from the "
              "renderer sample for sample",
-             MusicColourOf(track)->name);
+             MusicTrackName(track));
 }
 
 static void Excerpt(MusicTrack track, int16_t *left, int16_t *right) {
-    const MusicColour *colour = MusicColourOf(track);
+    const char *const track_name = MusicTrackName(track);
     char name[128];
     ExcerptName(name, sizeof(name), track);
     if (!ReportStart(SUITE, name)) {
@@ -159,7 +159,7 @@ static void Excerpt(MusicTrack track, int16_t *left, int16_t *right) {
     uint32_t best_at = 0;
     const uint32_t rotation = FindRotation(left, right, &best_match, &best_at);
     if (rotation < RING) {
-        ReportNote("music: the aux's ring holds %s's loop %u samples late", colour->name,
+        ReportNote("music: the aux's ring holds %s's loop %u samples late", track_name,
                    (unsigned)((RING - rotation) % RING));
     }
     CHECK_TRUE(SUITE, name, CHECK_EXACT, rotation < RING,
