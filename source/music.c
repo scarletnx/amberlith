@@ -1258,6 +1258,9 @@ void MusicSwitch(MusicPlayer *player, MusicTrack track) {
     if (player->state == MUSIC_PLAYING) {
         player->state = MUSIC_FADING;
         player->fade_left = MUSIC_FADE_FRAMES;
+    } else if (player->state == MUSIC_BARRIER && player->next == MUSIC_TRACKS) {
+        // A stop inside the barrier: already silent, and nothing comes after it.
+        player->state = MUSIC_SILENT;
     }
 }
 
@@ -1275,7 +1278,11 @@ void MusicRender(MusicPlayer *p, int16_t *out, size_t frames) {
             out[2u * f] = 0;
             out[2u * f + 1u] = 0;
             if (p->state == MUSIC_BARRIER && --p->barrier_left == 0u) {
-                Begin(p, p->next, COLOURS[p->next].seed);
+                if ((unsigned)p->next < MUSIC_TRACKS) {
+                    Begin(p, p->next, COLOURS[p->next].seed);
+                } else {
+                    p->state = MUSIC_SILENT;
+                }
             }
             ++p->frames;
             continue;

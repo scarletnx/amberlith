@@ -17,12 +17,12 @@ build's, then what the audio renderer plays of it to that render. Only the word 
 ([the mode file](../ModeFile.md)), and `all` leaves it out: outside its cases and the interactive
 mode the music makes no thread, no voice and no sample ([When it plays](#when-it-plays)).
 
-- **music**, ten cases. Four hold each track's 32 bars, rendered on this machine, to the host's
-  samples, and one holds a switch between two tracks to the tracks rendered alone (the host build
-  runs these five too: their hashes are its own). Four play an excerpt of each track through the
-  renderer and one the interactive mode's own stream across a switch, each held sample for sample to
-  what the tracker rendered. If the renderer does not open, those five are skipped as
-  `unavailable`, with what it answered.
+- **music**, eleven cases. Four hold each track's 32 bars, rendered on this machine, to the host's
+  samples, one a switch between two tracks to the tracks rendered alone, and one a switch and a
+  stop inside the silence (the host build runs these six too: their hashes are its own). Four play
+  an excerpt of each track through the renderer and one the interactive mode's own stream across a
+  switch, each held sample for sample to what the tracker rendered. If the renderer does not open,
+  those five are skipped as `unavailable`, with what it answered.
 
 ## The tracker
 
@@ -98,8 +98,8 @@ eight holds one note and lets it go before the next phrase: the tonic at a close
 tone where the music goes on. A long note gets the track's vibrato from its second beat.
 
 A switch between tracks fades the one playing over 50 ms, then a second of silence, the barrier
-between two colours, then the next track from its first row. From silence a track starts at
-once.
+between two colours, then the next track from its first row. A switch inside the barrier changes
+only what follows it, and a stop there ends it in silence; from silence a track starts at once.
 
 ## What is judged
 
@@ -107,6 +107,7 @@ once.
 |---|---|---|
 | the *track*'s 32 bars render to the host's samples (four) | one pass of its form renders to the frames and the FNV-1a of its samples, left then right, low byte first, that the host build rendered (`source/tests/t_musicrender.c`), with none clamped to 16 bits | exact |
 | a switch fades the track out over 50 ms, keeps a second of silence, then starts the next one from its first row | half a second of the browser's track, a switch to Wimsy's: the 2400 frames after it are the browser's own scaled by the fade, the 48000 after those are nought, and the half second after them is Wimsy's first, each as the tracker renders it alone | exact |
+| a switch inside the silence keeps it and starts the newer track after it, and a stop there stays silent | a switch to Wimsy's track, then 1000 frames into the barrier one to the fluid's: the rest of the barrier is nought and the fluid's track follows it, as it renders alone; the same with a stop instead, and two seconds of nought after it | exact |
 | the *track*, looped on two voices at the output rate, comes back from the renderer sample for sample (four) | 9600 frames of the track from its first second, left and right on two voices looping into the audio family's submix at a gain of nought: once they have played 100 renderer frames, both channels the submix's aux effect recorded are that loop, one for one, from some sample of it | exact |
 | the player's stream through the renderer's wave buffers comes back sample for sample, past a switch and its silence | the browser's track through the stream the interactive mode plays (below), switched to Wimsy's after 0.4 s and played to 0.15 s past the barrier: the aux's last 9600 frames, read from wherever its ring was last written, are a stretch of the stream as the tracker renders it alone, one for one, and not silent | exact |
 
