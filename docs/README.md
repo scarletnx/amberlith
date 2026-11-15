@@ -11,6 +11,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[On Android](./Android.md)** - edenprobe's APK, and the NRO in an emulator's Android build
   - **[Frontends](./Frontends.md)** - one engine for the console, Android and a PC, and how another fits
   - **[On the console](./Console.md)** - the two modes, the screens and the buttons
+  - **[The browser](./UI.md)** - a family, a suite, a case or a demo at a time, and the demos' HUD
   - **[The mode file](./ModeFile.md)** - the words that choose what runs
   - **[The hooks mode](./Hooks.md)** - the services asked through the SDK's functions the program exports
   - **[The validation layer](./Validation.md)** - `make validate`

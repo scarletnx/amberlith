@@ -25,21 +25,42 @@ extern "C" {
 /// Nothing here decides anything: it draws the cases the report recorded, and the pixels a
 /// verdict came from. A screen is never an input to a result.
 
-/// Where the pictures start down the frame, under the two lines of heading and the labels.
+/// The look every screen a person chooses on wears: ScarletNX's launcher in its YoRHa theme, at the
+/// scale of two it opens in on a frame of 720 lines (src/gui/themes/yorha/theme.ini). The VGA font
+/// at twice its size, a title at four times it with its shadow in the dim colour, tabs and keys as
+/// buttons a row of letters and four pixels above and below it tall, a frieze along the top and
+/// the bottom, and the grid, thin diagonals, darker corners and a grain on the page. Tables a
+/// person reads down, the results' and a case's detail, keep the font's own size.
+#define UI_TEXT_SCALE 2u
+#define UI_CELL_WIDTH 16u
+#define UI_CELL_HEIGHT 32u
+#define UI_BUTTON_HEIGHT 40u
+#define UI_TABS_TOP 26u
+#define UI_TITLE_TOP 82u
+#define UI_BODY_TOP 158u
+/// The foot: a box over the bottom frieze, the focused thing's sentence on its first row and the
+/// keys, buttons for a tap, on its second.
+#define UI_FOOT_HEIGHT 78u
+#define UI_FOOT_TOP(frame_height) ((frame_height) - 24u - UI_FOOT_HEIGHT)
+#define UI_BODY_BOTTOM(frame_height) (UI_FOOT_TOP(frame_height) - 8u)
+/// A row of a list at the text's size: its box, and the step to the next.
+#define UI_ROW_BOX 36u
+#define UI_ROW_PITCH 42u
+
+/// Where the pictures start down the frame, under the head, the case's name and the labels.
 /// Named here rather than buried in the layout because the cases that check the layout have to
 /// look in the same place it drew.
-#define UI_PANEL_TOP 72u
+#define UI_PANEL_TOP (UI_BODY_TOP + UI_BUTTON_HEIGHT + 30u)
 
-/// Where the overview's and a group's list start, the height of one of their rows, and where a
-/// group's result marks start across it.
-#define UI_LIST_TOP 72u
+/// Where the overview's and a group's list start, under the head and the band of their counts,
+/// the height of one of their rows, and where a group's result marks start across it.
+#define UI_LIST_TOP (UI_BODY_TOP + UI_BUTTON_HEIGHT + 10u)
 #define UI_ROW_HEIGHT 20u
 #define UI_MARK_LEFT 64u
 
-/// The smallest frame the screens lay out on; a smaller one gets a line saying so. The console's
-/// is 1280 by 720.
-#define UI_MIN_WIDTH 640u
-#define UI_MIN_HEIGHT 360u
+/// The smallest frame the screens lay out on, the console's; a smaller one gets a line saying so.
+#define UI_MIN_WIDTH 1280u
+#define UI_MIN_HEIGHT 720u
 
 /// The bottom of every screen: the band the keys are named on, across the frame's last rows, and
 /// above it the row the countdown is written in. Nothing else is drawn there.
@@ -127,6 +148,8 @@ typedef struct {
     uint32_t failed;
     uint32_t skipped;
     uint32_t crashed;
+    /// At the title's right: the build and the machine, or NULL for nothing.
+    const char *heading;
 } UiRun;
 
 /// Indexes @p count records for the screens. @p reported is what the run's own counts add up to.
@@ -149,6 +172,13 @@ typedef struct {
     uint32_t index;
     UiView view;
     bool quit;
+    /// Shown in the browser (UiBrowse*), where back on the overview leaves for the browser and Y
+    /// runs the same run again: @p back and @p again say a press asked for either.
+    bool browser;
+    bool back;
+    bool again;
+    /// Y may run it again: the run was one the browser began.
+    bool repeatable;
     /// Whether the screen owes a frame. Set by anything that moved, and stays set until a
     /// frame is actually drawn, which is what makes the very first one get drawn at all. The
     /// display clears it and sleeps otherwise, so a still screen costs an emulated processor
@@ -175,6 +205,8 @@ typedef enum {
     UI_INPUT_PREVIOUS_FAILURE,
     UI_INPUT_CYCLE_VIEW,
     UI_INPUT_QUIT,
+    /// The browser's results only: the same run again (Y).
+    UI_INPUT_AGAIN,
 } UiInput;
 
 /// How many frames the pad is given to turn up before the launch button is given up on.
@@ -218,6 +250,12 @@ enum {
     /// screen, which is not open while the sequence plays.
     UI_BUTTON_LISTEN_REPEAT = 1u << 10,
     UI_BUTTON_LISTEN_SKIP = 1u << 11,
+    /// The browser's: L and R walk its tabs, Y runs again on its results, minus quits.
+    UI_BUTTON_TAB_PREVIOUS = 1u << 12,
+    UI_BUTTON_TAB_NEXT = 1u << 13,
+    UI_BUTTON_AGAIN = 1u << 14,
+    /// Plus: the browser's run, and outside it the results' quit, as minus is everywhere.
+    UI_BUTTON_RUN = 1u << 15,
 };
 
 /// The buttons that act again while they are held: the four directions, and nothing that opens,
@@ -341,6 +379,14 @@ UiState UiStep(UiState state, UiInput input, const UiRun *run);
 /// moves. Separate from drawing because the display owns the one and the navigation the other.
 void UiFrameDrawn(UiState *state);
 
+/// Where a case's picture @p width by @p height is drawn: panel @p panel (drawn, expected,
+/// judged) of the three side by side, or the one @p view shows alone (panel ignored); its scale is
+/// the rectangle's width over @p width. The key of the judged colours starts UI_KEY_GAP under the
+/// rectangle's bottom.
+UiRect UiPanelRect(uint32_t frame_width, uint32_t frame_height, uint32_t width, uint32_t height,
+                   UiView view, uint32_t panel);
+#define UI_KEY_GAP 10u
+
 /// Draws the screen @p state is on over the whole frame. @p picture is the selected case's kept
 /// picture at the case level, or NULL, which draws the case as its detail instead; the caller
 /// looks it up because the pictures live in their own store.
@@ -409,6 +455,9 @@ typedef struct {
     bool no_timing;
     /// Write the choice into the mode file.
     bool save;
+    /// L or R, or a tap on a tab, asked for another tab (UiTab), and the browser instead of the
+    /// run; nought for none.
+    uint32_t tab_asked;
 } UiStartState;
 
 /// Whether there is anything to choose: a family, or a case on the crash list.
@@ -435,6 +484,9 @@ enum {
     UI_START_SELECT = 1u << 3,
     UI_START_UP = 1u << 4,
     UI_START_DOWN = 1u << 5,
+    /// L and R: the tab before and after, the browser's.
+    UI_START_TAB_PREVIOUS = 1u << 6,
+    UI_START_TAB_NEXT = 1u << 7,
 };
 
 /// One frame's presses. Beginning wins over everything else in the same frame; a toggle for a
@@ -461,6 +513,9 @@ uint32_t UiStartSecondsLeft(uint64_t elapsed_ns, bool pressed);
 /// Where the menu's row @p row starts down the frame, for the cases that check the cursor.
 uint32_t UiStartRowTop(uint32_t row);
 
+/// The box of the menu's row @p row: its icon two cells of the look in from its left.
+UiRect UiStartRowBox(uint32_t row);
+
 /// Draws the start screen over the whole frame, its countdown included.
 void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState state,
                     uint32_t seconds_left);
@@ -472,6 +527,8 @@ uint32_t UiStartWarningTop(uint32_t frame_height);
 /// Where the line about the nvn family's window case is drawn, under the note on the judge, and
 /// what it says.
 uint32_t UiStartNvnTop(void);
+/// The rectangle that line takes, beside the rows: two lines of the font's own size.
+UiRect UiStartNvnBox(uint32_t frame_width);
 #define UI_START_NVN_SAID                                                                          \
     "nvn's window case is skipped in a run begun here: this screen holds the window to its end. " \
     "quick in the mode file runs it"
@@ -617,8 +674,14 @@ size_t UiProgressPassWords(char *out, size_t out_size, uint32_t pass, uint32_t p
 size_t UiElapsedWords(char *out, size_t out_size, uint64_t ns);
 
 /// Where the bar of steps is drawn, for the cases that check how much of it is filled.
-#define UI_PROGRESS_BAR_TOP (UI_LIST_TOP + UI_ROW_HEIGHT + 6u)
-#define UI_PROGRESS_BAR_HEIGHT 8u
+#define UI_PROGRESS_BAR_TOP (UI_BODY_TOP + UI_CELL_HEIGHT + 12u)
+#define UI_PROGRESS_BAR_HEIGHT 12u
+
+/// The screens that keep the font's own size (resume, pad, touch): where their list starts under
+/// their two lines of heading, and the pad screen's bar of prompts.
+#define UI_SMALL_LIST_TOP 72u
+#define UI_PAD_BAR_TOP (UI_SMALL_LIST_TOP + UI_ROW_HEIGHT + 6u)
+#define UI_PAD_BAR_HEIGHT 8u
 
 /// Draws the running screen over the whole frame.
 void UiComposeProgress(const UiFrame *frame, const UiProgress *progress);
@@ -776,6 +839,281 @@ typedef struct {
 #define UI_TOUCH_LIVE_TOP 420u
 
 void UiComposeTouch(const UiFrame *frame, const UiTouchScreen *screen);
+
+/// The keys along the foot of a screen in the launcher's look: what to press, and what it does
+/// there. A key with an input other than UI_INPUT_NONE is a button too, which a tap presses.
+typedef struct {
+    const char *key;
+    const char *what;
+    int input;
+} UiKey;
+
+/// The most keys a foot holds.
+#define UI_FOOT_KEYS 8u
+
+/// Where key @p index of @p keys sits on the foot of a frame @p frame_width wide and
+/// @p frame_height tall: against the foot's right, in order; all zeros for one that is not there
+/// or does not fit.
+UiRect UiFootKey(uint32_t frame_width, uint32_t frame_height, const UiKey *keys, uint32_t count,
+                 uint32_t index);
+
+/// The key under both ends of @p tap, or UINT32_MAX.
+uint32_t UiFootKeyAt(const UiTap *tap, uint32_t frame_width, uint32_t frame_height,
+                     const UiKey *keys, uint32_t count);
+
+/// The results screens' keys where @p state is, the ones UiCompose draws and UiTapStep presses.
+uint32_t UiResultsKeys(const UiRun *run, UiState state, UiKey *keys);
+
+/// The start screen's keys.
+uint32_t UiStartKeys(UiKey *keys);
+
+/// The colour the page has at @p x, @p y in the menu's look: its grid, its diagonals, its corners
+/// and its grain, which a check of what was drawn compares against.
+void UiPageColour(uint32_t x, uint32_t y, uint32_t frame_width, uint32_t frame_height,
+                  uint8_t out[4]);
+
+/// The browser: the start screen and four more tabs, walked with L and R, in which a person
+/// chooses families, suites, single cases and demos, runs them, reads the results and comes back.
+/// Like every screen here it decides no verdict; what it chooses is handed to the run as a pick
+/// (UiPick), which the report's filter and the steps follow.
+typedef enum {
+    UI_TAB_START,
+    UI_TAB_SUITES,
+    UI_TAB_DEMOS,
+    UI_TAB_RESULTS,
+    UI_TAB_OPTIONS,
+    UI_TABS,
+} UiTab;
+
+/// The name a tab's button and its title carry.
+const char *UiTabName(UiTab tab);
+
+/// A demo as the browser lists it: the words of demo.h's table, whose runs the frontend keeps.
+typedef struct {
+    const char *name;
+    const char *suite;
+    const char *description;
+    const char *track;
+} UiDemoRow;
+
+/// The most suites the browser lists, and the most demos.
+#define UI_BROWSE_SUITES 128u
+#define UI_BROWSE_DEMOS 16u
+
+/// The suites the browser lists, every one this build's screens know a family for, the judge's
+/// first: how many, and each one's name and family.
+uint32_t UiBrowseSuiteCount(void);
+const char *UiBrowseSuite(uint32_t index);
+UiFamily UiBrowseSuiteFamily(uint32_t index);
+/// The index of @p suite, or UINT32_MAX.
+uint32_t UiBrowseSuiteIndex(const char *suite);
+
+/// What the browser shows: the program, the catalogue of cases the card's last report and this
+/// session's runs gave, the demos, the last run's results, the start screen's choices.
+typedef struct {
+    const char *heading;
+    /// At the title's right: the build and the machine, as the mode file names it.
+    const char *machine;
+    /// Where the catalogue came from, a folder, or empty for none.
+    const char *catalogue_from;
+    const ReportRecord *catalogue;
+    uint32_t catalogue_count;
+    const UiDemoRow *demos;
+    uint32_t demo_count;
+    /// The last run's cases, NULL before one ran.
+    const UiRun *results;
+    const PictureRecord *(*picture)(int32_t index);
+    const UiStartInfo *start;
+    /// The seconds left before an unattended screen leaves, 0 once a press was seen; the start
+    /// tab says what then begins, the others that the program leaves.
+    uint32_t seconds_left;
+} UiBrowseInfo;
+
+/// The options a session runs with, which start as the mode file leaves them.
+typedef struct {
+    bool timing;
+    bool every_picture;
+    bool retry;
+    uint32_t frames;
+    bool music;
+    bool motion;
+    bool hud;
+} UiOptions;
+
+/// The frames a demo may run, in the order the option walks them.
+#define UI_DEMO_FRAME_CHOICES 4u
+extern const uint32_t UI_DEMO_FRAMES[UI_DEMO_FRAME_CHOICES];
+
+/// The options as @p mode leaves them: timing unless notime, every case's picture with images,
+/// retry, its frames (the nearest choice at or over them), music, motion and the HUD on.
+UiOptions UiOptionsFrom(const RunMode *mode);
+
+/// The option rows, top to bottom.
+enum {
+    UI_OPTION_TIMING,
+    UI_OPTION_PICTURES,
+    UI_OPTION_RETRY,
+    UI_OPTION_FRAMES,
+    UI_OPTION_MUSIC,
+    UI_OPTION_MOTION,
+    UI_OPTION_HUD,
+    UI_OPTIONS,
+};
+
+/// What a press asked the browser's owner to do.
+typedef enum {
+    UI_ASK_NONE,
+    /// Run what is marked, or the row under the cursor when nothing is.
+    UI_ASK_RUN,
+    /// Run the case or the demo under the cursor, alone.
+    UI_ASK_RUN_ONE,
+    /// The start tab's begin the run: the families it has on, whole.
+    UI_ASK_BEGIN,
+    /// The results' Y: the run before again.
+    UI_ASK_AGAIN,
+    UI_ASK_QUIT,
+} UiAsk;
+
+typedef struct {
+    UiTab tab;
+    /// The suites tab's level: 0 the families, 1 a family's suites, 2 a suite's cases.
+    uint32_t level;
+    /// The family the cursor is on at level 0, and the one open at 1 and 2.
+    uint32_t family;
+    /// The suite (UiBrowseSuite) the cursor is on at level 1, and the one open at 2.
+    uint32_t suite;
+    /// The case the cursor is on at level 2, counted among the suite's in the catalogue.
+    uint32_t item;
+    uint32_t demo;
+    uint32_t option;
+    UiStartState start;
+    UiState results;
+    UiOptions options;
+    uint8_t suite_marks[UI_BROWSE_SUITES / 8u];
+    uint8_t case_marks[UI_MAX_CASES / 8u];
+    uint32_t demo_marks;
+    UiAsk ask;
+    /// A press was seen, which stops the unattended countdown.
+    bool pressed;
+    bool changed;
+} UiBrowseState;
+
+/// The browser on @p tab with nothing marked, the results on the run's first failure.
+UiBrowseState UiBrowseOpen(UiTab tab, const UiStartState *start, UiOptions options,
+                           const UiBrowseInfo *info);
+
+/// One frame's buttons (UI_BUTTON_*, the start screen's in the start tab), as UiStep takes them.
+/// Clears the last ask first; the owner reads it after.
+UiBrowseState UiBrowseStep(UiBrowseState state, uint32_t buttons, uint32_t frame_index,
+                           const UiBrowseInfo *info);
+
+/// One tap: a tab, a row (twice does what A does), a key of the foot.
+UiBrowseState UiBrowseTap(UiBrowseState state, const UiTap *tap, uint32_t frame_width,
+                          uint32_t frame_height, const UiBrowseInfo *info);
+
+/// The browser's keys where @p state is.
+uint32_t UiBrowseKeys(const UiBrowseState *state, const UiBrowseInfo *info, UiKey *keys);
+
+/// Draws the browser over the whole frame.
+void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBrowseState *state);
+
+/// The catalogue's cases of suite @p suite, in its order: how many, and the index in the catalogue
+/// of the @p n th.
+uint32_t UiBrowseCases(const UiBrowseInfo *info, uint32_t suite);
+uint32_t UiBrowseCaseAt(const UiBrowseInfo *info, uint32_t suite, uint32_t n);
+
+/// What a run asked for in the browser holds, resolved: the suites whole, the single cases by
+/// their index in the catalogue, the demos.
+typedef struct {
+    uint8_t suites[UI_BROWSE_SUITES / 8u];
+    uint8_t cases[UI_MAX_CASES / 8u];
+    uint32_t demos;
+} UiPick;
+
+/// The pick of @p state's last ask: the marks for a run of them, or the row under the cursor
+/// when nothing is marked or the ask was for that row alone; the start tab's families whole for
+/// its begin. False when it holds nothing.
+bool UiBrowsePick(const UiBrowseState *state, const UiBrowseInfo *info, UiPick *pick);
+
+/// Whether a case of @p suite named @p name runs in a run of @p pick: the judge's always, every
+/// case of a suite picked whole, a case picked, and with any case of its suite picked, the
+/// suite's cases the catalogue holds no verdict tier for (its bring-up) and those it does not
+/// hold at all.
+bool UiPickHas(const UiPick *pick, const UiBrowseInfo *info, const char *suite,
+               const char *name);
+
+/// Whether any suite of @p family is in @p pick.
+bool UiPickHasFamily(const UiPick *pick, UiFamily family);
+
+/// The demo's heads-up display and its pause menu, drawn over a demo's frames while it runs on the
+/// program's screen: boxes of the menu's look, opaque, with nothing blended.
+typedef struct {
+    const char *name;
+    const char *track;
+    uint32_t frame;
+    uint32_t frames;
+    /// The last frame's time and the frames a second over the last second, both from the screen's
+    /// own presents; the last UI_HUD_TIMES frame times, oldest first, in microseconds.
+    uint32_t frame_us;
+    uint32_t fps_tenths;
+    uint32_t times[160];
+    uint32_t time_count;
+} UiHud;
+
+#define UI_HUD_TIMES 160u
+
+/// The HUD over @p frame, whose pixels are the demo's: its name and numbers at the top left, the
+/// frame times at the top right, the track and the keys along the bottom.
+void UiComposeHud(const UiFrame *frame, const UiHud *hud);
+
+/// The pause menu's rows.
+enum {
+    UI_PAUSE_RESUME,
+    UI_PAUSE_LEVEL,
+    UI_PAUSE_FRAMES,
+    UI_PAUSE_MUSIC,
+    UI_PAUSE_HUD,
+    UI_PAUSE_RESTART,
+    UI_PAUSE_BACK,
+    UI_PAUSE_ROWS,
+};
+
+typedef struct {
+    uint32_t cursor;
+    /// The demo the level row names, among the demos of its family (UiPauseInfo).
+    uint32_t level;
+    uint32_t frames;
+    bool music;
+    bool hud;
+    /// What the press asked: resume, run @p level (a restart when it is the demo running),
+    /// back to the browser.
+    bool resume;
+    bool start_level;
+    bool back;
+    bool changed;
+} UiPauseState;
+
+typedef struct {
+    const char *name;
+    /// The demos the level row walks: the running one's family of demos, and which it is.
+    const UiDemoRow *levels;
+    uint32_t level_count;
+    uint32_t running;
+    uint32_t frame;
+    uint32_t frames;
+} UiPauseInfo;
+
+UiPauseState UiPauseOpen(const UiPauseInfo *info, uint32_t frames, bool music, bool hud);
+UiPauseState UiPauseStep(UiPauseState state, uint32_t buttons, const UiPauseInfo *info);
+
+/// The pause menu over the frozen frame: every other row of it the run's page colour, a dimming
+/// with nothing blended, and the menu's box in the middle.
+void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPauseState *state);
+
+/// The rows of a frame the motion option shows at step @p step of UI_MOTION_STEPS when a screen
+/// changes: the new screen's top rows first, all of it at the last step.
+#define UI_MOTION_STEPS 6u
+uint32_t UiMotionRows(uint32_t step, uint32_t frame_height);
 
 #ifdef __cplusplus
 }

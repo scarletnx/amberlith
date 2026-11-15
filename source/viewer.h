@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "demo.h"
 #include "mode.h"
 #include "ui.h"
 
@@ -34,21 +35,63 @@ bool ViewerResumeScreen(const UiResumeInfo *info, bool *start_over);
 
 /// How the screen ended.
 typedef enum {
-    /// Quit with plus or minus, or closed by the system.
+    /// Quit with minus, or closed by the system.
     VIEWER_CLOSED,
-    /// Nothing was pressed within UI_UNATTENDED_NANOSECONDS of the report closing.
+    /// Nothing was pressed within the time it was given.
     VIEWER_UNATTENDED,
-    /// There was no screen to open, or the report was still open and it refused to.
+    /// There was no screen to open.
     VIEWER_NO_SCREEN,
+    /// A press asked for something: the state's ask says what.
+    VIEWER_ASKED,
 } ViewerEnd;
 
-/// Presents the cases the report kept, group by group, and the pictures of the drawing cases,
-/// until the viewer is quit, or until nobody has pressed anything for UI_UNATTENDED_NANOSECONDS,
-/// which is how a forgotten mode file ends.
-///
-/// Does nothing while a report is still being written: the verdicts are decided, emitted and
-/// closed before a pixel reaches a screen, so the two modes cannot report different bytes.
-ViewerEnd ViewerRun(void);
+/// The browser (UiBrowse*), its tabs, the results of the last run among them, until a press asks
+/// for a run or to leave, or, with @p unattended_ns, until nothing has been pressed that long,
+/// which is how a forgotten mode file ends. Called only with no report open: the verdicts are
+/// decided, emitted and closed before a pixel reaches a screen, so the two modes cannot report
+/// different bytes. The screen stays open for the run asked for.
+ViewerEnd ViewerBrowse(UiBrowseInfo *info, UiBrowseState *state, uint64_t unattended_ns);
+
+/// Frees what the browser's motion kept, once the browser is left for good.
+void ViewerBrowseClose(void);
+
+/// The cases the report kept, indexed for the results, with @p heading at their title's right.
+/// Read once the report is closed.
+const UiRun *ViewerIndexRun(const char *heading);
+
+/// A demo the browser runs: its HUD over the frames it shows through the screen, and the pause
+/// menu plus brings up there, both on the frames' own thread.
+typedef struct {
+    const char *name;
+    const char *track;
+    uint32_t frames;
+    bool hud;
+    bool music;
+    /// The demos the pause menu's level row walks, and which of them runs.
+    const UiDemoRow *levels;
+    uint32_t level_count;
+    uint32_t running;
+} ViewerDemo;
+
+/// What the person asked of a demo while it ran.
+typedef struct {
+    /// The level (among ViewerDemo's levels) to run next, or UINT32_MAX for none.
+    uint32_t next;
+    /// Back to the browser, with no demo after it.
+    bool back;
+    /// The options as the pause menu left them.
+    uint32_t frames;
+    bool music;
+    bool hud;
+} ViewerDemoEnd;
+
+void ViewerDemoBegin(const ViewerDemo *demo);
+ViewerDemoEnd ViewerDemoFinish(void);
+
+/// What a DemoRun's stopped and paused read (demo.h): B, or the pause menu's choices, asked it to
+/// stop; plus brought the pause menu up, and the demo shows its last frame again until it goes.
+bool ViewerDemoStopped(void);
+bool ViewerDemoPaused(void);
 
 /// The running screen (UiComposeProgress), from the run's first step to its last. It draws into
 /// the program's one framebuffer, which is open when a screen came before the run; @p open opens

@@ -104,6 +104,10 @@ static void Take(RunMode *mode, const char *word, bool cut) {
             mode->no_progress = true;
             return;
         }
+        if (strcmp(word, "browse") == 0) {
+            mode->browse = true;
+            return;
+        }
         if (strcmp(word, "hooks") == 0) {
             mode->hooks = true;
             return;
@@ -513,6 +517,10 @@ RunMode ModeAtLaunch(const char *text, bool detailed_button_held) {
     return ModeWithButton(ModeFromText(text), detailed_button_held);
 }
 
+bool ModeOpensBrowser(const RunMode *mode) {
+    return mode != NULL && mode->browse && mode->detailed;
+}
+
 bool ModeAsksPad(const RunMode *mode) {
     return mode != NULL && !mode->detailed;
 }
@@ -724,6 +732,13 @@ static void Describe(char *out, size_t out_size, const RunMode *mode, uint32_t p
     if (mode->no_progress) {
         const size_t used = strlen(out);
         snprintf(out + used, out_size - used, "; no running screen");
+    }
+    if (mode->browse) {
+        const size_t used = strlen(out);
+        snprintf(out + used, out_size - used, "%s",
+                 mode->detailed ? "; the browser, not the start screen"
+                                : "; browse refused: the run is quick, a script's, and the "
+                                  "browser opens only in a detailed one");
     }
     if (mode->label[0] != '\0') {
         const size_t used = strlen(out);

@@ -89,8 +89,24 @@ static void PlaceRun(Runner *runner, const RunMode *mode) {
     (void)JournalWriteFile(runner->last_run_path, last);
 }
 
+/// What last-run names, when it is a browser's run: read before this launch's names its own.
+static void ReadBrowserLast(Runner *runner) {
+    runner->browser_last[0] = '\0';
+    char text[RUNNER_PATH_MAX];
+    const int64_t length = JournalReadFile(runner->last_run_path, text, sizeof(text) - 1u, NULL);
+    if (length <= 0) {
+        return;
+    }
+    text[length] = '\0';
+    text[strcspn(text, "\r\n")] = '\0';
+    if (strstr(text, "/browse/") != NULL) {
+        snprintf(runner->browser_last, sizeof(runner->browser_last), "%s", text);
+    }
+}
+
 void RunnerPlan(Runner *runner, const RunMode *from_file) {
     const RunnerFrontend *const frontend = runner->frontend;
+    ReadBrowserLast(runner);
     PlaceRun(runner, from_file);
     PictureSetRoot(runner->run_directory);
     char key[JOURNAL_MODE_MAX];
@@ -294,6 +310,145 @@ static void RunTimed(const char *suite, void (*run)(void), bool timing) {
     ReportPerf(suite);
 }
 
+/// One step, journaled before and after, with its passes when it is timed.
+static void RunStep(const RunnerStep *step, uint32_t number, bool timing,
+                    RunnerProgress progress, const RunnerFrontend *frontend) {
+    JournalRecord record;
+    memset(&record, 0, sizeof(record));
+    record.kind = JOURNAL_STEP;
+    snprintf(record.suite, sizeof(record.suite), "%s", step->name);
+    record.offset = ReportOffset();
+    record.counts = ReportCounts();
+    ReportJournalWrite(&record);
+    if (progress != NULL) {
+        progress(number, step->name, step->timed && timing);
+    }
+    ReportRequireStarts(step->asks);
+    if (step->timed) {
+        RunTimed(step->name, step->run, timing);
+    } else {
+        step->run();
+    }
+    ReportRequireStarts(false);
+    if (frontend->step_done != NULL) {
+        frontend->step_done(step->name);
+    }
+    JournalSimple(JOURNAL_DONE, step->name, 0);
+}
+
+void RunnerStepsWhere(Runner *runner, bool (*runs)(const RunnerStep *step), bool timing,
+                      RunnerProgress progress) {
+    const RunnerFrontend *const frontend = runner->frontend;
+    BaselineReset();
+    uint32_t step_number = 0;
+    for (size_t i = 0; i < frontend->step_count; ++i) {
+        if (runs != NULL && runs(&frontend->steps[i])) {
+            RunStep(&frontend->steps[i], ++step_number, timing, progress, frontend);
+        }
+    }
+}
+
+typedef struct {
+    void (*run)(const void *);
+    const void *argument;
+} Extra;
+
+static const Extra *extra;
+
+static void RunExtra(void) {
+    extra->run(extra->argument);
+}
+
+void RunnerRunExtra(Runner *runner, uint32_t number, const char *name, void (*run)(const void *),
+                    const void *argument, RunnerProgress progress) {
+    const Extra that = { run, argument };
+    extra = &that;
+    const RunnerStep step = { name, RunExtra, 0u, false, true };
+    RunStep(&step, number, false, progress, runner->frontend);
+    extra = NULL;
+}
+
+uint32_t RunnerPlanBrowser(Runner *runner, const RunMode *mode) {
+    char folder[MODE_FOLDER_MAX + 1u];
+    if (ModeRunFolder(folder, sizeof(folder), runner->frontend->hash, mode) == 0u) {
+        snprintf(folder, sizeof(folder), "unknown");
+    }
+    // Room after it for a run's number, so every path under it fits RUNNER_PATH_MAX.
+    char base[RUNNER_PATH_MAX - 8u];
+    const int wrote = snprintf(base, sizeof(base), "%s/%s/browse", runner->runs_directory, folder);
+    if (wrote < 0 || (size_t)wrote >= sizeof(base)) {
+        return 0u;
+    }
+    mkdir(runner->runs_directory, 0777);
+    char launch[RUNNER_PATH_MAX];
+    snprintf(launch, sizeof(launch), "%s/%s", runner->runs_directory, folder);
+    mkdir(launch, 0777);
+    mkdir(base, 0777);
+    // The first number with no folder yet, so a run never writes over one before it.
+    uint32_t number = 0;
+    for (uint32_t n = 1; n <= RUNNER_BROWSER_RUNS_MAX && number == 0u; ++n) {
+        char path[RUNNER_PATH_MAX];
+        snprintf(path, sizeof(path), "%s/%u", base, (unsigned)n);
+        struct stat about;
+        if (stat(path, &about) != 0) {
+            number = n;
+        }
+    }
+    if (number == 0u) {
+        return 0u;
+    }
+    snprintf(runner->run_directory, sizeof(runner->run_directory), "%s/%u", base,
+             (unsigned)number);
+    snprintf(runner->report_path, sizeof(runner->report_path), "%s/report.jsonl",
+             runner->run_directory);
+    snprintf(runner->journal_path, sizeof(runner->journal_path), "%s/%s", runner->run_directory,
+             JOURNAL_FILE_NAME);
+    mkdir(runner->run_directory, 0777);
+    char last[RUNNER_PATH_MAX];
+    snprintf(last, sizeof(last), "runs/%s/browse/%u\n", folder, (unsigned)number);
+    (void)JournalWriteFile(runner->last_run_path, last);
+    PictureSetRoot(runner->run_directory);
+    // The crash list as the card has it now: a run of this session may have added to it.
+    CrashListInit(&runner->crashes);
+    {
+        static char text[CRASH_LIST_MAX * (JOURNAL_SUITE_MAX + JOURNAL_NAME_MAX + 2u) + 1024u];
+        const int64_t length = JournalReadFile(runner->crash_list_path, text, sizeof(text), NULL);
+        if (length > 0) {
+            CrashListParse(&runner->crashes, text, (size_t)length);
+        }
+    }
+    JournalStateInit(&runner->journal);
+    memset(&runner->plan, 0, sizeof(runner->plan));
+    runner->plan.start = JOURNAL_FRESH;
+    runner->plan.launch = 1u;
+    runner->plan.why_new = JOURNAL_NEW_NO_JOURNAL;
+    return number;
+}
+
+void RunnerAdoptBrowserCrash(Runner *runner) {
+    if (runner->browser_last[0] == '\0') {
+        return;
+    }
+    char path[RUNNER_PATH_MAX + RUNNER_ROOT_MAX + 16u];
+    snprintf(path, sizeof(path), "%s/%s/%s", runner->frontend->root, runner->browser_last,
+             JOURNAL_FILE_NAME);
+    static JournalState journal;
+    JournalStateInit(&journal);
+    if (!JournalReadPath(&journal, path)) {
+        return;
+    }
+    // A case begun and never ended in a run that never finished: the program ended inside it.
+    // A runner's time limit is not the case's, and leaves the list alone, as in any run.
+    if (journal.finished || !journal.in_case || journal.timed_out) {
+        return;
+    }
+    const bool listed = ReportCrashListAdd(journal.started.suite, journal.started.name);
+    ReportNote("browser: the program ended inside %s case \"%s\" in the browser's run %s, so it "
+               "goes on the crash list%s",
+               journal.started.suite, journal.started.name, runner->browser_last,
+               listed ? "" : " (it was there already, or the list could not be written)");
+}
+
 void RunnerSteps(Runner *runner, uint32_t families, bool timing, RunnerProgress progress) {
     const RunnerFrontend *const frontend = runner->frontend;
     const JournalPlan *const plan = &runner->plan;
@@ -312,27 +467,7 @@ void RunnerSteps(Runner *runner, uint32_t families, bool timing, RunnerProgress 
               strcmp(journal->step.suite, step->name) == 0))) {
             continue;
         }
-        JournalRecord record;
-        memset(&record, 0, sizeof(record));
-        record.kind = JOURNAL_STEP;
-        snprintf(record.suite, sizeof(record.suite), "%s", step->name);
-        record.offset = ReportOffset();
-        record.counts = ReportCounts();
-        ReportJournalWrite(&record);
-        if (progress != NULL) {
-            progress(step_number, step->name, step->timed && timing);
-        }
-        ReportRequireStarts(step->asks);
-        if (step->timed) {
-            RunTimed(step->name, step->run, timing);
-        } else {
-            step->run();
-        }
-        ReportRequireStarts(false);
-        if (frontend->step_done != NULL) {
-            frontend->step_done(step->name);
-        }
-        JournalSimple(JOURNAL_DONE, step->name, 0);
+        RunStep(step, step_number, timing, progress, frontend);
     }
 }
 

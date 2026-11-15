@@ -25,11 +25,10 @@ static const char *const SUITE = "support";
 
 // The screen's own colours, repeated here so a case that looks for red is looking for the red
 // the layout promised rather than whatever it happens to use today. The menus' (the start, the
-// resume and the results screens) first: the page, its grid, the ink a row the cursor is on is
-// inverted on, the soft colour the keys and the touch bar's boxes are filled with, and the four
-// a result is said in.
+// resume and the results screens) first: the page (its grid and grain read as page by Ground),
+// the ink a row the cursor is on is inverted on, the soft colour the touch bar's boxes are filled
+// with, and the four a result is said in.
 static const uint8_t BACKGROUND[3] = { 0xDA, 0xD6, 0xBE };
-static const uint8_t GRID[3] = { 0xCF, 0xCB, 0xB4 };
 static const uint8_t INK[3] = { 0x45, 0x41, 0x3A };
 static const uint8_t SOFT[3] = { 0x8A, 0x86, 0x76 };
 static const uint8_t PASSED[3] = { 0x4A, 0x70, 0x40 };
@@ -37,10 +36,9 @@ static const uint8_t FAILED[3] = { 0xA5, 0x47, 0x3C };
 static const uint8_t SKIPPED[3] = { 0x8A, 0x6A, 0x2A };
 static const uint8_t CRASHED[3] = { 0x6E, 0x55, 0x85 };
 
-// And the run's (the running, listening, pad and touch screens): the page, its scan lines, the
-// ink, the soft and the dim colours, and three of a result's.
+// And the run's (the running, listening, pad and touch screens): the page, the ink, the soft and
+// the dim colours, and three of a result's.
 static const uint8_t RUN_PAGE[3] = { 0x14, 0x14, 0x16 };
-static const uint8_t RUN_LINES[3] = { 0x21, 0x21, 0x23 };
 static const uint8_t RUN_INK[3] = { 0xE6, 0xE4, 0xDC };
 static const uint8_t RUN_SOFT[3] = { 0x8E, 0x8C, 0x86 };
 static const uint8_t RUN_DIM[3] = { 0x3E, 0x3E, 0x40 };
@@ -51,9 +49,18 @@ static const uint8_t RUN_SKIPPED[3] = { 0xD9, 0xB2, 0x4A };
 // Characters across the frame inside its margins, in the 8 by 16 font: what a detail wraps at.
 #define COLUMNS ((FRAME_WIDTH - 64u) / 8u)
 
-// The bottom of the frame: the countdown's row, then the band of the keys.
+// The bottom of the frame: the countdown's row, then the band of the keys, on the screens that
+// keep the font's own size (resume, pad, touch).
 #define COUNTDOWN_TOP (FRAME_HEIGHT - UI_COUNTDOWN_ROW - UI_FOOT_BAND)
 #define BAND_TOP (FRAME_HEIGHT - UI_FOOT_BAND)
+
+// The foot of the screens in the launcher's look: the row of its sentence, which the countdown
+// takes, and the row of its keys under it.
+#define FOOT_TOP UI_FOOT_TOP(FRAME_HEIGHT)
+#define TIP_TOP (FOOT_TOP + 4u)
+#define TIP_BOTTOM (FOOT_TOP + 8u + UI_CELL_HEIGHT)
+#define KEYS_BOTTOM (FOOT_TOP + UI_FOOT_HEIGHT)
+#define BODY_BOTTOM UI_BODY_BOTTOM(FRAME_HEIGHT)
 
 // A row the cursor is on is a box of ink the width of the frame; a row it is not on has a few
 // hundred pixels of ink in its words. Halfway between, to tell the two apart.
@@ -337,9 +344,24 @@ static uint32_t CountColour(const UiFrame *frame, uint32_t x0, uint32_t y0, uint
 }
 
 /// The page under everything, its faint lines included, on either set of colours.
+/// Whether each channel of @p pixel is from @p below under @p colour's to @p above over it.
+static bool Within(const uint8_t *pixel, const uint8_t colour[3], int below, int above) {
+    for (int k = 0; k < 3; ++k) {
+        const int difference = (int)pixel[k] - (int)colour[k];
+        if (difference < -below || difference > above) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// The page under everything, as either look draws it: the menu's paper with its grid, its
+/// diagonals and its corners darker than its colour by 32 at most and its grain 3 over it; the
+/// run's dark page with its scan lines and diagonals 30 over it at most and its grain and
+/// corners 4 under it. Every word, rule and box is further: the menu's dim colour 34 under the
+/// paper, the run's ink and dim colour well over its page.
 static bool Ground(const uint8_t *pixel) {
-    return memcmp(pixel, BACKGROUND, 3u) == 0 || memcmp(pixel, GRID, 3u) == 0 ||
-           memcmp(pixel, RUN_PAGE, 3u) == 0 || memcmp(pixel, RUN_LINES, 3u) == 0;
+    return Within(pixel, BACKGROUND, 32, 3) || Within(pixel, RUN_PAGE, 4, 30);
 }
 
 /// Pixels other than the page inside a rectangle.
@@ -664,7 +686,7 @@ static void CheckOverflow(Fixture *f) {
     const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
     UiCompose(&frame, &f->small, UiStart(&f->small), NULL);
     const uint32_t said =
-        CountColour(&frame, 0, UI_LIST_TOP - UI_ROW_HEIGHT, FRAME_WIDTH, UI_LIST_TOP, SKIPPED);
+        CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
     const bool counted = f->small.group_count == UI_MAX_GROUPS && f->small.unplaced == 8u;
 
     // A list longer than the screen says so at its right, above it and below it, every pixel of
@@ -702,11 +724,11 @@ static void CheckOverflow(Fixture *f) {
     UiRunIndex(&f->small, f->records, 3, 9);
     UiCompose(&frame, &f->small, UiStart(&f->small), NULL);
     const uint32_t short_said =
-        CountColour(&frame, 0, UI_LIST_TOP - UI_ROW_HEIGHT, FRAME_WIDTH, UI_LIST_TOP, SKIPPED);
+        CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
     UiRunIndex(&f->small, f->records, 3, 3);
     UiCompose(&frame, &f->small, UiStart(&f->small), NULL);
     const uint32_t quiet =
-        CountColour(&frame, 0, UI_LIST_TOP - UI_ROW_HEIGHT, FRAME_WIDTH, UI_LIST_TOP, SKIPPED);
+        CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
     CHECK_TRUE(SUITE, "cases the screens could not hold are counted and the overview says so",
                CHECK_NONE,
                counted && whole_run && said > 50u && short_said > 50u && quiet == 0u,
@@ -1050,32 +1072,38 @@ static void CheckScreens(Fixture *f) {
 
     // The overview: red in a group's row exactly where the group failed, amber exactly where it
     // skipped, and the cursor's band on the one group it is on.
+    // Each group with the cursor on it, the list scrolled to it, and its neighbours above and
+    // below: the lists hold fewer rows than the run has groups.
     const UiState start = UiStart(run);
-    UiCompose(&frame, run, start, NULL);
     const uint32_t rows = UiListRows(UI_LEVEL_OVERVIEW, FRAME_HEIGHT);
     const uint32_t total = UiOverviewRow(run, run->group_count - 1u) + 1u;
-    const uint32_t first = UiListFirst(UiOverviewRow(run, start.group), total, rows);
     uint32_t wrong_rows = 0;
     uint32_t first_wrong = UINT32_MAX;
-    for (uint32_t g = 0; g < run->group_count; ++g) {
-        const uint32_t row = UiOverviewRow(run, g);
-        if (row < first || row >= first + rows) {
-            ++wrong_rows;
-            continue;
-        }
-        const uint32_t y = UI_LIST_TOP + (row - first) * UI_ROW_HEIGHT;
-        const uint32_t y1 = y + UI_ROW_HEIGHT;
-        const bool red = CountColour(&frame, 0, y, FRAME_WIDTH, y1, FAILED) > 0u;
-        const bool amber = CountColour(&frame, 0, y, FRAME_WIDTH, y1, SKIPPED) > 0u;
-        const bool band = CountColour(&frame, 0, y, FRAME_WIDTH, y1, INK) > CURSOR_INK;
-        if (red != (run->groups[g].failed > 0u) || amber != (run->groups[g].skipped > 0u) ||
-            band != (g == start.group)) {
-            ++wrong_rows;
-            if (first_wrong == UINT32_MAX) {
-                first_wrong = g;
+    for (uint32_t on = 0; on < run->group_count; ++on) {
+        UiState at = start;
+        at.group = on;
+        UiCompose(&frame, run, at, NULL);
+        const uint32_t first = UiListFirst(UiOverviewRow(run, on), total, rows);
+        for (uint32_t g = on > 0u ? on - 1u : 0u; g <= on + 1u && g < run->group_count; ++g) {
+            const uint32_t row = UiOverviewRow(run, g);
+            if (row < first || row >= first + rows) {
+                continue;
+            }
+            const uint32_t y = UI_LIST_TOP + (row - first) * UI_ROW_HEIGHT;
+            const uint32_t y1 = y + UI_ROW_HEIGHT;
+            const bool red = CountColour(&frame, 0, y, FRAME_WIDTH, y1, FAILED) > 0u;
+            const bool amber = CountColour(&frame, 0, y, FRAME_WIDTH, y1, SKIPPED) > 0u;
+            const bool band = CountColour(&frame, 0, y, FRAME_WIDTH, y1, INK) > CURSOR_INK;
+            if (red != (run->groups[g].failed > 0u) ||
+                amber != (run->groups[g].skipped > 0u) || band != (g == on)) {
+                ++wrong_rows;
+                if (first_wrong == UINT32_MAX) {
+                    first_wrong = g;
+                }
             }
         }
     }
+    UiCompose(&frame, run, start, NULL);
     CHECK_TRUE(SUITE, "the overview marks failed groups red, skipped ones amber, and the cursor",
                CHECK_NONE, wrong_rows == 0u && total == run->group_count + 4u,
                "%u of %u rows wrong, the first %s; %u rows in all",
@@ -1120,7 +1148,7 @@ static void CheckScreens(Fixture *f) {
     const uint32_t band_at_end =
         CountColour(&frame, 0, last_row, FRAME_WIDTH, last_row + UI_ROW_HEIGHT, INK);
     CHECK_TRUE(SUITE, "a long group scrolls to keep the selected case on screen", CHECK_NONE,
-               group_rows >= 20u && UiListFirst(0, 118, 23) == 0u &&
+               group_rows >= 12u && UiListFirst(0, 118, 23) == 0u &&
                    UiListFirst(117, 118, 23) == 95u && UiListFirst(50, 118, 23) == 39u &&
                    UiListFirst(5, 10, 23) == 0u && band_at_end > CURSOR_INK,
                "%u rows; first rows %u, %u, %u; %u pixels of the cursor on the last row",
@@ -1158,7 +1186,8 @@ static void CheckScreens(Fixture *f) {
     UiState page = in_ssl;
     page.level = UI_LEVEL_CASE;
     UiCompose(&frame, run, page, NULL);
-    const uint32_t page_lines = TextLines(&frame, 36u, BAND_TOP);
+    const uint32_t page_lines =
+        TextLines(&frame, UI_BODY_TOP + UI_BUTTON_HEIGHT + 4u, BODY_BOTTOM);
     const uint32_t wanted = UiWrappedLines(failing->name, COLUMNS) + 1u +
                             UiWrappedLines(long_detail, COLUMNS);
     // The viewer asks the same function which picture to hand over, and it says none here.
@@ -1176,8 +1205,10 @@ static void CheckScreens(Fixture *f) {
     pictures.group = GroupNamed(run, "intmath");
     pictures.index = CaseNamed(run, pictures.group, FAILS_WITH_PICTURE);
     UiCompose(&frame, run, pictures, &f->picture);
-    const uint32_t scale = (FRAME_WIDTH - 4u * 32u) / 3u / PICTURE_SIDE;
-    const uint32_t diff_x = 32u + 2u * (PICTURE_SIDE * scale + 32u);
+    const UiRect judged = UiPanelRect(FRAME_WIDTH, FRAME_HEIGHT, PICTURE_SIDE, PICTURE_SIDE,
+                                      UI_VIEW_ALL, 2u);
+    const uint32_t scale = judged.width / PICTURE_SIDE;
+    const uint32_t diff_x = judged.x;
     const uint8_t *const bad =
         UiPixel(&frame, diff_x + scale / 2u, UI_PANEL_TOP + WRONG_FROM_ROW * scale + scale / 2u);
     const uint8_t *const good = UiPixel(&frame, diff_x + scale / 2u, UI_PANEL_TOP + scale / 2u);
@@ -1199,8 +1230,8 @@ static void CheckScreens(Fixture *f) {
                good != NULL ? good[0] : 0, good != NULL ? good[1] : 0,
                good != NULL ? good[2] : 0, (int)opened, (int)in_list);
 
-    // Every screen leaves the countdown's rows alone and says what the buttons do on its last
-    // line; the countdown draws over nothing, and nothing draws over it.
+    // Every screen names its keys on its foot, each inverted where a tap on it does what it
+    // says, and the countdown takes the foot's first row and nothing else.
     const struct {
         UiLevel level;
         uint32_t group;
@@ -1214,9 +1245,9 @@ static void CheckScreens(Fixture *f) {
         { UI_LEVEL_CASE, pictures.group, FAILS_WITH_PICTURE, UI_VIEW_ALL },
         { UI_LEVEL_CASE, pictures.group, FAILS_WITH_PICTURE, UI_VIEW_DIFF },
     };
-    uint32_t crowded = 0;
     uint32_t unlabelled = 0;
-    uint32_t barless = 0;
+    uint32_t keyless = 0;
+    uint32_t crowded = 0;
     for (size_t i = 0; i < sizeof(SCREENS) / sizeof(SCREENS[0]); ++i) {
         UiState at = UiStart(run);
         at.level = SCREENS[i].level;
@@ -1225,23 +1256,34 @@ static void CheckScreens(Fixture *f) {
                        ? CaseNamed(run, SCREENS[i].group, SCREENS[i].index_name)
                        : 0u;
         at.view = SCREENS[i].view;
-        UiCompose(&frame, run, at, UiOpenPicture(run, at) >= 0 ? &f->picture : NULL);
-        // Left of the touch bar, which sits on the band at the right. The keys' words are in
-        // the page's colour on the band.
-        const uint32_t right = UiFootRight(FRAME_WIDTH);
-        crowded += CountLitIn(&frame, 0, COUNTDOWN_TOP, right, BAND_TOP) > 0u;
-        unlabelled +=
-            CountColour(&frame, 0, BAND_TOP, right, FRAME_HEIGHT, BACKGROUND) > 500u ? 0u : 1u;
-        const UiRect box = UiTouchBox(FRAME_WIDTH, FRAME_HEIGHT, 1u, 0u);
-        barless += CountColour(&frame, box.x + 1u, box.y + 1u, box.x + box.width - 1u,
-                               box.y + box.height - 1u, SOFT) > 100u
-                       ? 0u
-                       : 1u;
+        const PictureRecord *const shown = UiOpenPicture(run, at) >= 0 ? &f->picture : NULL;
+        UiCompose(&frame, run, at, shown);
+        UiKey keys[UI_FOOT_KEYS];
+        const uint32_t count = UiResultsKeys(run, at, keys);
+        uint32_t drawn = 0;
+        for (uint32_t k = 0; k < count; ++k) {
+            const UiRect box = UiFootKey(FRAME_WIDTH, FRAME_HEIGHT, keys, count, k);
+            drawn += box.width > 0u && CountColour(&frame, box.x, box.y, box.x + box.width,
+                                                   box.y + box.height, INK) > 100u
+                         ? 1u
+                         : 0u;
+        }
+        keyless += count == 0u || drawn != count ? 1u : 0u;
+        // The countdown: the foot's first row before and after it, and the rest of the frame
+        // the same.
+        const uint32_t before = CountLitIn(&frame, 0, 0, FRAME_WIDTH, TIP_TOP);
+        UiComposeCountdown(&frame, 7u);
+        unlabelled += CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED) > 500u
+                          ? 0u
+                          : 1u;
+        crowded += CountLitIn(&frame, 0, 0, FRAME_WIDTH, TIP_TOP) != before ? 1u : 0u;
     }
-    CHECK_TRUE(SUITE, "every screen leaves the countdown its rows and names its buttons",
-               CHECK_NONE, crowded == 0u && unlabelled == 0u && barless == 0u,
-               "%u screens drew into the countdown's rows, %u had no button line, %u no touch bar",
-               (unsigned)crowded, (unsigned)unlabelled, (unsigned)barless);
+    CHECK_TRUE(SUITE,
+               "every screen names its keys on its foot, and the countdown takes the foot's first "
+               "row",
+               CHECK_NONE, keyless == 0u && unlabelled == 0u && crowded == 0u,
+               "%u screens with a key not drawn, %u with no countdown, %u where it drew elsewhere",
+               (unsigned)keyless, (unsigned)unlabelled, (unsigned)crowded);
 }
 
 /// The corners a real run does not reach: a frame smaller than the console's, a group of hundreds
@@ -1346,18 +1388,21 @@ static void CheckStartNvn(Fixture *f) {
     info.heading = "edenprobe 0.2.0 (test)";
     info.families_present = MODE_FAMILIES_PRESENT;
     const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
-    const uint32_t top = UiStartNvnTop();
-    const uint32_t bottom = top + UI_ROW_HEIGHT;
+    const UiRect box = UiStartNvnBox(FRAME_WIDTH);
+    const uint32_t top = box.y;
+    const uint32_t bottom = box.y + box.height;
+    const uint32_t left = box.x;
+    const uint32_t right = box.x + box.width;
     const RunMode named = ModeFromText("nvn");
     const RunMode all = ModeFromText("all");
     const UiStartState state = UiStartOpen(&named, MODE_FAMILIES_PRESENT);
     UiComposeStart(&frame, &info, state, 0u);
-    const uint32_t quiet = CountLitIn(&frame, 0, top, FRAME_WIDTH, bottom);
+    const uint32_t quiet = CountLitIn(&frame, left, top, right, bottom);
     const uint32_t outside_quiet =
         CountLit(&frame, 0, top) + CountLit(&frame, bottom, FRAME_HEIGHT);
     info.nvn_named = (ModeFamiliesNamed(&named, MODE_FAMILIES_PRESENT) & MODE_FAMILY_NVN) != 0u;
     UiComposeStart(&frame, &info, state, 0u);
-    const uint32_t said = CountColour(&frame, 0, top, FRAME_WIDTH, bottom, SKIPPED);
+    const uint32_t said = CountColour(&frame, left, top, right, bottom, SKIPPED);
     const uint32_t outside_said =
         CountLit(&frame, 0, top) + CountLit(&frame, bottom, FRAME_HEIGHT);
     DumpFrame(&frame, "8-start-nvn");
@@ -1368,7 +1413,7 @@ static void CheckStartNvn(Fixture *f) {
                CHECK_NONE,
                info.nvn_named && quiet == 0u && said == GlyphPixels(UI_START_NVN_SAID) &&
                    outside_said == outside_quiet && all_leaves_it &&
-                   top > UiStartRowTop(UI_START_ROWS),
+                   left > UiStartRowTop(0u),
                "named %d; the line's band lit %u without nvn, %u of %u in the warning colour with "
                "it; elsewhere %u and %u; all names nvn %d",
                (int)info.nvn_named, (unsigned)quiet, (unsigned)said,
@@ -1470,16 +1515,13 @@ static void CheckStartScreen(Fixture *f) {
     UiComposeStart(&frame, &info, StartFrom(NULL), 7u);
     const uint32_t quiet = CountColour(&frame, 0, top, FRAME_WIDTH, bottom, FAILED);
     const uint32_t above_quiet = CountLit(&frame, 0, top);
-    const uint32_t counting =
-        CountColour(&frame, 0, COUNTDOWN_TOP, FRAME_WIDTH, BAND_TOP, FAILED);
-    const uint32_t buttons =
-        CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, BACKGROUND);
+    const uint32_t counting = CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
+    const uint32_t buttons = CountColour(&frame, 0, TIP_BOTTOM, FRAME_WIDTH, KEYS_BOTTOM, INK);
     UiComposeStart(&frame, &info, StartFrom("fatal"), 7u);
     const uint32_t fatal_quiet = CountColour(&frame, 0, top, FRAME_WIDTH, bottom, FAILED);
     UiComposeStart(&frame, &info, StartFrom("retry"), 0u);
     const uint32_t retrying = CountColour(&frame, 0, top, FRAME_WIDTH, bottom, FAILED);
-    const uint32_t no_count =
-        CountColour(&frame, 0, COUNTDOWN_TOP, FRAME_WIDTH, BAND_TOP, FAILED);
+    const uint32_t no_count = CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
     CHECK_TRUE(SUITE, "the start screen warns exactly while the crash list's choice is on",
                CHECK_NONE,
                quiet == 0u && fatal_quiet == 0u && retrying > 1000u && above_quiet > 1000u &&
@@ -1589,35 +1631,42 @@ static void CheckStartMenu(Fixture *f) {
     // The frame: the cursor's band on its row and on no other, a family's box in the colour of a
     // pass while it is on, and no warning for a crash list with nothing on it.
     const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
-    const uint32_t graphics_row = UiStartRowTop(UI_START_ROW_GRAPHICS);
-    const uint32_t box_right = 32u + 9u * 8u;
+    const UiRect graphics = UiStartRowBox(UI_START_ROW_GRAPHICS);
+    const uint32_t graphics_row = graphics.y;
     UiComposeStart(&frame, &info, plain, 0u);
     const uint32_t band_begin = CountColour(&frame, 0, UiStartRowTop(UI_START_ROW_BEGIN),
                                             FRAME_WIDTH, graphics_row, INK);
     uint32_t band_elsewhere = 0;
     for (uint32_t row = UI_START_ROW_GRAPHICS; row <= UI_START_ROW_SAVE; ++row) {
-        band_elsewhere += CountColour(&frame, 0, UiStartRowTop(row), FRAME_WIDTH,
-                                      UiStartRowTop(row) + UI_ROW_HEIGHT, INK) > CURSOR_INK;
+        const UiRect box = UiStartRowBox(row);
+        band_elsewhere += CountColour(&frame, box.x, box.y, box.x + box.width,
+                                      box.y + box.height, INK) > CURSOR_INK;
     }
-    const uint32_t box_on = CountColour(&frame, 0, graphics_row, box_right,
-                                        graphics_row + UI_ROW_HEIGHT, PASSED);
+    // On is said at the row's right in the colour of a pass.
+    const uint32_t box_on = CountColour(&frame, graphics.x, graphics.y,
+                                        graphics.x + graphics.width,
+                                        graphics.y + graphics.height, PASSED);
     // Each row's icon, two cells in from the margin: in the page's colour on the cursor's row,
     // in the ink on a row that can be turned on, and in the soft colour on one that cannot, the
     // crash list with nothing on it.
     uint32_t iconless = 0;
     for (uint32_t row = 0; row < UI_START_ROWS; ++row) {
-        const uint32_t y = UiStartRowTop(row);
+        const UiRect box = UiStartRowBox(row);
+        const uint32_t x = box.x + 2u * UI_CELL_WIDTH;
+        const uint32_t y = box.y + (box.height - 16u) / 2u;
         const uint8_t *const colour = row == UI_START_ROW_BEGIN   ? BACKGROUND
                                       : row == UI_START_ROW_RETRY ? SOFT
                                                                   : INK;
-        iconless += CountColour(&frame, 48u, y + 2u, 64u, y + 18u, colour) < 12u ? 1u : 0u;
+        iconless += CountColour(&frame, x, y, x + 16u, y + 16u, colour) < 12u ? 1u : 0u;
     }
     DumpFrame(&frame, "8-start-menu");
     UiComposeStart(&frame, &info, no_graphics, 0u);
-    const uint32_t band_moved = CountColour(&frame, 0, graphics_row, FRAME_WIDTH,
-                                            graphics_row + UI_ROW_HEIGHT, INK);
-    const uint32_t box_off = CountColour(&frame, 0, graphics_row, box_right,
-                                         graphics_row + UI_ROW_HEIGHT, PASSED);
+    const uint32_t band_moved =
+        CountColour(&frame, graphics.x, graphics.y, graphics.x + graphics.width,
+                    graphics.y + graphics.height, INK);
+    const uint32_t box_off = CountColour(&frame, graphics.x, graphics.y,
+                                         graphics.x + graphics.width,
+                                         graphics.y + graphics.height, PASSED);
     const uint32_t top = UiStartWarningTop(FRAME_HEIGHT);
     const uint32_t bottom = top + UI_START_WARNING_LINES * UI_ROW_HEIGHT + 16u;
     // The file asked for retry and nothing is on the list: nothing to warn about.
@@ -1626,8 +1675,7 @@ static void CheckStartMenu(Fixture *f) {
     const uint32_t warned_for_nothing = CountColour(&frame, 0, top, FRAME_WIDTH, bottom, FAILED);
     const bool drawn = band_begin > CURSOR_INK && band_elsewhere == 0u && box_on > 50u &&
                        band_moved > CURSOR_INK && box_off == 0u && unlisted.retry &&
-                       warned_for_nothing == 0u && iconless == 0u &&
-                       UiStartRowTop(UI_START_ROWS) + UI_ROW_HEIGHT < top;
+                       warned_for_nothing == 0u && iconless == 0u;
     CHECK_TRUE(SUITE, "the start screen draws the cursor's row, each box and icon, and no warning "
                       "for an empty crash list",
                CHECK_NONE, drawn,
@@ -1841,8 +1889,8 @@ static void CheckResumeScreen(Fixture *f) {
     const uint32_t counting =
         CountColour(&frame, 0, COUNTDOWN_TOP, FRAME_WIDTH, BAND_TOP, FAILED);
     const uint32_t heading = CountLit(&frame, 8u, 24u);
-    const uint32_t where = TextLines(&frame, UI_LIST_TOP, UI_LIST_TOP + 3u * UI_ROW_HEIGHT);
-    const uint32_t crashed = CountColour(&frame, 0, UI_LIST_TOP, FRAME_WIDTH, row0, CRASHED);
+    const uint32_t where = TextLines(&frame, UI_SMALL_LIST_TOP, UI_SMALL_LIST_TOP + 3u * UI_ROW_HEIGHT);
+    const uint32_t crashed = CountColour(&frame, 0, UI_SMALL_LIST_TOP, FRAME_WIDTH, row0, CRASHED);
     const uint32_t buttons =
         CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, BACKGROUND);
     DumpFrame(&frame, "10-resume");
@@ -1962,8 +2010,9 @@ static void CheckProgress(Fixture *f) {
     const uint32_t done = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_INK);
     const uint32_t under_way = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_SOFT);
     const uint32_t header = CountLit(&frame, 8u, 24u);
-    const uint32_t counted = CountColour(&frame, 0, 30u, FRAME_WIDTH, 46u, RUN_FAILED);
-    const uint32_t named = TextLines(&frame, bar_end + 16u, bar_end + 16u + 4u * UI_ROW_HEIGHT);
+    const uint32_t counted =
+        CountColour(&frame, 0, UI_BODY_TOP, FRAME_WIDTH, BODY_BOTTOM, RUN_FAILED);
+    const uint32_t named = TextLines(&frame, bar_end + 14u, bar_end + 14u + 4u * UI_CELL_HEIGHT);
     const uint32_t footer =
         CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, RUN_PAGE);
     DumpFrame(&frame, "11-running");
@@ -1979,8 +2028,9 @@ static void CheckProgress(Fixture *f) {
     progress.pass = 3u;
     progress.passes = 10u;
     UiComposeProgress(&frame, &progress);
-    const uint32_t unnamed = TextLines(&frame, bar_end + 16u + UI_ROW_HEIGHT,
-                                       bar_end + 16u + 4u * UI_ROW_HEIGHT);
+    // Under the pass line, where the case and its name go.
+    const uint32_t unnamed = TextLines(&frame, bar_end + 14u + UI_CELL_HEIGHT,
+                                       bar_end + 14u + 4u * UI_CELL_HEIGHT);
     const uint32_t pass_line = CountLit(&frame, bar_end + 16u, bar_end + 16u + 16u);
     const UiFrame small = { f->pixels, 24u, 100u, 24u * 4u };
     const size_t used = (size_t)small.pitch * small.height;
@@ -2023,7 +2073,8 @@ static void CheckCrashed(Fixture *f) {
     UiCompose(&frame, &f->small, start, NULL);
     const uint32_t row = UI_LIST_TOP + UiOverviewRow(&f->small, 0) * UI_ROW_HEIGHT;
     const uint32_t in_row = CountColour(&frame, 0, row, FRAME_WIDTH, row + UI_ROW_HEIGHT, CRASHED);
-    const uint32_t heading = CountColour(&frame, 0, 8, FRAME_WIDTH, 26, CRASHED);
+    const uint32_t heading = CountColour(&frame, 0, UI_BODY_TOP, FRAME_WIDTH,
+                                         UI_BODY_TOP + UI_BUTTON_HEIGHT, CRASHED);
     UiState in_group = start;
     in_group.level = UI_LEVEL_GROUP;
     in_group.group = 0;
@@ -2178,7 +2229,9 @@ static void CheckListen(Fixture *f) {
     for (size_t i = 0; i < sizeof(SHOWN) / sizeof(SHOWN[0]); ++i) {
         UiComposeListen(&frame, SHOWN[i], i == 3u ? 0.15 : 0.0, 0.0);
         hashes[i] = HashRows(&frame, 32u, 200u);
-        crowded += CountLit(&frame, COUNTDOWN_TOP, BAND_TOP) > 0u ? 1u : 0u;
+        // Its keys on the foot's second row, inverted in the run's ink.
+        crowded +=
+            CountColour(&frame, 0, TIP_BOTTOM, FRAME_WIDTH, KEYS_BOTTOM, RUN_INK) > 100u ? 0u : 1u;
         unlabelled +=
             CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, RUN_PAGE) > 500u ? 0u
                                                                                          : 1u;
@@ -2192,7 +2245,7 @@ static void CheckListen(Fixture *f) {
     UiComposeListen(&frame, UI_LISTEN_A1, 0.0, 0.0);
     DumpFrame(&frame, "12-listening");
     const uint32_t listen_header = CountLit(&frame, 8u, 24u);
-    const uint32_t listen_second = CountLit(&frame, 30u, 46u);
+    const uint32_t listen_second = CountLit(&frame, UI_TITLE_TOP, UI_TITLE_TOP + 64u);
     uint32_t same = 0;
     for (size_t i = 0; i < 6u; ++i) {
         for (size_t j = i + 1u; j < 6u; ++j) {
@@ -2218,7 +2271,7 @@ static void CheckListen(Fixture *f) {
     UiComposeListen(&frame, UI_LISTEN_A1, 0.0, 0.0);
     const uint32_t done = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_INK);
     const uint32_t playing = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_SOFT);
-    const uint32_t step_line = CountLit(&frame, UI_LIST_TOP, UI_LIST_TOP + 16u);
+    const uint32_t step_line = CountLit(&frame, UI_BODY_TOP + 2u, UI_BODY_TOP + 2u + UI_CELL_HEIGHT);
     UiComposeListen(&frame, UI_LISTEN_OPENING, 0.0, 0.0);
     const uint32_t opening = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_INK);
     UiComposeListen(&frame, UI_LISTEN_CLOSING, 0.0, 0.0);
@@ -2237,11 +2290,11 @@ static void CheckListen(Fixture *f) {
                (unsigned)((width * (n - 1u) / n) * UI_PROGRESS_BAR_HEIGHT),
                (unsigned)step_line);
 
-    CHECK_TRUE(SUITE, "the listening screen leaves the countdown its rows and names its buttons",
+    CHECK_TRUE(SUITE, "the listening screen names its buttons on its foot",
                CHECK_NONE, crowded == 0u && unlabelled == 0u && blank == 0u && same == 0u &&
                                spilled == 0u && shouted && bare_header == 0u &&
                                results_header > 40u && listen_header > 40u && listen_second > 40u,
-               "countdown %u, no buttons %u, blank %u, identical %u, spilled %u, small %d, "
+               "no keys %u, no foot %u, blank %u, identical %u, spilled %u, small %d, "
                "header %u, results %u, listen %u, second %u",
                (unsigned)crowded, (unsigned)unlabelled, (unsigned)blank, (unsigned)same,
                (unsigned)spilled, (int)shouted, (unsigned)bare_header, (unsigned)results_header,
@@ -2268,7 +2321,7 @@ static void CheckPad(Fixture *f) {
     const uint32_t first = HashRows(&frame, 100u, 300u);
     const uint32_t header = CountLit(&frame, 8u, 24u);
     const uint32_t second = CountLit(&frame, 30u, 46u);
-    const uint32_t big_top = UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT + 24u;
+    const uint32_t big_top = UI_PAD_BAR_TOP + UI_PAD_BAR_HEIGHT + 24u;
     const uint32_t big = CountLit(&frame, big_top, big_top + 16u * UI_PAD_BIG);
     const uint32_t foot = CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, RUN_PAGE);
     const uint32_t before_none =
@@ -2300,16 +2353,16 @@ static void CheckPad(Fixture *f) {
     const uint32_t before_failed =
         CountColour(&frame, 0, box_y + 112u, FRAME_WIDTH, FRAME_HEIGHT - 20u, RUN_FAILED);
     const uint32_t bar_done =
-        CountColour(&frame, 0, UI_PROGRESS_BAR_TOP, FRAME_WIDTH,
-                    UI_PROGRESS_BAR_TOP + UI_PROGRESS_BAR_HEIGHT, RUN_INK);
+        CountColour(&frame, 0, UI_PAD_BAR_TOP, FRAME_WIDTH,
+                    UI_PAD_BAR_TOP + UI_PAD_BAR_HEIGHT, RUN_INK);
     const uint32_t width = FRAME_WIDTH - 64u;
-    const bool bar_right = bar_done == (width * 1u / screen.prompts) * UI_PROGRESS_BAR_HEIGHT;
+    const bool bar_right = bar_done == (width * 1u / screen.prompts) * UI_PAD_BAR_HEIGHT;
 
     // A word too long for eight times the cell comes down a size rather than off the frame.
     screen.big = "a prompt far too long to sit at the largest size";
     UiComposePad(&frame, &screen);
-    const uint32_t right_edge = CountLit(&frame, UI_PROGRESS_BAR_TOP + 24u,
-                                         UI_PROGRESS_BAR_TOP + 120u);
+    const uint32_t right_edge = CountLit(&frame, UI_PAD_BAR_TOP + 24u,
+                                         UI_PAD_BAR_TOP + 120u);
     const UiFrame small = { f->pixels, 24u, 100u, 24u * 4u };
     const size_t used = (size_t)small.pitch * small.height;
     memset(f->pixels + used, 0xA5, 64u);
@@ -2383,6 +2436,30 @@ static bool BoxDrawn(const UiFrame *frame, uint32_t count, uint32_t index) {
     return box.width > 0u && (menu || run);
 }
 
+/// The middle of the key named @p key on a foot of @p keys, or a tap nowhere when there is none.
+static UiTap TapKey(const UiKey *keys, uint32_t count, const char *key) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if (strcmp(keys[i].key, key) == 0) {
+            const UiRect box = UiFootKey(FRAME_WIDTH, FRAME_HEIGHT, keys, count, i);
+            return TapAt(box.x + box.width / 2u, box.y + box.height / 2u);
+        }
+    }
+    return TapAt(0u, 0u);
+}
+
+/// Whether every key of a foot is drawn: its key inverted in the ink, where a tap finds it.
+static bool KeysDrawn(const UiFrame *frame, const UiKey *keys, uint32_t count) {
+    uint32_t drawn = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        const UiRect box = UiFootKey(frame->width, frame->height, keys, count, i);
+        drawn += box.width > 0u && CountColour(frame, box.x, box.y, box.x + box.width,
+                                               box.y + box.height, INK) > 100u
+                     ? 1u
+                     : 0u;
+    }
+    return count > 0u && drawn == count;
+}
+
 /// Touch: a tap is one finger that went down after the settling frames and came up again, a row
 /// tapped is the cursor's and then chosen, and each box does what its word says.
 static void CheckTouch(Fixture *f) {
@@ -2422,17 +2499,19 @@ static void CheckTouch(Fixture *f) {
     info.heading = "edenprobe 0.3.0 (test)";
     info.families_present = MODE_FAMILIES_PRESENT;
     const uint32_t row_y = UiStartRowTop(UI_START_ROW_GRAPHICS) + UI_ROW_HEIGHT / 2u;
+    UiKey start_keys[UI_FOOT_KEYS];
+    const uint32_t start_count = UiStartKeys(start_keys);
     const UiStartState plain = StartFrom(NULL);
     UiTap graphics = TapAt(300u, row_y);
     const UiStartState moved_to = UiStartTap(plain, &graphics, FRAME_WIDTH, FRAME_HEIGHT, &info);
     const UiStartState chosen = UiStartTap(moved_to, &graphics, FRAME_WIDTH, FRAME_HEIGHT, &info);
-    UiTap slid = { 300u, row_y, 300u, row_y + UI_ROW_HEIGHT };
+    UiTap slid = { 300u, row_y, 300u, UiStartRowTop(UI_START_ROW_GRAPHICS + 1u) + 10u };
     const UiStartState slid_off = UiStartTap(moved_to, &slid, FRAME_WIDTH, FRAME_HEIGHT, &info);
     UiTap heading = TapAt(300u, 12u);
     const UiStartState off_rows = UiStartTap(plain, &heading, FRAME_WIDTH, FRAME_HEIGHT, &info);
     UiTap begin_row = TapAt(300u, UiStartRowTop(UI_START_ROW_BEGIN) + 4u);
     const UiStartState begun_row = UiStartTap(plain, &begin_row, FRAME_WIDTH, FRAME_HEIGHT, &info);
-    UiTap begin_box = TapBox(1u, 0u);
+    UiTap begin_box = TapKey(start_keys, start_count, "Plus");
     const UiStartState begun_box =
         UiStartTap(moved_to, &begin_box, FRAME_WIDTH, FRAME_HEIGHT, &info);
     const bool start =
@@ -2444,7 +2523,7 @@ static void CheckTouch(Fixture *f) {
         (begun_box.families & MODE_FAMILY_GRAPHICS) != 0u;
     const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
     UiComposeStart(&frame, &info, plain, 7u);
-    const bool start_bar = BoxDrawn(&frame, 1u, 0u);
+    const bool start_bar = KeysDrawn(&frame, start_keys, start_count);
 
     // The resume screen: a choice, then the same choice to take it.
     UiTap over = TapAt(300u, UiResumeRowTop(UI_RESUME_START_OVER) + UI_ROW_HEIGHT);
@@ -2470,10 +2549,12 @@ static void CheckTouch(Fixture *f) {
     // case after, back, back and quit, each from the bar.
     const UiRun *const run = &f->run;
     UiState state = UiStart(run);
+    const uint32_t ssl = GroupNamed(run, "ssl");
+    // The cursor on the group before ssl, so the list shows ssl beside it.
+    state.group = ssl > 0u ? ssl - 1u : ssl;
     const uint32_t rows = UiListRows(UI_LEVEL_OVERVIEW, FRAME_HEIGHT);
     const uint32_t total = UiOverviewRow(run, run->group_count - 1u) + 1u;
     const uint32_t first = UiListFirst(UiOverviewRow(run, state.group), total, rows);
-    const uint32_t ssl = GroupNamed(run, "ssl");
     const uint32_t ssl_y = UI_LIST_TOP + (UiOverviewRow(run, ssl) - first) * UI_ROW_HEIGHT + 10u;
     UiTap on_ssl = TapAt(400u, ssl_y);
     const UiState on_group = UiTapStep(state, &on_ssl, run, FRAME_WIDTH, FRAME_HEIGHT);
@@ -2492,17 +2573,23 @@ static void CheckTouch(Fixture *f) {
     const UiState on_other = UiTapStep(opened, &on_case, run, FRAME_WIDTH, FRAME_HEIGHT);
     const UiState in_case = UiTapStep(on_other, &on_case, run, FRAME_WIDTH, FRAME_HEIGHT);
     UiCompose(&frame, run, in_case, NULL);
-    const bool case_bar = BoxDrawn(&frame, 3u, 0u) && BoxDrawn(&frame, 3u, 2u);
-    UiTap next = TapBox(3u, 1u);
+    UiKey keys[UI_FOOT_KEYS];
+    uint32_t count = UiResultsKeys(run, in_case, keys);
+    const bool case_bar = KeysDrawn(&frame, keys, count);
+    UiTap next = TapKey(keys, count, "Right");
     const UiState after = UiTapStep(in_case, &next, run, FRAME_WIDTH, FRAME_HEIGHT);
-    UiTap back = TapBox(3u, 2u);
+    count = UiResultsKeys(run, after, keys);
+    UiTap back = TapKey(keys, count, "B");
     const UiState backed = UiTapStep(after, &back, run, FRAME_WIDTH, FRAME_HEIGHT);
     UiCompose(&frame, run, backed, NULL);
     UiComposeCountdown(&frame, 9u);
-    const bool group_bar = BoxDrawn(&frame, 1u, 0u);
-    UiTap one_box = TapBox(1u, 0u);
+    count = UiResultsKeys(run, backed, keys);
+    const bool group_bar = KeysDrawn(&frame, keys, count);
+    UiTap one_box = TapKey(keys, count, "B");
     const UiState overview = UiTapStep(backed, &one_box, run, FRAME_WIDTH, FRAME_HEIGHT);
-    const UiState quit = UiTapStep(overview, &one_box, run, FRAME_WIDTH, FRAME_HEIGHT);
+    count = UiResultsKeys(run, overview, keys);
+    UiTap quit_key = TapKey(keys, count, "Plus");
+    const UiState quit = UiTapStep(overview, &quit_key, run, FRAME_WIDTH, FRAME_HEIGHT);
     const bool walk = on_group.group == ssl && on_group.level == UI_LEVEL_OVERVIEW &&
                       on_group.changed && opened.level == UI_LEVEL_GROUP &&
                       opened.group == ssl && headed.group == 0u && UiOverviewRow(run, 0u) == 1u &&
@@ -2519,12 +2606,13 @@ static void CheckTouch(Fixture *f) {
     drawn.group = pictures;
     drawn.index = CaseNamed(run, pictures, FAILS_WITH_PICTURE);
     UiCompose(&frame, run, drawn, &f->picture);
-    const bool four = BoxDrawn(&frame, 4u, 0u) && BoxDrawn(&frame, 4u, 3u);
-    UiTap view = TapBox(4u, 2u);
+    count = UiResultsKeys(run, drawn, keys);
+    const bool four = KeysDrawn(&frame, keys, count);
+    UiTap view = TapKey(keys, count, "X");
     const UiState turned = UiTapStep(drawn, &view, run, FRAME_WIDTH, FRAME_HEIGHT);
     const UiFrame tiny = { f->pixels, 320u, 200u, 320u * 4u };
     const UiState small = UiTapStep(drawn, &view, run, tiny.width, tiny.height);
-    CHECK_TRUE(SUITE, "on the results a tapped row is the cursor's, then opened; the bar's boxes "
+    CHECK_TRUE(SUITE, "on the results a tapped row is the cursor's, then opened; the foot's keys "
                       "do what they say",
                CHECK_NONE,
                walk && case_bar && group_bar && four && turned.view == UI_VIEW_GOT &&

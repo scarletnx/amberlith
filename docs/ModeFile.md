@@ -16,6 +16,7 @@
 | `retry` | the cases on the crash list run again; one that runs to its end leaves the list (see [When the program ends in the middle](Crashes.md)). A case the hang table names stays skipped until `hang` asks too |
 | `nojournal` | no journal between cases, so a crash costs the rest of the run; for measuring what the journal costs |
 | `noprogress` | no running screen while the suites run; for a machine whose window misbehaves while the suites draw |
+| `browse` | the browser instead of the start screen, on its suites tab: a person runs a family, a suite, a case or a demo at a time, each in a report of its own ([The browser](UI.md)). Only in a detailed run: beside `quick` the mode line says `browse refused: the run is quick, a script's, and the browser opens only in a detailed one`. Nothing pressed on its first screen for ten seconds, the program leaves and says so |
 | `hooks` | the console's services a machine may answer in a game's own code, nn::fs, nn::time, nn::pl, nn::ngc, nn::nsd, nn::pctl, nn::audio and nn::codec, asked through the SDK's functions the program exports, and not by IPC: the program opens neither fsp-srv nor time:u, its card is nn::fs's, and the audio, service and game families open no audio service but through those functions. For a recompiler that runs a game's SDK functions itself and serves none of those services; read at the program's start, with no row on the start screen; see [The hooks mode](Hooks.md) |
 | `all` | every family the build has but pad, which waits for a person, nvn, demo and music: one word for a run that needs nobody. `pad`, `nvn`, `demo` or `music` beside it adds that family; the mode line lists the families that run |
 | `cpu` | the processor family. It runs in every mode, so naming it alone leaves the graphics, fs and net families out: a few seconds, nothing drawn |
@@ -52,7 +53,7 @@ music. A family this
 build lacks is listed in the mode line and skipped. Any other word is quoted and counted in the mode line and has no
 effect: a typo costs a line, never the run.
 
-The start screen chooses the same words for a person; the file is for a script or a choice that should stay. Under
+The start screen chooses the same words for a person, and its L and R open the browser ([The browser](UI.md)); the file is for a script or a choice that should stay. Under
 `make run` it is the `MODE` variable; in Eden's Android build, `files/sdmc/edenprobe/mode` in the app's data folder;
 for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android](Android.md)). For example:
 
@@ -80,6 +81,7 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick demo` | the judge, cpu and the demo family's two zooms, 600 frames each, presented and timed, then exit |
 | `quick music` | the judge, cpu and the music family's twelve cases, then exit: about five seconds, four of them silent sound through the renderer |
 | `quick skip=tex8k` | the families a file naming none runs, the tex8k suite's cases each a skip asked for |
+| `browse` | the browser, on its suites tab, and nothing until a person picks; ten seconds of nothing leaves |
 
 The first 4096 bytes are read, and a longer file says so in the mode line; a word, or a `label=`, `baseline=`,
 `compare=` or `skip=` value, the limit cuts in two is dropped. A folder named `mode` reads as no file, and the mode line says so.

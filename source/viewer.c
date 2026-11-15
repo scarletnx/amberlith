@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -9,6 +10,7 @@
 
 #include "gpu.h"
 #include "mode.h"
+#include "musicplay.h"
 #include "perf.h"
 #include "picture.h"
 #include "report.h"
@@ -112,34 +114,6 @@ RunMode ViewerModeWithPad(RunMode from_file) {
     return ModeWithButton(from_file, (padGetButtons(&pad) & HidNpadButton_X) != 0u);
 }
 
-/// Translates the console's own button bits into the ones the screens are written against. A
-/// flat mapping and nothing else: what each one does, and when a press counts at all, is in ui.c
-/// where this build can check it.
-static uint32_t ButtonsFrom(uint64_t pressed) {
-    static const struct {
-        uint64_t console;
-        uint32_t screen;
-    } MAP[] = {
-        { HidNpadButton_Plus | HidNpadButton_Minus, UI_BUTTON_QUIT },
-        { HidNpadButton_B, UI_BUTTON_BACK },
-        { HidNpadButton_A, UI_BUTTON_OPEN },
-        { HidNpadButton_X, UI_BUTTON_CYCLE_VIEW },
-        { HidNpadButton_R | HidNpadButton_ZR, UI_BUTTON_NEXT_FAILURE },
-        { HidNpadButton_L | HidNpadButton_ZL, UI_BUTTON_PREVIOUS_FAILURE },
-        { HidNpadButton_AnyUp, UI_BUTTON_UP },
-        { HidNpadButton_AnyDown, UI_BUTTON_DOWN },
-        { HidNpadButton_AnyLeft, UI_BUTTON_LEFT },
-        { HidNpadButton_AnyRight, UI_BUTTON_RIGHT },
-    };
-    uint32_t buttons = 0;
-    for (size_t i = 0; i < sizeof(MAP) / sizeof(MAP[0]); ++i) {
-        if ((pressed & MAP[i].console) != 0u) {
-            buttons |= MAP[i].screen;
-        }
-    }
-    return buttons;
-}
-
 /// The start screen's buttons: up and down move the cursor, A takes the row under it, plus or
 /// minus begins from any row, X turns the crash list's choice from any row. Y chooses nothing,
 /// and is read only so an edge that holds it and X is known for a pad's whole mask.
@@ -154,6 +128,8 @@ static uint32_t StartButtonsFrom(uint64_t pressed) {
         { HidNpadButton_X, UI_START_TOGGLE_RETRY },
         { HidNpadButton_AnyUp, UI_START_UP },
         { HidNpadButton_AnyDown, UI_START_DOWN },
+        { HidNpadButton_L, UI_START_TAB_PREVIOUS },
+        { HidNpadButton_R, UI_START_TAB_NEXT },
     };
     uint32_t buttons = 0;
     for (size_t i = 0; i < sizeof(MAP) / sizeof(MAP[0]); ++i) {
@@ -181,7 +157,7 @@ bool ViewerStartScreen(const UiStartInfo *info, const RunMode *from_file, UiStar
     bool pressed = false;
     uint32_t shown_left = UINT32_MAX;
     uint32_t frames_seen = 0;
-    while (appletMainLoop() && !state.begun) {
+    while (appletMainLoop() && !state.begun && state.tab_asked == 0u) {
         padUpdate(&pad);
         const uint64_t down = padGetButtonsDown(&pad);
         if (frames_seen >= UI_SETTLING_FRAMES && down != 0u) {
@@ -287,87 +263,158 @@ bool ViewerResumeScreen(const UiResumeInfo *info, bool *start_over) {
     return true;
 }
 
-/// The kept picture of the case the cursor has open, or NULL, which draws the case as its detail.
-static const PictureRecord *OpenPicture(UiState state) {
-    const int32_t index = UiOpenPicture(&run, state);
-    return index >= 0 ? PictureAt((size_t)index) : NULL;
+/// The browser's buttons from the console's: the directions, A open, B back, X mark (and the
+/// results' view), Y again, plus run, minus quit, L and R the tabs, ZL and ZR the failures.
+static uint32_t BrowseButtonsFrom(uint64_t pressed) {
+    static const struct {
+        uint64_t console;
+        uint32_t screen;
+    } MAP[] = {
+        { HidNpadButton_Minus, UI_BUTTON_QUIT },
+        { HidNpadButton_Plus, UI_BUTTON_RUN },
+        { HidNpadButton_B, UI_BUTTON_BACK },
+        { HidNpadButton_A, UI_BUTTON_OPEN },
+        { HidNpadButton_X, UI_BUTTON_CYCLE_VIEW },
+        { HidNpadButton_Y, UI_BUTTON_AGAIN },
+        { HidNpadButton_L, UI_BUTTON_TAB_PREVIOUS },
+        { HidNpadButton_R, UI_BUTTON_TAB_NEXT },
+        { HidNpadButton_ZR, UI_BUTTON_NEXT_FAILURE },
+        { HidNpadButton_ZL, UI_BUTTON_PREVIOUS_FAILURE },
+        { HidNpadButton_AnyUp, UI_BUTTON_UP },
+        { HidNpadButton_AnyDown, UI_BUTTON_DOWN },
+        { HidNpadButton_AnyLeft, UI_BUTTON_LEFT },
+        { HidNpadButton_AnyRight, UI_BUTTON_RIGHT },
+    };
+    uint32_t buttons = 0;
+    for (size_t i = 0; i < sizeof(MAP) / sizeof(MAP[0]); ++i) {
+        if ((pressed & MAP[i].console) != 0u) {
+            buttons |= MAP[i].screen;
+        }
+    }
+    return buttons;
 }
 
-ViewerEnd ViewerRun(void) {
-    if (ReportIsOpen()) {
+// The motion option's two frames: the screen before and the one after, made when the browser
+// opens with the option on and freed when it leaves. Without them a screen comes in at once.
+static uint8_t *motion_before;
+static uint8_t *motion_after;
+
+#define FRAME_BYTES ((size_t)SCREEN_WIDTH * SCREEN_HEIGHT * 4u)
+
+/// Copies a composed frame of @p from into the screen's buffer of @p stride.
+static void CopyFrame(uint8_t *out, uint32_t stride, const uint8_t *from, uint32_t rows) {
+    for (uint32_t y = 0; y < rows && y < SCREEN_HEIGHT; ++y) {
+        memcpy(out + (size_t)y * stride, from + (size_t)y * SCREEN_WIDTH * 4u,
+               SCREEN_WIDTH * 4u);
+    }
+}
+
+/// Draws the browser: into the screen when there is no motion, else the new screen over the old
+/// one from the top over UI_MOTION_STEPS frames, when the tab or the level changed.
+static void DrawBrowse(const UiBrowseInfo *info, const UiBrowseState *state, bool moved) {
+    if (motion_after != NULL && motion_before != NULL) {
+        const UiFrame frame = { motion_after, SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH * 4u };
+        UiComposeBrowse(&frame, info, state);
+        const uint32_t steps = moved && state->options.motion ? UI_MOTION_STEPS : 1u;
+        for (uint32_t step = steps == 1u ? UI_MOTION_STEPS : 0u; step <= UI_MOTION_STEPS;
+             ++step) {
+            uint32_t stride = 0;
+            uint8_t *const out = (uint8_t *)framebufferBegin(&screen, &stride);
+            if (out != NULL && stride >= SCREEN_WIDTH * 4u) {
+                const uint32_t rows = UiMotionRows(step, SCREEN_HEIGHT);
+                CopyFrame(out, stride, motion_after, rows);
+                for (uint32_t y = rows; y < SCREEN_HEIGHT; ++y) {
+                    memcpy(out + (size_t)y * stride,
+                           motion_before + (size_t)y * SCREEN_WIDTH * 4u, SCREEN_WIDTH * 4u);
+                }
+            }
+            framebufferEnd(&screen);
+            if (step < UI_MOTION_STEPS) {
+                svcSleepThread(FRAME_NANOSECONDS);
+            }
+        }
+        uint8_t *const swap = motion_before;
+        motion_before = motion_after;
+        motion_after = swap;
+        return;
+    }
+    uint32_t stride = 0;
+    uint8_t *const out = (uint8_t *)framebufferBegin(&screen, &stride);
+    if (out != NULL && stride >= SCREEN_WIDTH * 4u) {
+        const UiFrame frame = { out, SCREEN_WIDTH, SCREEN_HEIGHT, stride };
+        UiComposeBrowse(&frame, info, state);
+    }
+    framebufferEnd(&screen);
+}
+
+ViewerEnd ViewerBrowse(UiBrowseInfo *info, UiBrowseState *state, uint64_t unattended_ns) {
+    if (info == NULL || state == NULL || !OpenScreen()) {
         return VIEWER_NO_SCREEN;
     }
-    // What the run recorded, and nothing else: the cases as their lines went out, and the count
-    // the report's own summary carries, so a store that ran out is said to have.
-    size_t count = 0;
-    const ReportRecord *const records = ReportRecords(&count);
-    UiRunIndex(&run, records, (uint32_t)count,
-               (uint32_t)(ReportPassed() + ReportFailed() + ReportSkipped() + ReportCrashed()));
-
-    if (!OpenScreen()) {
-        return VIEWER_NO_SCREEN;
+    if (state->options.motion && motion_before == NULL) {
+        motion_before = (uint8_t *)calloc(1, FRAME_BYTES);
+        motion_after = (uint8_t *)calloc(1, FRAME_BYTES);
     }
-
     PadState pad;
     ReadPad(&pad);
     UiTouch touch;
     UiTouchReset(&touch);
-    UiState state = UiStart(&run);
     UiRepeat repeat = { 0, 0 };
-
-    // Counted from here, which is the moment after the report closed. A clock rather than a
-    // count of frames, because a frame here is a sleep plus however long composing took.
     const uint64_t opened = armGetSystemTick();
-    bool pressed = false;
-    uint32_t shown_left = UINT32_MAX;
-    ViewerEnd end = VIEWER_CLOSED;
-
     uint32_t frames_seen = 0;
-    while (appletMainLoop() && !state.quit) {
+    uint32_t shown_left = UINT32_MAX;
+    UiTab shown_tab = UI_TABS;
+    uint32_t shown_level = UINT32_MAX;
+    state->changed = true;
+    while (appletMainLoop()) {
         padUpdate(&pad);
-        const uint64_t down = padGetButtonsDown(&pad);
-        // The same settling the navigation keeps: a controller arriving with the window reports
-        // its whole mask as newly pressed, and that is not a person.
-        if (frames_seen >= UI_SETTLING_FRAMES && down != 0u) {
-            pressed = true;
-        }
         const uint32_t buttons =
-            UiRepeatButtons(&repeat, ButtonsFrom(padGetButtons(&pad)), ButtonsFrom(down),
-                            frames_seen);
-        const UiInput input = UiInputFromButtons(buttons, frames_seen);
+            UiRepeatButtons(&repeat, BrowseButtonsFrom(padGetButtons(&pad)),
+                            BrowseButtonsFrom(padGetButtonsDown(&pad)), frames_seen);
+        *state = UiBrowseStep(*state, buttons, frames_seen, info);
         UiTap tap;
         const UiTouchEvent touched = ReadTouch(&touch, frames_seen, &tap);
-        pressed = pressed || touched != UI_TOUCH_NONE;
+        if (touched == UI_TOUCH_BEGAN) {
+            state->pressed = true;
+        } else if (touched == UI_TOUCH_TAP && state->ask == UI_ASK_NONE) {
+            *state = UiBrowseTap(*state, &tap, SCREEN_WIDTH, SCREEN_HEIGHT, info);
+        }
         if (frames_seen < UI_SETTLING_FRAMES) {
             ++frames_seen;
         }
-        const uint64_t elapsed = armTicksToNs(armGetSystemTick() - opened);
-        if (UiLeavesUnattended(elapsed, pressed)) {
-            end = VIEWER_UNATTENDED;
-            break;
+        info->seconds_left = 0u;
+        if (unattended_ns > 0u && !state->pressed) {
+            const uint64_t elapsed = armTicksToNs(armGetSystemTick() - opened);
+            if (elapsed >= unattended_ns) {
+                return VIEWER_UNATTENDED;
+            }
+            info->seconds_left =
+                (uint32_t)((unattended_ns - elapsed + 999999999ull) / 1000000000ull);
         }
-        const uint32_t left = UiUnattendedSecondsLeft(elapsed, pressed);
-        state = UiStep(state, input, &run);
-        if (touched == UI_TOUCH_TAP) {
-            state = UiTapStep(state, &tap, &run, SCREEN_WIDTH, SCREEN_HEIGHT);
+        if (state->ask == UI_ASK_QUIT) {
+            return VIEWER_CLOSED;
         }
-        if (state.changed || left != shown_left) {
-            uint32_t stride = 0;
-            UiFrame frame = { (uint8_t *)framebufferBegin(&screen, &stride), SCREEN_WIDTH,
-                              SCREEN_HEIGHT, stride };
-            // The whole frame every time, the countdown included: there are two buffers, and
-            // the one handed over holds whatever was drawn two frames ago.
-            UiCompose(&frame, &run, state, OpenPicture(state));
-            UiComposeCountdown(&frame, left);
-            framebufferEnd(&screen);
-            UiFrameDrawn(&state);
-            shown_left = left;
+        if (state->ask != UI_ASK_NONE) {
+            return VIEWER_ASKED;
+        }
+        if (state->changed || info->seconds_left != shown_left) {
+            const bool moved = state->tab != shown_tab || state->level != shown_level;
+            DrawBrowse(info, state, moved && shown_tab != UI_TABS);
+            state->changed = false;
+            shown_left = info->seconds_left;
+            shown_tab = state->tab;
+            shown_level = state->level;
         }
         svcSleepThread(FRAME_NANOSECONDS);
     }
+    return VIEWER_CLOSED;
+}
 
-    CloseScreen();
-    return end;
+void ViewerBrowseClose(void) {
+    free(motion_before);
+    free(motion_after);
+    motion_before = NULL;
+    motion_after = NULL;
 }
 
 void ViewerEndScreen(void) {
@@ -378,35 +425,205 @@ bool ViewerScreenUp(void) {
     return screen_open;
 }
 
-bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
-    if (!screen_open || pixels == NULL || width == 0u || height == 0u || width > SCREEN_WIDTH ||
-        height > SCREEN_HEIGHT) {
-        return false;
-    }
+const UiRun *ViewerIndexRun(const char *heading) {
+    // What the run recorded, and nothing else: the cases as their lines went out, and the count
+    // the report's own summary carries, so a store that ran out is said to have.
+    size_t count = 0;
+    const ReportRecord *const records = ReportRecords(&count);
+    UiRunIndex(&run, records, (uint32_t)count,
+               (uint32_t)(ReportPassed() + ReportFailed() + ReportSkipped() + ReportCrashed()));
+    run.heading = heading;
+    return &run;
+}
+
+/// @p pixels, @p width by @p height, scaled up by whole steps to fit and centred on the screen's
+/// buffer @p out.
+static void DrawImage(uint8_t *out, uint32_t stride, const uint8_t *pixels, uint32_t width,
+                      uint32_t height) {
     const uint32_t across = SCREEN_WIDTH / width;
     const uint32_t down = SCREEN_HEIGHT / height;
     const uint32_t scale = across < down ? across : down;
     const uint32_t left = (SCREEN_WIDTH - width * scale) / 2u;
     const uint32_t top = (SCREEN_HEIGHT - height * scale) / 2u;
+    static const uint8_t BACKGROUND[4] = { 0x0F, 0x0F, 0x14, 0xFF };
+    for (uint32_t y = 0; y < SCREEN_HEIGHT; ++y) {
+        uint8_t *const row = out + (size_t)y * stride;
+        const bool inside_y = y >= top && y < top + height * scale;
+        if (inside_y && scale == 1u && width == SCREEN_WIDTH) {
+            memcpy(row, pixels + (size_t)(y - top) * width * 4u, (size_t)width * 4u);
+            continue;
+        }
+        for (uint32_t x = 0; x < SCREEN_WIDTH; ++x) {
+            const bool inside = inside_y && x >= left && x < left + width * scale;
+            const size_t at = (size_t)((y - top) / scale) * width + (x - left) / scale;
+            const uint8_t *const from = inside ? pixels + at * 4u : BACKGROUND;
+            memcpy(row + (size_t)x * 4u, from, 4u);
+        }
+    }
+}
+
+// The demo running, when the browser runs one: its HUD and the pause menu over its frames, both
+// drawn and read on the frames' own thread as each frame is shown. Paused, the demo asks
+// paused() and shows its last frame again until it says no (demo.h), and the menu is drawn over
+// that frame and read here.
+static struct {
+    bool on;
+    ViewerDemo asked;
+    UiHud hud;
+    bool hud_on;
+    bool music;
+    PadState pad;
+    uint32_t frames_seen;
+    uint64_t last;
+    bool paused;
+    bool stopped;
+    UiPauseInfo pause_info;
+    UiPauseState pause;
+    ViewerDemoEnd end;
+} demo;
+
+void ViewerDemoBegin(const ViewerDemo *asked) {
+    memset(&demo, 0, sizeof(demo));
+    if (asked == NULL) {
+        return;
+    }
+    demo.on = true;
+    demo.asked = *asked;
+    demo.hud.name = asked->name;
+    demo.hud.track = asked->music ? asked->track : NULL;
+    demo.hud.frames = asked->frames;
+    demo.hud_on = asked->hud;
+    demo.music = asked->music;
+    ReadPad(&demo.pad);
+    demo.end.next = UINT32_MAX;
+    demo.end.frames = asked->frames;
+    demo.end.music = asked->music;
+    demo.end.hud = asked->hud;
+}
+
+ViewerDemoEnd ViewerDemoFinish(void) {
+    const ViewerDemoEnd end = demo.end;
+    demo.on = false;
+    return end;
+}
+
+bool ViewerDemoStopped(void) {
+    return __atomic_load_n(&demo.stopped, __ATOMIC_ACQUIRE);
+}
+
+bool ViewerDemoPaused(void) {
+    return __atomic_load_n(&demo.paused, __ATOMIC_ACQUIRE);
+}
+
+/// The music as the pause menu left it: the demo's track, or none. A demo with no track (the game
+/// scene, whose audio thread steps a renderer of its own) plays none either way; the choice holds
+/// for the demos after it.
+static void DemoMusicTo(bool on) {
+    if (on == demo.music) {
+        return;
+    }
+    char error[160];
+    if (!on) {
+        MusicPlayStop();
+    } else if (demo.asked.track != NULL &&
+               !(MusicPlayOn() ? MusicPlaySwitch(demo.asked.track, error, sizeof(error))
+                               : MusicPlayStart(demo.asked.track, error, sizeof(error)))) {
+        ReportNote("browser: the music's track %s did not play for %s: %s", demo.asked.track,
+                   demo.asked.name, error);
+    }
+    demo.music = on;
+    demo.hud.track = on ? demo.asked.track : NULL;
+}
+
+/// One look at the pad while the menu is up, the frame shown again under it: its rows moved and
+/// chosen. Leaving it, by plus, resume, back or a level, ends the pause.
+static void DemoPauseStep(uint32_t buttons) {
+    demo.pause = UiPauseStep(demo.pause, buttons, &demo.pause_info);
+    if (!demo.pause.resume && !demo.pause.back && !demo.pause.start_level) {
+        return;
+    }
+    demo.hud_on = demo.pause.hud;
+    DemoMusicTo(demo.pause.music);
+    demo.end.hud = demo.pause.hud;
+    demo.end.music = demo.pause.music;
+    demo.end.frames = demo.pause.frames;
+    if (demo.pause.back) {
+        demo.end.back = true;
+        __atomic_store_n(&demo.stopped, true, __ATOMIC_RELEASE);
+    } else if (demo.pause.start_level) {
+        demo.end.next = demo.pause.level;
+        __atomic_store_n(&demo.stopped, true, __ATOMIC_RELEASE);
+    }
+    __atomic_store_n(&demo.paused, false, __ATOMIC_RELEASE);
+}
+
+bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
+    if (!screen_open || pixels == NULL || width == 0u || height == 0u || width > SCREEN_WIDTH ||
+        height > SCREEN_HEIGHT) {
+        return false;
+    }
+    // The pad first, so the frame drawn says what it asked: the menu up, or gone.
+    uint32_t buttons = 0;
+    if (demo.on) {
+        padUpdate(&demo.pad);
+        buttons = demo.frames_seen >= UI_SETTLING_FRAMES
+                      ? BrowseButtonsFrom(padGetButtonsDown(&demo.pad))
+                      : 0u;
+        demo.frames_seen += demo.frames_seen < UI_SETTLING_FRAMES ? 1u : 0u;
+        if (demo.paused) {
+            DemoPauseStep(buttons);
+        } else if ((buttons & UI_BUTTON_BACK) != 0u) {
+            __atomic_store_n(&demo.stopped, true, __ATOMIC_RELEASE);
+        } else if ((buttons & UI_BUTTON_AGAIN) != 0u) {
+            demo.hud_on = !demo.hud_on;
+            demo.end.hud = demo.hud_on;
+        } else if ((buttons & UI_BUTTON_RUN) != 0u) {
+            memset(&demo.pause_info, 0, sizeof(demo.pause_info));
+            demo.pause_info.name = demo.asked.name;
+            demo.pause_info.levels = demo.asked.levels;
+            demo.pause_info.level_count = demo.asked.level_count;
+            demo.pause_info.running = demo.asked.running;
+            demo.pause_info.frame = demo.hud.frame;
+            demo.pause_info.frames = demo.asked.frames;
+            demo.pause = UiPauseOpen(&demo.pause_info, demo.asked.frames, demo.music, demo.hud_on);
+            __atomic_store_n(&demo.paused, true, __ATOMIC_RELEASE);
+        }
+    }
     uint32_t stride = 0;
     uint8_t *const out = (uint8_t *)framebufferBegin(&screen, &stride);
     if (out == NULL) {
         return false;
     }
     if (stride >= SCREEN_WIDTH * 4u) {
-        static const uint8_t BACKGROUND[4] = { 0x0F, 0x0F, 0x14, 0xFF };
-        for (uint32_t y = 0; y < SCREEN_HEIGHT; ++y) {
-            uint8_t *const row = out + (size_t)y * stride;
-            const bool inside_y = y >= top && y < top + height * scale;
-            for (uint32_t x = 0; x < SCREEN_WIDTH; ++x) {
-                const bool inside = inside_y && x >= left && x < left + width * scale;
-                const size_t at = (size_t)((y - top) / scale) * width + (x - left) / scale;
-                const uint8_t *const from = inside ? pixels + at * 4u : BACKGROUND;
-                memcpy(row + (size_t)x * 4u, from, 4u);
-            }
+        DrawImage(out, stride, pixels, width, height);
+        const UiFrame frame = { out, SCREEN_WIDTH, SCREEN_HEIGHT, stride };
+        if (demo.on && demo.paused) {
+            UiComposePause(&frame, &demo.pause_info, &demo.pause);
+        } else if (demo.on && demo.hud_on) {
+            UiComposeHud(&frame, &demo.hud);
         }
     }
     framebufferEnd(&screen);
+    if (!demo.on || demo.paused) {
+        // A frame shown again under the menu is no new frame, and its time no frame's.
+        demo.last = 0u;
+        return true;
+    }
+    // The HUD's numbers for the next frame: this one's time from the one before, its share of a
+    // second, and the times the graph draws, oldest first.
+    const uint64_t now = armGetSystemTick();
+    ++demo.hud.frame;
+    if (demo.last != 0u) {
+        const uint32_t us = (uint32_t)(armTicksToNs(now - demo.last) / 1000u);
+        demo.hud.frame_us = us;
+        demo.hud.fps_tenths = us > 0u ? (uint32_t)(10000000u / us) : 0u;
+        if (demo.hud.time_count == UI_HUD_TIMES) {
+            memmove(demo.hud.times, demo.hud.times + 1, (UI_HUD_TIMES - 1u) * sizeof(uint32_t));
+            --demo.hud.time_count;
+        }
+        demo.hud.times[demo.hud.time_count++] = us;
+    }
+    demo.last = now;
     return true;
 }
 

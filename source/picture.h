@@ -152,6 +152,10 @@ void PictureFinish(const char *suite, const char *name, const char *tier, bool p
 void PictureDiscard(void);
 
 size_t PictureCount(void);
+
+/// Frees the pictures kept for the screens and forgets the names the run's files took: the
+/// browser's next run is a run of its own, in a folder of its own.
+void PictureForgetKept(void);
 const PictureRecord *PictureAt(size_t index);
 
 /// Reserves this run's own file name for @p name inside @p suite_stem, numbering it when

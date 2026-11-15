@@ -16,6 +16,7 @@ source/check.c
 source/mode.c
 source/picture.c
 source/ui.c
+source/browse.c
 source/raster.c
 source/intref.c
 source/blendref.c
@@ -69,6 +70,7 @@ source/svcref.c
 source/tests/t_selfcheck.c
 source/tests/t_support.c
 source/tests/t_screens.c
+source/tests/t_browse.c
 source/tests/t_perf.c
 source/tests/t_settle.c
 source/tests/t_reference.c

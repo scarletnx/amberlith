@@ -1958,7 +1958,7 @@ static void CheckWidestMode(void) {
 static uint32_t CountRed(const UiFrame *frame) {
     static const uint8_t SHOUT[3] = { 0xA5, 0x47, 0x3C };
     uint32_t seen = 0;
-    for (uint32_t y = 8; y < 26u; ++y) {
+    for (uint32_t y = UI_BODY_TOP; y < UI_BODY_TOP + UI_BUTTON_HEIGHT; ++y) {
         for (uint32_t x = 0; x < frame->width; ++x) {
             const uint8_t *const pixel = UiPixel(frame, x, y);
             if (pixel != NULL && memcmp(pixel, SHOUT, 3u) == 0) {
@@ -2088,11 +2088,12 @@ static void CheckLayout(void) {
     state.view = UI_VIEW_DIFF;
     UiCompose(&frame, &run, state, &record);
 
-    // The single panel is centred, so where its first pixel lands is arithmetic a case can do
-    // as well as the layout can, and a panel drawn anywhere else fails here.
-    const uint32_t scale =
-        (FRAME_HEIGHT - UI_PANEL_TOP - 128u) / FIXTURE_HEIGHT;
-    const uint32_t left = (FRAME_WIDTH - FIXTURE_WIDTH * scale) / 2u;
+    // The single panel is centred where the layout says (UiPanelRect), and a panel drawn
+    // anywhere else fails here.
+    const UiRect alone = UiPanelRect(FRAME_WIDTH, FRAME_HEIGHT, FIXTURE_WIDTH, FIXTURE_HEIGHT,
+                                     UI_VIEW_DIFF, 0u);
+    const uint32_t scale = alone.width / FIXTURE_WIDTH;
+    const uint32_t left = alone.x;
     uint8_t wrong_colour[3];
     uint8_t matched_colour[3];
     PictureDiffColour(PICTURE_WRONG, wrong_colour);
@@ -2143,8 +2144,9 @@ static void CheckLayout(void) {
 
     // The key under the panels, which is the only thing on the screen that says what the red
     // in the third one means.
-    const uint32_t panel_scale = (FRAME_WIDTH - 4u * 32u) / 3u / FIXTURE_WIDTH;
-    const uint32_t key_y = UI_PANEL_TOP + FIXTURE_HEIGHT * panel_scale + 12u;
+    const UiRect panel = UiPanelRect(FRAME_WIDTH, FRAME_HEIGHT, FIXTURE_WIDTH, FIXTURE_HEIGHT,
+                                     UI_VIEW_ALL, 0u);
+    const uint32_t key_y = panel.y + panel.height + UI_KEY_GAP;
     const uint8_t *const swatch = UiPixel(&frame, 32u + 8u, key_y + 8u);
     CHECK_TRUE(SUITE, "the three colours of a verdict are named under the pictures", CHECK_NONE,
                swatch != NULL && memcmp(swatch, matched_colour, 3u) == 0,
@@ -2190,11 +2192,12 @@ static void CheckLayout(void) {
     // expected differ, so a layout that drew one picture twice fails here.
     record.format = PICTURE_BITS;
     UiCompose(&frame, &run, state, &record);
-    const uint32_t wide = panel_scale;
+    const uint32_t wide = panel.width / FIXTURE_WIDTH;
     const uint32_t row = UI_PANEL_TOP + wide / 2u;
-    const uint8_t *const drawn = UiPixel(&frame, 32u + wide + wide / 2u, row);
-    const uint8_t *const wanted_panel =
-        UiPixel(&frame, 32u + FIXTURE_WIDTH * wide + 32u + wide + wide / 2u, row);
+    const UiRect second = UiPanelRect(FRAME_WIDTH, FRAME_HEIGHT, FIXTURE_WIDTH, FIXTURE_HEIGHT,
+                                      UI_VIEW_ALL, 1u);
+    const uint8_t *const drawn = UiPixel(&frame, panel.x + wide + wide / 2u, row);
+    const uint8_t *const wanted_panel = UiPixel(&frame, second.x + wide + wide / 2u, row);
     CHECK_TRUE(SUITE, "the two panels show two pictures and not one twice", CHECK_NONE,
                drawn != NULL && wanted_panel != NULL && drawn[2] == fixture_got[4] &&
                    wanted_panel[2] == fixture_expected[4],
@@ -2241,6 +2244,7 @@ void RunSupport(void) {
     CheckLaunchAndMode();
     CheckLayout();
     RunSupportScreens();
+    RunSupportBrowse();
     RunSupportJournal(Scratch());
     RunSupportBaseline(Scratch());
 
