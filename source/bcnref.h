@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -37,6 +38,58 @@ uint32_t BcnBlockOffset(const BcnArray *array, uint32_t layer, uint32_t level, u
 /// The blocks of @p level in each direction.
 uint32_t BcnLevelBlocksX(const BcnArray *array, uint32_t level);
 uint32_t BcnLevelBlocksY(const BcnArray *array, uint32_t level);
+
+/// The BCn formats, as the decoder below takes them. Every block is 4x4 texels, little endian,
+/// texel (x, y) number y * 4 + x.
+typedef enum {
+    BCN_BC1,       ///< 8 bytes: two RGB565 endpoints and two bit indices; a first endpoint not
+                   ///< above the second has three colours and transparent black
+    BCN_BC2,       ///< 16 bytes: a four bit alpha a texel, then a BC1 colour block of four colours
+    BCN_BC3,       ///< 16 bytes: a BC4 alpha block, then a BC1 colour block of four colours
+    BCN_BC4,       ///< 8 bytes: one channel, unsigned
+    BCN_BC4_SNORM, ///< the same, signed
+    BCN_BC5,       ///< 16 bytes: two BC4 blocks, red then green, unsigned
+    BCN_BC5_SNORM, ///< the same, signed
+    BCN_BC6H_UF,   ///< 16 bytes: HDR RGB as unsigned halves, alpha one
+    BCN_BC6H_SF,   ///< the same bits, signed
+    BCN_BC7,       ///< 16 bytes: RGBA, eight modes
+    BCN_KINDS,
+} BcnKind;
+
+/// How BC1 to BC5's interpolated values are rounded, which the specification leaves to the
+/// implementation; BC6H and BC7 decode one way under every rule.
+typedef enum {
+    /// NVIDIA's, the console's texture unit: BC1's red and blue from the five bit codes, its green
+    /// from the eight bit ends by 80 of 256, BC3's alpha in 2048ths from the nearer end, BC4 in
+    /// 257ths (258ths signed). What ScarletNX's BCn decoder test measured on an NVIDIA card.
+    BCN_RULE_NVIDIA,
+    /// The exact thirds, halves, sevenths and fifths of the eight bit ends, rounded to nearest.
+    BCN_RULE_ROUNDED,
+    /// The same, cut toward nought: Pillow's decoder, which the reference suite holds blocks to.
+    BCN_RULE_TRUNCATED,
+    /// The weights BPTC's two and three bit indices take (21 and 43 of 64 for the thirds, 9 to 55
+    /// for the sevenths, 13 to 51 for the fifths), rounded: what RADV on an RX 6700 XT gives.
+    BCN_RULE_SIXTYFOURTHS,
+    BCN_RULES,
+} BcnRule;
+
+/// The bytes of one block of @p kind.
+uint32_t BcnBlockBytes(BcnKind kind);
+
+/// Decodes one block. A texel's channels: bytes for BC1, BC2, BC3 and BC7; 16 bit UNORM, or SNORM
+/// as an int16_t's bits, for BC4 (red, then nought, nought, all ones) and BC5 (red, green, nought,
+/// all ones); half floats for BC6H, alpha 1.0. A BC6H block of a reserved mode is opaque black,
+/// a BC7 block with no mode transparent black.
+void BcnDecodeBlock(BcnKind kind, BcnRule rule, const uint8_t *block, uint16_t texels[16][4]);
+
+/// What a channel @p value of @p kind (as BcnDecodeBlock gives it) reaches a UNORM8 target as:
+/// bytes as they are, 16 bit UNORM over 257 rounded, a half clamped to [0, 1] times 255 rounded.
+/// The alpha of BC4, BC5 and BC6H is the target's 255. @p ties is set when the half lands on a
+/// half step, where either byte beside it is right; NULL for none.
+uint8_t BcnTarget8(BcnKind kind, uint32_t channel, uint16_t value, bool *ties);
+
+/// The float a half's bits stand for.
+float BcnHalf(uint16_t half);
 
 /// A BC4 block whose sixteen texels are all @p value: both endpoints @p value, every index 0.
 void BcnSolidBc4(uint8_t block[8], uint8_t value);
