@@ -634,6 +634,19 @@ static void CheckHeavy(void) {
     Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 55");
     verdict = Verdict(3u, 70u, 120u, &machine);
     Expect(&t, WimsyVerdictPasses(&verdict), "thin faces turned just away, drawn, pass at frame 70");
+    // So is a machine whose samples are a 64th of a pixel aside, half the edge margin. In a
+    // field of grass two blades may each reach some of the places a sample may be and both miss
+    // the sample itself, where a third shows through: a reference that took the two together
+    // for a cover refused 11 pixels of level 3's first frame and 29 of level 4's, and one to
+    // three a frame of a desktop card's.
+    machine = WimsyMachineRight(3u);
+    machine.nudge = 2u;
+    verdict = Verdict(3u, 0u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "a 64th of a pixel aside passes at level 3");
+    machine = WimsyMachineRight(4u);
+    machine.nudge = 2u;
+    verdict = Verdict(4u, 0u, 600u, &machine);
+    Expect(&t, WimsyVerdictPasses(&verdict), "a 64th of a pixel aside passes at level 4");
     machine = WimsyMachineRight(4u);
     verdict = Verdict(4u, 599u, 600u, &machine);
     Expect(&t, WimsyVerdictPasses(&verdict) && verdict.held > 800000u, "level 4's last frame as asked");

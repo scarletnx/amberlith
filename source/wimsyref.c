@@ -913,7 +913,7 @@ bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uin
 WimsyMachine WimsyMachineRight(uint32_t level) {
     const WimsyMachine machine = {
         level == 0u ? 1u : 4u, level != 0u, true, true, 0u,   0u,   true,
-        0u,                    true,        0u,   false, 0u,  true, true, true
+        0u,                    true,        0u,   false, 0u,  true, true, true, 0u
     };
     return machine;
 }
@@ -961,14 +961,29 @@ typedef struct {
     /// The texture coordinates over w and one over w, each a plane over the target: at (x, y)
     /// the coordinate is its plane's value over the last one's.
     double u_plane[3], v_plane[3], w_plane[3];
+    /// Which surface it is a piece of: a model, the world, or a blade of grass by itself. The
+    /// triangles of one meet edge to edge, so where one stops the next begins.
+    uint32_t surface;
 } Triangle;
 
+/// The world's surface, and the first blade's; a model's is its number.
+#define SURFACE_WORLD 0x10000u
+#define SURFACE_BLADE 0x20000u
+#define SURFACE_NONE UINT32_MAX
+
 typedef struct {
-    /// The nearest fragment at each of the sample's places, FLT_MAX where there is none.
+    /// The nearest fragment of the surface in hand at each of the sample's places, FLT_MAX
+    /// where it has none, and which surface that is.
     float nearest[PLACES];
-    /// The depth nothing farther can show through: the farthest of the five when every place
-    /// has a fragment, FLT_MAX when one has none and the clear colour may show.
+    uint32_t surface;
+    /// The depth nothing farther can show through: the least, over the surfaces that have a
+    /// fragment at every place, of the surface's farthest of the five; FLT_MAX when no surface
+    /// has, and the clear colour may show. One surface, not several between them: two blades
+    /// of grass that each reach some of the places may both miss the sample itself, where a
+    /// model's triangles, meeting edge to edge, cannot.
     float cover;
+    /// The nearest fragment of any surface at any place.
+    float least;
     /// The range of the colours that may show.
     uint8_t low[3];
     uint8_t high[3];
@@ -1049,7 +1064,8 @@ static void SamplePlaces(Scene *scene) {
 /// Where sample @p s of the pixel at (@p px, @p py) is inside it.
 static void SamplePlace(const Scene *scene, uint32_t px, uint32_t py, uint32_t s, double *x,
                         double *y) {
-    *x = scene->place[py & 1u][px & 1u][s][0];
+    *x = scene->place[py & 1u][px & 1u][s][0] +
+         (scene->judging ? 0.0 : (double)scene->machine.nudge / 128.0);
     *y = scene->place[py & 1u][px & 1u][s][1];
 }
 
@@ -1470,6 +1486,7 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
                                        (double)((float)palette[1] / 255.0f) * (double)tint[1],
                                        (double)((float)palette[2] / 255.0f) * (double)tint[2] };
             if (SetUp(scene, v, colour, WIMSY_MATERIAL_MODEL, (double)x0, (double)y0, &triangle)) {
+                triangle.surface = i;
                 each(scene, &triangle, x0, y0);
             }
         }
@@ -1485,6 +1502,7 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
             const double colour[3] = { (double)world_vertices[t].r, (double)world_vertices[t].g,
                                        (double)world_vertices[t].b };
             if (SetUp(scene, v, colour, draw->material, (double)x0, (double)y0, &triangle)) {
+                triangle.surface = SURFACE_WORLD;
                 each(scene, &triangle, x0, y0);
             }
         }
@@ -1507,9 +1525,24 @@ static void OverTile(Scene *scene, uint32_t x0, uint32_t y0, EachTriangle each) 
                                    (double)((float)bytes[1] / 255.0f),
                                    (double)((float)bytes[2] / 255.0f) };
         if (SetUp(scene, v, colour, WIMSY_MATERIAL_FLAT, (double)x0, (double)y0, &triangle)) {
+            triangle.surface = SURFACE_BLADE + b;
             each(scene, &triangle, x0, y0);
         }
     }
+}
+
+/// Ends the surface a sample has in hand: one with a fragment at every place covers the sample,
+/// and nothing farther than its farthest of the five shows through.
+static void SurfaceDone(Sample *sample) {
+    float farthest = 0.0f;
+    for (uint32_t place = 0; place < PLACES; ++place) {
+        farthest = sample->nearest[place] > farthest ? sample->nearest[place] : farthest;
+        sample->nearest[place] = FLT_MAX;
+    }
+    if (farthest < sample->cover) {
+        sample->cover = farthest;
+    }
+    sample->surface = SURFACE_NONE;
 }
 
 /// The first pass: the nearest fragment at each place of each sample, from the triangles that
@@ -1528,6 +1561,10 @@ static void PassNearest(const Scene *scene, const Triangle *t, uint32_t x0, uint
                 double sx, sy;
                 SamplePlace(scene, x0 + px, y0 + py, s, &sx, &sy);
                 Sample *const sample = &samples[(py * TILE + px) * SAMPLES_MAX + s];
+                if (sample->surface != t->surface) {
+                    SurfaceDone(sample);
+                    sample->surface = t->surface;
+                }
                 for (uint32_t place = 0; place < PLACES; ++place) {
                     const double x = (double)(x0 + px) + sx + PLACE[place][0] * WIMSY_EDGE_MARGIN;
                     const double y = (double)(y0 + py) + sy + PLACE[place][1] * WIMSY_EDGE_MARGIN;
@@ -1539,6 +1576,9 @@ static void PassNearest(const Scene *scene, const Triangle *t, uint32_t x0, uint
                     const float depth = (float)(t->depth_x * x + t->depth_y * y + t->depth_0);
                     if (depth < sample->nearest[place]) {
                         sample->nearest[place] = depth;
+                    }
+                    if (depth < sample->least) {
+                        sample->least = depth;
                     }
                 }
             }
@@ -1842,12 +1882,11 @@ static void SmokeOver(const Scene *scene, uint32_t x0, uint32_t y0) {
                     Sample *const sample = &samples[(py * TILE + px) * SAMPLES_MAX + s];
                     // Inside the square at every place the sample may be, or at some, or at none.
                     uint32_t inside = 0;
-                    float nearest = FLT_MAX;
+                    const float nearest = sample->least;
                     for (uint32_t place = 0; place < PLACES; ++place) {
                         const double x = left + sx + PLACE[place][0] * WIMSY_EDGE_MARGIN;
                         const double y = top + sy + PLACE[place][1] * WIMSY_EDGE_MARGIN;
                         inside += fabs(x - middle_x) <= reach_x && fabs(y - middle_y) <= reach_y ? 1u : 0u;
-                        nearest = sample->nearest[place] < nearest ? sample->nearest[place] : nearest;
                     }
                     // Surely behind what covers the sample: nothing of it shows.
                     if (inside == 0u ||
@@ -1896,6 +1935,9 @@ static void TileRanges(Scene *scene, uint32_t x0, uint32_t y0) {
         for (uint32_t place = 0; place < PLACES; ++place) {
             sample->nearest[place] = FLT_MAX;
         }
+        sample->surface = SURFACE_NONE;
+        sample->cover = FLT_MAX;
+        sample->least = FLT_MAX;
         sample->any = false;
     }
     OverTile(scene, x0, y0, PassNearest);
@@ -1903,11 +1945,7 @@ static void TileRanges(Scene *scene, uint32_t x0, uint32_t y0) {
                               (double)WIMSY_CLEAR[2] };
     for (uint32_t i = 0; i < TILE * TILE * SAMPLES_MAX; ++i) {
         Sample *const sample = &samples[i];
-        sample->cover = 0.0f;
-        for (uint32_t place = 0; place < PLACES; ++place) {
-            sample->cover =
-                sample->nearest[place] > sample->cover ? sample->nearest[place] : sample->cover;
-        }
+        SurfaceDone(sample);
         if (sample->cover == FLT_MAX) {
             Widen(sample, clear, clear);
         }
