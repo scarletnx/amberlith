@@ -26,7 +26,7 @@ extern "C" {
 /// chip's sixteen rates), its total level and the tremolo. The modulator's output moves the
 /// carrier's phase (or the two are added), the modulator can feed itself back, and each channel
 /// sits left, right or in the middle. The sum goes through the card's coupling, a high pass near
-/// 10 Hz, and the track's gain.
+/// 6 Hz, and the track's gain.
 
 #define MUSIC_RATE 48000u
 #define MUSIC_FM_CHANNELS 10u
