@@ -69,6 +69,7 @@ static const char *const SUITE = "wimsy";
 // A draw's uniform buffer starts where the graphics unit lets one start.
 #define INSTANCE_STRIDE DK_UNIFORM_BUF_ALIGNMENT
 _Static_assert(sizeof(WimsyInstance) <= INSTANCE_STRIDE, "an instance fits a uniform buffer's step");
+_Static_assert(sizeof(WimsyBlade) == 20u, "a blade is the instance buffer's step, no gap in it");
 _Static_assert(sizeof(WimsyInstance) == 128u && sizeof(WimsyLight) == 32u,
                "the blocks are laid out as the shaders read them");
 _Static_assert(sizeof(WimsyWorldVertex) == sizeof(GpuVertex) &&
@@ -119,6 +120,10 @@ static DkShader texture_fs;
 static DkShader model_vs;
 static DkShader lit_fs;
 static DkShader world_vs;
+static DkShader grass_vs;
+static DkGpuAddr blade_unit;
+static DkGpuAddr blade_instances;
+static uint32_t blade_count;
 static DkShader flat_fs;
 static DkShader fill_cs;
 static DkImage compute_textures[WIMSY_COMPUTE_TEXTURES];
@@ -524,6 +529,30 @@ static void RecordWorld(uint32_t slot) {
     }
     rasterizer.depthBiasEnableMask = 0u;
     dkCmdBufBindRasterizerState(gpu.cmdbuf, &rasterizer);
+    if (blade_count != 0u) {
+        // The grass: one draw of a blade's three corners, an instance a blade.
+        const DkShader *const shaders[] = { &grass_vs, &flat_fs };
+        dkCmdBufBindShaders(gpu.cmdbuf, DkStageFlag_Vertex | DkStageFlag_Fragment, shaders, 2);
+        static const DkVtxAttribState attributes[] = {
+            { .bufferId = 0, .isFixed = 0, .offset = 0, .size = DkVtxAttribSize_2x32,
+              .type = DkVtxAttribType_Float, .isBgra = 0 },
+            { .bufferId = 1, .isFixed = 0, .offset = offsetof(WimsyBlade, x),
+              .size = DkVtxAttribSize_4x32, .type = DkVtxAttribType_Float, .isBgra = 0 },
+            { .bufferId = 1, .isFixed = 0, .offset = offsetof(WimsyBlade, colour),
+              .size = DkVtxAttribSize_4x8, .type = DkVtxAttribType_Unorm, .isBgra = 0 },
+        };
+        static const DkVtxBufferState buffers[] = { { 2u * sizeof(float), 0 },
+                                                    { sizeof(WimsyBlade), 1 } };
+        dkCmdBufBindVtxAttribState(gpu.cmdbuf, attributes,
+                                   sizeof(attributes) / sizeof(attributes[0]));
+        dkCmdBufBindVtxBufferState(gpu.cmdbuf, buffers, 2);
+        dkCmdBufBindVtxBuffer(gpu.cmdbuf, 0, blade_unit, 6u * (uint32_t)sizeof(float));
+        dkCmdBufBindVtxBuffer(gpu.cmdbuf, 1, blade_instances,
+                              blade_count * (uint32_t)sizeof(WimsyBlade));
+        dkCmdBufBindUniformBuffer(gpu.cmdbuf, DkStage_Vertex, 0, view_gpu[slot],
+                                  DK_UNIFORM_BUF_ALIGNMENT);
+        dkCmdBufDraw(gpu.cmdbuf, DkPrimitive_Triangles, 3, blade_count, 0, 0);
+    }
 }
 
 /// A higher level's frame: the models into a target of four samples behind a depth buffer, the
@@ -858,6 +887,8 @@ static bool BringUp(char *why, size_t why_size) {
                       ShaderSize(SHADER_WIMSY_LIT_FRAG)) &&
         GpuLoadShader(&gpu, &world_vs, ShaderData(SHADER_WIMSY_WORLD_VERT),
                       ShaderSize(SHADER_WIMSY_WORLD_VERT)) &&
+        GpuLoadShader(&gpu, &grass_vs, ShaderData(SHADER_WIMSY_GRASS_VERT),
+                      ShaderSize(SHADER_WIMSY_GRASS_VERT)) &&
         GpuLoadShader(&gpu, &flat_fs, ShaderData(SHADER_FLAT_FRAG), ShaderSize(SHADER_FLAT_FRAG)) &&
         GpuLoadShader(&gpu, &fill_cs, ShaderData(SHADER_WIMSY_FILL_COMP),
                       ShaderSize(SHADER_WIMSY_FILL_COMP));
@@ -965,6 +996,11 @@ static bool BringUp(char *why, size_t why_size) {
         "the world's vertices", why, why_size);
     GpuVertex *const shown = (GpuVertex *)Scratch(6u * (uint32_t)sizeof(GpuVertex), 256u,
                                                   &shown_quad, "the quad shown", why, why_size);
+    float *const unit = (float *)Scratch(6u * (uint32_t)sizeof(float), 256u, &blade_unit,
+                                         "a blade's corners", why, why_size);
+    WimsyBlade *const blades = (WimsyBlade *)Scratch(
+        WIMSY_BLADES * (uint32_t)sizeof(WimsyBlade), 256u, &blade_instances, "the grass", why,
+        why_size);
     ModelVertex *vertices[WIMSY_MESH_VARIANTS];
     for (uint32_t variant = 0; variant < WIMSY_MESH_VARIANTS; ++variant) {
         vertices[variant] = (ModelVertex *)Scratch(
@@ -987,6 +1023,10 @@ static bool BringUp(char *why, size_t why_size) {
     }
     world_draw_count = WimsyWorldOf(level, (WimsyWorldVertex *)world, &world_vertex_count,
                                     world_draws);
+    // The corners WimsyBladeCorner places: the two feet and the tip.
+    static const float UNIT[6] = { -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f };
+    memcpy(unit, UNIT, sizeof(UNIT));
+    blade_count = WimsyBladesOf(level, blades);
     static const uint8_t WHITE[4] = { 255, 255, 255, 255 };
     panel_count = WimsyPanelsOf(level, panels);
     for (uint32_t i = 0; i < panel_count; ++i) {
