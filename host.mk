@@ -15,12 +15,30 @@ HOSTFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -MMD -M
 HOSTOBJ  := $(patsubst source/%.c,build-host/%.o,$(HOSTSRC))
 HOSTDEP  := $(HOSTOBJ:.o=.d)
 
+# The NVN layer's own test (nvnlayer/tests), once for each API version the layer builds for: its
+# shared part, the API 231 build's bodies and the API 55 build's control sections, none of which
+# touches the console.
+LAYERTEST := build-host/nvnlayer-test-55 build-host/nvnlayer-test-231
+LAYERFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -Invnlayer/include
+
 .PHONY: host host-run host-clean music-wav
 
 # Where the fluid demo's budgets come from, measured on the processor (tools/fluid-envelope.c).
 FLUIDTOOL := build-host/fluid-envelope
 
-host: $(HOSTOUT) $(FLUIDTOOL)
+host: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST)
+
+build-host/nvnlayer-test-55: nvnlayer/tests/layer_test.c nvnlayer/source/layer.c \
+                             nvnlayer/source/api55_shader.c $(wildcard nvnlayer/source/*.h) \
+                             $(wildcard nvnlayer/include/*.h nvnlayer/include/nvn/*.h)
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=55 $(filter %.c,$^) -o $@
+
+build-host/nvnlayer-test-231: nvnlayer/tests/layer_test.c nvnlayer/source/layer.c \
+                              nvnlayer/source/api231_surface.c $(wildcard nvnlayer/source/*.h) \
+                              $(wildcard nvnlayer/include/*.h nvnlayer/include/nvn/*.h)
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=231 $(filter %.c,$^) -o $@
 
 build-host/%.o: source/%.c
 	@mkdir -p $(dir $@)
@@ -34,13 +52,16 @@ $(FLUIDTOOL): tools/fluid-envelope.c build-host/demo_fluidref.o
 
 # Twice, the second from somewhere else on purpose: a path built relative to the working
 # directory works from here and nowhere else, and the suite has to be able to notice that. Then
-# the report tools, which read what the binary wrote and have tests of their own, the CI's
+# the NVN layer's test in both of its API versions, the report tools, which read what the binary
+# wrote and have tests of their own, the CI's
 # scripts in .github/scripts, against a fake GitHub and a fake Discord, and the APK's runners,
 # against a fake adb and a fake ScarletNX driver. The fluid demo's budgets are measured between
 # them, on the early frames and a default run's 600.
-host-run: $(HOSTOUT) $(FLUIDTOOL)
+host-run: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST)
 	./$(HOSTOUT)
 	cd / && exec $(CURDIR)/$(HOSTOUT)
+	./build-host/nvnlayer-test-55
+	./build-host/nvnlayer-test-231
 	./$(FLUIDTOOL) 64 600
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts

@@ -289,7 +289,7 @@ void Tex8kSetTiming(bool on);
 /// unavailable with both numbers.
 void Tex8kSetVram(uint32_t mib);
 
-/// The nvn family: the program's NVN (nvnlayer.c, on deko3d) looked up by name as a game looks up
+/// The nvn family: the program's NVN (nvnlayer/, on deko3d) looked up by name as a game looks up
 /// its driver's, a device and a queue brought up through it, a 64x64 target cleared and read back
 /// pixel by pixel, and a window that acquires and presents both its textures. Under ScarletNX the
 /// same calls reach ScarletNX's NVN instead of the layer.

@@ -7,15 +7,17 @@
 
 #include <switch.h>
 
+#include <nvnlayer.h>
+
 #include "../check.h"
-#include "../nvnlayer.h"
+#include "../gpu.h"
 #include "../picture.h"
 #include "../report.h"
 #include "../viewer.h"
 #include "tests.h"
 
 // The nvn family: the clear suite's question asked through NVN, as a game asks it, with the
-// layer of nvnlayer.c as the driver. On the console and in Eden the layer records deko3d
+// layer of nvnlayer/ as the driver. On the console and in Eden the layer records deko3d
 // commands and the graphics unit answers; under ScarletNX, ScarletNX's own NVN takes every
 // function the case looks up and answers instead. Everything goes through the functions the
 // lookup handed back, never through the layer's code by name, so the case is the same program on
@@ -589,6 +591,9 @@ void RunNvn(void) {
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
+    // deko3d ends the program when it cannot make an object; under gpu.c's guard a bring-up
+    // that fails in the layer is a false result with its reason, which a case reports.
+    NvnLayerSetGuard(AbortGuarded);
     NvnLayerClearError();
     if (!ReportStart(SUITE, RESOLVE)) {
         return;

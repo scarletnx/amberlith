@@ -1,21 +1,14 @@
 // SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 
-#include <deko3d.h>
-#include <switch.h>
+#include "api55.h"
 
-#include "gpu.h"
-#include "nvnlayer.h"
-
-// NVN on deko3d. Each NVN object is storage the program owns, of the size nvn/nvn.h gives it;
-// the layer keeps its own record at the start of it, as a driver keeps its fields there, and
-// nothing else reads those bytes: a case asks every question through an NVN function, since
-// under ScarletNX the same storage holds ScarletNX's record instead.
+// The API 55 build: NVN on deko3d. Each NVN object is storage the program owns, of the size
+// nvn/nvn.h gives it; the layer keeps its own record at the start of it, as a driver keeps its
+// fields there, and nothing else reads those bytes: a program asks every question through an NVN
+// function, since under ScarletNX the same storage holds ScarletNX's record instead.
 //
 // deko3d stands for the driver in every choice NVN leaves to it, and where the two disagree the
 // layer takes NVN's word: the device starts with NVN's lower left origin and near plane at -w, a
@@ -23,192 +16,8 @@
 // flags. A choice NVN documents and this layer has not made yet is refused with its value in
 // NvnLayerError, never filled in with a guess.
 
-// ---- the failure a case reports
 
-static char layer_error[256];
-
-const char *NvnLayerError(void) {
-    return layer_error;
-}
-
-void NvnLayerClearError(void) {
-    layer_error[0] = '\0';
-}
-
-/// Keeps the first failure since the last clear: whatever fails after it is usually its
-/// consequence, and the first one is the one worth a line in the report.
-static void Complain(const char *format, ...) {
-    if (layer_error[0] != '\0') {
-        return;
-    }
-    va_list args;
-    va_start(args, format);
-    vsnprintf(layer_error, sizeof(layer_error), format, args);
-    va_end(args);
-}
-
-// ---- what the layer keeps in each NVN object
-
-#define MAGIC_DEVICE 0x4e4c4456u  // "VDLN"
-#define MAGIC_QUEUE 0x4e4c5155u   // "UQLN"
-#define MAGIC_POOL 0x4e4c504fu    // "OPLN"
-#define MAGIC_TEXTURE 0x4e4c5458u // "XTLN"
-#define MAGIC_CMDBUF 0x4e4c4342u  // "BCLN"
-#define MAGIC_WINDOW 0x4e4c5749u  // "IWLN"
-
-// NVN's windows take two to four textures (nvnDeviceGetInteger's MIN and MAX_TEXTURES_PER_WINDOW).
-#define WINDOW_TEXTURES_MAX 4
-// deko3d's limit on colour targets, which is NVN's too.
-#define COLOR_TARGETS_MAX 8
-
-typedef struct {
-    uint32_t magic;
-    DkDevice device;
-} LayerDevice;
-
-typedef struct {
-    int flags;
-} LayerDeviceBuilder;
-
-typedef struct {
-    NVNdevice *device;
-} LayerQueueBuilder;
-
-typedef struct {
-    uint32_t magic;
-    DkQueue queue;
-} LayerQueue;
-
-typedef struct {
-    NVNdevice *device;
-    void *storage;
-    size_t size;
-    int flags;
-} LayerPoolBuilder;
-
-typedef struct {
-    uint32_t magic;
-    DkMemBlock block;
-} LayerPool;
-
-typedef struct {
-    NVNdevice *device;
-    int flags;
-    NVNtextureTarget target;
-    NVNformat format;
-    int width;
-    int height;
-    NVNmemoryPool *pool;
-    ptrdiff_t offset;
-} LayerTextureBuilder;
-
-typedef struct {
-    DkImage image; // first: deko3d wants it at its own alignment, which the object's start has
-    uint32_t magic;
-} LayerTexture;
-
-typedef struct {
-    uint32_t magic;
-    DkCmdBuf cmdbuf;
-    /// nvnCommandBufferSetCopyRowStride's, nought for rows packed tight, NVN's default.
-    uint32_t copy_row_stride;
-} LayerCommandBuffer;
-
-typedef struct {
-    NVNdevice *device;
-    NVNnativeWindow native;
-    int count;
-    NVNtexture *const *textures;
-} LayerWindowBuilder;
-
-typedef struct {
-    uint32_t magic;
-    DkSwapchain swapchain;
-} LayerWindow;
-
-_Static_assert(sizeof(LayerDevice) <= sizeof(NVNdevice), "the device record fits NVNdevice");
-_Static_assert(sizeof(LayerDeviceBuilder) <= sizeof(NVNdeviceBuilder), "fits NVNdeviceBuilder");
-_Static_assert(sizeof(LayerQueueBuilder) <= sizeof(NVNqueueBuilder), "fits NVNqueueBuilder");
-_Static_assert(sizeof(LayerQueue) <= sizeof(NVNqueue), "fits NVNqueue");
-_Static_assert(sizeof(LayerPoolBuilder) <= sizeof(NVNmemoryPoolBuilder), "fits the builder");
-_Static_assert(sizeof(LayerPool) <= sizeof(NVNmemoryPool), "fits NVNmemoryPool");
-_Static_assert(sizeof(LayerTextureBuilder) <= sizeof(NVNtextureBuilder), "fits the builder");
-_Static_assert(sizeof(LayerTexture) <= sizeof(NVNtexture), "fits NVNtexture");
-_Static_assert(sizeof(LayerCommandBuffer) <= sizeof(NVNcommandBuffer), "fits NVNcommandBuffer");
-_Static_assert(sizeof(LayerWindowBuilder) <= sizeof(NVNwindowBuilder), "fits the builder");
-_Static_assert(sizeof(LayerWindow) <= sizeof(NVNwindow), "fits NVNwindow");
-
-/// The layer's record in @p object, or NULL with a complaint when the object is not on the eight
-/// byte boundary NVN asks of its objects: nvn/nvn.h declares them as bytes, so the compiler does
-/// not place them there by itself, and a case that forgot gets told rather than a misaligned load.
-static void *Record(const void *object, const char *what) {
-    if (object == NULL) {
-        Complain("%s: no object", what);
-        return NULL;
-    }
-    if (((uintptr_t)object & 7u) != 0u) {
-        Complain("%s: the object at %p is not 8-byte aligned, as NVN objects must be", what,
-                 object);
-        return NULL;
-    }
-    return (void *)(uintptr_t)object;
-}
-
-static LayerDevice *DeviceOf(const NVNdevice *device, const char *what) {
-    LayerDevice *const record = Record(device, what);
-    if (record != NULL && record->magic != MAGIC_DEVICE) {
-        Complain("%s: the device was not initialized", what);
-        return NULL;
-    }
-    return record;
-}
-
-static LayerPool *PoolOf(const NVNmemoryPool *pool, const char *what) {
-    LayerPool *const record = Record(pool, what);
-    if (record != NULL && record->magic != MAGIC_POOL) {
-        Complain("%s: the memory pool was not initialized", what);
-        return NULL;
-    }
-    return record;
-}
-
-static LayerTexture *TextureOf(const NVNtexture *texture, const char *what) {
-    LayerTexture *const record = Record(texture, what);
-    if (record != NULL && record->magic != MAGIC_TEXTURE) {
-        Complain("%s: the texture was not initialized", what);
-        return NULL;
-    }
-    return record;
-}
-
-static LayerQueue *QueueOf(const NVNqueue *queue, const char *what) {
-    LayerQueue *const record = Record(queue, what);
-    if (record != NULL && record->magic != MAGIC_QUEUE) {
-        Complain("%s: the queue was not initialized", what);
-        return NULL;
-    }
-    return record;
-}
-
-static LayerCommandBuffer *CmdOf(const NVNcommandBuffer *cmd, const char *what) {
-    LayerCommandBuffer *const record = Record(cmd, what);
-    if (record != NULL && record->magic != MAGIC_CMDBUF) {
-        Complain("%s: the command buffer was not initialized", what);
-        return NULL;
-    }
-    return record;
-}
-
-static LayerWindow *WindowOf(const NVNwindow *window, const char *what) {
-    LayerWindow *const record = Record(window, what);
-    if (record != NULL && record->magic != MAGIC_WINDOW) {
-        Complain("%s: the window was not initialized", what);
-        return NULL;
-    }
-    return record;
-}
-
-// ---- deko3d's constructors, which abort on a failure: run under gpu.c's AbortGuarded, their
+// ---- deko3d's constructors, which abort on a failure: run under the program's guard, their
 // arguments passed through here because a guarded call takes none. One thread calls the layer.
 
 static struct {
@@ -245,30 +54,40 @@ static void AcquireImage(void) {
     pending.acquired = dkQueueAcquireImage(pending.acquire_queue, pending.acquire_swapchain);
 }
 
-/// Runs @p call, and on an abort says which call and with what result.
-static bool Guarded(void (*call)(void), const char *what) {
-    uint32_t result = 0;
-    if (AbortGuarded(call, &result)) {
-        return true;
-    }
-    Complain("%s ended in deko3d's abort, result 0x%x", what, (unsigned)result);
-    return false;
-}
-
 // ---- the device
 
-static void Nvnl_nvnDeviceBuilderSetDefaults(NVNdeviceBuilder *builder) {
+void Nvnl_nvnDeviceBuilderSetDefaults(NVNdeviceBuilder *builder) {
     memset(builder, 0, sizeof(*builder));
 }
 
-static void Nvnl_nvnDeviceBuilderSetFlags(NVNdeviceBuilder *builder, int flags) {
+void Nvnl_nvnDeviceBuilderSetFlags(NVNdeviceBuilder *builder, int flags) {
     LayerDeviceBuilder *const record = Record(builder, "nvnDeviceBuilderSetFlags");
     if (record != NULL) {
         record->flags = flags;
     }
 }
 
-static NVNboolean Nvnl_nvnDeviceInitialize(NVNdevice *device, const NVNdeviceBuilder *builder) {
+/// deko3d's device for @p record's two modes; false with a complaint naming @p what.
+static bool MakeLayerDevice(LayerDevice *record, const char *what) {
+    dkDeviceMakerDefaults(&pending.device_maker);
+    pending.device_maker.flags =
+        (record->origin == NVN_WINDOW_ORIGIN_MODE_LOWER_LEFT ? DkDeviceFlags_OriginLowerLeft
+                                                              : DkDeviceFlags_OriginUpperLeft) |
+        (record->depth == NVN_DEPTH_MODE_NEAR_IS_MINUS_W ? DkDeviceFlags_DepthMinusOneToOne
+                                                          : DkDeviceFlags_DepthZeroToOne);
+    pending.device = NULL;
+    if (!LayerGuarded(MakeDevice, what)) {
+        return false;
+    }
+    if (pending.device == NULL) {
+        LayerComplain("%s: dkDeviceCreate gave no device", what);
+        return false;
+    }
+    record->device = pending.device;
+    return true;
+}
+
+NVNboolean Nvnl_nvnDeviceInitialize(NVNdevice *device, const NVNdeviceBuilder *builder) {
     LayerDevice *const record = Record(device, "nvnDeviceInitialize");
     const LayerDeviceBuilder *const from = Record(builder, "nvnDeviceInitialize");
     if (record == NULL || from == NULL) {
@@ -277,30 +96,85 @@ static NVNboolean Nvnl_nvnDeviceInitialize(NVNdevice *device, const NVNdeviceBui
     // The flags all ask for the debug layer or for finalizes deferred by age, which this layer
     // does not have; a case that sets one is told, rather than run without it.
     if (from->flags != 0) {
-        Complain("nvnDeviceInitialize: device flags 0x%x, and the layer takes 0 only",
-                 (unsigned)from->flags);
+        LayerComplain("nvnDeviceInitialize: device flags 0x%x, and the layer takes 0 only",
+                      (unsigned)from->flags);
         return 0;
     }
-    dkDeviceMakerDefaults(&pending.device_maker);
-    // NVN's defaults (nvnDeviceSetWindowOriginMode, nvnDeviceSetDepthMode): the window's origin
-    // in its lower left corner and the near plane at -w, OpenGL's conventions. deko3d sets them
-    // once, at creation, so the two setters are not in this layer.
-    pending.device_maker.flags = DkDeviceFlags_OriginLowerLeft | DkDeviceFlags_DepthMinusOneToOne;
-    pending.device = NULL;
-    if (!Guarded(MakeDevice, "nvnDeviceInitialize: dkDeviceCreate")) {
-        return 0;
-    }
-    if (pending.device == NULL) {
-        Complain("nvnDeviceInitialize: dkDeviceCreate gave no device");
-        return 0;
-    }
+    // NVN's defaults: the window's origin in its lower left corner and the near plane at -w,
+    // OpenGL's conventions.
     memset(device, 0, sizeof(*device));
+    record->origin = NVN_WINDOW_ORIGIN_MODE_LOWER_LEFT;
+    record->depth = NVN_DEPTH_MODE_NEAR_IS_MINUS_W;
+    if (!MakeLayerDevice(record, "nvnDeviceInitialize")) {
+        return 0;
+    }
     record->magic = MAGIC_DEVICE;
-    record->device = pending.device;
     return 1;
 }
 
-static void Nvnl_nvnDeviceFinalize(NVNdevice *device) {
+/// The device's two modes, which NVN sets on a device it has made and deko3d takes only as it
+/// makes one: deko3d's device is made again with the mode, which is possible until something was
+/// made from it. A mode set later is refused, saying so.
+static void SetMode(NVNdevice *device, uint8_t origin, uint8_t depth, const char *what) {
+    LayerDevice *const record = DeviceOf(device, what);
+    if (record == NULL || (record->origin == origin && record->depth == depth)) {
+        return;
+    }
+    if (record->used) {
+        LayerComplain("%s after the device's first object: deko3d takes the origin and the "
+                      "depth mode only as it makes a device, so the layer takes them before "
+                      "any queue, pool, texture, command buffer or window",
+                      what);
+        return;
+    }
+    dkDeviceDestroy(record->device);
+    record->device = NULL;
+    record->origin = origin;
+    record->depth = depth;
+    if (!MakeLayerDevice(record, what)) {
+        record->magic = 0;
+    }
+}
+
+void Nvnl_nvnDeviceSetWindowOriginMode(NVNdevice *device, NVNwindowOriginMode mode) {
+    const LayerDevice *const record = DeviceOf(device, "nvnDeviceSetWindowOriginMode");
+    if (record == NULL) {
+        return;
+    }
+    if (mode != NVN_WINDOW_ORIGIN_MODE_LOWER_LEFT && mode != NVN_WINDOW_ORIGIN_MODE_UPPER_LEFT) {
+        LayerComplain("nvnDeviceSetWindowOriginMode: mode %d is neither lower left (%d) nor "
+                      "upper left (%d)",
+                      (int)mode, (int)NVN_WINDOW_ORIGIN_MODE_LOWER_LEFT,
+                      (int)NVN_WINDOW_ORIGIN_MODE_UPPER_LEFT);
+        return;
+    }
+    SetMode(device, (uint8_t)mode, record->depth, "nvnDeviceSetWindowOriginMode");
+}
+
+void Nvnl_nvnDeviceSetDepthMode(NVNdevice *device, NVNdepthMode mode) {
+    const LayerDevice *const record = DeviceOf(device, "nvnDeviceSetDepthMode");
+    if (record == NULL) {
+        return;
+    }
+    if (mode != NVN_DEPTH_MODE_NEAR_IS_MINUS_W && mode != NVN_DEPTH_MODE_NEAR_IS_ZERO) {
+        LayerComplain("nvnDeviceSetDepthMode: mode %d is neither near at -w (%d) nor near at "
+                      "zero (%d)",
+                      (int)mode, (int)NVN_DEPTH_MODE_NEAR_IS_MINUS_W,
+                      (int)NVN_DEPTH_MODE_NEAR_IS_ZERO);
+        return;
+    }
+    SetMode(device, record->origin, (uint8_t)mode, "nvnDeviceSetDepthMode");
+}
+
+NVNtextureHandle Nvnl_nvnDeviceGetTextureHandle(const NVNdevice *device, int texture,
+                                                int sampler) {
+    // The graphics unit's own handle, which is NVN's and deko3d's alike: the texture's place in
+    // the texture pool in bits 0 to 19, the sampler's in the sampler pool above them.
+    (void)device;
+    return dkMakeTextureHandle((uint32_t)texture, (uint32_t)sampler);
+}
+
+void Nvnl_nvnDeviceFinalize(NVNdevice *device) {
     LayerDevice *const record = DeviceOf(device, "nvnDeviceFinalize");
     if (record == NULL) {
         return;
@@ -308,49 +182,6 @@ static void Nvnl_nvnDeviceFinalize(NVNdevice *device) {
     dkDeviceDestroy(record->device);
     record->magic = 0;
 }
-
-// nvnDeviceGetInteger, in assembly, in the shape the console's NVN drivers give it: a bounded
-// switch on the item through a byte table scaled by four from an ADR, its cases setting w0. That
-// is the shape ScarletNX reads a game's API version out of, from the code, before the game asks
-// (its nvn_driver.c); a C switch compiles to another shape, and ScarletNX would then warn and
-// answer from its own table. Items 0 and 1, the API's major and minor version, are the two
-// constants here; every other item goes to NvnLayerDeviceInfo, which ScarletNX's reader sees as
-// an item it cannot read from code, and answers from its own table.
-//
-// The table holds the item's case as a word offset from label 2: 0 for the major version, 2 for
-// the minor, 4 for the rest. The item is zero-extended first, since the callee owns the upper
-// half of x1 and the table load indexes with all of it.
-#define LAYER_STRING(x) #x
-#define LAYER_EXPAND(x) LAYER_STRING(x)
-void NvnLayerDeviceGetInteger(const NVNdevice *device, NVNdeviceInfo item, int *value);
-void NvnLayerDeviceInfo(const NVNdevice *device, int item, int *value);
-__asm__(".section .text.NvnLayerDeviceGetInteger,\"ax\",%progbits\n"
-        ".global NvnLayerDeviceGetInteger\n"
-        ".hidden NvnLayerDeviceGetInteger\n"
-        ".type NvnLayerDeviceGetInteger, %function\n"
-        ".p2align 2\n"
-        "NvnLayerDeviceGetInteger:\n"
-        ".cfi_startproc\n"
-        "    mov w1, w1\n"
-        "    cmp w1, #0x68\n"
-        "    b.hi 1f\n"
-        "    adr x8, 3f\n"
-        "    ldrb w9, [x8, x1]\n"
-        "    adr x10, 2f\n"
-        "    add x10, x10, x9, lsl #2\n"
-        "    br x10\n"
-        "2:  mov w0, #" LAYER_EXPAND(NVN_LAYER_API_MAJOR) "\n"
-        "    b 4f\n"
-        "    mov w0, #" LAYER_EXPAND(NVN_LAYER_API_MINOR) "\n"
-        "    b 4f\n"
-        "1:  b NvnLayerDeviceInfo\n"
-        "4:  str w0, [x2]\n"
-        "    ret\n"
-        ".cfi_endproc\n"
-        "3:  .byte 0, 2\n"
-        "    .fill 0x67, 1, 4\n"
-        ".size NvnLayerDeviceGetInteger, . - NvnLayerDeviceGetInteger\n"
-        ".text\n");
 
 /// The items nvnDeviceGetInteger does not answer with a constant in its switch: the ones whose
 /// deko3d value the layer knows, from deko3d.h. Anything else is refused with its number, as a
@@ -390,9 +221,29 @@ void NvnLayerDeviceInfo(const NVNdevice *device, int item, int *value) {
     case NVN_DEVICE_INFO_MAX_TEXTURES_PER_WINDOW:
         answer = WINDOW_TEXTURES_MAX;
         break;
+    case NVN_DEVICE_INFO_UNIFORM_BUFFER_BINDINGS_PER_STAGE:
+        // deko3d's sixteen less the one the layer binds the texture handles as, and no more
+        // than NVN's own fourteen.
+        answer = 14;
+        break;
+    case NVN_DEVICE_INFO_TEXTURE_BINDINGS_PER_STAGE:
+        answer = LAYER_HANDLE_SLOTS;
+        break;
+    case NVN_DEVICE_INFO_VERTEX_ATTRIBUTES:
+        answer = DK_MAX_VERTEX_ATTRIBS;
+        break;
+    case NVN_DEVICE_INFO_RESERVED_TEXTURE_DESCRIPTORS:
+    case NVN_DEVICE_INFO_RESERVED_SAMPLER_DESCRIPTORS:
+        // NVN keeps the first descriptors of each pool to itself. deko3d keeps none; the layer
+        // answers NVN's count so a program numbers its textures the same on every machine.
+        answer = 256;
+        break;
+    case NVN_DEVICE_INFO_SHADER_CODE_MEMORY_POOL_PADDING_SIZE:
+        answer = DK_SHADER_CODE_UNUSABLE_SIZE;
+        break;
     default:
-        Complain("nvnDeviceGetInteger: item 0x%x has no answer in the layer yet: it reads 0",
-                 (unsigned)item);
+        LayerComplain("nvnDeviceGetInteger: item 0x%x has no answer in the layer yet: it reads 0",
+                      (unsigned)item);
         answer = 0;
         break;
     }
@@ -401,7 +252,7 @@ void NvnLayerDeviceInfo(const NVNdevice *device, int item, int *value) {
 
 // ---- the queue
 
-static void Nvnl_nvnQueueBuilderSetDefaults(NVNqueueBuilder *builder) {
+void Nvnl_nvnQueueBuilderSetDefaults(NVNqueueBuilder *builder) {
     // The device stays, as NVN's own builder keeps it.
     LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSetDefaults");
     if (record == NULL) {
@@ -412,27 +263,27 @@ static void Nvnl_nvnQueueBuilderSetDefaults(NVNqueueBuilder *builder) {
     record->device = device;
 }
 
-static void Nvnl_nvnQueueBuilderSetDevice(NVNqueueBuilder *builder, NVNdevice *device) {
+void Nvnl_nvnQueueBuilderSetDevice(NVNqueueBuilder *builder, NVNdevice *device) {
     LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSetDevice");
     if (record != NULL) {
         record->device = device;
     }
 }
 
-static NVNboolean Nvnl_nvnQueueInitialize(NVNqueue *queue, const NVNqueueBuilder *builder) {
+NVNboolean Nvnl_nvnQueueInitialize(NVNqueue *queue, const NVNqueueBuilder *builder) {
     LayerQueue *const record = Record(queue, "nvnQueueInitialize");
     const LayerQueueBuilder *const from = Record(builder, "nvnQueueInitialize");
     if (record == NULL || from == NULL) {
         return 0;
     }
-    const LayerDevice *const device = DeviceOf(from->device, "nvnQueueInitialize");
+    LayerDevice *const device = DeviceOf(from->device, "nvnQueueInitialize");
     if (device == NULL) {
         return 0;
     }
     // deko3d's defaults: a graphics and compute queue, as every NVN queue is.
-    dkQueueMakerDefaults(&pending.queue_maker, device->device);
+    dkQueueMakerDefaults(&pending.queue_maker, DeviceUse(device));
     pending.queue = NULL;
-    if (!Guarded(MakeQueue, "nvnQueueInitialize: dkQueueCreate")) {
+    if (!LayerGuarded(MakeQueue, "nvnQueueInitialize: dkQueueCreate")) {
         return 0;
     }
     memset(queue, 0, sizeof(*queue));
@@ -441,7 +292,7 @@ static NVNboolean Nvnl_nvnQueueInitialize(NVNqueue *queue, const NVNqueueBuilder
     return 1;
 }
 
-static void Nvnl_nvnQueueFinalize(NVNqueue *queue) {
+void Nvnl_nvnQueueFinalize(NVNqueue *queue) {
     LayerQueue *const record = QueueOf(queue, "nvnQueueFinalize");
     if (record == NULL) {
         return;
@@ -450,7 +301,7 @@ static void Nvnl_nvnQueueFinalize(NVNqueue *queue) {
     record->magic = 0;
 }
 
-static void Nvnl_nvnQueueSubmitCommands(NVNqueue *queue, int count,
+void Nvnl_nvnQueueSubmitCommands(NVNqueue *queue, int count,
                                         const NVNcommandHandle *handles) {
     LayerQueue *const record = QueueOf(queue, "nvnQueueSubmitCommands");
     if (record == NULL) {
@@ -461,14 +312,14 @@ static void Nvnl_nvnQueueSubmitCommands(NVNqueue *queue, int count,
     }
 }
 
-static void Nvnl_nvnQueueFlush(NVNqueue *queue) {
+void Nvnl_nvnQueueFlush(NVNqueue *queue) {
     LayerQueue *const record = QueueOf(queue, "nvnQueueFlush");
     if (record != NULL) {
         dkQueueFlush(record->queue);
     }
 }
 
-static void Nvnl_nvnQueueFinish(NVNqueue *queue) {
+void Nvnl_nvnQueueFinish(NVNqueue *queue) {
     LayerQueue *const record = QueueOf(queue, "nvnQueueFinish");
     if (record == NULL) {
         return;
@@ -476,11 +327,11 @@ static void Nvnl_nvnQueueFinish(NVNqueue *queue) {
     dkQueueWaitIdle(record->queue);
     // NVN has nvnQueueGetError for this; the layer says it where a case reads it.
     if (dkQueueIsInErrorState(record->queue)) {
-        Complain("nvnQueueFinish: the queue faulted on the graphics unit");
+        LayerComplain("nvnQueueFinish: the queue faulted on the graphics unit");
     }
 }
 
-static NVNqueueAcquireTextureResult Nvnl_nvnQueueAcquireTexture(NVNqueue *queue,
+NVNqueueAcquireTextureResult Nvnl_nvnQueueAcquireTexture(NVNqueue *queue,
                                                                 NVNwindow *window, int *index) {
     LayerQueue *const record = QueueOf(queue, "nvnQueueAcquireTexture");
     LayerWindow *const target = WindowOf(window, "nvnQueueAcquireTexture");
@@ -490,16 +341,16 @@ static NVNqueueAcquireTextureResult Nvnl_nvnQueueAcquireTexture(NVNqueue *queue,
     pending.acquire_queue = record->queue;
     pending.acquire_swapchain = target->swapchain;
     pending.acquired = -1;
-    if (!Guarded(AcquireImage, "nvnQueueAcquireTexture: dkQueueAcquireImage") ||
+    if (!LayerGuarded(AcquireImage, "nvnQueueAcquireTexture: dkQueueAcquireImage") ||
         pending.acquired < 0) {
-        Complain("nvnQueueAcquireTexture: dkQueueAcquireImage gave slot %d", pending.acquired);
+        LayerComplain("nvnQueueAcquireTexture: dkQueueAcquireImage gave slot %d", pending.acquired);
         return NVN_QUEUE_ACQUIRE_TEXTURE_RESULT_NATIVE_ERROR;
     }
     *index = pending.acquired;
     return NVN_QUEUE_ACQUIRE_TEXTURE_RESULT_SUCCESS;
 }
 
-static void Nvnl_nvnQueuePresentTexture(NVNqueue *queue, NVNwindow *window, int index) {
+void Nvnl_nvnQueuePresentTexture(NVNqueue *queue, NVNwindow *window, int index) {
     LayerQueue *const record = QueueOf(queue, "nvnQueuePresentTexture");
     LayerWindow *const target = WindowOf(window, "nvnQueuePresentTexture");
     if (record != NULL && target != NULL) {
@@ -509,18 +360,56 @@ static void Nvnl_nvnQueuePresentTexture(NVNqueue *queue, NVNwindow *window, int 
 
 // ---- memory pools
 
-static void Nvnl_nvnMemoryPoolBuilderSetDefaults(NVNmemoryPoolBuilder *builder) {
+// The pools that hold shader code. NVN names a program's code by its GPU address alone
+// (NVNshaderData.data), and deko3d takes it as a block and an offset, so the layer has to find
+// the block again from the address.
+#define CODE_POOLS_MAX 8
+static DkMemBlock code_pools[CODE_POOLS_MAX];
+
+static bool CodePoolAdd(DkMemBlock block) {
+    for (int i = 0; i < CODE_POOLS_MAX; ++i) {
+        if (code_pools[i] == NULL) {
+            code_pools[i] = block;
+            return true;
+        }
+    }
+    return false;
+}
+
+static void CodePoolDrop(DkMemBlock block) {
+    for (int i = 0; i < CODE_POOLS_MAX; ++i) {
+        if (code_pools[i] == block) {
+            code_pools[i] = NULL;
+        }
+    }
+}
+
+DkMemBlock LayerCodePool(NVNbufferAddress address, uint32_t *offset) {
+    for (int i = 0; i < CODE_POOLS_MAX; ++i) {
+        if (code_pools[i] == NULL) {
+            continue;
+        }
+        const DkGpuAddr base = dkMemBlockGetGpuAddr(code_pools[i]);
+        if (address >= base && address - base < dkMemBlockGetSize(code_pools[i])) {
+            *offset = (uint32_t)(address - base);
+            return code_pools[i];
+        }
+    }
+    return NULL;
+}
+
+void Nvnl_nvnMemoryPoolBuilderSetDefaults(NVNmemoryPoolBuilder *builder) {
     memset(builder, 0, sizeof(*builder));
 }
 
-static void Nvnl_nvnMemoryPoolBuilderSetDevice(NVNmemoryPoolBuilder *builder, NVNdevice *device) {
+void Nvnl_nvnMemoryPoolBuilderSetDevice(NVNmemoryPoolBuilder *builder, NVNdevice *device) {
     LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderSetDevice");
     if (record != NULL) {
         record->device = device;
     }
 }
 
-static void Nvnl_nvnMemoryPoolBuilderSetStorage(NVNmemoryPoolBuilder *builder, void *memory,
+void Nvnl_nvnMemoryPoolBuilderSetStorage(NVNmemoryPoolBuilder *builder, void *memory,
                                                 size_t size) {
     LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderSetStorage");
     if (record != NULL) {
@@ -529,7 +418,7 @@ static void Nvnl_nvnMemoryPoolBuilderSetStorage(NVNmemoryPoolBuilder *builder, v
     }
 }
 
-static void Nvnl_nvnMemoryPoolBuilderSetFlags(NVNmemoryPoolBuilder *builder, int flags) {
+void Nvnl_nvnMemoryPoolBuilderSetFlags(NVNmemoryPoolBuilder *builder, int flags) {
     LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderSetFlags");
     if (record != NULL) {
         record->flags = flags;
@@ -552,14 +441,14 @@ static bool Access(int flags, int none, int uncached, int cached, uint32_t *acce
     return true;
 }
 
-static NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
+NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
                                                const NVNmemoryPoolBuilder *builder) {
     LayerPool *const record = Record(pool, "nvnMemoryPoolInitialize");
     const LayerPoolBuilder *const from = Record(builder, "nvnMemoryPoolInitialize");
     if (record == NULL || from == NULL) {
         return 0;
     }
-    const LayerDevice *const device = DeviceOf(from->device, "nvnMemoryPoolInitialize");
+    LayerDevice *const device = DeviceOf(from->device, "nvnMemoryPoolInitialize");
     if (device == NULL) {
         return 0;
     }
@@ -574,17 +463,17 @@ static NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
                 NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED, NVN_MEMORY_POOL_FLAGS_CPU_CACHED, &cpu) ||
         !Access(from->flags, NVN_MEMORY_POOL_FLAGS_GPU_NO_ACCESS,
                 NVN_MEMORY_POOL_FLAGS_GPU_UNCACHED, NVN_MEMORY_POOL_FLAGS_GPU_CACHED, &gpu)) {
-        Complain("nvnMemoryPoolInitialize: pool flags 0x%x, which the layer does not take: one "
-                 "processor and one graphics access each, shader code and compressible",
-                 (unsigned)from->flags);
+        LayerComplain("nvnMemoryPoolInitialize: pool flags 0x%x, which the layer does not take: "
+                      "one processor and one graphics access each, shader code and compressible",
+                      (unsigned)from->flags);
         return 0;
     }
     if (from->storage == NULL || ((uintptr_t)from->storage & (DK_MEMBLOCK_ALIGNMENT - 1)) != 0 ||
         from->size == 0 || (from->size & (DK_MEMBLOCK_ALIGNMENT - 1)) != 0 ||
         from->size > UINT32_MAX) {
-        Complain("nvnMemoryPoolInitialize: storage %p of 0x%zx bytes, where NVN and deko3d take "
-                 "a non-empty multiple of 0x%x bytes at that alignment",
-                 from->storage, from->size, (unsigned)DK_MEMBLOCK_ALIGNMENT);
+        LayerComplain("nvnMemoryPoolInitialize: storage %p of 0x%zx bytes, where NVN and deko3d "
+                      "take a non-empty multiple of 0x%x bytes at that alignment",
+                      from->storage, from->size, (unsigned)DK_MEMBLOCK_ALIGNMENT);
         return 0;
     }
     uint32_t flags = cpu << DkMemBlockFlags_CpuAccessShift | gpu << DkMemBlockFlags_GpuAccessShift;
@@ -595,39 +484,49 @@ static NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
         // image mappings, the compressed one among them, which is what COMPRESSIBLE asks for.
         flags |= DkMemBlockFlags_Image;
     }
-    dkMemBlockMakerDefaults(&pending.block_maker, device->device, (uint32_t)from->size);
+    dkMemBlockMakerDefaults(&pending.block_maker, DeviceUse(device), (uint32_t)from->size);
     pending.block_maker.flags = flags;
     pending.block_maker.storage = from->storage;
     pending.block = NULL;
-    if (!Guarded(MakeBlock, "nvnMemoryPoolInitialize: dkMemBlockCreate")) {
+    if (!LayerGuarded(MakeBlock, "nvnMemoryPoolInitialize: dkMemBlockCreate")) {
         return 0;
     }
     memset(pool, 0, sizeof(*pool));
     record->magic = MAGIC_POOL;
     record->block = pending.block;
+    record->flags = from->flags;
+    if ((from->flags & NVN_MEMORY_POOL_FLAGS_SHADER_CODE) != 0 && !CodePoolAdd(pending.block)) {
+        LayerComplain("nvnMemoryPoolInitialize: a shader code pool past the %d the layer keeps "
+                      "track of at a time",
+                      CODE_POOLS_MAX);
+        dkMemBlockDestroy(pending.block);
+        record->magic = 0;
+        return 0;
+    }
     return 1;
 }
 
-static void Nvnl_nvnMemoryPoolFinalize(NVNmemoryPool *pool) {
+void Nvnl_nvnMemoryPoolFinalize(NVNmemoryPool *pool) {
     LayerPool *const record = PoolOf(pool, "nvnMemoryPoolFinalize");
     if (record == NULL) {
         return;
     }
+    CodePoolDrop(record->block);
     dkMemBlockDestroy(record->block);
     record->magic = 0;
 }
 
-static void *Nvnl_nvnMemoryPoolMap(const NVNmemoryPool *pool) {
+void *Nvnl_nvnMemoryPoolMap(const NVNmemoryPool *pool) {
     LayerPool *const record = PoolOf(pool, "nvnMemoryPoolMap");
     return record != NULL ? dkMemBlockGetCpuAddr(record->block) : NULL;
 }
 
-static NVNbufferAddress Nvnl_nvnMemoryPoolGetBufferAddress(const NVNmemoryPool *pool) {
+NVNbufferAddress Nvnl_nvnMemoryPoolGetBufferAddress(const NVNmemoryPool *pool) {
     LayerPool *const record = PoolOf(pool, "nvnMemoryPoolGetBufferAddress");
     return record != NULL ? dkMemBlockGetGpuAddr(record->block) : 0;
 }
 
-static void Nvnl_nvnMemoryPoolFlushMappedRange(const NVNmemoryPool *pool, ptrdiff_t offset,
+void Nvnl_nvnMemoryPoolFlushMappedRange(const NVNmemoryPool *pool, ptrdiff_t offset,
                                                size_t size) {
     LayerPool *const record = PoolOf(pool, "nvnMemoryPoolFlushMappedRange");
     if (record != NULL) {
@@ -637,7 +536,7 @@ static void Nvnl_nvnMemoryPoolFlushMappedRange(const NVNmemoryPool *pool, ptrdif
 
 // ---- textures
 
-static void Nvnl_nvnTextureBuilderSetDefaults(NVNtextureBuilder *builder) {
+void Nvnl_nvnTextureBuilderSetDefaults(NVNtextureBuilder *builder) {
     // NVN's defaults: a 2D texture of one texel, one level; the device stays, as NVN keeps it.
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetDefaults");
     if (record == NULL) {
@@ -652,35 +551,35 @@ static void Nvnl_nvnTextureBuilderSetDefaults(NVNtextureBuilder *builder) {
     record->height = 1;
 }
 
-static void Nvnl_nvnTextureBuilderSetDevice(NVNtextureBuilder *builder, NVNdevice *device) {
+void Nvnl_nvnTextureBuilderSetDevice(NVNtextureBuilder *builder, NVNdevice *device) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetDevice");
     if (record != NULL) {
         record->device = device;
     }
 }
 
-static void Nvnl_nvnTextureBuilderSetFlags(NVNtextureBuilder *builder, int flags) {
+void Nvnl_nvnTextureBuilderSetFlags(NVNtextureBuilder *builder, int flags) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetFlags");
     if (record != NULL) {
         record->flags = flags;
     }
 }
 
-static void Nvnl_nvnTextureBuilderSetTarget(NVNtextureBuilder *builder, NVNtextureTarget target) {
+void Nvnl_nvnTextureBuilderSetTarget(NVNtextureBuilder *builder, NVNtextureTarget target) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetTarget");
     if (record != NULL) {
         record->target = target;
     }
 }
 
-static void Nvnl_nvnTextureBuilderSetFormat(NVNtextureBuilder *builder, NVNformat format) {
+void Nvnl_nvnTextureBuilderSetFormat(NVNtextureBuilder *builder, NVNformat format) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetFormat");
     if (record != NULL) {
         record->format = format;
     }
 }
 
-static void Nvnl_nvnTextureBuilderSetSize2D(NVNtextureBuilder *builder, int width, int height) {
+void Nvnl_nvnTextureBuilderSetSize2D(NVNtextureBuilder *builder, int width, int height) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetSize2D");
     if (record != NULL) {
         record->width = width;
@@ -688,7 +587,7 @@ static void Nvnl_nvnTextureBuilderSetSize2D(NVNtextureBuilder *builder, int widt
     }
 }
 
-static void Nvnl_nvnTextureBuilderSetStorage(NVNtextureBuilder *builder, NVNmemoryPool *pool,
+void Nvnl_nvnTextureBuilderSetStorage(NVNtextureBuilder *builder, NVNmemoryPool *pool,
                                              ptrdiff_t offset) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetStorage");
     if (record != NULL) {
@@ -704,6 +603,10 @@ static DkImageFormat FormatOf(NVNformat format) {
         return DkImageFormat_RGBA8_Unorm;
     case NVN_FORMAT_BGRA8:
         return DkImageFormat_BGRA8_Unorm;
+    case NVN_FORMAT_DEPTH32F:
+        return DkImageFormat_ZF32;
+    case NVN_FORMAT_DEPTH24_STENCIL8:
+        return DkImageFormat_Z24S8;
     default:
         return DkImageFormat_None;
     }
@@ -712,38 +615,41 @@ static DkImageFormat FormatOf(NVNformat format) {
 /// The layout @p builder describes, or false with a complaint naming what the layer does not
 /// take yet: a target, a format or a flag, by its number.
 static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, const char *what) {
-    const LayerDevice *const device = DeviceOf(builder->device, what);
+    LayerDevice *const device = DeviceOf(builder->device, what);
     if (device == NULL) {
         return false;
     }
     if (builder->target != NVN_TEXTURE_TARGET_2D) {
-        Complain("%s: texture target %d, and the layer takes 2D (%d) only", what,
-                 (int)builder->target, (int)NVN_TEXTURE_TARGET_2D);
+        LayerComplain("%s: texture target %d, and the layer takes 2D (%d) only", what,
+                      (int)builder->target, (int)NVN_TEXTURE_TARGET_2D);
         return false;
     }
     const DkImageFormat format = FormatOf(builder->format);
     if (format == DkImageFormat_None) {
-        Complain("%s: NVN format 0x%x has no deko3d format in the layer yet", what,
-                 (unsigned)builder->format);
+        LayerComplain("%s: NVN format 0x%x has no deko3d format in the layer yet", what,
+                      (unsigned)builder->format);
         return false;
     }
     const int known = NVN_TEXTURE_FLAGS_DISPLAY | NVN_TEXTURE_FLAGS_COMPRESSIBLE;
     if ((builder->flags & ~known) != 0) {
-        Complain("%s: texture flags 0x%x, and the layer takes display and compressible only",
-                 what, (unsigned)builder->flags);
+        LayerComplain("%s: texture flags 0x%x, and the layer takes display and compressible only",
+                      what, (unsigned)builder->flags);
         return false;
     }
     if (builder->width <= 0 || builder->height <= 0) {
-        Complain("%s: a %dx%d texture", what, builder->width, builder->height);
+        LayerComplain("%s: a %dx%d texture", what, builder->width, builder->height);
         return false;
     }
     DkImageLayoutMaker maker;
-    dkImageLayoutMakerDefaults(&maker, device->device);
+    dkImageLayoutMakerDefaults(&maker, DeviceUse(device));
     maker.type = DkImageType_2D;
     maker.format = format;
-    // Any NVN texture of a colour format can be drawn into and copied by either engine, so
-    // every one here says so: the 2D engine is where a mirrored copy goes.
-    maker.flags = DkImageFlags_UsageRender | DkImageFlags_Usage2DEngine;
+    // Any NVN texture can be drawn into, and one of a colour format copied by either engine,
+    // so every one here says so: the 2D engine is where a mirrored copy goes.
+    maker.flags = DkImageFlags_UsageRender;
+    if (format != DkImageFormat_ZF32 && format != DkImageFormat_Z24S8) {
+        maker.flags |= DkImageFlags_Usage2DEngine;
+    }
     if ((builder->flags & NVN_TEXTURE_FLAGS_DISPLAY) != 0) {
         maker.flags |= DkImageFlags_UsagePresent;
     }
@@ -756,7 +662,7 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
     return true;
 }
 
-static size_t Nvnl_nvnTextureBuilderGetStorageSize(const NVNtextureBuilder *builder) {
+size_t Nvnl_nvnTextureBuilderGetStorageSize(const NVNtextureBuilder *builder) {
     const LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderGetStorageSize");
     DkImageLayout layout;
     if (record == NULL || !LayoutOf(record, &layout, "nvnTextureBuilderGetStorageSize")) {
@@ -765,7 +671,7 @@ static size_t Nvnl_nvnTextureBuilderGetStorageSize(const NVNtextureBuilder *buil
     return (size_t)dkImageLayoutGetSize(&layout);
 }
 
-static size_t Nvnl_nvnTextureBuilderGetStorageAlignment(const NVNtextureBuilder *builder) {
+size_t Nvnl_nvnTextureBuilderGetStorageAlignment(const NVNtextureBuilder *builder) {
     const LayerTextureBuilder *const record =
         Record(builder, "nvnTextureBuilderGetStorageAlignment");
     DkImageLayout layout;
@@ -775,7 +681,7 @@ static size_t Nvnl_nvnTextureBuilderGetStorageAlignment(const NVNtextureBuilder 
     return (size_t)dkImageLayoutGetAlignment(&layout);
 }
 
-static NVNboolean Nvnl_nvnTextureInitialize(NVNtexture *texture,
+NVNboolean Nvnl_nvnTextureInitialize(NVNtexture *texture,
                                             const NVNtextureBuilder *builder) {
     LayerTexture *const record = Record(texture, "nvnTextureInitialize");
     const LayerTextureBuilder *const from = Record(builder, "nvnTextureInitialize");
@@ -789,9 +695,9 @@ static NVNboolean Nvnl_nvnTextureInitialize(NVNtexture *texture,
     }
     if (from->offset < 0 || (uint64_t)from->offset + dkImageLayoutGetSize(&layout) >
                                 dkMemBlockGetSize(pool->block)) {
-        Complain("nvnTextureInitialize: 0x%llx bytes at offset 0x%llx, past the pool's 0x%x",
-                 (unsigned long long)dkImageLayoutGetSize(&layout),
-                 (unsigned long long)from->offset, (unsigned)dkMemBlockGetSize(pool->block));
+        LayerComplain("nvnTextureInitialize: 0x%llx bytes at offset 0x%llx, past the pool's 0x%x",
+                      (unsigned long long)dkImageLayoutGetSize(&layout),
+                      (unsigned long long)from->offset, (unsigned)dkMemBlockGetSize(pool->block));
         return 0;
     }
     memset(texture, 0, sizeof(*texture));
@@ -800,7 +706,7 @@ static NVNboolean Nvnl_nvnTextureInitialize(NVNtexture *texture,
     return 1;
 }
 
-static void Nvnl_nvnTextureFinalize(NVNtexture *texture) {
+void Nvnl_nvnTextureFinalize(NVNtexture *texture) {
     LayerTexture *const record = TextureOf(texture, "nvnTextureFinalize");
     if (record != NULL) {
         record->magic = 0;
@@ -809,47 +715,81 @@ static void Nvnl_nvnTextureFinalize(NVNtexture *texture) {
 
 // ---- command buffers
 
-static NVNboolean Nvnl_nvnCommandBufferInitialize(NVNcommandBuffer *cmd, NVNdevice *device) {
+NVNboolean Nvnl_nvnCommandBufferInitialize(NVNcommandBuffer *cmd, NVNdevice *device) {
     LayerCommandBuffer *const record = Record(cmd, "nvnCommandBufferInitialize");
-    const LayerDevice *const owner = DeviceOf(device, "nvnCommandBufferInitialize");
+    LayerDevice *const owner = DeviceOf(device, "nvnCommandBufferInitialize");
     if (record == NULL || owner == NULL) {
         return 0;
     }
     DkCmdBufMaker maker;
-    dkCmdBufMakerDefaults(&maker, owner->device);
+    dkCmdBufMakerDefaults(&maker, DeviceUse(owner));
     // No memory callback: a case gives a command buffer the memory it needs up front, and
     // deko3d ends the program when a list runs out, which the case's journal then names.
     const DkCmdBuf made = dkCmdBufCreate(&maker);
     if (made == NULL) {
-        Complain("nvnCommandBufferInitialize: dkCmdBufCreate gave no command buffer");
+        LayerComplain("nvnCommandBufferInitialize: dkCmdBufCreate gave no command buffer");
         return 0;
+    }
+    LayerDraw *const draw = calloc(1, sizeof(*draw));
+    if (draw == NULL) {
+        LayerComplain("nvnCommandBufferInitialize: no %u bytes for the layer's draw state",
+                      (unsigned)sizeof(*draw));
+        dkCmdBufDestroy(made);
+        return 0;
+    }
+    // A stage's handles start with the words 0 to 7, as a driver's do (ScarletNX's nvn_draw.c
+    // has it from two of them): nothing here reads them, and a program that does reads the same.
+    for (int stage = 0; stage < LAYER_STAGES; ++stage) {
+        for (uint32_t word = 0; word < 8u; ++word) {
+            memcpy(draw->handles[stage] + 4u * word, &word, 4);
+        }
     }
     memset(cmd, 0, sizeof(*cmd));
     record->magic = MAGIC_CMDBUF;
     record->cmdbuf = made;
+    record->draw = draw;
     return 1;
 }
 
-static void Nvnl_nvnCommandBufferFinalize(NVNcommandBuffer *cmd) {
+void Nvnl_nvnCommandBufferFinalize(NVNcommandBuffer *cmd) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferFinalize");
     if (record == NULL) {
         return;
     }
     dkCmdBufDestroy(record->cmdbuf);
+    free(record->draw);
+    record->draw = NULL;
     record->magic = 0;
 }
 
-static void Nvnl_nvnCommandBufferAddCommandMemory(NVNcommandBuffer *cmd,
+void Nvnl_nvnCommandBufferAddCommandMemory(NVNcommandBuffer *cmd,
                                                   const NVNmemoryPool *pool, ptrdiff_t offset,
                                                   size_t size) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferAddCommandMemory");
     const LayerPool *const from = PoolOf(pool, "nvnCommandBufferAddCommandMemory");
-    if (record != NULL && from != NULL) {
-        dkCmdBufAddMemory(record->cmdbuf, from->block, (uint32_t)offset, (uint32_t)size);
+    if (record == NULL || from == NULL) {
+        return;
     }
+    // The last quarter is the layer's, for the texture handles each draw reads (api55_draw.c): a
+    // driver keeps such words in the command memory too, which is what makes them live exactly
+    // as long as the list. Whole uniform buffer units, and none of a memory too small for one.
+    uint32_t kept = ((uint32_t)size / 4u) & ~(LAYER_HANDLE_BYTES - 1u);
+    const uint32_t start =
+        ((uint32_t)offset + (uint32_t)size - kept) & ~(DK_UNIFORM_BUF_ALIGNMENT - 1u);
+    if (kept < LAYER_HANDLE_BYTES || start < (uint32_t)offset ||
+        (from->flags & NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS) != 0) {
+        kept = 0;
+    }
+    LayerDraw *const draw = record->draw;
+    draw->handle_size = kept != 0 ? (uint32_t)offset + (uint32_t)size - start : 0;
+    draw->handle_used = 0;
+    draw->handle_memory = dkMemBlockGetGpuAddr(from->block) + start;
+    draw->handle_cpu = (uint8_t *)dkMemBlockGetCpuAddr(from->block) + start;
+    dkCmdBufAddMemory(record->cmdbuf, from->block, (uint32_t)offset,
+                      kept != 0 ? start - (uint32_t)offset : (uint32_t)size);
 }
 
-static void Nvnl_nvnCommandBufferAddControlMemory(NVNcommandBuffer *cmd, void *memory,
+void Nvnl_nvnCommandBufferAddControlMemory(NVNcommandBuffer *cmd, void *memory,
                                                   size_t size) {
     // deko3d keeps a list's control words in its command memory, so the processor-side memory
     // NVN asks for has no use here; taken and left alone.
@@ -858,18 +798,18 @@ static void Nvnl_nvnCommandBufferAddControlMemory(NVNcommandBuffer *cmd, void *m
     (void)CmdOf(cmd, "nvnCommandBufferAddControlMemory");
 }
 
-static void Nvnl_nvnCommandBufferBeginRecording(NVNcommandBuffer *cmd) {
+void Nvnl_nvnCommandBufferBeginRecording(NVNcommandBuffer *cmd) {
     // A deko3d list is whatever was recorded since the last one finished, so a recording starts
     // by itself.
     (void)CmdOf(cmd, "nvnCommandBufferBeginRecording");
 }
 
-static NVNcommandHandle Nvnl_nvnCommandBufferEndRecording(NVNcommandBuffer *cmd) {
+NVNcommandHandle Nvnl_nvnCommandBufferEndRecording(NVNcommandBuffer *cmd) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferEndRecording");
     return record != NULL ? (NVNcommandHandle)dkCmdBufFinishList(record->cmdbuf) : 0;
 }
 
-static void Nvnl_nvnCommandBufferSetRenderTargets(NVNcommandBuffer *cmd, int count,
+void Nvnl_nvnCommandBufferSetRenderTargets(NVNcommandBuffer *cmd, int count,
                                                   const NVNtexture *const *colors,
                                                   const NVNtextureView *const *views,
                                                   const NVNtexture *depth,
@@ -878,19 +818,19 @@ static void Nvnl_nvnCommandBufferSetRenderTargets(NVNcommandBuffer *cmd, int cou
     if (record == NULL) {
         return;
     }
-    if (count < 0 || count > COLOR_TARGETS_MAX || depth != NULL || depth_view != NULL) {
-        Complain("nvnCommandBufferSetRenderTargets: %d colour targets and %s depth target, and "
-                 "the layer takes 0 to %d colour targets and no depth yet",
-                 count, depth != NULL ? "a" : "no", COLOR_TARGETS_MAX);
+    if (count < 0 || count > COLOR_TARGETS_MAX || depth_view != NULL) {
+        LayerComplain("nvnCommandBufferSetRenderTargets: %d colour targets and %s view on the "
+                      "depth target, and the layer takes 0 to %d colour targets and no view",
+                      count, depth_view != NULL ? "a" : "no", COLOR_TARGETS_MAX);
         return;
     }
     DkImageView targets[COLOR_TARGETS_MAX];
     DkImageView const *bound[COLOR_TARGETS_MAX];
     for (int i = 0; i < count; ++i) {
         if (views != NULL && views[i] != NULL) {
-            Complain("nvnCommandBufferSetRenderTargets: a texture view on target %d, which the "
-                     "layer does not take yet",
-                     i);
+            LayerComplain("nvnCommandBufferSetRenderTargets: a texture view on target %d, which "
+                          "the layer does not take yet",
+                          i);
             return;
         }
         const LayerTexture *const texture =
@@ -901,10 +841,19 @@ static void Nvnl_nvnCommandBufferSetRenderTargets(NVNcommandBuffer *cmd, int cou
         dkImageViewDefaults(&targets[i], &texture->image);
         bound[i] = &targets[i];
     }
-    dkCmdBufBindRenderTargets(record->cmdbuf, bound, (uint32_t)count, NULL);
+    DkImageView depth_target;
+    if (depth != NULL) {
+        const LayerTexture *const texture = TextureOf(depth, "nvnCommandBufferSetRenderTargets");
+        if (texture == NULL) {
+            return;
+        }
+        dkImageViewDefaults(&depth_target, &texture->image);
+    }
+    dkCmdBufBindRenderTargets(record->cmdbuf, bound, (uint32_t)count,
+                              depth != NULL ? &depth_target : NULL);
 }
 
-static void Nvnl_nvnCommandBufferSetViewport(NVNcommandBuffer *cmd, int x, int y, int width,
+void Nvnl_nvnCommandBufferSetViewport(NVNcommandBuffer *cmd, int x, int y, int width,
                                              int height) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetViewport");
     if (record == NULL) {
@@ -916,7 +865,7 @@ static void Nvnl_nvnCommandBufferSetViewport(NVNcommandBuffer *cmd, int x, int y
     dkCmdBufSetViewports(record->cmdbuf, 0, &viewport, 1);
 }
 
-static void Nvnl_nvnCommandBufferSetScissor(NVNcommandBuffer *cmd, int x, int y, int width,
+void Nvnl_nvnCommandBufferSetScissor(NVNcommandBuffer *cmd, int x, int y, int width,
                                             int height) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetScissor");
     if (record == NULL) {
@@ -926,7 +875,7 @@ static void Nvnl_nvnCommandBufferSetScissor(NVNcommandBuffer *cmd, int x, int y,
     dkCmdBufSetScissors(record->cmdbuf, 0, &scissor, 1);
 }
 
-static void Nvnl_nvnCommandBufferClearColor(NVNcommandBuffer *cmd, int index, const float *rgba,
+void Nvnl_nvnCommandBufferClearColor(NVNcommandBuffer *cmd, int index, const float *rgba,
                                             int mask) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferClearColor");
     if (record == NULL) {
@@ -937,7 +886,7 @@ static void Nvnl_nvnCommandBufferClearColor(NVNcommandBuffer *cmd, int index, co
                             rgba[0], rgba[1], rgba[2], rgba[3]);
 }
 
-static void Nvnl_nvnCommandBufferBarrier(NVNcommandBuffer *cmd, int bits) {
+void Nvnl_nvnCommandBufferBarrier(NVNcommandBuffer *cmd, int bits) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBarrier");
     if (record == NULL) {
         return;
@@ -978,9 +927,9 @@ static bool CopyFlags(const char *what, const NVNtextureView *view, int flags, i
                       uint32_t *blit) {
     *blit = 0;
     if (view != NULL || (flags & ~mirrors) != 0) {
-        Complain("%s: %s view and copy flags 0x%x, and the layer takes no view and of the flags "
-                 "only 0x%x here",
-                 what, view != NULL ? "a" : "no", (unsigned)flags, (unsigned)mirrors);
+        LayerComplain("%s: %s view and copy flags 0x%x, and the layer takes no view and of the "
+                      "flags only 0x%x here",
+                      what, view != NULL ? "a" : "no", (unsigned)flags, (unsigned)mirrors);
         return false;
     }
     if ((flags & NVN_COPY_FLAGS_MIRROR_X_BIT) != 0) {
@@ -992,7 +941,7 @@ static bool CopyFlags(const char *what, const NVNtextureView *view, int flags, i
     return true;
 }
 
-static void Nvnl_nvnCommandBufferCopyTextureToBuffer(NVNcommandBuffer *cmd,
+void Nvnl_nvnCommandBufferCopyTextureToBuffer(NVNcommandBuffer *cmd,
                                                      const NVNtexture *texture,
                                                      const NVNtextureView *view,
                                                      const NVNcopyRegion *region,
@@ -1016,7 +965,7 @@ static void Nvnl_nvnCommandBufferCopyTextureToBuffer(NVNcommandBuffer *cmd,
     dkCmdBufCopyImageToBuffer(record->cmdbuf, &from, &rect, &to, blit);
 }
 
-static void Nvnl_nvnCommandBufferCopyBufferToTexture(NVNcommandBuffer *cmd, NVNbufferAddress buffer,
+void Nvnl_nvnCommandBufferCopyBufferToTexture(NVNcommandBuffer *cmd, NVNbufferAddress buffer,
                                                      const NVNtexture *texture,
                                                      const NVNtextureView *view,
                                                      const NVNcopyRegion *region, int flags) {
@@ -1035,7 +984,7 @@ static void Nvnl_nvnCommandBufferCopyBufferToTexture(NVNcommandBuffer *cmd, NVNb
     dkCmdBufCopyBufferToImage(record->cmdbuf, &from, &to, &rect, blit);
 }
 
-static void Nvnl_nvnCommandBufferCopyTextureToTexture(
+void Nvnl_nvnCommandBufferCopyTextureToTexture(
     NVNcommandBuffer *cmd, const NVNtexture *source, const NVNtextureView *source_view,
     const NVNcopyRegion *source_region, const NVNtexture *destination,
     const NVNtextureView *destination_view, const NVNcopyRegion *destination_region, int flags) {
@@ -1052,10 +1001,11 @@ static void Nvnl_nvnCommandBufferCopyTextureToTexture(
     if (source_region->width != destination_region->width ||
         source_region->height != destination_region->height ||
         source_region->depth != destination_region->depth) {
-        Complain("%s: a %dx%dx%d region into a %dx%dx%d one, and the layer copies without "
-                 "scaling only",
-                 WHAT, source_region->width, source_region->height, source_region->depth,
-                 destination_region->width, destination_region->height, destination_region->depth);
+        LayerComplain("%s: a %dx%dx%d region into a %dx%dx%d one, and the layer copies without "
+                      "scaling only",
+                      WHAT, source_region->width, source_region->height, source_region->depth,
+                      destination_region->width, destination_region->height,
+                      destination_region->depth);
         return;
     }
     DkImageView src, dst;
@@ -1066,7 +1016,7 @@ static void Nvnl_nvnCommandBufferCopyTextureToTexture(
     dkCmdBufCopyImage(record->cmdbuf, &src, &src_rect, &dst, &dst_rect, blit);
 }
 
-static void Nvnl_nvnCommandBufferCopyBufferToBuffer(NVNcommandBuffer *cmd, NVNbufferAddress source,
+void Nvnl_nvnCommandBufferCopyBufferToBuffer(NVNcommandBuffer *cmd, NVNbufferAddress source,
                                                     NVNbufferAddress destination, size_t size,
                                                     int flags) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferCopyBufferToBuffer");
@@ -1074,23 +1024,23 @@ static void Nvnl_nvnCommandBufferCopyBufferToBuffer(NVNcommandBuffer *cmd, NVNbu
         return;
     }
     if (flags != NVN_COPY_FLAGS_NONE || size > UINT32_MAX) {
-        Complain("nvnCommandBufferCopyBufferToBuffer: copy flags 0x%x over 0x%llx bytes, and the "
-                 "layer takes no flags and at most 4 GiB",
-                 (unsigned)flags, (unsigned long long)size);
+        LayerComplain("nvnCommandBufferCopyBufferToBuffer: copy flags 0x%x over 0x%llx bytes, and "
+                      "the layer takes no flags and at most 4 GiB",
+                      (unsigned)flags, (unsigned long long)size);
         return;
     }
     dkCmdBufCopyBuffer(record->cmdbuf, source, destination, (uint32_t)size);
 }
 
-static void Nvnl_nvnCommandBufferSetCopyRowStride(NVNcommandBuffer *cmd, ptrdiff_t stride) {
+void Nvnl_nvnCommandBufferSetCopyRowStride(NVNcommandBuffer *cmd, ptrdiff_t stride) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetCopyRowStride");
     if (record == NULL) {
         return;
     }
     if (stride < 0 || stride > (ptrdiff_t)UINT32_MAX) {
-        Complain("nvnCommandBufferSetCopyRowStride: a stride of %lld, and the layer takes nought "
-                 "to 4 GiB",
-                 (long long)stride);
+        LayerComplain("nvnCommandBufferSetCopyRowStride: a stride of %lld, and the layer takes "
+                      "nought to 4 GiB",
+                      (long long)stride);
         return;
     }
     record->copy_row_stride = (uint32_t)stride;
@@ -1098,18 +1048,18 @@ static void Nvnl_nvnCommandBufferSetCopyRowStride(NVNcommandBuffer *cmd, ptrdiff
 
 // ---- windows
 
-static void Nvnl_nvnWindowBuilderSetDefaults(NVNwindowBuilder *builder) {
+void Nvnl_nvnWindowBuilderSetDefaults(NVNwindowBuilder *builder) {
     memset(builder, 0, sizeof(*builder));
 }
 
-static void Nvnl_nvnWindowBuilderSetDevice(NVNwindowBuilder *builder, NVNdevice *device) {
+void Nvnl_nvnWindowBuilderSetDevice(NVNwindowBuilder *builder, NVNdevice *device) {
     LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetDevice");
     if (record != NULL) {
         record->device = device;
     }
 }
 
-static void Nvnl_nvnWindowBuilderSetNativeWindow(NVNwindowBuilder *builder,
+void Nvnl_nvnWindowBuilderSetNativeWindow(NVNwindowBuilder *builder,
                                                  NVNnativeWindow native) {
     LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetNativeWindow");
     if (record != NULL) {
@@ -1117,7 +1067,7 @@ static void Nvnl_nvnWindowBuilderSetNativeWindow(NVNwindowBuilder *builder,
     }
 }
 
-static void Nvnl_nvnWindowBuilderSetTextures(NVNwindowBuilder *builder, int count,
+void Nvnl_nvnWindowBuilderSetTextures(NVNwindowBuilder *builder, int count,
                                              NVNtexture *const *textures) {
     LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetTextures");
     if (record != NULL) {
@@ -1126,21 +1076,21 @@ static void Nvnl_nvnWindowBuilderSetTextures(NVNwindowBuilder *builder, int coun
     }
 }
 
-static NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBuilder *builder) {
+NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBuilder *builder) {
     LayerWindow *const record = Record(window, "nvnWindowInitialize");
     const LayerWindowBuilder *const from = Record(builder, "nvnWindowInitialize");
     if (record == NULL || from == NULL) {
         return 0;
     }
-    const LayerDevice *const device = DeviceOf(from->device, "nvnWindowInitialize");
+    LayerDevice *const device = DeviceOf(from->device, "nvnWindowInitialize");
     if (device == NULL) {
         return 0;
     }
     if (from->count < 2 || from->count > WINDOW_TEXTURES_MAX || from->textures == NULL ||
         from->native == NULL) {
-        Complain("nvnWindowInitialize: %d textures and %s native window, where NVN takes 2 to "
-                 "%d and one",
-                 from->count, from->native != NULL ? "a" : "no", WINDOW_TEXTURES_MAX);
+        LayerComplain("nvnWindowInitialize: %d textures and %s native window, where NVN takes 2 to "
+                      "%d and one",
+                      from->count, from->native != NULL ? "a" : "no", WINDOW_TEXTURES_MAX);
         return 0;
     }
     DkImage const *images[WINDOW_TEXTURES_MAX];
@@ -1151,10 +1101,10 @@ static NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBui
         }
         images[i] = &texture->image;
     }
-    dkSwapchainMakerDefaults(&pending.swapchain_maker, device->device, from->native, images,
+    dkSwapchainMakerDefaults(&pending.swapchain_maker, DeviceUse(device), from->native, images,
                              (uint32_t)from->count);
     pending.swapchain = NULL;
-    if (!Guarded(MakeSwapchain, "nvnWindowInitialize: dkSwapchainCreate")) {
+    if (!LayerGuarded(MakeSwapchain, "nvnWindowInitialize: dkSwapchainCreate")) {
         return 0;
     }
     memset(window, 0, sizeof(*window));
@@ -1163,7 +1113,7 @@ static NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBui
     return 1;
 }
 
-static void Nvnl_nvnWindowFinalize(NVNwindow *window) {
+void Nvnl_nvnWindowFinalize(NVNwindow *window) {
     LayerWindow *const record = WindowOf(window, "nvnWindowFinalize");
     if (record == NULL) {
         return;
@@ -1172,77 +1122,21 @@ static void Nvnl_nvnWindowFinalize(NVNwindow *window) {
     record->magic = 0;
 }
 
-// ---- the lookup
+// ---- the build's table
 
-static NvnGenericProc Lookup(const char *name);
-
-static NvnGenericProc Nvnl_nvnDeviceGetProcAddress(const NVNdevice *device, const char *name) {
-    // A game's driver answers with no device too, and ScarletNX's loader calls it so.
-    (void)device;
-    return Lookup(name);
-}
-
-// The names the lookup answers, built from the list in nvnlayer.h, so that every name has the
-// implementation of the type the list gives it: a definition above that disagrees with the list
-// does not compile against these declarations.
-#define NVN_LAYER_DECLARE(result, name, parameters) static result Nvnl_##name parameters;
-NVN_LAYER_PROCS(NVN_LAYER_DECLARE)
-#undef NVN_LAYER_DECLARE
-
-static const struct {
-    const char *name;
-    NvnGenericProc proc;
-} PROCS[] = {
-    { "nvnDeviceGetInteger", (NvnGenericProc)NvnLayerDeviceGetInteger },
+// The names the lookup answers, built from the list in nvnlayer_procs.h, as api55.h declares
+// their bodies from it: a name of the list with no body does not link.
+const LayerEntry LAYER_ENTRIES[] = {
 #define NVN_LAYER_ENTRY(result, name, parameters) { #name, (NvnGenericProc)Nvnl_##name },
     NVN_LAYER_PROCS(NVN_LAYER_ENTRY)
 #undef NVN_LAYER_ENTRY
 };
+const size_t LAYER_ENTRY_COUNT = sizeof(LAYER_ENTRIES) / sizeof(LAYER_ENTRIES[0]);
 
-/// The function named @p name, by a search of the table and nothing else: ScarletNX runs this
-/// code itself, from inside the program's first nvnBootstrapLoader call, and expects of it what
-/// a driver's lookup does, a name in and an address out.
-static NvnGenericProc Lookup(const char *name) {
-    if (name == NULL) {
-        return NULL;
+void LayerStop(const char *text) {
+    // No body of this build stops the program; the shared part still links against the name.
+    svcOutputDebugString(text, strlen(text));
+    for (;;) {
+        svcBreak(BreakReason_Panic, 0, 0);
     }
-    for (size_t i = 0; i < sizeof(PROCS) / sizeof(PROCS[0]); ++i) {
-        if (strcmp(PROCS[i].name, name) == 0) {
-            return PROCS[i].proc;
-        }
-    }
-    return NULL;
-}
-
-NvnGenericProc nvnBootstrapLoader(const char *name) {
-    return Lookup(name);
-}
-
-// ---- what a program does with the lookup
-
-bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size) {
-    // Through a pointer the compiler cannot see through, as a game calls its import.
-    NvnGenericProc (*volatile bootstrap)(const char *) = nvnBootstrapLoader;
-    memset(procs, 0, sizeof(*procs));
-    procs->nvnDeviceGetProcAddress =
-        (NvnGenericProc(*)(const NVNdevice *, const char *))bootstrap("nvnDeviceGetProcAddress");
-    if (procs->nvnDeviceGetProcAddress == NULL) {
-        snprintf(missing, missing_size, "nvnDeviceGetProcAddress");
-        return false;
-    }
-    procs->nvnDeviceGetInteger =
-        (NvnDeviceGetIntegerProc)procs->nvnDeviceGetProcAddress(NULL, "nvnDeviceGetInteger");
-    if (procs->nvnDeviceGetInteger == NULL) {
-        snprintf(missing, missing_size, "nvnDeviceGetInteger");
-        return false;
-    }
-#define NVN_LAYER_LOAD(result, name, parameters)                                                  \
-    procs->name = (result(*) parameters)procs->nvnDeviceGetProcAddress(NULL, #name);              \
-    if (procs->name == NULL) {                                                                    \
-        snprintf(missing, missing_size, "%s", #name);                                             \
-        return false;                                                                             \
-    }
-    NVN_LAYER_PROCS(NVN_LAYER_LOAD)
-#undef NVN_LAYER_LOAD
-    return true;
 }

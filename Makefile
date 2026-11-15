@@ -12,6 +12,10 @@ TARGET   := edenprobe
 BUILD    := build
 SOURCES  := source source/tests
 
+# The NVN layer, a module of its own (docs/NvnLayer.md): its sources, its include path and the
+# link flag that exports nvnBootstrapLoader. NVNLAYER_API=231 builds its other version.
+include nvnlayer/layer.mk
+
 PREFIX   := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
 CC       := $(PREFIX)gcc
 LIBNX    := $(DEVKITPRO)/libnx
@@ -42,17 +46,19 @@ ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 # can never be reporting a stale binary's answer.
 CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
             -Wall -Wextra -Werror -Wno-unused-parameter \
-            -D__SWITCH__ -I$(LIBNX)/include -Isource -I$(BUILD) -I$(BUILD)/shaders
+            -D__SWITCH__ -I$(LIBNX)/include -Isource -I$(BUILD) -I$(BUILD)/shaders \
+            $(NVNLAYER_CFLAGS)
 # --wrap on the abort is what lets GpuOpen report a failed bring-up instead of dying: the
 # graphics library answers a failed constructor by calling the runtime's abort, which never comes
-# back. gpu.c arms the wrapper only while the device is being brought up. nvnBootstrapLoader is
-# how a runtime that runs a game's NVN calls itself (ScarletNX) finds the program's NVN, as it
-# finds a game's driver (nvnlayer.h); the SDK's functions under nn:: (and its const methods, _ZNK)
+# back. gpu.c arms the wrapper only while the device is being brought up. The NVN layer's flag
+# exports nvnBootstrapLoader, which is how a runtime that runs a game's NVN calls itself
+# (ScarletNX) finds the program's NVN, as it finds a game's driver (nvnlayer/layer.mk); the SDK's
+# functions under nn:: (and its const methods, _ZNK)
 # are how a machine that answers a game's SDK functions itself takes the program's, or calls it
 # back (sdk.h, the hooks mode), and edenprobe_sdk_label
 # is the SDK version such a machine reads for them, which nothing in the program reads.
 LDFLAGS  := $(ARCH) -specs=$(LIBNX)/switch.specs -Wl,--gc-sections -g \
-            -Wl,--wrap=diagAbortWithResult -Wl,--export-dynamic-symbol=nvnBootstrapLoader \
+            -Wl,--wrap=diagAbortWithResult $(NVNLAYER_LDFLAGS) \
             -Wl,--export-dynamic-symbol='_ZN2nn*' -Wl,--export-dynamic-symbol='_ZNK2nn*' \
             -Wl,--undefined=edenprobe_sdk_label
 # Order matters: the graphics library leans on the C runtime and on the maths library after it.
@@ -71,7 +77,8 @@ SHADER_OBJ  := $(BUILD)/shaders/blobs.o
 # would pick up two of them and fail the link; platform_host.c is the host's side of platform.h,
 # which platform_switch.c is here.
 HOSTONLY := source/host_main.c source/platform_host.c
-CFILES   := $(filter-out $(HOSTONLY),$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c)))
+CFILES   := $(filter-out $(HOSTONLY),$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))) \
+            $(NVNLAYER_SOURCES)
 OFILES   := $(patsubst %.c,$(BUILD)/%.o,$(CFILES)) $(SHADER_OBJ)
 # Only the C objects get a .d: the shader blobs are assembled, not compiled, and an assembly
 # file made of byte literals reads no headers to depend on.

@@ -156,6 +156,35 @@ typedef struct {
     const void* control;
 } NVNshaderData;
 
+#if NVN_LAYER_API >= 231
+/* The Ounce's objects (API 231), the bytes ScarletNX's implementation keeps of each (its
+   src/nx/gpu/nvn/nvn.h): the program builder, DLSS's three, and the device's command and message
+   buffers */
+typedef struct {
+    char reserved[0x80];
+} NVNprogramBuilder;
+
+typedef struct {
+    char reserved[0xC0];
+} NVNdlssNetworkBuilder;
+
+typedef struct {
+    char reserved[0xC8];
+} NVNdlssParameters;
+
+typedef struct {
+    char reserved[0x258];
+} NVNdlssNetwork;
+
+typedef struct {
+    char reserved[0x30];
+} NVNdeviceCommandBuffer;
+
+typedef struct {
+    char reserved[0x28];
+} NVNdeviceMessageBuffer;
+#endif
+
 typedef struct {
     char reserved[0x100];
 } NVNmemoryPool;
