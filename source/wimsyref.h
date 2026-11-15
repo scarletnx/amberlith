@@ -145,27 +145,63 @@ typedef enum {
     WIMSY_MATERIAL_MARK,
     /// The model's: its vertex's colour in the light. Not a world draw's.
     WIMSY_MATERIAL_MODEL,
+    /// A screen on a wall: a texture shown as it is, the texel under the place and no other,
+    /// which texture the draw says.
+    WIMSY_MATERIAL_SCREEN,
 } WimsyMaterial;
+
+/// What a screen shows: a level of a compute texture, a chain's last target, one of the frame's
+/// loads, or the plaques' texture.
+typedef enum {
+    WIMSY_SCREEN_COMPUTE,
+    WIMSY_SCREEN_CHAIN,
+    WIMSY_SCREEN_LOAD,
+    WIMSY_SCREEN_PLAQUES,
+} WimsyScreen;
 
 typedef struct {
     uint32_t first;
     uint32_t count;
     WimsyMaterial material;
+    /// A screen's texture: its kind, which of them, and for a compute texture which level.
+    WimsyScreen screen;
+    uint32_t index;
+    uint32_t mip;
 } WimsyWorldDraw;
 
-#define WIMSY_WORLD_VERTICES_MAX 4800u
-#define WIMSY_WORLD_DRAWS_MAX 8u
+#define WIMSY_WORLD_VERTICES_MAX 6000u
+#define WIMSY_WORLD_DRAWS_MAX 160u
 /// The hills of a heavy level: either side of the floor, this many columns of six units out
 /// from it, a row a floor's row, two triangles a square, each one colour.
 #define WIMSY_HILL_COLUMNS 8u
 #define WIMSY_HILL_ROWS 34u
 #define WIMSY_HILL_VERTICES (2u * WIMSY_HILL_COLUMNS * WIMSY_HILL_ROWS * 6u)
 
+/// Where a heavy level's camera is and looks @p along its walk, from 0 at the run's first frame
+/// to 1 at its last: a walk made to check the scene by. Down the lane between the grass; along
+/// the left wall and its compute textures; round, and along the right wall, its chains and
+/// loads; down the lane into the smoke and through it; then up, and round to look back at it
+/// all. The judged frames, a quarter of the run apart, are the scene from its start, a wall
+/// each, the smoke from inside and the scene from its far end. @p ahead is a unit long.
+void WimsyWalkAt(float along, float eye[3], float ahead[3]);
+
+/// The direction a camera looks with @p heading, of 65536 a turn from down the lane leftwards,
+/// and @p pitch, of 65536 a turn upwards: what a person turning a camera gives WimsyViewFrom.
+void WimsyLookAt(uint32_t heading, int32_t pitch, float ahead[3]);
+
+/// The matrix from the world to clip space of a camera at @p eye looking along @p ahead, a unit
+/// long and not straight up or down.
+void WimsyViewFrom(const float eye[3], const float ahead[3], float to_clip[16]);
+
 /// The world of @p level, the same on every frame: its vertices, six a quad, into @p vertices
 /// with how many in @p vertex_count, and its draws, in order, into @p draws. Returns how many
-/// draws; none for a level with no world. A heavy level's last draw is its hills: a field of
+/// draws; none for a level with no world. A heavy level's fifth draw is its hills: a field of
 /// heights from one seed, worked out in whole numbers, rising from the floor's edge to 24 units,
-/// each triangle the colour of its height in a light baked into it.
+/// each triangle the colour of its height in a light baked into it. After them its two walls,
+/// one along each edge of the floor, and on the walls its screens, a draw a screen: on the left
+/// every level of every compute texture, a texture every 3.25 units down the wall, on the right
+/// every chain's last target and the frame's two loads; last, unless the legend was taken away,
+/// one draw of a plaque under each texture, chain and load saying which it is.
 uint32_t WimsyWorldOf(uint32_t level, WimsyWorldVertex *vertices, uint32_t *vertex_count,
                       WimsyWorldDraw *draws);
 
@@ -314,37 +350,23 @@ void WimsyChainTexel(uint32_t chain, uint32_t frame, uint32_t x, uint32_t y, uin
 void WimsyLoadTexel(uint32_t load, uint32_t x, uint32_t y, uint8_t out[4]);
 void WimsyLoadBlock(uint32_t load, uint32_t bx, uint32_t by, uint8_t out[16]);
 
-/// What a panel shows: a level of a compute texture, a chain's last target, or one of the
-/// frame's loads.
-typedef enum {
-    WIMSY_PANEL_COMPUTE,
-    WIMSY_PANEL_CHAIN,
-    WIMSY_PANEL_LOAD,
-} WimsyPanelKind;
-
-/// A panel's square on the target: where its top left pixel is, its side, and what it shows.
-typedef struct {
-    uint32_t x;
-    uint32_t y;
-    uint32_t side;
-    WimsyPanelKind kind;
-    uint32_t index;
-    uint32_t mip;
-} WimsyPanel;
-#define WIMSY_PANELS \
-    (WIMSY_COMPUTE_TEXTURES * WIMSY_COMPUTE_LEVELS + WIMSY_CHAINS + WIMSY_LOADS)
-
 /// What the processor reads back of each frame's compute work: the one texel of the first
 /// texture's last level.
 #define WIMSY_PEEK_TEXTURE 0u
 #define WIMSY_PEEK_LEVEL (WIMSY_COMPUTE_LEVELS - 1u)
 
-/// The panels of @p level, in the order they are drawn. Returns how many: none under level 3.
-uint32_t WimsyPanelsOf(uint32_t level, WimsyPanel *out);
+/// The plaques: one texture of all the screens' names, a plaque 128 by 32 texels, four a row.
+/// Plaque n names compute texture n, then chain n - 16, then load n - 32: two lines of the
+/// 8 by 16 font, sixteen characters each.
+#define WIMSY_PLAQUES (WIMSY_COMPUTE_TEXTURES + WIMSY_CHAINS + WIMSY_LOADS)
+#define WIMSY_PLAQUE_WIDTH 128u
+#define WIMSY_PLAQUE_HEIGHT 32u
+#define WIMSY_PLAQUES_SIDE 512u
+void WimsyPlaqueTexel(uint32_t x, uint32_t y, uint8_t out[4]);
 
-/// Whether the pixel at (@p x, @p y) is a panel's at @p level, and then its bytes on frame
-/// @p frame.
-bool WimsyPanelPixel(uint32_t level, uint32_t frame, uint32_t x, uint32_t y, uint8_t out[4]);
+/// Whether the plaques are drawn: they are unless WimsyLegendAsk(false) took them away.
+void WimsyLegendAsk(bool on);
+bool WimsyLegendOf(void);
 
 /// A puff of smoke, as the instance buffer holds it: a square that faces the camera, its middle
 /// in the world and its half side in the world's units, its grey, and in the colour's last byte
@@ -406,8 +428,8 @@ typedef struct {
     /// machine whose own corners, a fraction of a pixel from the reference's, turn it towards it.
     /// Not a fault: the judge has to pass it.
     bool thin_faces;
-    /// The world's draws it leaves out, a bit a draw in the world's order, the grass the bit
-    /// after the last: nought draws them all.
+    /// The world's draws it leaves out, a bit a draw for the world's first thirty, and
+    /// WIMSY_LEAVES_OUT_GRASS for the grass: nought draws them all.
     uint32_t left_out;
     /// The wind. Off, the grass stands as frame nought has it.
     bool wind;
@@ -419,7 +441,11 @@ typedef struct {
     /// on a machine whose corners land a fraction of a pixel from the reference's. Under
     /// WIMSY_EDGE_MARGIN it is not a fault: the judge has to pass it.
     uint32_t nudge;
+    /// The screens show the frame's textures. Off, they show the frame before's.
+    bool screens;
 } WimsyMachine;
+
+#define WIMSY_LEAVES_OUT_GRASS 0x80000000u
 
 /// The machine that draws a level as the level asks.
 WimsyMachine WimsyMachineRight(uint32_t level);
