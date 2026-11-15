@@ -647,9 +647,39 @@ def split(text):
     return out
 
 
+REPEAT_MOST = 256
+
+
+def expand(text):
+    """(line number, text) of every line with what .repeat N and .end hold written out N times, each keeping its own
+    line number: a loop a program has no branch for, such as an iteration unrolled"""
+    out, held, times, opened = [], [], 0, 0
+    for number_, raw in enumerate(text.splitlines(), 1):
+        words = raw.split(";")[0].split()
+        if words and words[0] == ".repeat":
+            if opened:
+                raise Refused("line %d: .repeat inside the .repeat of line %d" % (number_, opened))
+            if len(words) != 2 or not words[1].isdigit() or not 1 <= int(words[1]) <= REPEAT_MOST:
+                raise Refused("line %d: .repeat takes a count from 1 to %d, and has %s"
+                              % (number_, REPEAT_MOST, " ".join(words[1:]) or "none"))
+            held, times, opened = [], int(words[1]), number_
+        elif words and words[0] == ".end":
+            if not opened:
+                raise Refused("line %d: .end with no .repeat before it" % number_)
+            out += held * times
+            opened = 0
+        elif opened:
+            held.append((number_, raw))
+        else:
+            out.append((number_, raw))
+    if opened:
+        raise Refused("line %d: .repeat with no .end after it" % opened)
+    return out
+
+
 def parse(text, table):
     program = Program(table)
-    for number_, raw in enumerate(text.splitlines(), 1):
+    for number_, raw in expand(text):
         line = raw.split(";")[0].strip()
         if not line:
             continue
