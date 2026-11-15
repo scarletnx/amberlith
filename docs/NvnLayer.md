@@ -156,7 +156,8 @@ A hundred and eighty functions, each recording the deko3d commands that do what 
   the texture is made;
 - **texture views**: the levels, the layers, the format and the target, each set or left to the texture, with the
   getters that say which, and the comparison;
-- **copies** between textures and buffers, with the mirror flags and a row stride, and through a view of levels,
+- **copies** between textures and buffers, with the mirror flags (between two textures a mirror is deko3d's
+  blit, colour formats only) and a row stride, and through a view of levels,
   whose first level is the one copied; a view with another part set is refused in a copy;
 - **programs** of the graphics stages, from DKSH modules (below);
 - **samplers** (the filters and the wrap modes), the **texture pool** and the **sampler pool**;

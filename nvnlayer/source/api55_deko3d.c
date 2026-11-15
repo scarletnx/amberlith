@@ -1020,6 +1020,10 @@ static DkImageFormat FormatOf(NVNformat format) {
     }
 }
 
+static bool FormatIsDepth(NVNformat format) {
+    return format == NVN_FORMAT_DEPTH32F || format == NVN_FORMAT_DEPTH24_STENCIL8;
+}
+
 /// The layout @p builder describes, or false with a complaint naming what the layer does not
 /// take yet: a target, a format or a flag, by its number.
 static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, const char *what) {
@@ -1594,7 +1598,19 @@ void Nvnl_nvnCommandBufferCopyTextureToTexture(
     }
     const DkImageRect src_rect = RectOf(source_region);
     const DkImageRect dst_rect = RectOf(destination_region);
-    dkCmdBufCopyImage(record->cmdbuf, &src, &src_rect, &dst, &dst_rect, blit);
+    if (blit == 0) {
+        dkCmdBufCopyImage(record->cmdbuf, &src, &src_rect, &dst, &dst_rect, 0);
+        return;
+    }
+    // deko3d's copy between images takes no mirror and drops the flag: a mirrored one is its
+    // blit, the 2D engine's, which the depth formats cannot go through.
+    if (FormatIsDepth(from->format) || FormatIsDepth(to->format)) {
+        LayerComplain("%s: copy flags 0x%x between textures of formats 0x%x and 0x%x, and the "
+                      "layer mirrors colour formats only",
+                      WHAT, (unsigned)flags, (unsigned)from->format, (unsigned)to->format);
+        return;
+    }
+    dkCmdBufBlitImage(record->cmdbuf, &src, &src_rect, &dst, &dst_rect, blit, 0);
 }
 
 void Nvnl_nvnCommandBufferCopyBufferToBuffer(NVNcommandBuffer *cmd, NVNbufferAddress source,
