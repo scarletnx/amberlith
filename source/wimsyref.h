@@ -415,6 +415,10 @@ typedef struct {
     bool smoke;
     /// The smoke is behind what is nearer. Off, a puff is drawn over everything.
     bool smoke_depth;
+    /// How many 128ths of a pixel to the right its samples are of where the level puts them, as
+    /// on a machine whose corners land a fraction of a pixel from the reference's. Under
+    /// WIMSY_EDGE_MARGIN it is not a fault: the judge has to pass it.
+    uint32_t nudge;
 } WimsyMachine;
 
 /// The machine that draws a level as the level asks.
