@@ -7,6 +7,7 @@
 #include "bans.h"
 #include "mode.h"
 #include "tex8kref.h"
+#include "wimsyref.h"
 
 // Longer than any word this file knows. A longer one is unknown whatever it spells, and is
 // quoted cut short rather than in full.
@@ -246,6 +247,23 @@ static void TakeVram(RunMode *mode, const char *value, size_t length) {
     mode->vram_refused_cut = length > MODE_VRAM_QUOTED;
 }
 
+/// Takes the level after `level=`, @p length bytes of it: added to the run's when it is one the
+/// Wimsy scene has, quoted in the mode line otherwise.
+static void TakeLevel(RunMode *mode, const char *value, size_t length) {
+    if (length == 1u && value[0] >= '0' && (uint32_t)(value[0] - '0') < WIMSY_LEVELS) {
+        mode->levels |= 1u << (uint32_t)(value[0] - '0');
+        return;
+    }
+    mode->level_was_refused = true;
+    const size_t quoted = length < MODE_LEVEL_QUOTED ? length : MODE_LEVEL_QUOTED;
+    for (size_t i = 0; i < quoted; ++i) {
+        const unsigned char c = (unsigned char)value[i];
+        mode->level_refused[i] = c < 0x20u || c >= 0x7Fu || c == '"' || c == '\\' ? '?' : (char)c;
+    }
+    mode->level_refused[quoted] = '\0';
+    mode->level_refused_cut = length > MODE_LEVEL_QUOTED;
+}
+
 /// Takes the machine after `machine=`, @p length bytes of it, `<name>` or `<name>@<version>`: kept
 /// when the ban list knows the name and the version is one a machine can have, quoted in the mode
 /// line otherwise, an earlier good one left in effect.
@@ -328,8 +346,8 @@ static void TakeSkip(RunMode *mode, const char *value, size_t length) {
     mode->skip_refused_cut = length > MODE_SKIP_NAME_MAX;
 }
 
-/// The words a value follows (a name, the number `frames=` takes, a machine, a suite), and the
-/// length of each without its sign.
+/// The words a value follows (a name, the number `frames=` takes, a machine, a suite, a level),
+/// and the length of each without its sign.
 static const struct {
     const char *word;
     size_t length;
@@ -341,6 +359,7 @@ static const struct {
     { "machine", 7u },
     { "skip", 4u },
     { "vram", 4u },
+    { "level", 5u },
 };
 
 /// Which of NAMED the @p length letters of @p word are, or -1.
@@ -365,6 +384,8 @@ static void TakeNamed(RunMode *mode, int which, const char *value, size_t length
         TakeSkip(mode, value, length);
     } else if (which == 6) {
         TakeVram(mode, value, length);
+    } else if (which == 7) {
+        TakeLevel(mode, value, length);
     } else {
         TakeName(which == 1 ? &mode->baseline : &mode->compare, value, length);
     }
@@ -533,6 +554,21 @@ static void AppendFamilies(char *out, size_t out_size, uint32_t set) {
     if (!any) {
         const size_t used = strlen(out);
         snprintf(out + used, out_size - used, "none");
+    }
+}
+
+/// The levels in @p levels as the mode line says them: `level 1`, `levels 0 1`, or `no level`.
+static void Levels(char *out, size_t out_size, uint32_t levels) {
+    if (levels == 0u) {
+        snprintf(out, out_size, "no level");
+        return;
+    }
+    snprintf(out, out_size, "level%s", (levels & (levels - 1u)) != 0u ? "s" : "");
+    for (uint32_t level = 0; level < WIMSY_LEVELS; ++level) {
+        if ((levels >> level & 1u) != 0u) {
+            const size_t used = strlen(out);
+            snprintf(out + used, out_size - used, " %u", (unsigned)level);
+        }
     }
 }
 
@@ -712,6 +748,20 @@ static void Describe(char *out, size_t out_size, const RunMode *mode, uint32_t p
                  mode->frames_refused, mode->frames_refused_cut ? "..." : "",
                  (unsigned)MODE_FRAMES_MAX, (unsigned)mode->frames);
     }
+    char levels[4u * WIMSY_LEVELS + 16u];
+    Levels(levels, sizeof(levels), mode->levels);
+    if (mode->levels != 0u) {
+        const size_t used = strlen(out);
+        const bool game = (ModeFamiliesToRunOf(mode, present, asked) & MODE_FAMILY_GAME) != 0u;
+        snprintf(out + used, out_size - used, "; %s%s", levels,
+                 game ? "" : ", for the game family, which this run leaves out");
+    }
+    if (mode->level_was_refused) {
+        const size_t used = strlen(out);
+        snprintf(out + used, out_size - used,
+                 "; level=%s%s is not a level from 0 to %u: the run has %s", mode->level_refused,
+                 mode->level_refused_cut ? "..." : "", (unsigned)(WIMSY_LEVELS - 1u), levels);
+    }
     if (mode->vram != 0u) {
         const size_t used = strlen(out);
         const bool graphics =
@@ -820,6 +870,15 @@ size_t ModeKey(char *out, size_t out_size, const RunMode *mode) {
         snprintf(skips + used, sizeof(skips) - used, "%sskip=%s", i > 0u ? " " : "",
                  mode->skip[i]);
     }
+    // Each level is cases of its own, lowest first whatever order the file has them in.
+    char level_words[8u * WIMSY_LEVELS + 1u] = "";
+    for (uint32_t level = 0; level < WIMSY_LEVELS; ++level) {
+        if ((mode->levels >> level & 1u) != 0u) {
+            const size_t used = strlen(level_words);
+            snprintf(level_words + used, sizeof(level_words) - used, "%slevel=%u",
+                     used > 0u ? " " : "", (unsigned)level);
+        }
+    }
     // The memory decides whether tex8k's textures are tried, so another memory is another run.
     char vram[24];
     snprintf(vram, sizeof(vram), "vram=%u", (unsigned)mode->vram);
@@ -844,6 +903,7 @@ size_t ModeKey(char *out, size_t out_size, const RunMode *mode) {
         { mode->every_case, "images" },
         { (mode->families_named & MODE_FAMILY_JNI) != 0u, "jni" },
         { (mode->families_named & MODE_FAMILY_KERNEL) != 0u, "kernel" },
+        { mode->levels != 0u, level_words },
         { (mode->families_named & MODE_FAMILY_LIBC) != 0u, "libc" },
         { mode->listen, "listen" },
         { mode->machine[0] != '\0', machine },

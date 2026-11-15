@@ -107,6 +107,7 @@ broken instrument. It is the order they run in; a new suite goes where its depen
 | acc | exact | the account a signed in session reports and the id token it caches (`hle/service/acc/acc.cpp`, `IManagerForApplication`, `EnsureIdTokenCacheAsyncInterface`). |
 | friend | exact | the blocked list and the profiles a session fetches (`hle/service/friend/{friend,profile_query}.cpp`). |
 | game | exact, level for the sound | everything above at once: a uniform buffer or a texture the processor rewrote every other frame served from what the emulator held before (`buffer_cache/buffer_cache.h`, `texture_cache/texture_cache.h`), the depth test, the swapchain's pacing and the present (`hle/service/nvnflinger/`), the renderer kept stepping by a thread of its own, reads from a thread of its own, hid and the steady clock asked every frame, and threads kept on their cores. Last, since it leans on every family before it; the frames' times are the point as much as the verdicts. |
+| wimsy | exact for the sprites, position for a model | a game's frame at the sizes a game comes in, a level each: a batch of vertices or a uniform buffer the processor rewrote every frame served from what the emulator held before (`buffer_cache/buffer_cache.h`), blending, a normalised byte attribute, the face the winding gives through the flipped viewport (`renderer_vulkan/fixed_pipeline_state.cpp`), a Z24S8 depth buffer of four samples, the sample locations and the 2D engine's resolve (`engines/fermi_2d.cpp`); the frames' times at each level. |
 
 ## Next
 

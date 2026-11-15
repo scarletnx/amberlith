@@ -345,6 +345,19 @@ void RunGame(void);
 void GameSetFrames(uint32_t frames);
 void GameSetTiming(bool on);
 
+/// The game family's levels: Wimsy, ScarletNX's mascot, drawn as a game draws a character, a
+/// level a scene, from sprites to her lit model and on to a game's heaviest frame; each level's
+/// frames presented and timed as the game scene's, and five of them held to the ranges the
+/// processor works out (wimsyref.h).
+void RunWimsy(void);
+
+/// How many frames a level runs (the mode file's `frames=`), whether its lines carry the frames'
+/// times (not with `notime`), and which levels run (the mode file's `level=` words, bit n for
+/// level n; none without one).
+void WimsySetFrames(uint32_t frames);
+void WimsySetTiming(bool on);
+void WimsySetLevels(uint32_t levels);
+
 /// The net family: nifm, dns, bsd, ssl, acc and friend, in that order, against whatever
 /// sdmc:/edenprobe/net says the backend promises. A case that needs a backend the file does not
 /// name, or a service this program cannot open, is skipped with the reason and counted apart.
@@ -392,6 +405,11 @@ void RunReferenceService(void);
 /// The game scene's world, frames, reads and frame times against answers worked out by hand:
 /// part of the reference suite.
 void RunReferenceGame(void);
+
+/// The Wimsy levels' reference and judge: the model's turn, the judged frames, the sprite and
+/// its frames, the model's transform, and the judge on machines made to order, each wrong in one
+/// way: part of the reference suite.
+void RunReferenceWimsy(void);
 
 /// The coverage suite's sample patterns, edges, modulation table entries and modulated bytes,
 /// against answers worked out by hand: part of the reference suite.

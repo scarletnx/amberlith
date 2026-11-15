@@ -126,6 +126,9 @@ static const RunnerStep STEPS[] = {
     // Last: it asks everything the families above ask one at a time, all at once. Untimed by
     // the passes: it runs its frames once and times each of them itself.
     { "game", RunGame, MODE_FAMILY_GAME, false, true },
+    // The game family's levels, each named by a `level=` word: none runs without one. Untimed by
+    // the passes, as the scene before it.
+    { "wimsy", RunWimsy, MODE_FAMILY_GAME, false, true },
 };
 
 // The console's frontend for the runner: its folder, its build and its steps.
@@ -284,6 +287,9 @@ int main(int argc, char **argv) {
     const bool timing = !mode.no_timing;
     GameSetFrames(mode.frames);
     GameSetTiming(timing);
+    WimsySetFrames(mode.frames);
+    WimsySetTiming(timing);
+    WimsySetLevels(mode.levels);
     Tex8kSetTiming(timing);
     Tex8kSetVram(mode.vram);
     // The running screen, for a run with a screen: a detailed one, or one the start screen made

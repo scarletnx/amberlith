@@ -5,6 +5,7 @@
 * [The scene](#the-scene)
 * [What is judged](#what-is-judged)
 * [What is timed](#what-is-timed)
+* [The levels](#the-levels)
 * [What rests on reasoning](#what-rests-on-reasoning)
 
 Every other family asks the machine one thing at a time. A game asks everything at once: it draws,
@@ -14,7 +15,9 @@ that, judges what each part produced against what the processor works out, and t
 Only the word `game` runs it (see [The mode file](../ModeFile.md)), since no console has run it
 yet; the start screen has no row for it, and a file that names it keeps it whatever the screen
 changes. `frames=<n>` sets how many frames the scene runs, from 1 to 36000; without it, 600, ten
-seconds at 60 a second.
+seconds at 60 a second. The family's second suite, `wimsy`, is the same question at the sizes a
+game comes in, a level a scene, each run only when a `level=<n>` word names it: see [The
+levels](#the-levels).
 
 - **game**, thirteen cases, six with `notime`. One says the scene came up (none tier): a graphics
   device, a way to the display (a swapchain, or the program's screen), the audio renderer and the fs
@@ -156,8 +159,103 @@ note names the first eight by number and counts the rest; the longest frame is t
 holds. With `notime` the seven timing cases and the two notes are left out and the scene runs the
 same frames.
 
+## The levels
+
+The scene above is one small frame, the same on every run. The `wimsy` suite draws Wimsy,
+ScarletNX's mascot, as a game draws a character, from the lightest frame a game makes upwards, a
+level a scene. A level runs when a word names it, `level=<n>`, one word a level
+([the mode file](../ModeFile.md)); none runs without one, and `frames=<n>` is theirs as it is the
+scene's. Two levels so far:
+
+| level | a frame |
+|---|---|
+| 0, sprites | 96 sprites of her, 128 texels a side, a pixel or four a texel, half of them mirrored, some hanging off the target: one batch of 576 vertices the main thread rewrites every frame as the scene's world moves them, drawn in one draw and blended over the clear colour, as a 2D game's are |
+| 1, one lit model | her model, 1680 triangles, turning a two hundred and fortieth of a turn a frame, while the camera backs away from 3 of her half widths to 48 over the run: a transform in a uniform buffer the main thread rewrites every frame, a normal a vertex and a colour of four normalised bytes, one light worked out a pixel, the faces turned away culled, a Z24S8 depth buffer, and four samples a pixel resolved before the frame is shown |
+
+**The model** is `source/wimsymesh.c`, which `tools/wimsy-mesh.py` makes from her drawing,
+`static/wimsy.svg`: each of its five leaves a slab with a white bevel where the drawing strokes
+it, each eye a short cylinder, every part closed and wound one way. The sprite is that model seen
+from the front, drawn by the processor in whole numbers, so its texels are the same bytes on every
+machine.
+
+**A frame** is drawn into a 1280 by 720 target, the console's own screen, by two threads as the
+scene's are: the main thread, on core 0, works the frame out and writes what it reads into one of
+two slots, at most a frame ahead; the render thread, on core 1, takes an image from a swapchain
+on the default window, records the frame, draws the target onto the image, submits, waits for
+the queue and presents. A level has a device of its own, sized for it. In a run with a screen
+the window is the program's screen's, so each level's first case is a `skip`, `unavailable`, and
+its others `depends`: the levels run in a quick run from the mode file.
+
+**What is judged** is five frames of a run: its first, each quarter of the way and its last
+(frames 0, 149, 299, 449 and 599 of 600), so the camera's whole path, which ends with the run
+whatever `frames=` is. The render thread copies each out after its present and keeps it, and once
+the frames are over each is held to what the processor works out, a case a frame. A frame's image
+depends on its number and the run's length alone.
+
+Level 0's frames are held bit for bit, the exact tier: a sprite's corners are pixel corners and a
+texel's edges fall on them, a texel is opaque or clear, and the batch's order decides which
+sprite is on top.
+
+A frame with a model is held to no hash ([Design](../Design.md#no-screenshots-compared)): two
+machines that are both right differ in a shaded frame's last bits and in which way a sample on an
+edge falls. The reference, `source/wimsyref.c`, draws the frame on the processor from the matrices
+the uniform buffers held and works out the range each channel of each pixel may hold:
+
+- a sample (four a pixel, at the standard locations the level programs) is moved a thirty second
+  of a pixel each way, and what any of those five places would show is allowed: a sample that
+  near an edge may fall either side of it. Where all five have a surface the clear colour is
+  not allowed, and neither is a surface behind the farthest of them;
+- two surfaces within 2^-18 of each other in depth may each hide the other;
+- a surface's colour is worked out at the pixel's centre and at the sample, and both are
+  allowed with what lies between, since a machine may shade a multisampled pixel anywhere in it;
+- a pixel's range is the mean of its samples' ranges and two codes more each way, one for the
+  byte a float rounds to and one for the mean's own rounding.
+
+A pixel inside its range passes. One whose range is no wider than eight codes is held to a
+colour; a wider one is on an edge, held to the colours beside it. This is the position tier, and
+a passing frame's note says how many pixels were each:
+
+```json
+{"type":"note","text":"wimsy: level 1, frame 0: 920128 pixels within their colour's range, 1472 on an edge within the colours beside it"}
+```
+
+A frame with a pixel outside its range fails, saying how many are, by how much at most, and one
+of them with its range. With the word `images` each judged frame leaves its
+[pictures](../FailurePictures.md): what the machine drew, the nearest picture inside the ranges,
+and the verdicts, grey for a pixel held to a colour, blue for one on an edge, red for one outside.
+
+What the ranges refuse is checked by the reference suite on machines made to order
+([the judge](Judge.md)): one that draws the level as asked passes near and far, and one that draws
+it with one sample a pixel, with no depth test, with no light, a frame late, a pixel aside or
+not at all is refused.
+
+**What is timed** is what the scene times: seven cases a level, named with it
+(`level 1, 600 frames, present to present: the mean`), and two notes. A judged frame's copy is
+made after its present, so neither part holds it; it falls in the next frame's present to
+present, and the second note says what the longest one took.
+
+In an emulator a failure at level 0 points at a vertex buffer the processor rewrote every frame
+served from what was held before (`buffer_cache/buffer_cache.h`), at blending, or at a sprite a
+texel aside; at level 1, at the uniform buffer in the same way, a normalised byte attribute, the
+face the winding gives through the flipped viewport, a Z24S8 buffer of four samples, the sample
+locations, or the resolve, which the library makes on the 2D engine. A level whose first frame
+passes and whose later ones show the faces turned away points at the shadow RAM: to present a
+compressed image the library writes the window origin with its flip set while the shadow RAM
+passes methods through, and again while it replays them, which puts the tracked value back; a
+machine that keeps that method out of its shadow RAM is left with the flip, and with it the
+other face in front, from the first present on.
+
 ## What rests on reasoning
 
 No console has run the scene. What it expects of one, besides what the other families already
 check: that hid answers GetSupportedNpadStyleSet with the set the program gave, standard styles
 included; and that a deko3d swapchain on the default window paces at the display.
+
+Nor the levels. What they expect of one: that the resolve of a target of four samples is the
+mean of each pixel's four, as the msaa suite's resolve case holds it; that a second device and a
+second swapchain on the default window come up after the first were closed; that the shadow
+RAM's replay puts the window origin back after a present, as Eden's does; and that a channel is
+never more than two codes from what the reference's arithmetic gives. ScarletNX 04befe5 on a
+desktop card and on lavapipe is inside every range of both levels once the presented images are
+not compressed, and with them compressed, as the levels present, draws level 1's faces turned
+away from its second frame on.

@@ -18,6 +18,7 @@
 #include "../runner.h"
 #include "../tex8kref.h"
 #include "../ui.h"
+#include "../wimsyref.h"
 #include "tests.h"
 
 // The two things this program does around a verdict rather than to reach one: the picture it
@@ -818,6 +819,7 @@ static void CheckReportLine(void) {
 // what is left here is what happens before and after them: the launch and the mode file.
 static void CheckLabel(void);
 static void CheckFrames(void);
+static void CheckLevels(void);
 static void CheckVram(void);
 static void CheckMachine(void);
 static void CheckSkipWord(void);
@@ -1123,6 +1125,7 @@ static void CheckLaunchAndMode(void) {
 
     CheckLabel();
     CheckFrames();
+    CheckLevels();
     CheckVram();
     CheckMachine();
     CheckSkipWord();
@@ -1363,6 +1366,103 @@ static void CheckFrames(void) {
 #undef FRAMES_EXPECT
     CHECK_TRUE(SUITE, "the words game and frames=<n> run the scene and set its frames, and a bad "
                       "number says the one it keeps",
+               CHECK_NONE, wrong == 0u, "%u readings wrong, the first: %.80s", (unsigned)wrong,
+               first);
+}
+
+/// `level=<n>`, a level of the game family's Wimsy scene, one word a level: the levels a file
+/// names, a refusal with the levels in effect, the key and the words the start screen saves.
+static void CheckLevels(void) {
+    char said[REPORT_NOTE_MAX + 1];
+    char key[JOURNAL_MODE_MAX];
+    uint32_t wrong = 0;
+    const char *first = "none";
+#define LEVEL_EXPECT(condition, what)                                                              \
+    do {                                                                                           \
+        if (!(condition) && wrong++ == 0u) {                                                       \
+            first = (what);                                                                        \
+        }                                                                                          \
+    } while (0)
+
+    const RunMode game = ModeFromText("quick game");
+    LEVEL_EXPECT(game.levels == 0u && !game.level_was_refused, "no word: no level");
+    const RunMode one = ModeFromText("quick game level=1");
+    ModeDescribe(said, sizeof(said), &one, MODE_FAMILIES_PRESENT);
+    LEVEL_EXPECT(one.levels == 2u && one.unknown_count == 0u &&
+                     strcmp(said, "mode: quick, from the mode file; pictures of failures only; "
+                                  "families game; level 1") == 0,
+                 "level=1");
+    const RunMode two = ModeFromText("quick game LEVEL=1 level=0 level=1");
+    ModeDescribe(said, sizeof(said), &two, MODE_FAMILIES_PRESENT);
+    LEVEL_EXPECT(two.levels == 3u && strstr(said, "; levels 0 1") != NULL,
+                 "two levels, in capitals, one of them twice");
+
+    // Refused, each with the levels the run has.
+    char past[96];
+    snprintf(past, sizeof(past), "; level=%u is not a level from 0 to %u: the run has no level",
+             (unsigned)WIMSY_LEVELS, (unsigned)(WIMSY_LEVELS - 1u));
+    char past_word[24];
+    snprintf(past_word, sizeof(past_word), "game level=%u", (unsigned)WIMSY_LEVELS);
+    static const struct {
+        const char *text;
+        const char *said;
+        uint32_t levels;
+        bool cut;
+    } BAD[] = {
+        { "game level=", "; level= is not a level from 0 to", 0u, false },
+        { "game level=x", "; level=x is not a level from 0 to", 0u, false },
+        { "game level=-1", "; level=-1 is not a level from 0 to", 0u, false },
+        { "game level=01", "; level=01 is not a level from 0 to", 0u, false },
+        { "game level=1,0", "; level=1,0 is not a level from 0 to", 0u, false },
+        { "game level=0123456789", "; level=01234567... is not a level from 0 to", 0u, true },
+        { "game level=1 level=x", "; level 1; level=x is not a level from 0 to", 2u, false },
+    };
+    for (size_t i = 0; i < sizeof(BAD) / sizeof(BAD[0]); ++i) {
+        const RunMode bad = ModeFromText(BAD[i].text);
+        ModeDescribe(said, sizeof(said), &bad, MODE_FAMILIES_PRESENT);
+        LEVEL_EXPECT(bad.levels == BAD[i].levels && bad.level_was_refused &&
+                         bad.level_refused_cut == BAD[i].cut && bad.unknown_count == 0u &&
+                         strstr(said, BAD[i].said) != NULL,
+                     BAD[i].text);
+    }
+    const RunMode beyond = ModeFromText(past_word);
+    ModeDescribe(said, sizeof(said), &beyond, MODE_FAMILIES_PRESENT);
+    LEVEL_EXPECT(beyond.levels == 0u && beyond.level_was_refused && strstr(said, past) != NULL,
+                 "the level past the last says the range and that the run has none");
+    const RunMode kept = ModeFromText("game level=0 level=9");
+    ModeDescribe(said, sizeof(said), &kept, MODE_FAMILIES_PRESENT);
+    LEVEL_EXPECT(kept.levels == 1u && strstr(said, ": the run has level 0") != NULL,
+                 "a refusal says the level the run keeps");
+    const RunMode spaced = ModeFromText("level = 1");
+    LEVEL_EXPECT(spaced.levels == 0u && !spaced.level_was_refused && spaced.unknown_count == 1u,
+                 "level = 1");
+
+    // In the key lowest first, and back through the file the screen saves.
+    ModeKey(key, sizeof(key), &two);
+    LEVEL_EXPECT(strcmp(key, "game level=0 level=1") == 0, "the key");
+    char text[MODE_FILE_MAX];
+    ModeFormat(text, sizeof(text), &two);
+    LEVEL_EXPECT(strcmp(text, "quick game level=0 level=1") == 0 && ModeFromText(text).levels == 3u,
+                 "the words the start screen saves");
+
+    // The limit falling inside the value drops it, which could be another level.
+    static const char LONG[] = "quick level=1 more";
+    const RunMode cut = ModeFromFile(MODE_SOURCE_FILE, LONG, 12u, true);
+    const RunMode whole = ModeFromFile(MODE_SOURCE_FILE, LONG, 13u, true);
+    LEVEL_EXPECT(cut.quick && cut.levels == 0u && !cut.level_was_refused && whole.levels == 2u,
+                 "a level cut by the limit");
+
+    // Given with no game family to run it: the line says the levels are left out.
+    const RunMode unused = ModeFromText("quick net level=1");
+    ModeDescribe(said, sizeof(said), &unused, MODE_FAMILIES_PRESENT);
+    LEVEL_EXPECT(unused.levels == 2u &&
+                     strstr(said, "; level 1, for the game family, which this run leaves out") !=
+                         NULL,
+                 "level=1 with no game family");
+    LEVEL_EXPECT(UiFamilyOf("wimsy") == UI_FAMILY_GAME, "the screens' family");
+#undef LEVEL_EXPECT
+    CHECK_TRUE(SUITE, "each level=<n> adds a level of the Wimsy scene, and a bad one says the "
+                      "levels the run has",
                CHECK_NONE, wrong == 0u, "%u readings wrong, the first: %.80s", (unsigned)wrong,
                first);
 }
@@ -1732,18 +1832,21 @@ _Static_assert(JOURNAL_LINE_MAX >= sizeof("run   \t\n") + JOURNAL_SUITE_MAX + JO
                                        JOURNAL_MODE_MAX,
                "a run record with every field at its widest fits a journal line");
 
+_Static_assert(WIMSY_LEVELS == 2u, "the widest mode below names every level there is");
+
 /// The widest mode a file can ask for, every word on and `frames=` at its widest: its key is whole
 /// in MODE_KEY_MAX, the run and chosen records hold it, and a launch after a crash goes on with
 /// the run in that mode rather than starting over with an empty key.
 static void CheckWidestMode(void) {
     static const char WIDEST[] = "quick all audio cpu display fatal frames=36000 framework fs game "
-                                 "graphics hang hooks images jni kernel libc listen "
+                                 "graphics hang hooks images jni kernel level=1 level=0 libc "
+                                 "listen "
                                  "machine=scarletnx-android@12345678901234567890123456789012 net "
                                  "notime nvn pad retry service skip=abcdefghijklmnop "
                                  "skip=bcdefghijklmnopq skip=cdefghijklmnopqr "
                                  "skip=defghijklmnopqrs stress unban video vram=1048576";
     static const char KEY[] = "all audio cpu display fatal frames=36000 framework fs game graphics "
-                              "hang hooks images jni kernel libc listen "
+                              "hang hooks images jni kernel level=0 level=1 libc listen "
                               "machine=scarletnx-android@12345678901234567890123456789012 net "
                               "notime nvn pad retry service skip=abcdefghijklmnop "
                               "skip=bcdefghijklmnopq skip=cdefghijklmnopqr skip=defghijklmnopqrs "

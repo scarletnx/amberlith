@@ -221,6 +221,14 @@ uint32_t GameTimeCases(const GameTimes *times, uint32_t frames,
 size_t GameDescribeFrames(char *out, size_t out_size, const GameTimes *times);
 size_t GameDescribeWork(char *out, size_t out_size, const GameTimes *times);
 
+/// The frames' note for another scene timed the same way, @p scene where the game scene's says
+/// `game`; and its work's note as far as the main and render threads' parts, which is where a
+/// scene with no audio and file threads ends.
+size_t GameDescribeFramesOf(char *out, size_t out_size, const char *scene,
+                            const GameTimes *times);
+size_t GameDescribePartsOf(char *out, size_t out_size, const char *scene,
+                           const GameTimes *times);
+
 #ifdef __cplusplus
 }
 #endif

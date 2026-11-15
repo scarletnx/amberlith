@@ -22,11 +22,12 @@ points at. A case that ends the program costs that case, not the rest of the run
 - **[Audio](./Audio.md)** - the audio renderer, and the listening sequence
 - **[Service](./Service.md)** - commands a game sends to the system's services, held to reden's answers
 - **[Net](./Net.md)** - nifm, dns, bsd, ssl, acc and friend, the net file and the fixture
-- **[Game](./Game.md)** - one scene that runs everything at once, as a game does
+- **[Game](./Game.md)** - one scene that runs everything at once, as a game does, and the levels that draw Wimsy
+  as a game draws a character
 - **[libc](./Libc.md)** - the C library and what it asks of the system, the same cases on every frontend
 
 Every drawing suite draws offscreen and reads its target back, so no case depends on the compositor, the swapchain
-or vertical sync. The game scene is the one exception: it presents every frame and judges the offscreen copy it
-makes of each. A run with a screen shows the running screen between cases, never inside a timed interval; a quick
+or vertical sync. The game family is the one exception: its scene and its levels present every frame and judge
+offscreen copies of them. A run with a screen shows the running screen between cases, never inside a timed interval; a quick
 run from the mode file draws nothing. The pad family and the listening sequence put up screens for a person, and
 neither is an input to a verdict.

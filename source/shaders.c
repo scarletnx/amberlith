@@ -89,6 +89,8 @@ static const ShaderBlob BLOBS[SHADER_COUNT] = {
     [SHADER_BUFFER_STORE_GEOM] = { buffer_store_geom_dksh, (uint32_t)buffer_store_geom_dksh_size },
     [SHADER_CONST_RED_FRAG] = { const_red_frag_dksh, (uint32_t)const_red_frag_dksh_size },
     [SHADER_CONST_GREEN_FRAG] = { const_green_frag_dksh, (uint32_t)const_green_frag_dksh_size },
+    [SHADER_WIMSY_VERT] = { wimsy_vert_dksh, (uint32_t)wimsy_vert_dksh_size },
+    [SHADER_WIMSY_LIT_FRAG] = { wimsy_lit_frag_dksh, (uint32_t)wimsy_lit_frag_dksh_size },
 };
 
 const void *ShaderData(ShaderId id) {
