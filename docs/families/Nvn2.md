@@ -1,9 +1,15 @@
 # The nvn2 suite
 
+## Index
+
+* [The cases](#the-cases)
+* [The Mandelbrot, in three stages](#the-mandelbrot-in-three-stages)
+* [The matrix instruction](#the-matrix-instruction)
+
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch
 2's own shader code, a compute dispatch that writes a storage buffer, and a draw whose geometry a mesh program
 writes. Only the probe's Switch 2 build runs it ([The probe as a Switch 2 program](../Ounce.md)), in the nvn
-family, after the `nvn` suite. Seven cases.
+family, after the `nvn` suite. Eight cases.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.
@@ -20,6 +26,7 @@ What a pass says, and what it cannot, is in [The probe as a Switch 2 program](..
 | the Mandelbrot's compute, mesh and fragment programs make two programs | one program of the compute stage, one of the mesh and fragment stages | the calls' answers |
 | a compute program counts the Mandelbrot set's steps for every cell of a grid | `mandel.comp.sm86`, a block a row; the counts copied out by the graphics unit | every cell's count, exact (`source/mandelref.c`, `MandelCount`) |
 | a mesh program draws the counts as bars, a fragment program colours them and the depth test keeps the nearest | `mandel.mesh.sm86` and `mandel.frag.sm86`, drawn with `nvnCommandBufferDrawMeshTasks`, a workgroup a row | every pixel, exact (`MandelExpected`) |
+| one warp's matrix instruction multiplies a 16 by 16 matrix of halves by a 16 by 8 one into floats | `hmma.comp.sm86`: `HMMA.16816.F32` over a block of 32 invocations, each lane holding its part of the matrices | the product's 128 floats, bit for bit, against the integers' sums |
 
 ## The Mandelbrot, in three stages
 
@@ -50,6 +57,20 @@ integers and the picture by painting the bars from the furthest row to the neare
 The picture is drawn from the counts the dispatch left in the buffer, and the count case reads them through a
 copy the graphics unit makes: neither leans on what the processor reads of a buffer a dispatch wrote, which the
 scale program's first case asks alone.
+
+## The matrix instruction
+
+`HMMA` multiplies two matrices held across a warp's 32 lanes and adds a third. The case gives it A, 16 by 16, and B,
+16 by 8, of half floats, and takes the product in floats. Their elements are quarters from -6/4 to 6/4, never
+nought, drawn from a generator: every product and every sum of sixteen is exact in a float, so the order the
+graphics unit adds them in cannot show, and a sum of nought is +0. The reference is the sum in integers.
+
+What the case holds beyond the arithmetic is where each lane keeps its part of the matrices, which is the
+instruction's public description (PTX's `mma.sync` for m16n8k16): lane l is thread t = l % 4 of group g = l / 4;
+its four words of A are rows g and g + 8 at columns 2t and 2t + 1, then the same rows at columns 2t + 8 and
+2t + 9; its two words of B are rows 2t and 2t + 1, then 2t + 8 and 2t + 9, of column g; its four floats of the
+product are rows g and g + 8 at columns 2t and 2t + 1. ScarletNX's translator is the only reading of the
+instruction's arithmetic there is to hold it to ([Switch 2 shader programs](../Sm86.md)).
 
 ScarletNX draws mesh draws only with its `mesh_draws` setting on (`--mesh_draws=1`), which is experimental and off
 unless set: the suite is run with it.

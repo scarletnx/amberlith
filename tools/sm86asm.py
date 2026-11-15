@@ -414,6 +414,19 @@ def encode(program, index, mnemonic, mods, guard, ops):
             word.put(81, 3, PT, "the first carry")
             word.put(84, 3, PT, "the second carry")
         return word
+    if mnemonic == "HMMA":
+        # The warp's matrix multiply and add, D = A * B + C over the 32 lanes: A's and B's halves in registers from
+        # the two named, C's and D's halves or floats from theirs. The shape at bit 75 and the sums' type at 76
+        count(mnemonic, ops, 4)
+        got = modifiers(mnemonic, mods, {"16816": ("shape", 1), "1688": ("shape", 0),
+                                         "F16": ("sum", 0), "F32": ("sum", 1)})
+        for group, what in (("shape", "its shape, .16816 or .1688"), ("sum", "its sums' type, .F16 or .F32")):
+            if group not in got:
+                raise Refused("HMMA needs %s" % what)
+        word = alu(program, mnemonic, guard, reg_of(ops[0], "the destination", mnemonic), ops[1], ops[2], ops[3])
+        word.put(75, 1, got["shape"], "the shape")
+        word.put(76, 1, got["sum"], "the sums' type")
+        return word
     if mnemonic == "SHF":
         count(mnemonic, ops, 4)
         got = modifiers(mnemonic, mods, {"L": ("right", 0), "R": ("right", 1), "S64": ("type", 0), "U64": ("type", 1),
@@ -601,8 +614,8 @@ def encode(program, index, mnemonic, mods, guard, ops):
         word.put(79, 1, got.get("output", 0), ".O")
         return word
     raise Refused("%s is not an instruction the assembler writes yet: MOV, FADD, FMUL, FFMA, FSETP, ISETP, IADD3, "
-                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, S2R, ULDC, LDC, LDG, STG, IPA, ALD, AST, ISBERD, "
-                  "ISBEWR, BRA, EXIT, KILL and NOP" % mnemonic)
+                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, IPA, ALD, AST, "
+                  "ISBERD, ISBEWR, BRA, EXIT, KILL and NOP" % mnemonic)
 
 
 def single(program, mnemonic):

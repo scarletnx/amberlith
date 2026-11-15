@@ -49,10 +49,18 @@ void RunNvn2(void);
 // What an Ounce game sets before its mesh draws (ScarletNX's docs/platforms/nx/ounce.md, "Draws").
 #define GEOMETRY_PROCESSING_MESH 2
 
+// The matrix case's buffer, in the data pool past the Mandelbrot's: 32 bytes a lane in, and each
+// lane's four floats 0x400 bytes on, as hmma.comp.sm86 says.
+#define HMMA_BYTE 0x2000u
+#define HMMA_LANES 32u
+#define HMMA_OUT_BYTE 0x400u
+#define HMMA_BYTES (HMMA_OUT_BYTE + HMMA_LANES * 32u)
+
 typedef enum {
     PROGRAM_SCALE,
     PROGRAM_MANDEL_COUNT,
     PROGRAM_MANDEL_DRAW,
+    PROGRAM_HMMA,
     PROGRAM_COUNT,
 } ProgramId;
 
@@ -477,6 +485,130 @@ static const uint8_t *MandelDraw(char *why, size_t why_size) {
     return Finish("the readback", why, why_size) ? pixels : NULL;
 }
 
+/// The next element of the matrix case's matrices, in quarters: -6 to 6 and never 0, so every
+/// product and every sum of sixteen is exact in a float, and a sum of nought is +0 whichever
+/// order the products are added in. From a generator's high bits, so no row or column repeats
+/// another and a matrix laid out wrong gives another product.
+static int32_t HmmaQuarters(uint32_t *seed) {
+    *seed = *seed * 1664525u + 1013904223u;
+    const int32_t step = (int32_t)((*seed >> 24) % 12u);
+    return step < 6 ? step - 6 : step - 5;
+}
+
+/// @p quarters / 4 as a half float's sixteen bits.
+static uint32_t HmmaHalf(int32_t quarters) {
+    const uint32_t magnitude = (uint32_t)(quarters < 0 ? -quarters : quarters);
+    const uint32_t exponent = magnitude >= 4u ? 2u : magnitude >= 2u ? 1u : 0u;
+    return (quarters < 0 ? 0x8000u : 0u) | (13u + exponent) << 10 |
+           ((magnitude << (10u - exponent)) & 0x3ffu);
+}
+
+/// The matrix case: A, 16 by 16, times B, 16 by 8, by one warp's HMMA, every float of the
+/// product against the integers' sum.
+///
+/// The lanes hold the matrices as the instruction's public description lays them out (PTX's
+/// mma.sync of m16n8k16, which ScarletNX's translator follows). Lane l is thread t = l % 4 of
+/// group g = l / 4. Its four words of A are rows g and g + 8 at columns 2t and 2t + 1, then
+/// the same rows at columns 2t + 8 and 2t + 9, two halves a word; its two words of B are rows
+/// 2t and 2t + 1, then 2t + 8 and 2t + 9, of column g; its four floats of the product are rows
+/// g and g + 8 at columns 2t and 2t + 1.
+static void HmmaCase(const char *name) {
+    char why[256] = "";
+    NvnLayerClearError();
+    static int32_t a[16][16];
+    static int32_t b[16][8];
+    uint32_t seed = 0x2545f491u;
+    for (uint32_t row = 0; row < 16u; ++row) {
+        for (uint32_t column = 0; column < 16u; ++column) {
+            a[row][column] = HmmaQuarters(&seed);
+        }
+    }
+    for (uint32_t row = 0; row < 16u; ++row) {
+        for (uint32_t column = 0; column < 8u; ++column) {
+            b[row][column] = HmmaQuarters(&seed);
+        }
+    }
+    uint8_t *const pool = n2.nvn.nvnMemoryPoolMap(&n2.data_pool.pool);
+    if (pool == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   "nvnMemoryPoolMap gave no address for the buffer's pool");
+        return;
+    }
+    uint8_t *const memory = pool + HMMA_BYTE;
+    memset(memory, 0, HMMA_BYTES);
+    for (uint32_t lane = 0; lane < HMMA_LANES; ++lane) {
+        const uint32_t g = lane / 4u;
+        const uint32_t t = lane % 4u;
+        const uint32_t words[6] = {
+            HmmaHalf(a[g][2u * t]) | HmmaHalf(a[g][2u * t + 1u]) << 16,
+            HmmaHalf(a[g + 8u][2u * t]) | HmmaHalf(a[g + 8u][2u * t + 1u]) << 16,
+            HmmaHalf(a[g][2u * t + 8u]) | HmmaHalf(a[g][2u * t + 9u]) << 16,
+            HmmaHalf(a[g + 8u][2u * t + 8u]) | HmmaHalf(a[g + 8u][2u * t + 9u]) << 16,
+            HmmaHalf(b[2u * t][g]) | HmmaHalf(b[2u * t + 1u][g]) << 16,
+            HmmaHalf(b[2u * t + 8u][g]) | HmmaHalf(b[2u * t + 9u][g]) << 16,
+        };
+        memcpy(memory + 32u * lane, words, sizeof(words));
+        for (uint32_t i = 0; i < 4u; ++i) {
+            const uint32_t preset = 0xdeadbeefu;
+            memcpy(memory + HMMA_OUT_BYTE + 32u * lane + 4u * i, &preset, sizeof(preset));
+        }
+    }
+    const NVNbufferAddress buffer =
+        n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + HMMA_BYTE;
+    n2.nvn.nvnCommandBufferBeginRecording(&n2.command);
+    n2.nvn.nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_INVALIDATE_SHADER_BIT);
+    n2.nvn.nvnCommandBufferBindProgram(&n2.command, &n2.programs[PROGRAM_HMMA],
+                                       NVN_SHADER_STAGE_COMPUTE_BIT);
+    n2.nvn.nvnCommandBufferBindStorageBuffer(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, buffer,
+                                             HMMA_BYTES);
+    n2.nvn.nvnCommandBufferDispatchCompute(&n2.command, 1, 1, 1);
+    const uint8_t *const out =
+        Finish("the dispatch", why, sizeof(why))
+            ? CopyOut(buffer + HMMA_OUT_BYTE, HMMA_LANES * 32u, why, sizeof(why))
+            : NULL;
+    if (out == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    uint32_t wrong = 0;
+    uint32_t first_row = 0;
+    uint32_t first_column = 0;
+    uint32_t first_got = 0;
+    uint32_t first_want = 0;
+    int32_t total = 0;
+    for (uint32_t lane = 0; lane < HMMA_LANES; ++lane) {
+        for (uint32_t i = 0; i < 4u; ++i) {
+            const uint32_t row = lane / 4u + (i >= 2u ? 8u : 0u);
+            const uint32_t column = 2u * (lane % 4u) + (i & 1u);
+            int32_t sixteenths = 0;
+            for (uint32_t k = 0; k < 16u; ++k) {
+                sixteenths += a[row][k] * b[k][column];
+            }
+            total += sixteenths;
+            const float product = (float)sixteenths / 16.0f;
+            uint32_t want;
+            uint32_t got;
+            memcpy(&want, &product, sizeof(want));
+            memcpy(&got, out + 32u * lane + 4u * i, sizeof(got));
+            if (got != want && wrong++ == 0u) {
+                first_row = row;
+                first_column = column;
+                first_got = got;
+                first_want = want;
+            }
+        }
+    }
+    // The product's 128 elements come to -176 sixteenths, reckoned apart with unbounded
+    // integers: the case's own matrices and sums are held to that before the machine's are.
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u && total == -176,
+               "%u of 128 elements of the product differ; the first, row %u and column %u, holds "
+               "the bits 0x%08x where the integers' sum is 0x%08x (0xdeadbeef is a word nothing "
+               "wrote, 0xa5a5a5a5 one nothing copied); the processor's own product sums to %d "
+               "sixteenths, where it has -176",
+               (unsigned)wrong, (unsigned)first_row, (unsigned)first_column, (unsigned)first_got,
+               (unsigned)first_want, (int)total);
+}
+
 /// The count case: every cell's word against the processor's count.
 static void MandelCountCase(const char *name) {
     char why[256] = "";
@@ -567,8 +699,10 @@ void RunNvn2(void) {
     static const char *const MANDEL_PICTURE = "a mesh program draws the counts as bars, a "
                                               "fragment program colours them and the depth "
                                               "test keeps the nearest";
-    const char *const AFTER[] = { PROGRAM,         SCALE,        SCALE_COPIED,
-                                  MANDEL_PROGRAMS, MANDEL_COUNT, MANDEL_PICTURE };
+    static const char *const HMMA = "one warp's matrix instruction multiplies a 16 by 16 matrix "
+                                    "of halves by a 16 by 8 one into floats";
+    const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, MANDEL_PROGRAMS,
+                                  MANDEL_COUNT, MANDEL_PICTURE, HMMA };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -645,6 +779,16 @@ void RunNvn2(void) {
         }
         if (ReportStart(SUITE, MANDEL_PICTURE)) {
             MandelPictureCase(MANDEL_PICTURE);
+        }
+    }
+
+    if (ReportStart(SUITE, HMMA)) {
+        NvnLayerClearError();
+        const Stage hmma = { hmma_comp_bin, hmma_comp_bin_size, hmma_comp_ctl };
+        if (BuildProgram(PROGRAM_HMMA, &hmma, 1, why, sizeof(why))) {
+            HmmaCase(HMMA);
+        } else {
+            ReportCase(SUITE, HMMA, CHECK_NONE, false, why);
         }
     }
     TearDown();
