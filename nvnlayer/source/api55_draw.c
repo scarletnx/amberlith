@@ -61,6 +61,26 @@ void Nvnl_nvnProgramFinalize(NVNprogram *program) {
     }
 }
 
+void Nvnl_nvnProgramSetSampleShading(NVNprogram *program, int mode) {
+    if (ProgramOf(program, "nvnProgramSetSampleShading") == NULL) {
+        return;
+    }
+    // Mode 0 is as the program's own code says, which is how deko3d runs every program.
+    if (mode != 0) {
+        LayerLack("nvnProgramSetSampleShading: mode %d, a fragment stage run for every sample "
+                  "whatever its code says, and deko3d has no call for that (0 is as the code "
+                  "says)",
+                  mode);
+    }
+}
+
+/// The subtile of the tiled cache a program asks for: none, which is what a driver's
+/// nvnProgramSetShaders leaves and nothing in NVN changes.
+int Nvnl_nvnProgramGetSubtileSize(const NVNprogram *program) {
+    (void)ProgramOf(program, "nvnProgramGetSubtileSize");
+    return 0;
+}
+
 NVNboolean Nvnl_nvnProgramSetShaders(NVNprogram *program, int count,
                                      const NVNshaderData *shaders) {
     return LayerProgramSetShaders(program, count, shaders, "nvnProgramSetShaders");

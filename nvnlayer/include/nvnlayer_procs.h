@@ -754,10 +754,22 @@
     X(void, nvnCommandBufferWaitEvent,                                                            \
       (NVNcommandBuffer * cmd, const NVNevent *event, NVNeventWaitMode mode, uint32_t value))
 
-// The rest of the render state a list sets by itself: the alpha test's reference, the blend
+// What is left of the device, of a program and of the render state a list sets by itself:
+// three calls a device takes and shows nothing of, a program's sample shading and subtile
+// size, three more hints about the depth target, the alpha test's reference, the blend
 // colour, the stencil's reference and masks, the sample mask, the polygon offset with its
 // clamp, and five hints to the graphics unit that no picture shows.
 #define NVN_LAYER_PROCS_RENDER_REST(X)                                                            \
+    X(void, nvnDeviceApplyDeferredFinalizes, (NVNdevice * device, int age))                       \
+    X(void, nvnDeviceSetIntermediateShaderCache, (NVNdevice * device, int count))                 \
+    X(void, nvnDeviceFinalizeCommandHandle, (NVNdevice * device, NVNcommandHandle handle))        \
+    X(void, nvnProgramSetSampleShading, (NVNprogram * program, int mode))                         \
+    X(int, nvnProgramGetSubtileSize, (const NVNprogram *program))                                 \
+    X(void, nvnCommandBufferResolveDepthBuffer, (NVNcommandBuffer * cmd))                         \
+    X(void, nvnCommandBufferSaveZCullData,                                                        \
+      (NVNcommandBuffer * cmd, NVNbufferAddress address, size_t size))                            \
+    X(void, nvnCommandBufferRestoreZCullData,                                                     \
+      (NVNcommandBuffer * cmd, NVNbufferAddress address, size_t size))                            \
     X(void, nvnCommandBufferSetAlphaRef, (NVNcommandBuffer * cmd, float ref))                     \
     X(void, nvnCommandBufferSetBlendColor, (NVNcommandBuffer * cmd, const float *rgba))           \
     X(void, nvnCommandBufferSetStencilRef, (NVNcommandBuffer * cmd, NVNface faces, int ref))      \
@@ -1066,6 +1078,23 @@
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
     X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
+    X(uint64_t, nvnDeviceGetUniformBufferHandle,                                                  \
+      (const NVNdevice *device, NVNbufferAddress address, uint64_t size))                         \
+    X(void, nvnDeviceCommandBufferSetDefaults, (NVNdeviceCommandBuffer *buffer))                  \
+    X(void, nvnDeviceCommandBufferSetDevice,                                                      \
+      (NVNdeviceCommandBuffer *buffer, NVNdevice *device))                                        \
+    X(void, nvnDeviceCommandBufferSetStorage,                                                     \
+      (NVNdeviceCommandBuffer *buffer, NVNmemoryPool *pool, ptrdiff_t offset, size_t size))       \
+    X(void, nvnDeviceCommandBufferSetCommandMemorySize,                                           \
+      (NVNdeviceCommandBuffer *buffer, size_t size))                                              \
+    X(void, nvnDeviceCommandBufferSetComputeMemorySize,                                           \
+      (NVNdeviceCommandBuffer *buffer, size_t size))                                              \
+    X(void, nvnDeviceMessageBufferSetDefaults, (NVNdeviceMessageBuffer *buffer))                  \
+    X(void, nvnDeviceMessageBufferSetDevice,                                                      \
+      (NVNdeviceMessageBuffer *buffer, NVNdevice *device))                                        \
+    X(void, nvnDeviceMessageBufferSetStorage,                                                     \
+      (NVNdeviceMessageBuffer *buffer, NVNmemoryPool *pool, int offset, int size))                \
+    X(void, nvnDeviceMessageBufferEndMessages, (NVNdeviceMessageBuffer *buffer))                  \
     X(void, nvnCommandBufferSetRecordingMode, (NVNcommandBuffer *cmd, int mode))                  \
     X(void, nvnCommandBufferSetComputeOverlapMode, (NVNcommandBuffer *cmd, int mode))            \
     X(void, nvnCommandBufferSetComputeWorkloadPriority, (NVNcommandBuffer *cmd, int priority))   \

@@ -1839,6 +1839,91 @@ static void HintsCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 5 | 1u << 6, why);
 }
 
+// ---- a program's sample shading, and the depth target's own business
+
+/// Into the open list: a program of the case's own, its sample shading set to what its code
+/// says before its shaders are, bound for the draws after it. False when the program was not
+/// made or took no shaders; @p subtile is what it says of the tiled cache's subtile.
+static bool ShadedRecorded(Kit *kit, NVNprogram *program, bool *made, int *subtile) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    *made = n->nvnProgramInitialize(program, kit->nvn.device);
+    if (!*made) {
+        return false;
+    }
+    n->nvnProgramSetSampleShading(program, 0);
+    if (!n->nvnProgramSetShaders(program, 2, kit->nvn.stages[kit->program])) {
+        return false;
+    }
+    *subtile = n->nvnProgramGetSubtileSize(program);
+    n->nvnCommandBufferBindProgram(kit->nvn.command, program,
+                                   NVN_SHADER_STAGE_VERTEX_BIT | NVN_SHADER_STAGE_FRAGMENT_BIT);
+    return true;
+}
+
+/// A program whose sample shading is left to its code draws as any other, and asks for no
+/// subtile of the tiled cache: a driver's nvnProgramSetShaders leaves that at nought and
+/// nothing in NVN sets it.
+static void ShadedCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    static _Alignas(8) NVNprogram program;
+    bool made = false;
+    int subtile = -1;
+    KitBegin(&kit, true);
+    const bool set = ShadedRecorded(&kit, &program, &made, &subtile);
+    for (uint32_t k = 12; k < 15u; ++k) {
+        KitCell(&kit, k);
+    }
+    if (KitEnd(&kit, why, sizeof(why)) && !set) {
+        snprintf(why, sizeof(why), "%s answered false: %s",
+                 made ? "nvnProgramSetShaders" : "nvnProgramInitialize",
+                 NvnLayerError()[0] != '\0' ? NvnLayerError() : "no reason given");
+    } else if (why[0] == '\0' && subtile != 0) {
+        snprintf(why, sizeof(why), "the program's subtile size is %d, where a program asks for "
+                                   "none, 0",
+                 subtile);
+    }
+    if (made) {
+        kit.nvn.nvn->nvnProgramFinalize(&program);
+    }
+    KitJudge(&kit, name, set ? 1u << 12 | 1u << 13 | 1u << 14 : 0u, why);
+}
+
+/// Into the open list, between depth tested draws: the depth target written out as values, and
+/// the coarse culling's data saved to the page's memory and restored from it.
+static void DepthKeptRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    KitCell(kit, 0);
+    n->nvnCommandBufferResolveDepthBuffer(cmd);
+    KitCell(kit, 1);
+    n->nvnCommandBufferSaveZCullData(cmd, kit->page.address, PAGE_BYTES);
+    KitCell(kit, 2);
+    n->nvnCommandBufferRestoreZCullData(cmd, kit->page.address, PAGE_BYTES);
+    KitCell(kit, 3);
+}
+
+/// The depth target's own business with the graphics unit, which no picture shows: written out
+/// as values where it was kept compressed, and its coarse culling's data saved and restored.
+/// Over a depth of 0.6 the four cells, each at 0.5, are drawn around the three calls as without
+/// them, and a quad past the depth already there would not be.
+static void DepthKeptCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpenWith(&kit, kind, true, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    DrawPathClearDepth(kit.path, 0.6f);
+    DrawPathDepth(kit.path, true, false);
+    DepthKeptRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 0xfu, why);
+}
+
 // ---- patches
 
 /// The outer levels the patches of the tessellation case are drawn with, which its evaluation
@@ -2276,6 +2361,11 @@ void NvnCommandFirst(void) {
                                     "NVN functions");
     HintsCase(DRAW_PATH_LAYER, "draws under five hints to the graphics unit are as without "
                                "them, through the layer's own NVN functions");
+    ShadedCase(DRAW_PATH_LAYER, "a program whose sample shading is its code's draws and asks "
+                                "for no subtile, through the layer's own NVN functions");
+    DepthKeptCase(DRAW_PATH_LAYER, "depth tested draws around a depth target's resolve and its "
+                                   "culling data's save and restore are as without them, "
+                                   "through the layer's own NVN functions");
     TouchedCase(DRAW_PATH_LAYER, "conservative rasterization draws every pixel a quad "
                                  "touches, through the layer's own NVN functions");
     DilatedCase(DRAW_PATH_LAYER, "a conservative quad dilated by half a pixel reaches the "
@@ -2354,6 +2444,11 @@ void NvnCommandLast(void) {
                                   "looks up");
     HintsCase(DRAW_PATH_NVN, "draws under five hints to the graphics unit are as without them, "
                              "through the NVN the program looks up");
+    ShadedCase(DRAW_PATH_NVN, "a program whose sample shading is its code's draws and asks for "
+                              "no subtile, through the NVN the program looks up");
+    DepthKeptCase(DRAW_PATH_NVN, "depth tested draws around a depth target's resolve and its "
+                                 "culling data's save and restore are as without them, through "
+                                 "the NVN the program looks up");
     TouchedCase(DRAW_PATH_NVN, "conservative rasterization draws every pixel a quad touches, "
                                "through the NVN the program looks up");
     DilatedCase(DRAW_PATH_NVN, "a conservative quad dilated by half a pixel reaches the pixels "

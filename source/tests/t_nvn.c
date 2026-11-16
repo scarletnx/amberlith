@@ -267,6 +267,9 @@ static void RecordClear(const NVNtexture *texture, int width, int height, const 
     nvn.nvn.nvnCommandBufferClearColor(&nvn.command, 0, rgba, NVN_CLEAR_COLOR_MASK_RGBA);
 }
 
+/// The list of the last ClearAndRead, which has run.
+static NVNcommandHandle cleared_list;
+
 /// Clears the target to @p rgba, copies it to the readback pool and waits: the pool's bytes, or
 /// NULL with the reason in @p why.
 static const uint8_t *ClearAndRead(const float rgba[4], char *why, size_t why_size) {
@@ -297,11 +300,57 @@ static const uint8_t *ClearAndRead(const float rgba[4], char *why, size_t why_si
     }
     nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
     nvn.nvn.nvnQueueFinish(&nvn.queue);
+    cleared_list = list;
     if (NvnLayerError()[0] != '\0') {
         snprintf(why, why_size, "%s", NvnLayerError());
         return NULL;
     }
     return pixels;
+}
+
+/// Every pixel of @p pixels against @p expected: how many differ.
+static uint32_t ClearWrong(const uint8_t *pixels, const uint8_t expected[4]) {
+    uint32_t wrong = 0;
+    for (uint32_t i = 0; i < TARGET_SIZE * TARGET_SIZE; ++i) {
+        wrong += memcmp(pixels + (size_t)i * 4u, expected, 4) != 0 ? 1u : 0u;
+    }
+    return wrong;
+}
+
+/// Three calls a device takes and shows nothing of, which a release driver returns from at
+/// once: deferred finalizes applied, the intermediate shader cache switched, and the handle of
+/// a list that ran given up. A clear before them is there, and so is one after.
+static void DeviceQuietCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static const float before[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
+    static const uint8_t before_bytes[4] = { 0x00, 0xff, 0x00, 0xff };
+    static const float after[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+    static const uint8_t after_bytes[4] = { 0x00, 0x00, 0xff, 0xff };
+    char why[256] = "";
+    const uint8_t *pixels = ClearAndRead(before, why, sizeof(why));
+    if (pixels == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    const uint32_t wrong_before = ClearWrong(pixels, before_bytes);
+    nvn.nvn.nvnDeviceFinalizeCommandHandle(&nvn.device, cleared_list);
+    nvn.nvn.nvnDeviceApplyDeferredFinalizes(&nvn.device, 0);
+    nvn.nvn.nvnDeviceSetIntermediateShaderCache(&nvn.device, 1);
+    nvn.nvn.nvnDeviceSetIntermediateShaderCache(&nvn.device, 0);
+    pixels = ClearAndRead(after, why, sizeof(why));
+    if (pixels == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    const uint32_t wrong_after = ClearWrong(pixels, after_bytes);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong_before == 0u && wrong_after == 0u,
+               "%u of %u pixels are not the green cleared before the three calls, and %u are "
+               "not the blue cleared after them",
+               (unsigned)wrong_before, (unsigned)(TARGET_SIZE * TARGET_SIZE),
+               (unsigned)wrong_after);
 }
 
 /// One case: the target cleared to @p rgba must read back as @p expected in every pixel.
@@ -3160,6 +3209,8 @@ static void LayerCases(LayerWay way) {
     const char *const TARGET = Way("a queue, its pools and a 64x64 target come up");
     const char *const RED = Way("clear to opaque red");
     const char *const MID = Way("clear to a mid channel value");
+    const char *const DEVICE_QUIET = Way("clears before and after deferred finalizes, the shader "
+                                         "cache switch and a list's handle given up are there");
     const char *const WINDOW = Way("a window acquires and presents both its textures");
     const char *const COPIES = Way("two copy textures and a staging pool come up");
     const char *const ROUND_TRIP = Way("a picture copied into a texture and back keeps every texel");
@@ -3257,7 +3308,8 @@ static void LayerCases(LayerWay way) {
     const char *const WINDOW_HDR = Way("an Ounce window has its builder's HDR metadata, and "
                                           "gives back what it is set");
 #endif
-    const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
+    const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     DEVICE_QUIET,
+                                         COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
@@ -3360,6 +3412,7 @@ static void LayerCases(LayerWay way) {
     static const uint8_t mid_bytes[4] = { 0x80, 0x00, 0x00, 0xff };
     ClearCase(RED, red, red_bytes);
     ClearCase(MID, mid, mid_bytes);
+    DeviceQuietCase(DEVICE_QUIET);
 
     if (ReportStart(SUITE, COPIES)) {
         NvnLayerClearError();

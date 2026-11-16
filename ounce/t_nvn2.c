@@ -1053,6 +1053,50 @@ static void SameFloat(char *why, size_t why_size, const char *what, float got, f
     }
 }
 
+// ---- the device's own buffers
+
+/// What a uniform buffer's handle is, as a driver makes it: the address in units of sixteen
+/// bytes in its low bits, and the size in the same units, rounded up, from bit 45.
+static uint64_t UniformHandle(uint64_t address, uint64_t size) {
+    return ((0x1e0000000000ull + (size << 41)) & 0xffffe00000000000ull) | address >> 4;
+}
+
+/// A uniform buffer's handle is its address and its size in one word, which the case works out
+/// itself; and the builders of a device's command buffer and of its message buffer take their
+/// device, their storage and their sizes. Neither builder has a getter and the suite makes no
+/// object of either, so of those nine calls the case holds only that the device goes on.
+static void DeviceBuffersCase(const char *name) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    const NVNbufferAddress address = n->nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + 0x40u;
+    Same(why, sizeof(why), "the handle of 0x130 bytes of the data pool from its byte 0x40",
+         (long long)n->nvnDeviceGetUniformBufferHandle(&n2.device, address, 0x130u),
+         (long long)UniformHandle(address, 0x130u));
+    Same(why, sizeof(why), "the handle of 0x131 bytes there, a size that is no whole unit",
+         (long long)n->nvnDeviceGetUniformBufferHandle(&n2.device, address, 0x131u),
+         (long long)UniformHandle(address, 0x131u));
+    _Alignas(8) NVNdeviceCommandBuffer commands;
+    memset(&commands, 0, sizeof(commands));
+    n->nvnDeviceCommandBufferSetDevice(&commands, &n2.device);
+    n->nvnDeviceCommandBufferSetDefaults(&commands);
+    n->nvnDeviceCommandBufferSetStorage(&commands, &n2.data_pool.pool, 0x8000, 0x1000u);
+    n->nvnDeviceCommandBufferSetCommandMemorySize(&commands, 0x800u);
+    n->nvnDeviceCommandBufferSetComputeMemorySize(&commands, 0x400u);
+    _Alignas(8) NVNdeviceMessageBuffer messages;
+    memset(&messages, 0, sizeof(messages));
+    n->nvnDeviceMessageBufferSetDevice(&messages, &n2.device);
+    n->nvnDeviceMessageBufferSetDefaults(&messages);
+    n->nvnDeviceMessageBufferSetStorage(&messages, &n2.data_pool.pool, 0x9000, 0x1000);
+    n->nvnDeviceMessageBufferEndMessages(&messages);
+    int version = 0;
+    n->nvnDeviceGetInteger(&n2.device, NVN_DEVICE_INFO_API_MAJOR_VERSION, &version);
+    Same(why, sizeof(why), "the device's API version after the two builders were filled",
+         version, NVN_LAYER_API);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 /// A network builder keeps each number it is given. Its defaults keep the device and take one
 /// evaluation entry, as the driver's do.
 static void DlssBuilderCase(const char *name) {
@@ -1695,6 +1739,8 @@ void RunNvn2(void) {
                                              "that take several";
     static const char *const APART_DEFERRED = "the same texture and sampler bound by the "
                                               "deferred calls";
+    static const char *const DEVICE_BUFFERS = "a uniform buffer's handle is its address and size, "
+                                              "and the device's two buffer builders are filled";
     static const char *const DLSS_BUILDER = "a DLSS network builder gives back what it was set";
     static const char *const DLSS_PARAMETERS = "the parameters of a DLSS evaluation give back "
                                                "what they were set";
@@ -1709,7 +1755,7 @@ void RunNvn2(void) {
                                   PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
                                   SCALE_MODES, PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
                                   IMAGE_DEFERRED, APART, APART_SEVERAL, APART_DEFERRED,
-                                  DLSS_BUILDER, DLSS_PARAMETERS, DLSS_SIZES, DLSS_EVALUATE };
+                                  DEVICE_BUFFERS, DLSS_BUILDER, DLSS_PARAMETERS, DLSS_SIZES, DLSS_EVALUATE };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -1934,6 +1980,10 @@ void RunNvn2(void) {
         if (ReportStart(SUITE, APART_DEFERRED)) {
             ApartCase(APART_DEFERRED, IMAGES_DEFERRED);
         }
+    }
+
+    if (ReportStart(SUITE, DEVICE_BUFFERS)) {
+        DeviceBuffersCase(DEVICE_BUFFERS);
     }
 
     // DLSS: the builder and the parameters as records, then a network and an evaluation.
