@@ -991,6 +991,10 @@ typedef struct {
     uint8_t case_marks[UI_MAX_CASES / 8u];
     uint32_t demo_marks;
     UiAsk ask;
+    /// A run asked for that waits on the person's answer to whether the judge runs first
+    /// (UI_ASK_NONE while none waits), and that answer: the judge's suites before the pick.
+    UiAsk waiting;
+    bool judge;
     /// A press was seen, which stops the unattended countdown.
     bool pressed;
     bool changed;

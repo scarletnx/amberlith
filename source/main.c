@@ -369,7 +369,14 @@ static bool Picked(const char *suite, const char *name) {
     return UiPickHas(&picked, &browse_info, suite, name);
 }
 
+// Whether the judge's steps run before what the browser picked: the person's answer to its
+// question, asked before every run begun there.
+static bool browse_judge = true;
+
 static bool StepPicked(const RunnerStep *step) {
+    if (!browse_judge && UiFamilyOf(step->name) == UI_FAMILY_JUDGE) {
+        return false;
+    }
     return BrowseStepRuns(step->name, &picked, &browse_info);
 }
 
@@ -452,9 +459,10 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
     {
         char described[REPORT_NOTE_MAX - 64];
         BrowseDescribePick(described, sizeof(described), &picked, &browse_info);
-        ReportNote("browser: run %u, picked in the browser: the judge, then %s; the cases of a "
-                   "step not picked neither run nor leave a line",
-                   (unsigned)number, described);
+        ReportNote("browser: run %u, picked in the browser: %s%s; the cases of a step not picked "
+                   "neither run nor leave a line",
+                   (unsigned)number, browse_judge ? "the judge, then " : "without the judge, ",
+                   described);
     }
     HooksReportOwnCode(NULL);
     PictureWriteEveryCase(mode.every_case);
@@ -637,6 +645,7 @@ static ViewerEnd BrowserSession(const RunMode *from_file, UiTab tab, const UiSta
         picked = pick;
         last = pick;
         have_last = true;
+        browse_judge = state.judge;
         BrowserRun(from_file, &state.options, &state.start);
         browse_info.results = ViewerIndexRun(heading);
         BrowseCatalogMerge(&catalog, browse_info.results->records, browse_info.results->count);
