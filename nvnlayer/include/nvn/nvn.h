@@ -168,6 +168,12 @@ typedef struct {
     char reserved[0x80];
 } NVNprogramBuilder;
 
+/* A shader group of a ray tracing program, as an Ounce game's driver takes one, by value: three
+   of the program's ray tracing shaders by number, -1 where the group has none */
+typedef struct {
+    int shaders[3];
+} NVNshaderGroup;
+
 typedef struct {
     char reserved[0xC0];
 } NVNdlssNetworkBuilder;
