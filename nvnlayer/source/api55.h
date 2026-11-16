@@ -497,6 +497,12 @@ static inline DkDevice DeviceUse(LayerDevice *device) {
 /// pool: api55_deko3d.c keeps the pools nvnMemoryPoolInitialize made with SHADER_CODE.
 DkMemBlock LayerCodePool(NVNbufferAddress address, uint32_t *offset);
 
+/// A program's stages set from @p count shader data, for the two NVN calls that set them, the
+/// one named @p what: neither calls the other, since a runtime that runs NVN itself takes each
+/// at its own address (tools/nvn-lookups.py holds the program to that).
+NVNboolean LayerProgramSetShaders(NVNprogram *program, int count, const NVNshaderData *shaders,
+                                  const char *what);
+
 /// deko3d's call for a command buffer out of command memory, @p user the NVN command buffer:
 /// the program's callback, if it set one and left it on (api55_command.c).
 void LayerCommandGrow(void *user, DkCmdBuf cmdbuf, size_t least);
