@@ -15,7 +15,8 @@
 /// Three lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
-///   NVN_LAYER_PROCS_WINDOW and NVN_LAYER_PROCS_COUNTER, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER and NVN_LAYER_PROCS_RECORDING, parts of it
+///   written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, a part of it written apart): the
@@ -257,6 +258,31 @@
       (const NVNdevice *device, const NVNcounterData *counter))                                   \
     X(uint64_t, nvnDeviceGetCurrentTimestampInNanoseconds, (const NVNdevice *device))
 
+// What a command buffer says of its memory and of its recording, the callback that adds memory
+// to a list that ran out, and lists called from a list or copied into one.
+#define NVN_LAYER_PROCS_RECORDING(X)                                                              \
+    X(size_t, nvnCommandBufferGetCommandMemorySize, (const NVNcommandBuffer *cmd))                \
+    X(size_t, nvnCommandBufferGetCommandMemoryUsed, (const NVNcommandBuffer *cmd))                \
+    X(size_t, nvnCommandBufferGetCommandMemoryFree, (const NVNcommandBuffer *cmd))                \
+    X(size_t, nvnCommandBufferGetControlMemorySize, (const NVNcommandBuffer *cmd))                \
+    X(size_t, nvnCommandBufferGetControlMemoryUsed, (const NVNcommandBuffer *cmd))                \
+    X(size_t, nvnCommandBufferGetControlMemoryFree, (const NVNcommandBuffer *cmd))                \
+    X(NVNboolean, nvnCommandBufferIsRecording, (const NVNcommandBuffer *cmd))                     \
+    X(void, nvnCommandBufferSetMemoryCallback,                                                    \
+      (NVNcommandBuffer * cmd, PFNNVNCOMMANDBUFFERMEMORYCALLBACKPROC callback))                   \
+    X(void, nvnCommandBufferSetMemoryCallbackData, (NVNcommandBuffer * cmd, void *data))          \
+    X(PFNNVNCOMMANDBUFFERMEMORYCALLBACKPROC, nvnCommandBufferGetMemoryCallback,                   \
+      (const NVNcommandBuffer *cmd))                                                              \
+    X(void *, nvnCommandBufferGetMemoryCallbackData, (const NVNcommandBuffer *cmd))               \
+    X(void, nvnCommandBufferSetCommandMemoryCallbackEnabled,                                      \
+      (NVNcommandBuffer * cmd, NVNboolean enabled))                                               \
+    X(void, nvnCommandBufferSetControlMemoryCallbackEnabled,                                      \
+      (NVNcommandBuffer * cmd, NVNboolean enabled))                                               \
+    X(void, nvnCommandBufferCallCommands,                                                         \
+      (NVNcommandBuffer * cmd, int count, const NVNcommandHandle *handles))                       \
+    X(void, nvnCommandBufferCopyCommands,                                                         \
+      (NVNcommandBuffer * cmd, int count, const NVNcommandHandle *handles))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -346,7 +372,8 @@
     NVN_LAYER_PROCS_SAMPLER(X)                                                                    \
     NVN_LAYER_PROCS_BUFFER(X)                                                                     \
     NVN_LAYER_PROCS_WINDOW(X)                                                                     \
-    NVN_LAYER_PROCS_COUNTER(X)
+    NVN_LAYER_PROCS_COUNTER(X)                                                                    \
+    NVN_LAYER_PROCS_RECORDING(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

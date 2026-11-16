@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and sixty one functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and seventy six functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -151,6 +151,12 @@ Two hundred and sixty one functions, each recording the deko3d commands that do 
 - **the render enable**, which deko3d has no command for: the 3D engine's method itself (0x554: an address and a
   mode), its words and the control list that names them written into the part of the command memory the layer
   keeps, a unit of 0x200 bytes each, so they live as long as the list;
+- **what a command buffer says of its memory**: the sizes it was given; the command memory used, which is the
+  layer's own part and what deko3d has written of the rest, found by the byte the layer fills that memory with
+  as it hands it over (so the pool has to be one the processor reads), and the free as the rest; no control
+  memory used, since deko3d keeps a list's control words itself; whether it is recording; **the memory
+  callback**, which deko3d's own call for more command memory reaches while the program left it on, with its
+  getters; and **lists in a list**, called or copied, both deko3d's call of a list where it lies;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

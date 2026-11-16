@@ -178,6 +178,25 @@ typedef struct {
 #define LAYER_HANDLE_FIRST 0x20u
 #define LAYER_HANDLE_BYTES 0x200u
 
+/// The memory a command buffer was given, as the program may ask of it, and the callback that
+/// adds more.
+typedef struct {
+    /// The part of the command memory deko3d records into, as the processor reads it (NULL for
+    /// a pool it cannot read), which the layer fills with LAYER_UNUSED_BYTE as it hands it over:
+    /// how far a list got is where that byte starts again.
+    const uint8_t *given;
+    uint32_t given_size;
+    /// All the bytes nvnCommandBufferAddCommandMemory gave, the layer's own part included.
+    uint32_t added;
+    size_t control;
+    bool recording;
+    bool command_callback;
+    bool control_callback;
+    PFNNVNCOMMANDBUFFERMEMORYCALLBACKPROC callback;
+    void *callback_data;
+} LayerCommandMemory;
+#define LAYER_UNUSED_BYTE 0xa5u
+
 /// What a command buffer keeps for its draws, too large for the NVN object: allocated with it.
 typedef struct {
     /// The part of the command memory the layer keeps to itself, where each draw's copy of the
@@ -191,6 +210,8 @@ typedef struct {
     /// last draw took a copy.
     uint8_t handles[LAYER_STAGES][LAYER_HANDLE_BYTES];
     uint8_t dirty;
+    /// What the command buffer answers of its memory and of its recording (api55_command.c).
+    LayerCommandMemory memory;
 } LayerDraw;
 
 typedef struct {
@@ -433,6 +454,10 @@ static inline DkDevice DeviceUse(LayerDevice *device) {
 /// The shader code pool that holds the GPU address @p address, with the offset of it in the
 /// pool: api55_deko3d.c keeps the pools nvnMemoryPoolInitialize made with SHADER_CODE.
 DkMemBlock LayerCodePool(NVNbufferAddress address, uint32_t *offset);
+
+/// deko3d's call for a command buffer out of command memory, @p user the NVN command buffer:
+/// the program's callback, if it set one and left it on (api55_command.c).
+void LayerCommandGrow(void *user, DkCmdBuf cmdbuf, size_t least);
 
 _Static_assert(sizeof(DkShader) <= sizeof(((LayerControlTail *)0)->shader),
                "deko3d's shader fits the room the control section keeps for it");
