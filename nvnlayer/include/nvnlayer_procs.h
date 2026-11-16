@@ -16,9 +16,9 @@
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
 ///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING,
-///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE, NVN_LAYER_PROCS_DEBUG, NVN_LAYER_PROCS_OBJECT
-///   and NVN_LAYER_PROCS_STATE_OBJECTS, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
-///   versions have them. The API 55
+///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE, NVN_LAYER_PROCS_DEBUG, NVN_LAYER_PROCS_OBJECT,
+///   NVN_LAYER_PROCS_STATE_OBJECTS and NVN_LAYER_PROCS_SUBROUTINE, parts of it written apart) and
+///   NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231,
 ///   NVN_LAYER_PROCS_PROGRAM_231 and NVN_LAYER_PROCS_DLSS_231, parts of it written apart): the
@@ -438,7 +438,8 @@
     X(uint64_t, nvnDeviceGetTexelFetchHandle, (const NVNdevice *device, int id))
 
 // What the Ounce's program builder (API 231) answers of itself: its device, its shader data,
-// its sample shading, and the three numbers it keeps for a ray tracing program.
+// its sample shading, the three numbers it keeps for a ray tracing program and its subroutine
+// linkage; and the scratch memory a program says a warp of its ray tracing needs.
 #define NVN_LAYER_PROCS_PROGRAM_231(X)                                                            \
     X(NVNdevice *, nvnProgramBuilderGetDevice, (const NVNprogramBuilder *builder))                \
     X(const NVNshaderData *, nvnProgramBuilderGetShaders, (const NVNprogramBuilder *builder))     \
@@ -451,7 +452,13 @@
     X(void, nvnProgramBuilderSetMaxTraceRecursionDepth, (NVNprogramBuilder * builder, int depth)) \
     X(int, nvnProgramBuilderGetMaxTraceRecursionDepth, (const NVNprogramBuilder *builder))        \
     X(void, nvnProgramBuilderSetProgramRayTracingFlags, (NVNprogramBuilder * builder, int flags)) \
-    X(int, nvnProgramBuilderGetProgramRayTracingFlags, (const NVNprogramBuilder *builder))
+    X(int, nvnProgramBuilderGetProgramRayTracingFlags, (const NVNprogramBuilder *builder))        \
+    X(void, nvnProgramBuilderSetSubroutineLinkage,                                                \
+      (NVNprogramBuilder * builder, int count, const NVNsubroutineLinkageMapPtr *maps))           \
+    X(const NVNsubroutineLinkageMapPtr *, nvnProgramBuilderGetSubroutineLinkage,                  \
+      (const NVNprogramBuilder *builder))                                                         \
+    X(int, nvnProgramBuilderGetSubroutineLinkageCount, (const NVNprogramBuilder *builder))        \
+    X(uint64_t, nvnProgramGetScratchBytesPerWarp, (const NVNprogram *program))
 
 // The Ounce's DLSS (API 231): the network's builder, the network, the parameters of an
 // evaluation and the evaluation.
@@ -799,6 +806,11 @@
     X(void, nvnCommandBufferSetZCullZF32CompressionEnable,                                        \
       (NVNcommandBuffer * cmd, NVNboolean enable))
 
+// Subroutines: the linkage maps a program takes for its stages that declare some.
+#define NVN_LAYER_PROCS_SUBROUTINE(X)                                                             \
+    X(NVNboolean, nvnProgramSetSubroutineLinkage,                                                 \
+      (NVNprogram * program, int count, const NVNsubroutineLinkageMapPtr *maps))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -898,7 +910,8 @@
     NVN_LAYER_PROCS_STATE_OBJECTS(X)                                                              \
     NVN_LAYER_PROCS_TEXTURE_MORE(X)                                                               \
     NVN_LAYER_PROCS_REST(X)                                                                       \
-    NVN_LAYER_PROCS_RENDER_REST(X)
+    NVN_LAYER_PROCS_RENDER_REST(X)                                                                \
+    NVN_LAYER_PROCS_SUBROUTINE(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

@@ -81,6 +81,19 @@ int Nvnl_nvnProgramGetSubtileSize(const NVNprogram *program) {
     return 0;
 }
 
+/// A program takes a linkage map for each of its stages that declares subroutines, and a driver
+/// answers false to anything else: no map, or a map where no stage declares any. A stage
+/// declares them in its control section (byte 0x7c0 of it, as ScarletNX reads one), and the
+/// section the layer writes of a DKSH module has nought there. So no program here has such a
+/// stage, and every map is refused as a driver refuses it.
+NVNboolean Nvnl_nvnProgramSetSubroutineLinkage(NVNprogram *program, int count,
+                                               const NVNsubroutineLinkageMapPtr *maps) {
+    (void)count;
+    (void)maps;
+    (void)ProgramOf(program, "nvnProgramSetSubroutineLinkage");
+    return 0;
+}
+
 NVNboolean Nvnl_nvnProgramSetShaders(NVNprogram *program, int count,
                                      const NVNshaderData *shaders) {
     return LayerProgramSetShaders(program, count, shaders, "nvnProgramSetShaders");

@@ -42,7 +42,7 @@ set behind the version.
 
 | Part | Files | In which build |
 | --- | --- | --- |
-| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has a hundred and thirty one names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
+| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has a hundred and thirty five names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
 | the lookup: `nvnBootstrapLoader`, `nvnDeviceGetProcAddress`, `NvnLoadProcs` | `source/layer.c` | both |
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |
@@ -137,7 +137,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Five hundred and thirty two functions, each recording the deko3d commands that do what NVN says it does:
+Five hundred and thirty three functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -253,6 +253,9 @@ Five hundred and thirty two functions, each recording the deko3d commands that d
   `nvnCommandBufferBindCoverageModulationTable` (deko3d's table; no table is refused, deko3d having no call that
   takes one away) and `nvnCommandBufferSetShaderScratchMemory` (checked against its pool and not recorded:
   deko3d asks for no such memory);
+- **a program's subroutine linkage**, refused: `nvnProgramSetSubroutineLinkage` answers false, as a driver
+  answers a map for a program none of whose stages declares a subroutine. The control section the layer writes
+  of a DKSH declares none;
 - **instanced draws** (`nvnCommandBufferDrawArraysInstanced`, `DrawElementsInstanced`) and **draws whose
   numbers the graphics unit reads** from a buffer (`DrawArraysIndirect`, `DrawElementsIndirect`): NVN's words
   there are deko3d's, in the same order;
