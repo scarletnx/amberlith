@@ -288,8 +288,13 @@ static bool Stage(NvnPath *nv, const void *module, uint32_t bytes, const char *w
     return true;
 }
 
-static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
-                     const void *fragment_dksh, uint32_t fragment_bytes) {
+/// A program of the two modules; with @p capturing its vertex stage's section says what a
+/// capture takes of a vertex, a GpuVertex's nine numbers.
+static int ProgramOf(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                     const void *fragment_dksh, uint32_t fragment_bytes, bool capturing) {
+    static const NvnLayerCaptureGroup VERTEX[3] = { { NVN_LAYER_CAPTURE_POSITION, 0, 3 },
+                                                    { NVN_LAYER_CAPTURE_GENERIC(0), 0, 2 },
+                                                    { NVN_LAYER_CAPTURE_GENERIC(1), 0, 4 } };
     NvnPath *const nv = Nv(path);
     const uint32_t index = nv->program_count;
     if (index >= path->spec.programs) {
@@ -306,6 +311,10 @@ static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
             return -1;
         }
     }
+    if (capturing && !NvnLayerShaderCapture(nv->sections[index][0], 0, VERTEX, 3)) {
+        DrawPathFail(path, "the vertex stage's capture: %s", Why("refused"));
+        return -1;
+    }
     if (!nv->nvn.nvnProgramInitialize(&nv->programs[index], &nv->device)) {
         DrawPathFail(path, "nvnProgramInitialize: %s", Why("false"));
         return -1;
@@ -317,6 +326,16 @@ static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
         return -1;
     }
     return (int)index;
+}
+
+static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                     const void *fragment_dksh, uint32_t fragment_bytes) {
+    return ProgramOf(path, vertex_dksh, vertex_bytes, fragment_dksh, fragment_bytes, false);
+}
+
+static int NvProgramCapturing(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                              const void *fragment_dksh, uint32_t fragment_bytes) {
+    return ProgramOf(path, vertex_dksh, vertex_bytes, fragment_dksh, fragment_bytes, true);
 }
 
 static int NvTexture(DrawPath *path, uint32_t width, uint32_t height, const uint8_t *texels,
@@ -596,6 +615,47 @@ static void NvDrawTexture(DrawPath *path, int texture, const float destination[4
                                        (const NVNdrawTextureRegion *)source);
 }
 
+static void NvCaptureInto(DrawPath *path, const DrawBuffer *into, uint32_t bytes,
+                          bool several) {
+    NvnPath *const nv = Nv(path);
+    if (several) {
+        NVNbufferRange range;
+        range.address = into->address;
+        range.size = bytes;
+        nv->nvn.nvnCommandBufferBindTransformFeedbackBuffers(&nv->command, 0, 1, &range);
+    } else {
+        nv->nvn.nvnCommandBufferBindTransformFeedbackBuffer(&nv->command, 0, into->address,
+                                                           bytes);
+    }
+}
+
+static void NvCapture(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control) {
+    NvnPath *const nv = Nv(path);
+    switch (step) {
+    case DRAW_CAPTURE_BEGIN:
+        nv->nvn.nvnCommandBufferBeginTransformFeedback(&nv->command, control->address);
+        break;
+    case DRAW_CAPTURE_PAUSE:
+        nv->nvn.nvnCommandBufferPauseTransformFeedback(&nv->command, control->address);
+        break;
+    case DRAW_CAPTURE_RESUME:
+        nv->nvn.nvnCommandBufferResumeTransformFeedback(&nv->command, control->address);
+        break;
+    case DRAW_CAPTURE_END:
+        nv->nvn.nvnCommandBufferEndTransformFeedback(&nv->command, control->address);
+        break;
+    default:
+        DrawPathFail(path, "step %d of a capture, where a capture has steps 0 to 3", (int)step);
+        break;
+    }
+}
+
+static void NvDrawCaptured(DrawPath *path, const DrawBuffer *control) {
+    NvnPath *const nv = Nv(path);
+    nv->nvn.nvnCommandBufferDrawTransformFeedback(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                                 control->address);
+}
+
 static void NvVertices(DrawPath *path, const DrawBuffer *vertices, uint32_t bytes) {
     NvnPath *const nv = Nv(path);
     const NvnProcs *const n = &nv->nvn;
@@ -732,7 +792,8 @@ static const DrawPathWay NVN_WAY = {
     NvClose, NvProgram, NvTexture, NvAlloc,       NvBegin, NvClear, NvClearDepth, NvDepth,
     NvUseProgram, NvVertices, NvUniform, NvBindTexture, NvDraw,  NvEnd,   NvRead,
     NvDrawIndexed, NvUpdate, NvInstances, NvDrawInstanced, NvDrawIndirect,
-    NvDrawIndirectCount, NvDrawTexture,
+    NvDrawIndirectCount, NvDrawTexture, NvProgramCapturing, NvCaptureInto, NvCapture,
+    NvDrawCaptured,
 };
 
 /// The steps of the bring-up, in order; false with the step in @p why.

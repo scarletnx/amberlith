@@ -859,6 +859,20 @@
     X(void, nvnCommandBufferDrawTexture,                                                          \
       (NVNcommandBuffer *cmd, NVNtextureHandle handle, const NVNdrawTextureRegion *destination,   \
        const NVNdrawTextureRegion *source))                                                       \
+    X(void, nvnCommandBufferBindTransformFeedbackBuffer,                                          \
+      (NVNcommandBuffer *cmd, int index, NVNbufferAddress buffer, size_t size))                   \
+    X(void, nvnCommandBufferBindTransformFeedbackBuffers,                                         \
+      (NVNcommandBuffer *cmd, int first, int count, const NVNbufferRange *ranges))                \
+    X(void, nvnCommandBufferBeginTransformFeedback,                                               \
+      (NVNcommandBuffer *cmd, NVNbufferAddress control))                                          \
+    X(void, nvnCommandBufferEndTransformFeedback,                                                 \
+      (NVNcommandBuffer *cmd, NVNbufferAddress control))                                          \
+    X(void, nvnCommandBufferPauseTransformFeedback,                                               \
+      (NVNcommandBuffer *cmd, NVNbufferAddress control))                                          \
+    X(void, nvnCommandBufferResumeTransformFeedback,                                              \
+      (NVNcommandBuffer *cmd, NVNbufferAddress control))                                          \
+    X(void, nvnCommandBufferDrawTransformFeedback,                                                \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNbufferAddress control))              \
     X(void, nvnCommandBufferBindVertexBuffers,                                                    \
       (NVNcommandBuffer *cmd, int first, int count, const NVNbufferRange *ranges))                \
     X(void, nvnCommandBufferBindUniformBuffers,                                                   \

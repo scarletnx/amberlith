@@ -160,6 +160,30 @@ typedef struct {
 /// never declared as a uniform of its own.
 bool NvnLayerShaderControl(const void *dksh, size_t dksh_bytes, void *control,
                            NvnLayerShaderCode *code);
+
+/// The outputs a stage's capture takes words of (transform feedback): the position, or generic
+/// output @p n, which is `layout (location = n) out` in the stage's GLSL.
+#define NVN_LAYER_CAPTURE_POSITION 0
+#define NVN_LAYER_CAPTURE_GENERIC(n) (0x20 + (n))
+/// @p count words of @p output from word @p first, of the four an output has.
+typedef struct {
+    uint8_t output;
+    uint8_t first;
+    uint8_t count;
+} NvnLayerCaptureGroup;
+
+/// Says in @p control, a section NvnLayerShaderControl wrote for the last stage before the
+/// rasterizer, that the stage's outputs are captured into capture buffer @p buffer, 0 to 3: each
+/// vertex the words of the @p count groups at @p groups, one group after the other, so a
+/// captured vertex is four bytes a word. Before nvnProgramSetShaders, which is where a runtime
+/// reads it. False, with the reason in NvnLayerError, for a section, a buffer or a group it
+/// cannot write.
+///
+/// uam says nothing of a capture, and a console's compiler writes it where this does, which is
+/// where ScarletNX reads it. The API 55 build's own bodies capture nothing (deko3d has no call
+/// for it), so only the NVN a program looks up captures.
+bool NvnLayerShaderCapture(void *control, int buffer, const NvnLayerCaptureGroup *groups,
+                           int count);
 #endif
 
 #ifdef __cplusplus

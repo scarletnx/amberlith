@@ -39,6 +39,11 @@ typedef struct {
                                 uint32_t most, uint32_t stride);
     void (*draw_texture)(DrawPath *path, int texture, const float destination[4],
                          const float source[4]);
+    int (*program_capturing)(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                             const void *fragment_dksh, uint32_t fragment_bytes);
+    void (*capture_into)(DrawPath *path, const DrawBuffer *into, uint32_t bytes, bool several);
+    void (*capture)(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control);
+    void (*draw_captured)(DrawPath *path, const DrawBuffer *control);
 } DrawPathWay;
 
 /// What every way starts with: its functions, what it was asked for and its failure.

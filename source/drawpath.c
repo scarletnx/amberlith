@@ -141,6 +141,24 @@ void DrawPathDrawTexture(DrawPath *path, int texture, const float destination[4]
     path->way->draw_texture(path, texture, destination, source);
 }
 
+int DrawPathProgramCapturing(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                             const void *fragment_dksh, uint32_t fragment_bytes) {
+    return path->way->program_capturing(path, vertex_dksh, vertex_bytes, fragment_dksh,
+                                        fragment_bytes);
+}
+
+void DrawPathCaptureInto(DrawPath *path, const DrawBuffer *into, uint32_t bytes, bool several) {
+    path->way->capture_into(path, into, bytes, several);
+}
+
+void DrawPathCapture(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control) {
+    path->way->capture(path, step, control);
+}
+
+void DrawPathDrawCaptured(DrawPath *path, const DrawBuffer *control) {
+    path->way->draw_captured(path, control);
+}
+
 void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
                          uint32_t count, int32_t base_vertex) {
     path->way->draw_indexed(path, type, indices, count, base_vertex);
@@ -456,6 +474,33 @@ static void DkDrawTexture(DrawPath *path, int texture, const float destination[4
                  texture);
 }
 
+static int DkProgramCapturing(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                              const void *fragment_dksh, uint32_t fragment_bytes) {
+    (void)vertex_dksh;
+    (void)fragment_dksh;
+    DrawPathFail(path, "a program of %u and %u bytes whose vertex stage is captured: deko3d has "
+                       "no call for a capture",
+                 (unsigned)vertex_bytes, (unsigned)fragment_bytes);
+    return -1;
+}
+
+static void DkCaptureInto(DrawPath *path, const DrawBuffer *into, uint32_t bytes, bool several) {
+    (void)into;
+    (void)several;
+    DrawPathFail(path, "%u bytes as a capture buffer: deko3d has no call for a capture",
+                 (unsigned)bytes);
+}
+
+static void DkCapture(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control) {
+    (void)control;
+    DrawPathFail(path, "step %d of a capture: deko3d has no call for a capture", (int)step);
+}
+
+static void DkDrawCaptured(DrawPath *path, const DrawBuffer *control) {
+    (void)control;
+    DrawPathFail(path, "a draw of what a capture wrote: deko3d has no call for a capture");
+}
+
 static void DkUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
                      uint32_t offset, const void *data, uint32_t bytes) {
     if (offset > buffer_bytes || bytes > buffer_bytes - offset) {
@@ -486,7 +531,8 @@ static const DrawPathWay DEKO3D_WAY = {
     DkClose, DkProgram, DkTexture, DkAlloc,       DkBegin, DkClear, DkClearDepth, DkDepth,
     DkUseProgram, DkVertices, DkUniform, DkBindTexture, DkDraw,  DkEnd,   DkRead,
     DkDrawIndexed, DkUpdate, DkInstances, DkDrawInstanced, DkDrawIndirect,
-    DkDrawIndirectCount, DkDrawTexture,
+    DkDrawIndirectCount, DkDrawTexture, DkProgramCapturing, DkCaptureInto, DkCapture,
+    DkDrawCaptured,
 };
 
 DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_size) {

@@ -142,3 +142,54 @@ bool NvnLayerShaderControl(const void *dksh, size_t dksh_bytes, void *control,
     code->code_bytes = code_bytes;
     return true;
 }
+
+bool NvnLayerShaderCapture(void *control, int buffer, const NvnLayerCaptureGroup *groups,
+                           int count) {
+    static const char *const WHAT = "NvnLayerShaderCapture";
+    uint8_t *const section = control;
+    if (section == NULL || Word(section + LAYER_SECTION_AT_MAGIC) != LAYER_SECTION_MAGIC) {
+        LayerComplain("%s: a section NvnLayerShaderControl wrote is needed", WHAT);
+        return false;
+    }
+    if (buffer < 0 || buffer >= LAYER_SECTION_CAPTURE_BUFFERS || groups == NULL || count < 1 ||
+        count > LAYER_SECTION_GROUPS) {
+        LayerComplain("%s: %d groups for buffer %d, where a stage captures 1 to %d groups into "
+                      "each of buffers 0 to %d",
+                      WHAT, count, buffer, LAYER_SECTION_GROUPS,
+                      LAYER_SECTION_CAPTURE_BUFFERS - 1);
+        return false;
+    }
+    uint32_t words = 0;
+    for (int i = 0; i < count; ++i) {
+        const bool generic = groups[i].output >= NVN_LAYER_CAPTURE_GENERIC(0) &&
+                             groups[i].output <= NVN_LAYER_CAPTURE_GENERIC(31);
+        if ((groups[i].output != NVN_LAYER_CAPTURE_POSITION && !generic) ||
+            groups[i].count < 1 || groups[i].first > 3 || groups[i].count > 4 - groups[i].first) {
+            LayerComplain("%s: group %d takes %d words from word %d of output %d, where an "
+                          "output is the position, %d, or a generic one, %d to %d, and has "
+                          "four words",
+                          WHAT, i, groups[i].count, groups[i].first, groups[i].output,
+                          NVN_LAYER_CAPTURE_POSITION, NVN_LAYER_CAPTURE_GENERIC(0),
+                          NVN_LAYER_CAPTURE_GENERIC(31));
+            return false;
+        }
+        words += groups[i].count;
+    }
+    const uint32_t at = (uint32_t)buffer * LAYER_SECTION_GROUPS;
+    memset(section + LAYER_SECTION_AT_GROUP_OUTPUT + at, 0, LAYER_SECTION_GROUPS);
+    memset(section + LAYER_SECTION_AT_GROUP_FIRST + at, 0, LAYER_SECTION_GROUPS);
+    memset(section + LAYER_SECTION_AT_GROUP_COUNT + at, 0, LAYER_SECTION_GROUPS);
+    for (int i = 0; i < count; ++i) {
+        section[LAYER_SECTION_AT_GROUP_OUTPUT + at + (uint32_t)i] = groups[i].output;
+        section[LAYER_SECTION_AT_GROUP_FIRST + at + (uint32_t)i] = groups[i].first;
+        section[LAYER_SECTION_AT_GROUP_COUNT + at + (uint32_t)i] = groups[i].count;
+    }
+    // A captured vertex is its words one after the other, so the stride is four bytes a word.
+    section[LAYER_SECTION_AT_CAPTURE_STRIDE + 2u * (uint32_t)buffer] = (uint8_t)(4u * words);
+    section[LAYER_SECTION_AT_CAPTURE_STRIDE + 2u * (uint32_t)buffer + 1u] =
+        (uint8_t)((4u * words) >> 8);
+    section[LAYER_SECTION_AT_CAPTURE_STREAM + (uint32_t)buffer] = 0;
+    section[LAYER_SECTION_AT_CAPTURE_GROUPS + (uint32_t)buffer] = (uint8_t)count;
+    section[LAYER_SECTION_AT_CAPTURES] = 1;
+    return true;
+}
