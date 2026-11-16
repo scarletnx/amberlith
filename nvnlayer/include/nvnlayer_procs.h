@@ -754,6 +754,29 @@
     X(void, nvnCommandBufferWaitEvent,                                                            \
       (NVNcommandBuffer * cmd, const NVNevent *event, NVNeventWaitMode mode, uint32_t value))
 
+// The rest of the render state a list sets by itself: the alpha test's reference, the blend
+// colour, the stencil's reference and masks, the sample mask, the polygon offset with its
+// clamp, and five hints to the graphics unit that no picture shows.
+#define NVN_LAYER_PROCS_RENDER_REST(X)                                                            \
+    X(void, nvnCommandBufferSetAlphaRef, (NVNcommandBuffer * cmd, float ref))                     \
+    X(void, nvnCommandBufferSetBlendColor, (NVNcommandBuffer * cmd, const float *rgba))           \
+    X(void, nvnCommandBufferSetStencilRef, (NVNcommandBuffer * cmd, NVNface faces, int ref))      \
+    X(void, nvnCommandBufferSetStencilMask, (NVNcommandBuffer * cmd, NVNface faces, int mask))    \
+    X(void, nvnCommandBufferSetStencilValueMask,                                                  \
+      (NVNcommandBuffer * cmd, NVNface faces, int mask))                                          \
+    X(void, nvnCommandBufferSetSampleMask, (NVNcommandBuffer * cmd, int mask))                    \
+    X(void, nvnCommandBufferSetPolygonOffsetClamp,                                                \
+      (NVNcommandBuffer * cmd, float factor, float units, float clamp))                           \
+    X(void, nvnCommandBufferSetStencilCullCriteria,                                               \
+      (NVNcommandBuffer * cmd, NVNstencilFunc func, int ref, int mask))                           \
+    X(void, nvnCommandBufferOverrideSubtileSize,                                                  \
+      (NVNcommandBuffer * cmd, NVNboolean enable, int size))                                      \
+    X(void, nvnCommandBufferSetColorReductionEnable, (NVNcommandBuffer * cmd, NVNboolean enable)) \
+    X(void, nvnCommandBufferSetColorReductionThresholds,                                          \
+      (NVNcommandBuffer * cmd, int format_class, int conservative, int aggressive))               \
+    X(void, nvnCommandBufferSetZCullZF32CompressionEnable,                                        \
+      (NVNcommandBuffer * cmd, NVNboolean enable))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -852,7 +875,8 @@
     NVN_LAYER_PROCS_OBJECT(X)                                                                     \
     NVN_LAYER_PROCS_STATE_OBJECTS(X)                                                              \
     NVN_LAYER_PROCS_TEXTURE_MORE(X)                                                               \
-    NVN_LAYER_PROCS_REST(X)
+    NVN_LAYER_PROCS_REST(X)                                                                       \
+    NVN_LAYER_PROCS_RENDER_REST(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
@@ -1042,7 +1066,11 @@
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
     X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
-    X(void, nvnCommandBufferBindShadingRateImage,                                                 \
+    X(void, nvnCommandBufferSetRecordingMode, (NVNcommandBuffer *cmd, int mode))                  \
+    X(void, nvnCommandBufferSetComputeOverlapMode, (NVNcommandBuffer *cmd, int mode))            \
+    X(void, nvnCommandBufferSetComputeWorkloadPriority, (NVNcommandBuffer *cmd, int priority))   \
+    X(void, nvnCommandBufferSetShadingRatePaletteMode, (NVNcommandBuffer *cmd, int mode))        \
+    X(void, nvnCommandBufferBindShadingRateImage,                                                \
       (NVNcommandBuffer *cmd, const NVNtexture *texture, const NVNtextureView *view))             \
     X(void, nvnCommandBufferBindStorageBuffers,                                                   \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \

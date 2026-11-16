@@ -874,7 +874,9 @@ static bool BringUp(NvnPath *nv, const DrawPathSpec *spec, bool own, char *why,
                                       (int)spec->height, why, why_size))) {
         return false;
     }
-    if (spec->depth && !(nv->depth_up = MakeTexture(nv, &nv->depth, NVN_FORMAT_DEPTH32F,
+    const NVNformat depth_format =
+        spec->stencil ? NVN_FORMAT_DEPTH24_STENCIL8 : NVN_FORMAT_DEPTH32F;
+    if (spec->depth && !(nv->depth_up = MakeTexture(nv, &nv->depth, depth_format,
                                                     (int)spec->width, (int)spec->height, why,
                                                     why_size))) {
         return false;

@@ -66,6 +66,8 @@ typedef struct {
     uint32_t height;
     /// A 32-bit float depth target beside the colour one.
     bool depth;
+    /// The depth target is 24 bits of depth with 8 of stencil instead.
+    bool stencil;
     /// How many programs and textures the scene makes, at most DRAW_PATH_PROGRAMS and
     /// DRAW_PATH_TEXTURES.
     uint32_t programs;

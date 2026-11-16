@@ -546,7 +546,9 @@ DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_siz
     dk->base.spec = *spec;
     GpuSpec gpu;
     GpuSpecDefaults(&gpu, spec->width, spec->height);
-    gpu.depth_format = spec->depth ? DkImageFormat_ZF32 : DkImageFormat_None;
+    gpu.depth_format = !spec->depth    ? DkImageFormat_None
+                       : spec->stencil ? DkImageFormat_Z24S8
+                                       : DkImageFormat_ZF32;
     // A program's two modules, each a multiple of 0x100 bytes of code after deko3d's own skip.
     gpu.code_size = 0x10000u;
     // The scene's own data, the two descriptor sets, and room to stage the textures' texels.
