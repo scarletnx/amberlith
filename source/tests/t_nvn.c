@@ -1553,6 +1553,208 @@ static void BufferCopyCase(const char *name) {
                want_first, READ_PRESET);
 }
 
+// ---- the debug layer's calls
+
+/// How often the debug callback and the database walk were called.
+static uint32_t debug_calls;
+
+static void DebugCallback(NVNdebugCallbackSource source, NVNdebugCallbackType type, int id,
+                          NVNdebugCallbackSeverity severity, const unsigned char *message,
+                          void *user) {
+    (void)source;
+    (void)type;
+    (void)id;
+    (void)severity;
+    (void)message;
+    (void)user;
+    ++debug_calls;
+}
+
+static void DebugWalk(void *object, void *user) {
+    (void)object;
+    (void)user;
+    ++debug_calls;
+}
+
+/// The debug layer's calls as a release driver answers them, the driver a game ships with: no
+/// debugger attached; a callback installed and a walk of the object database, neither of which
+/// calls back; each checkpoint switch taken; two debug domains numbered one after the other;
+/// no object numbered; and every object given a label, after which each says of itself what it
+/// said before.
+static void DebugCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNtexturePool textures;
+    static _Alignas(8) NVNsamplerPool samplers;
+    static _Alignas(8) NVNsampler sampler;
+    static _Alignas(8) NVNbuffer buffer;
+    static _Alignas(8) NVNsync sync;
+    static _Alignas(8) NVNprogram program;
+    const int texture_count = 96, sampler_count = 64;
+    const ptrdiff_t buffer_offset = 0x800;
+    const size_t buffer_bytes = 0x400;
+    _Alignas(8) NVNsamplerBuilder sampler_builder;
+    SamplerBuilder(&sampler_builder, 0.5f);
+    _Alignas(8) NVNbufferBuilder buffer_builder;
+    memset(&buffer_builder, 0, sizeof(buffer_builder));
+    nvn.nvn.nvnBufferBuilderSetDevice(&buffer_builder, &nvn.device);
+    nvn.nvn.nvnBufferBuilderSetDefaults(&buffer_builder);
+    nvn.nvn.nvnBufferBuilderSetStorage(&buffer_builder, &nvn.read_pool, buffer_offset,
+                                       buffer_bytes);
+    const bool textures_up = nvn.nvn.nvnTexturePoolInitialize(&textures, &nvn.read_pool,
+                                                              (ptrdiff_t)POOL_PAGE, texture_count);
+    const bool samplers_up =
+        textures_up && nvn.nvn.nvnSamplerPoolInitialize(&samplers, &nvn.read_pool,
+                                                        3 * (ptrdiff_t)POOL_PAGE, sampler_count);
+    const bool sampler_up = samplers_up && nvn.nvn.nvnSamplerInitialize(&sampler, &sampler_builder);
+    const bool buffer_up = sampler_up && nvn.nvn.nvnBufferInitialize(&buffer, &buffer_builder);
+    const bool sync_up = buffer_up && nvn.nvn.nvnSyncInitialize(&sync, &nvn.device);
+    const bool program_up = sync_up && nvn.nvn.nvnProgramInitialize(&program, &nvn.device);
+    if (program_up) {
+        debug_calls = 0;
+        nvn.nvn.nvnSetExternalDebuggerEnabledNVX(0);
+        Gives(why, sizeof(why), "whether an external debugger is attached",
+              nvn.nvn.nvnDeviceIsExternalDebuggerAttached(&nvn.device), 0);
+        nvn.nvn.nvnDeviceInstallDebugCallback(&nvn.device, DebugCallback, &debug_calls, 1);
+        nvn.nvn.nvnDeviceWalkDebugDatabase(&nvn.device, NVN_DEBUG_OBJECT_TYPE_MEMORY_POOL,
+                                           DebugWalk, &debug_calls);
+        Gives(why, sizeof(why), "the checkpoints by debug group, as taken",
+              nvn.nvn.nvnDeviceSetAutomaticCheckpointsByDebugGroup(&nvn.device, 1), 1);
+        Gives(why, sizeof(why), "the automatic checkpoints, as taken",
+              nvn.nvn.nvnDeviceSetAutomaticCheckpointsEnable(&nvn.device, 1), 1);
+        Gives(why, sizeof(why), "the checkpoints' mask, as taken",
+              nvn.nvn.nvnDeviceSetAutomaticCheckpointsMask(&nvn.device, 0xffu), 1);
+        Gives(why, sizeof(why), "the checkpoints' sampling interval, as taken",
+              nvn.nvn.nvnDeviceSetAutomaticCheckpointsSamplingInterval(&nvn.device, 4u), 1);
+        Gives(why, sizeof(why), "the checkpoints' call stacks, as taken",
+              nvn.nvn.nvnDeviceSetCheckpointCallStacksEnable(&nvn.device, 1), 1);
+        Gives(why, sizeof(why), "the call stacks' depth, as taken",
+              nvn.nvn.nvnDeviceSetCheckpointMaxCallStacksDepth(&nvn.device, 8), 1);
+        // Put back off: a later case's list is no checkpoint's business.
+        nvn.nvn.nvnDeviceSetAutomaticCheckpointsEnable(&nvn.device, 0);
+        nvn.nvn.nvnDeviceSetAutomaticCheckpointsByDebugGroup(&nvn.device, 0);
+        nvn.nvn.nvnDeviceSetCheckpointCallStacksEnable(&nvn.device, 0);
+        const NVNdebugDomainId first = nvn.nvn.nvnDeviceGenerateDebugDomainId(&nvn.device, "one");
+        Gives(why, sizeof(why), "the debug domain made after another",
+              nvn.nvn.nvnDeviceGenerateDebugDomainId(&nvn.device, "two"), (long long)first + 1);
+        nvn.nvn.nvnDeviceSetDebugLabel(&nvn.device, "edenprobe's device");
+        nvn.nvn.nvnQueueSetDebugLabel(&nvn.queue, "edenprobe's queue");
+        nvn.nvn.nvnMemoryPoolSetDebugLabel(&nvn.read_pool, "edenprobe's readback pool");
+        nvn.nvn.nvnTextureSetDebugLabel(&nvn.target, "edenprobe's target");
+        nvn.nvn.nvnCommandBufferSetDebugLabel(&nvn.command, "edenprobe's command buffer");
+        nvn.nvn.nvnBufferSetDebugLabel(&buffer, "edenprobe's buffer");
+        nvn.nvn.nvnSamplerSetDebugLabel(&sampler, "edenprobe's sampler");
+        nvn.nvn.nvnProgramSetDebugLabel(&program, "edenprobe's program");
+        nvn.nvn.nvnSyncSetDebugLabel(&sync, "edenprobe's sync");
+        nvn.nvn.nvnTexturePoolSetDebugLabel(&textures, "edenprobe's texture pool");
+        nvn.nvn.nvnSamplerPoolSetDebugLabel(&samplers, "edenprobe's sampler pool");
+        Gives(why, sizeof(why), "the labelled buffer's debug number",
+              (long long)nvn.nvn.nvnBufferGetDebugID(&buffer), 0);
+        Gives(why, sizeof(why), "the labelled texture's debug number",
+              (long long)nvn.nvn.nvnTextureGetDebugID(&nvn.target), 0);
+        Gives(why, sizeof(why), "the labelled sampler's debug number",
+              (long long)nvn.nvn.nvnSamplerGetDebugID(&sampler), 0);
+        Gives(why, sizeof(why), "the labelled pool's size",
+              (long long)nvn.nvn.nvnMemoryPoolGetSize(&nvn.read_pool), READ_POOL_BYTES);
+        Gives(why, sizeof(why), "the labelled texture's width",
+              nvn.nvn.nvnTextureGetWidth(&nvn.target), TARGET_SIZE);
+        Gives(why, sizeof(why), "the labelled buffer's size",
+              (long long)nvn.nvn.nvnBufferGetSize(&buffer), (long long)buffer_bytes);
+        Gives(why, sizeof(why), "the labelled texture pool's size",
+              nvn.nvn.nvnTexturePoolGetSize(&textures), texture_count);
+        Gives(why, sizeof(why), "the labelled sampler pool's size",
+              nvn.nvn.nvnSamplerPoolGetSize(&samplers), sampler_count);
+        Gives(why, sizeof(why), "the labelled queue's error",
+              nvn.nvn.nvnQueueGetError(&nvn.queue, NULL), NVN_QUEUE_GET_ERROR_RESULT_GPU_NO_ERROR);
+        nvn.nvn.nvnDeviceInstallDebugCallback(&nvn.device, NULL, NULL, 0);
+        Gives(why, sizeof(why), "the times the debug callback and the database walk called back",
+              debug_calls, 0);
+    }
+    if (program_up) {
+        nvn.nvn.nvnProgramFinalize(&program);
+    }
+    if (sync_up) {
+        nvn.nvn.nvnSyncFinalize(&sync);
+    }
+    if (buffer_up) {
+        nvn.nvn.nvnBufferFinalize(&buffer);
+    }
+    if (sampler_up) {
+        nvn.nvn.nvnSamplerFinalize(&sampler);
+    }
+    if (samplers_up) {
+        nvn.nvn.nvnSamplerPoolFinalize(&samplers);
+    }
+    if (textures_up) {
+        nvn.nvn.nvnTexturePoolFinalize(&textures);
+    }
+    if (!program_up) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("a texture pool, a sampler pool, a sampler, a buffer, a sync or a program "
+                       "did not initialize"));
+        return;
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+#if NVN_LAYER_API >= 231
+/// Records into the open command buffer the Ounce's markers and groups, which say whether they
+/// name graphics or compute work: a compute group inside a graphics one, a marker in each.
+static void RecordOunceMarkers(NVNdebugDomainId domain) {
+    nvn.nvn.nvnCommandBufferPushDebugGroupGraphics(&nvn.command, domain, "edenprobe's clear");
+    nvn.nvn.nvnCommandBufferInsertDebugMarkerGraphics(&nvn.command, domain, "before the clear");
+    nvn.nvn.nvnCommandBufferPushDebugGroupCompute(&nvn.command, domain, "no compute work");
+    nvn.nvn.nvnCommandBufferInsertDebugMarkerCompute(&nvn.command, domain, "nothing here");
+    nvn.nvn.nvnCommandBufferPopDebugGroupCompute(&nvn.command, domain);
+}
+
+/// A clear recorded inside the Ounce's debug groups, between its markers, is the clear: the
+/// markers name work for the debug layer and record nothing a picture shows.
+static void OunceMarkersCase(const char *name, const float rgba[4], const uint8_t expected[4]) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    uint8_t *const pixels = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    if (pixels == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    memset(pixels, READ_PRESET, TARGET_BYTES);
+    const NVNdebugDomainId domain = nvn.nvn.nvnDeviceGenerateDebugDomainId(&nvn.device, "ounce");
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    RecordOunceMarkers(domain);
+    RecordClear(&nvn.target, TARGET_SIZE, TARGET_SIZE, rgba);
+    nvn.nvn.nvnCommandBufferPopDebugGroupGraphics(&nvn.command, domain);
+    nvn.nvn.nvnCommandBufferBarrier(&nvn.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
+                                                      NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    const NVNcopyRegion region = { 0, 0, 0, TARGET_SIZE, TARGET_SIZE, 1 };
+    nvn.nvn.nvnCommandBufferCopyTextureToBuffer(
+        &nvn.command, &nvn.target, NULL, &region,
+        nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.read_pool), NVN_COPY_FLAGS_NONE);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    uint32_t wrong = 0;
+    uint8_t first[4] = { 0, 0, 0, 0 };
+    for (uint32_t at = 0; at < TARGET_SIZE * TARGET_SIZE; ++at) {
+        if (memcmp(pixels + (size_t)at * 4u, expected, 4) != 0 && wrong++ == 0u) {
+            memcpy(first, pixels + (size_t)at * 4u, 4);
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, list != 0u && wrong == 0u,
+               "%u of %u pixels wrong after the clear between the markers, the first "
+               "%02x%02x%02x%02x, expected %02x%02x%02x%02x (0x%02x is a byte nothing copied)",
+               (unsigned)wrong, (unsigned)(TARGET_SIZE * TARGET_SIZE), first[0], first[1],
+               first[2], first[3], expected[0], expected[1], expected[2], expected[3],
+               READ_PRESET);
+}
+#endif
+
 // ---- the window
 
 // The suite's one window, which every window case shares: a second swapchain on the default
@@ -1727,6 +1929,8 @@ static void WindowSaysCase(const char *name) {
     }
     NvnLayerClearError();
     char why[256] = "";
+    // A label is the debug layer's: the window says the same with one.
+    nvn.nvn.nvnWindowSetDebugLabel(&win.window, "edenprobe's window");
     Gives(why, sizeof(why), "the window's native window",
           (long long)(uintptr_t)nvn.nvn.nvnWindowGetNativeWindow(&win.window),
           (long long)(uintptr_t)nwindowGetDefault());
@@ -1955,6 +2159,12 @@ static void LayerCases(void) {
                                        "as another of that state alone";
     static const char *const DESCRIPTOR_POOLS = "the texture and sampler pools say where they "
                                                 "are, and a builder registers as its sampler";
+    static const char *const DEBUG = "the debug layer's calls are answered as a release "
+                                     "driver answers them, and a label changes no object";
+#if NVN_LAYER_API >= 231
+    static const char *const OUNCE_MARKERS = "a clear between the Ounce's graphics and compute "
+                                             "markers and groups is the clear";
+#endif
     static const char *const WINDOW_BUILDER = "a window builder gives back what it was set";
     static const char *const WINDOW_SAYS = "a window says what it is of, and keeps the active "
                                            "textures, the interval and the crop it is set";
@@ -1973,9 +2183,9 @@ static void LayerCases(void) {
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
                                          UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT,
                                          SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
-                                         BUFFER_RANGE, BUFFER_COPY, WINDOW_BUILDER,
+                                         BUFFER_RANGE, BUFFER_COPY, DEBUG, WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
-                                         WINDOW_HDR_BUILDER, WINDOW_HDR,
+                                         OUNCE_MARKERS, WINDOW_HDR_BUILDER, WINDOW_HDR,
 #endif
                                          WINDOW, WINDOW_SAYS, WINDOW_SYNC };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
@@ -2127,8 +2337,13 @@ static void LayerCases(void) {
         BufferCopyCase(BUFFER_COPY);
     }
 
+    DebugCase(DEBUG);
     WindowBuilderCase(WINDOW_BUILDER);
 #if NVN_LAYER_API >= 231
+    // A colour no case before left in the target or in the readback.
+    static const float teal[4] = { 0.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f };
+    static const uint8_t teal_bytes[4] = { 0x00, 0x80, 0x80, 0xff };
+    OunceMarkersCase(OUNCE_MARKERS, teal, teal_bytes);
     WindowHdrBuilderCase(WINDOW_HDR_BUILDER);
 #endif
 

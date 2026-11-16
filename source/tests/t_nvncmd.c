@@ -1373,6 +1373,49 @@ static void TilesCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 3 | 1u << 4, why);
 }
 
+// ---- the debug layer's marks in a list
+
+/// Into the open list, around three draws: markers and groups of each kind, and a checkpoint
+/// of each. False when a checkpoint was not taken.
+static bool MarksRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    const NVNdebugDomainId domain = n->nvnDeviceGenerateDebugDomainId(kit->nvn.device, "marks");
+    n->nvnCommandBufferInsertDebugMarker(cmd, "before the cells");
+    n->nvnCommandBufferPushDebugGroup(cmd, domain, "three cells");
+    KitCell(kit, 5);
+    n->nvnCommandBufferInsertDebugMarkerDynamic(cmd, domain, "a text the list has to keep");
+    n->nvnCommandBufferPushDebugGroupDynamic(cmd, domain, "a group named by a kept text");
+    const bool dynamic = n->nvnCommandBufferInsertCheckpointDynamic(cmd, "a kept checkpoint");
+    KitCell(kit, 6);
+    n->nvnCommandBufferPopDebugGroupId(cmd, domain);
+    n->nvnCommandBufferInsertDebugMarkerStatic(cmd, domain, "a text that stays where it is");
+    n->nvnCommandBufferPushDebugGroupStatic(cmd, domain, "a group named by a standing text");
+    const bool fixed = n->nvnCommandBufferInsertCheckpointStatic(cmd, "a standing checkpoint");
+    KitCell(kit, 7);
+    n->nvnCommandBufferPopDebugGroup(cmd);
+    n->nvnCommandBufferPopDebugGroup(cmd);
+    return dynamic && fixed;
+}
+
+/// The debug layer's marks name parts of a list and record nothing a picture shows: with
+/// markers, groups and checkpoints of each kind between them, three cells are drawn as without,
+/// and each checkpoint answers that it was taken, as a release driver answers.
+static void MarksCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    const bool taken = MarksRecorded(&kit);
+    if (KitEnd(&kit, why, sizeof(why)) && !taken) {
+        snprintf(why, sizeof(why), "a checkpoint answered false, where a release driver "
+                 "answers that it was taken");
+    }
+    KitJudge(&kit, name, 1u << 5 | 1u << 6 | 1u << 7, why);
+}
+
 // ---- the cases, by way
 
 void NvnCommandFirst(void) {
@@ -1424,6 +1467,8 @@ void NvnCommandFirst(void) {
                                  "diagonal, through the layer's own NVN functions");
     TilesCase(DRAW_PATH_LAYER, "draws around the tiled cache's actions are as without them, "
                                "through the layer's own NVN functions");
+    MarksCase(DRAW_PATH_LAYER, "draws between debug markers, groups and checkpoints are as "
+                               "without them, through the layer's own NVN functions");
 }
 
 void NvnCommandLast(void) {
@@ -1474,4 +1519,6 @@ void NvnCommandLast(void) {
                                "through the NVN the program looks up");
     TilesCase(DRAW_PATH_NVN, "draws around the tiled cache's actions are as without them, "
                              "through the NVN the program looks up");
+    MarksCase(DRAW_PATH_NVN, "draws between debug markers, groups and checkpoints are as "
+                             "without them, through the NVN the program looks up");
 }

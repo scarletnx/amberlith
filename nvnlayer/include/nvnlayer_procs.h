@@ -16,10 +16,12 @@
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
 ///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING,
-///   NVN_LAYER_PROCS_CLEAR and NVN_LAYER_PROCS_STATE, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE and NVN_LAYER_PROCS_DEBUG, parts of it written
+///   apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
-/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, a part of it written apart): the
+/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231 and NVN_LAYER_PROCS_DEBUG_231, parts
+///   of it written apart): the
 ///   functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
 
@@ -332,6 +334,74 @@
     X(void, nvnCommandBufferSetTiledCacheTileSize,                                                \
       (NVNcommandBuffer * cmd, int width, int height))
 
+// The debug layer's calls, as a release driver answers them: labels, markers and groups, object
+// numbers, the callback, the object database and the checkpoints.
+#define NVN_LAYER_PROCS_DEBUG(X)                                                                  \
+    X(void, nvnSetExternalDebuggerEnabledNVX, (NVNboolean enabled))                               \
+    X(NVNdebugDomainId, nvnDeviceGenerateDebugDomainId,                                           \
+      (const NVNdevice *device, const char *name))                                                \
+    X(void, nvnDeviceInstallDebugCallback,                                                        \
+      (NVNdevice * device, PFNNVNDEBUGCALLBACKPROC callback, void *data, NVNboolean enable))      \
+    X(NVNboolean, nvnDeviceIsExternalDebuggerAttached, (const NVNdevice *device))                 \
+    X(void, nvnDeviceWalkDebugDatabase,                                                           \
+      (const NVNdevice *device, NVNdebugObjectType type,                                          \
+       PFNNVNWALKDEBUGDATABASECALLBACKPROC callback, void *data))                                 \
+    X(NVNboolean, nvnDeviceSetAutomaticCheckpointsByDebugGroup,                                   \
+      (NVNdevice * device, NVNboolean value))                                                     \
+    X(NVNboolean, nvnDeviceSetAutomaticCheckpointsEnable, (NVNdevice * device, NVNboolean value)) \
+    X(NVNboolean, nvnDeviceSetAutomaticCheckpointsMask, (NVNdevice * device, uint32_t value))     \
+    X(NVNboolean, nvnDeviceSetAutomaticCheckpointsSamplingInterval,                               \
+      (NVNdevice * device, uint32_t value))                                                       \
+    X(NVNboolean, nvnDeviceSetCheckpointCallStacksEnable, (NVNdevice * device, NVNboolean value)) \
+    X(NVNboolean, nvnDeviceSetCheckpointMaxCallStacksDepth, (NVNdevice * device, int value))      \
+    X(void, nvnDeviceSetDebugLabel, (NVNdevice * object, const char *label))                      \
+    X(void, nvnQueueSetDebugLabel, (NVNqueue * object, const char *label))                        \
+    X(void, nvnMemoryPoolSetDebugLabel, (NVNmemoryPool * object, const char *label))              \
+    X(void, nvnTextureSetDebugLabel, (NVNtexture * object, const char *label))                    \
+    X(void, nvnCommandBufferSetDebugLabel, (NVNcommandBuffer * object, const char *label))        \
+    X(void, nvnWindowSetDebugLabel, (NVNwindow * object, const char *label))                      \
+    X(void, nvnBufferSetDebugLabel, (NVNbuffer * object, const char *label))                      \
+    X(void, nvnSamplerSetDebugLabel, (NVNsampler * object, const char *label))                    \
+    X(void, nvnProgramSetDebugLabel, (NVNprogram * object, const char *label))                    \
+    X(void, nvnSyncSetDebugLabel, (NVNsync * object, const char *label))                          \
+    X(void, nvnTexturePoolSetDebugLabel, (NVNtexturePool * object, const char *label))            \
+    X(void, nvnSamplerPoolSetDebugLabel, (NVNsamplerPool * object, const char *label))            \
+    X(uint64_t, nvnBufferGetDebugID, (const NVNbuffer *object))                                   \
+    X(uint64_t, nvnTextureGetDebugID, (const NVNtexture *object))                                 \
+    X(uint64_t, nvnSamplerGetDebugID, (const NVNsampler *object))                                 \
+    X(void, nvnCommandBufferInsertDebugMarker, (NVNcommandBuffer * cmd, const char *text))        \
+    X(void, nvnCommandBufferInsertDebugMarkerDynamic,                                             \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferInsertDebugMarkerStatic,                                              \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPushDebugGroup,                                                       \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPushDebugGroupDynamic,                                                \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPushDebugGroupStatic,                                                 \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPopDebugGroup, (NVNcommandBuffer * cmd))                              \
+    X(void, nvnCommandBufferPopDebugGroupId, (NVNcommandBuffer * cmd, NVNdebugDomainId domain))   \
+    X(NVNboolean, nvnCommandBufferInsertCheckpointDynamic,                                        \
+      (NVNcommandBuffer * cmd, const char *label))                                                \
+    X(NVNboolean, nvnCommandBufferInsertCheckpointStatic,                                         \
+      (NVNcommandBuffer * cmd, const char *label))
+
+// The Ounce's markers and groups (API 231), which say whether they name graphics or compute work.
+#define NVN_LAYER_PROCS_DEBUG_231(X)                                                              \
+    X(void, nvnCommandBufferInsertDebugMarkerGraphics,                                            \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferInsertDebugMarkerCompute,                                             \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPushDebugGroupGraphics,                                               \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPushDebugGroupCompute,                                                \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
+    X(void, nvnCommandBufferPopDebugGroupGraphics,                                                \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain))                                          \
+    X(void, nvnCommandBufferPopDebugGroupCompute,                                                 \
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -424,7 +494,8 @@
     NVN_LAYER_PROCS_COUNTER(X)                                                                    \
     NVN_LAYER_PROCS_RECORDING(X)                                                                  \
     NVN_LAYER_PROCS_CLEAR(X)                                                                      \
-    NVN_LAYER_PROCS_STATE(X)
+    NVN_LAYER_PROCS_STATE(X)                                                                      \
+    NVN_LAYER_PROCS_DEBUG(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
@@ -536,7 +607,8 @@
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
     X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
-    NVN_LAYER_PROCS_WINDOW_231(X)
+    NVN_LAYER_PROCS_WINDOW_231(X)                                                                 \
+    NVN_LAYER_PROCS_DEBUG_231(X)
 
 #if NVN_LAYER_API >= 231
 #define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_231(X)
