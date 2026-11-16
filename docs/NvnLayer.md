@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Three hundred and forty nine functions, each recording the deko3d commands that do what NVN says it does:
+Three hundred and fifty two functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -168,7 +168,8 @@ Three hundred and forty nine functions, each recording the deko3d commands that 
   viewport whole on either call; the rasterizer's discard, depth clamp and provoking vertex, which deko3d keeps in
   the state it takes for NVN's polygon state, kept and recorded together the same way; the depth bounds, the
   point size, the primitive restart, the line width, conservative rasterization with its dilation and its
-  subpixel bias, and the tiled cache's tile size and actions, each deko3d's own;
+  subpixel bias, a patch's size and its tessellation levels, and the tiled cache's tile size and actions, each
+  deko3d's own;
 - **the debug layer's calls**, answered as a console's release driver answers them, the driver a game ships
   with: no callback is installed and no object database walked, no debugger is attached, no object is numbered,
   every checkpoint switch and checkpoint answers that it was taken and records nothing, a debug domain is the next

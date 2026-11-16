@@ -1581,6 +1581,104 @@ static void LineCase(DrawPathKind kind, const char *name) {
     line_pixels = NULL;
 }
 
+// ---- patches
+
+/// The outer levels the patches of the tessellation case are drawn with, which its evaluation
+/// stage writes to alpha: the first two patches, then the third.
+#define PATCH_LEVEL_FIRST 3u
+#define PATCH_LEVEL_THEN 5u
+
+/// Into the open list: a program of the case's own, the way's vertex and fragment stages with
+/// a tessellation evaluation stage between them and no control stage, so the levels are the
+/// list's; then two patches of four vertices at one outer level and a third at another.
+static bool PatchesRecorded(Kit *kit, NVNprogram *program, bool *made) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    NVNshaderData stages[3];
+    stages[0] = kit->nvn.stages[kit->program][0];
+    stages[2] = kit->nvn.stages[kit->program][1];
+    if (!DrawPathNvnStage(kit->path, ShaderData(SHADER_QUAD_TESE), ShaderSize(SHADER_QUAD_TESE),
+                          &stages[1])) {
+        return false;
+    }
+    *made = n->nvnProgramInitialize(program, kit->nvn.device);
+    if (!*made || !n->nvnProgramSetShaders(program, 3, stages)) {
+        return false;
+    }
+    static const float first[4] = { (float)PATCH_LEVEL_FIRST, (float)PATCH_LEVEL_FIRST,
+                                    (float)PATCH_LEVEL_FIRST, (float)PATCH_LEVEL_FIRST };
+    static const float then[4] = { (float)PATCH_LEVEL_THEN, (float)PATCH_LEVEL_THEN,
+                                   (float)PATCH_LEVEL_THEN, (float)PATCH_LEVEL_THEN };
+    static const float inner[2] = { 2.0f, 2.0f };
+    n->nvnCommandBufferBindProgram(cmd, program,
+                                   NVN_SHADER_STAGE_VERTEX_BIT |
+                                       NVN_SHADER_STAGE_TESS_EVALUATION_BIT |
+                                       NVN_SHADER_STAGE_FRAGMENT_BIT);
+    n->nvnCommandBufferSetPatchSize(cmd, 4);
+    n->nvnCommandBufferSetInnerTessellationLevels(cmd, inner);
+    n->nvnCommandBufferSetOuterTessellationLevels(cmd, first);
+    n->nvnCommandBufferDrawArrays(cmd, NVN_DRAW_PRIMITIVE_PATCHES, 0, 8);
+    n->nvnCommandBufferSetOuterTessellationLevels(cmd, then);
+    n->nvnCommandBufferDrawArrays(cmd, NVN_DRAW_PRIMITIVE_PATCHES, 8, 4);
+    return true;
+}
+
+static const uint32_t PATCH_CELLS[3] = { 5, 10, 15 };
+
+static void PatchesExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    memcpy(out, SCENE_CLEAR, 4);
+    for (uint32_t i = 0; i < 3u; ++i) {
+        if (k == PATCH_CELLS[i]) {
+            CellColour(k, out);
+            out[3] = (uint8_t)(i < 2u ? PATCH_LEVEL_FIRST : PATCH_LEVEL_THEN);
+        }
+    }
+}
+
+/// Patches drawn through a tessellation evaluation stage with no control stage take their
+/// levels from the list: three patches of four vertices, the size
+/// nvnCommandBufferSetPatchSize gave, each fill their cell, in the colour of their first vertex
+/// and with the outer level the list had set in alpha, 3 for the first two and 5 for the
+/// third. The inner levels are set and change nothing here: a quad tessellated finer covers the
+/// same pixels.
+static void PatchesCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    GpuVertex own[12];
+    for (uint32_t i = 0; i < 3u; ++i) {
+        const uint32_t cell = PATCH_CELLS[i];
+        const uint32_t x0 = cell % CELLS_ACROSS * CELL;
+        const uint32_t y0 = cell / CELLS_ACROSS * CELL;
+        // The evaluation stage's corners: 0 to 1 along one side, 3 to 2 along the other.
+        own[i * 4u + 0u] = OwnVertex(x0, y0, cell);
+        own[i * 4u + 1u] = OwnVertex(x0 + CELL, y0, cell);
+        own[i * 4u + 2u] = OwnVertex(x0 + CELL, y0 + CELL, cell);
+        own[i * 4u + 3u] = OwnVertex(x0, y0 + CELL, cell);
+    }
+    memcpy(kit.own.bytes, own, sizeof(own));
+    static _Alignas(8) NVNprogram program;
+    bool made = false;
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    const bool drawn = PatchesRecorded(&kit, &program, &made);
+    if (KitEnd(&kit, why, sizeof(why)) && !drawn) {
+        snprintf(why, sizeof(why), "the program of three stages was not made: %s",
+                 DrawPathFailure(kit.path)[0] != '\0'
+                     ? DrawPathFailure(kit.path)
+                     : NvnLayerError()[0] != '\0' ? NvnLayerError()
+                                                  : "nvnProgramInitialize or "
+                                                    "nvnProgramSetShaders answered false");
+    }
+    if (made) {
+        kit.nvn.nvn->nvnProgramFinalize(&program);
+    }
+    KitJudgeWith(&kit, name, PatchesExpected, why);
+}
+
 // ---- the debug layer's marks in a list
 
 /// Into the open list, around three draws: markers and groups of each kind, and a checkpoint
@@ -1792,6 +1890,8 @@ void NvnCommandFirst(void) {
                                  "functions");
     LineCase(DRAW_PATH_LAYER, "a line of width four is four rows of pixels, through the "
                               "layer's own NVN functions");
+    PatchesCase(DRAW_PATH_LAYER, "patches of the size and the outer levels a list sets fill "
+                                 "their cells, through the layer's own NVN functions");
     MarksCase(DRAW_PATH_LAYER, "draws between debug markers, groups and checkpoints are as "
                                "without them, through the layer's own NVN functions");
     DeviceCase(DRAW_PATH_LAYER, "the device says its modes and its builder its flags, and "
@@ -1854,6 +1954,8 @@ void NvnCommandLast(void) {
                                "a third of one away, through the NVN the program looks up");
     LineCase(DRAW_PATH_NVN, "a line of width four is four rows of pixels, through the NVN the "
                             "program looks up");
+    PatchesCase(DRAW_PATH_NVN, "patches of the size and the outer levels a list sets fill "
+                               "their cells, through the NVN the program looks up");
     MarksCase(DRAW_PATH_NVN, "draws between debug markers, groups and checkpoints are as "
                              "without them, through the NVN the program looks up");
     DeviceCase(DRAW_PATH_NVN, "the device says its modes and its builder its flags, and clear "

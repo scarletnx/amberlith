@@ -19,7 +19,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, ninety seven cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, ninety nine cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -63,7 +63,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three
-  hundred and forty nine.
+  hundred and fifty two.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -429,9 +429,17 @@ hashes set is the driver's, and ScarletNX keeps none.
   one to three rows above the boundary, and every pixel between its ends is judged against those rows. Which of
   the three it is, and the two pixels at each end, are the rasterizer's rounding and are not asked.
 
+- **patches of the size and the outer levels a list sets fill their cells**: a program of the case's own, the
+  scene's vertex and fragment stages with a tessellation evaluation stage between them (`quad.tese`, the geometry
+  suite's) and no control stage, so the levels are the list's. `nvnCommandBufferSetPatchSize` of four,
+  `SetInnerTessellationLevels` and `SetOuterTessellationLevels`, and three patches: each fills its cell in its
+  first vertex's colour, with the outer level the list had set in alpha, which the evaluation stage writes there:
+  3 for the first two patches and 5 for the third. The inner levels change nothing a picture of a flat quad
+  shows. `source/drawpath_nvn.h` hands such a case the shader data of a stage past a scene's two
+  (`DrawPathNvnStage`).
+
 Still without a case: the stencil's reference and masks, the blend colour, the alpha reference, the polygon
-offset and the sample mask, which need the state objects' tests in the layer; the patch size and the tessellation
-levels, which need a program of three stages. And for good, as far as a picture
+offset and the sample mask, which need the state objects' tests in the layer. And for good, as far as a picture
 goes: `nvnCommandBufferOverrideSubtileSize`, `SetColorReductionEnable`, `SetColorReductionThresholds`,
 `SetZCullZF32CompressionEnable`, `SetStencilCullCriteria` and the Ounce's `SetShadingRatePaletteMode`, which tune
 how the graphics unit stores and culls and change nothing a program reads.
