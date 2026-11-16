@@ -75,8 +75,10 @@ static const Look RUN = {
     false,
 };
 
-// The set the screen being composed is in; each UiCompose* names its own before drawing.
-static const Look *g_look = &MENU;
+// The set the screen being composed is in; each UiCompose* names its own before drawing. One a
+// thread: the running screen is composed on a thread of its own while the run's thread composes
+// the screens its cases judge.
+static _Thread_local const Look *g_look = &MENU;
 
 #define BACKGROUND (g_look->page)
 #define TEXT (g_look->ink)
@@ -2735,6 +2737,22 @@ UiResumeState UiResumeTap(UiResumeState state, const UiTap *tap, uint32_t frame_
 bool UiProgressDue(bool drawn_before, uint64_t drawn_ns, uint64_t now_ns, bool step_began) {
     return !drawn_before || step_began || now_ns < drawn_ns ||
            now_ns - drawn_ns >= UI_PROGRESS_NANOSECONDS;
+}
+
+bool UiProgressKeeperDraws(uint64_t run_drawn_ns, uint64_t keeper_drawn_ns, uint64_t now_ns,
+                           bool asked, bool timed_step) {
+    if (timed_step) {
+        return false;
+    }
+    if (asked) {
+        return true;
+    }
+    if (now_ns < run_drawn_ns || now_ns - run_drawn_ns < UI_PROGRESS_STALE_NANOSECONDS) {
+        return false;
+    }
+    // Its first frame since the run's thread drew, then one every so often.
+    return keeper_drawn_ns <= run_drawn_ns || now_ns < keeper_drawn_ns ||
+           now_ns - keeper_drawn_ns >= UI_PROGRESS_REDRAW_NANOSECONDS;
 }
 
 void UiProgressCancelReset(UiProgressCancel *cancel) {

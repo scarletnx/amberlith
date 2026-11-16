@@ -77,12 +77,13 @@ class Counts(unittest.TestCase):
         self.assertEqual(self.judge("selfcheck"), self.ran["selfcheck"])
 
     def test_support(self):
-        # the host build has ten cases more: a backward seek through the C library's stream
+        # the host build has eleven cases more: a backward seek through the C library's stream
         # buffer, a baseline file that is there and cannot be read, a case that times itself
         # with the one that reads its line back off standard output, which is the debug channel
-        # only there, and the six of runs whose launches are processes of their own; and one
-        # less, the console's first, which says how the run asks the console's services
-        self.assertEqual(self.judge("support") + 10 - 1, self.ran["support"])
+        # only there, the six of runs whose launches are processes of their own, and the running
+        # screen composed on a thread beside the run's; and one less, the console's first, which
+        # says how the run asks the console's services
+        self.assertEqual(self.judge("support") + 11 - 1, self.ran["support"])
 
     def test_reference(self):
         self.assertEqual(self.judge("reference"), self.ran["reference"])

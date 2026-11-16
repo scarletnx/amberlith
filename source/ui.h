@@ -604,9 +604,10 @@ void UiComposeResume(const UiFrame *frame, const UiResumeInfo *info, UiResumeSta
                      uint32_t seconds_left);
 
 /// The running screen: what a run that has a screen shows while its suites run, so a person can
-/// tell a long run from a stuck one. It is drawn between cases, when the report says one started
-/// or ended, never inside a timed interval, and at most once every UI_PROGRESS_NANOSECONDS but
-/// when a step begins. Like every screen here, it decides nothing.
+/// tell a long run from a stuck one. The run's own thread draws it between cases, when the report
+/// says one started or ended, never inside a timed interval, and at most once every
+/// UI_PROGRESS_NANOSECONDS but when a step begins; inside a case that lasts, a thread beside the
+/// run draws it (UiProgressKeeperDraws). Like every screen here, it decides nothing.
 typedef struct {
     /// The first line: the program and its build.
     const char *heading;
@@ -648,6 +649,26 @@ typedef struct {
 /// UI_PROGRESS_NANOSECONDS have passed since the last frame. @p now_ns and @p drawn_ns are
 /// readings of one clock.
 bool UiProgressDue(bool drawn_before, uint64_t drawn_ns, uint64_t now_ns, bool step_began);
+
+/// The running screen inside a case that lasts. The run's thread draws only between cases, so a
+/// case of minutes would leave the window with one frame and B unread. On the console a thread
+/// beside the run looks at B every UI_PROGRESS_LOOK_NANOSECONDS, often enough that a tap is not
+/// missed, and once the run's thread has drawn nothing for UI_PROGRESS_STALE_NANOSECONDS draws
+/// the screen every UI_PROGRESS_REDRAW_NANOSECONDS, from the counts the run's thread left at its
+/// last case. In a step timed by the passes it draws nothing: a frame there would land inside a
+/// timed interval, and that step's cases are short enough for the run's thread to draw between
+/// them. A run with no screen, a script's, has no such thread.
+#define UI_PROGRESS_LOOK_NANOSECONDS 50000000ull
+#define UI_PROGRESS_STALE_NANOSECONDS 1000000000ull
+#define UI_PROGRESS_REDRAW_NANOSECONDS 250000000ull
+
+/// Whether that thread draws at this look: @p run_drawn_ns when the run's thread last drew the
+/// screen and @p keeper_drawn_ns when this thread did, nought before its first, with @p now_ns
+/// readings of one clock; @p asked when this look saw the press that cancels, which the screen
+/// says at once; @p timed_step when the step under way is timed by the passes, where the run's
+/// thread says that press at the case's end.
+bool UiProgressKeeperDraws(uint64_t run_drawn_ns, uint64_t keeper_drawn_ns, uint64_t now_ns,
+                           bool asked, bool timed_step);
 
 /// B on the running screen, which cancels the run. It is a press only once B was seen up while
 /// that screen had the window: the B that answered the judge's question or stopped a demo is

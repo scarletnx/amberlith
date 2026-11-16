@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef EDENPROBE_HOST
+#include <pthread.h>
+#endif
 
 #include "../check.h"
 #include "../fontvga.h"
@@ -1920,6 +1923,81 @@ static void CheckResumeScreen(Fixture *f) {
                (unsigned)small_lit);
 }
 
+#ifdef EDENPROBE_HOST
+/// A frame's bytes as one number.
+static uint64_t FrameHash(const uint8_t *pixels) {
+    uint64_t hash = 1469598103934665603ull;
+    for (size_t i = 0; i < (size_t)FRAME_WIDTH * FRAME_HEIGHT * 4u; ++i) {
+        hash = (hash ^ pixels[i]) * 1099511628211ull;
+    }
+    return hash;
+}
+
+/// The keeper's side of the case below: the running screen composed on a thread of its own.
+typedef struct {
+    const UiProgress *progress;
+    uint8_t *pixels;
+    uint64_t want;
+    uint32_t rounds;
+    uint32_t wrong;
+    bool over;
+} KeeperSide;
+
+static void *KeeperSideMain(void *argument) {
+    KeeperSide *const side = (KeeperSide *)argument;
+    const UiFrame frame = { side->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
+    for (uint32_t i = 0; i < side->rounds; ++i) {
+        UiComposeProgress(&frame, side->progress);
+        side->wrong += FrameHash(side->pixels) != side->want ? 1u : 0u;
+    }
+    __atomic_store_n(&side->over, true, __ATOMIC_RELEASE);
+    return NULL;
+}
+
+/// The running screen composed on the keeper's thread while this one composes a screen of the
+/// other look, as a case of the judge does on the console: each frame of either is the frame its
+/// thread composes alone. Host only: the judge makes no thread on a machine it is judging.
+static void CheckKeeperSide(Fixture *f, const UiProgress *progress) {
+    static const char NAME[] = "the running screen composed on a thread of its own leaves this "
+                               "thread's screens as they were, and they it";
+    UiResumeInfo info;
+    memset(&info, 0, sizeof(info));
+    info.heading = "edenprobe 0.3.0 (test)";
+    info.where = "the program ended inside a case";
+    info.folder = "sdmc:/edenprobe/runs/b7172fc";
+    KeeperSide side = { progress, (uint8_t *)malloc(sizeof(f->pixels)), 0u, 24u, 0u, false };
+    if (side.pixels == NULL) {
+        ReportCase(SUITE, NAME, CHECK_NONE, false, "no memory for the second frame");
+        return;
+    }
+    const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
+    UiComposeProgress(&frame, progress);
+    side.want = FrameHash(f->pixels);
+    UiComposeResume(&frame, &info, UiResumeOpen(), 7u);
+    const uint64_t menu = FrameHash(f->pixels);
+    pthread_t thread;
+    const int made = pthread_create(&thread, NULL, KeeperSideMain, &side);
+    uint32_t rounds = 0;
+    uint32_t wrong = 0;
+    // At least as many frames as the other thread, and until it is over, so the two overlap.
+    while (made == 0 && (rounds < side.rounds || !__atomic_load_n(&side.over, __ATOMIC_ACQUIRE))) {
+        UiComposeResume(&frame, &info, UiResumeOpen(), 7u);
+        wrong += FrameHash(f->pixels) != menu ? 1u : 0u;
+        ++rounds;
+    }
+    if (made == 0) {
+        pthread_join(thread, NULL);
+    }
+    CHECK_TRUE(SUITE, NAME, CHECK_NONE,
+               made == 0 && side.want != menu && wrong == 0u && side.wrong == 0u,
+               "pthread_create %d; %u of this thread's %u frames and %u of the other's %u differ "
+               "from the frame composed alone",
+               made, (unsigned)wrong, (unsigned)rounds, (unsigned)side.wrong,
+               (unsigned)side.rounds);
+    free(side.pixels);
+}
+#endif
+
 /// The running screen: when it draws, how it counts a step's cases pass by pass, the words for
 /// a pass and a length of time, and a frame with the bar of steps in proportion.
 static void CheckProgress(Fixture *f) {
@@ -2006,6 +2084,46 @@ static void CheckProgress(Fixture *f) {
                (int)held[0], (int)held[1], (int)let_go, (int)pressed, (int)held_again,
                (int)up_first, (int)then_down);
 
+    // A case of three seconds, the keeper looking every 50 ms: nothing for the first second, in
+    // which the run's thread could still draw, then a frame every 250 ms to the case's end.
+    const uint64_t began = 10000u * ms;
+    uint64_t kept = 0;
+    uint64_t first_kept = 0;
+    uint32_t kept_frames = 0;
+    uint64_t widest = 0;
+    // The same case in a step timed by the passes: no frame of the keeper's, a press neither.
+    uint32_t timed_frames = 0;
+    for (uint64_t now = began + 50u * ms; now <= began + 3000u * ms; now += 50u * ms) {
+        if (UiProgressKeeperDraws(began, kept, now, false, false)) {
+            first_kept = kept_frames == 0u ? now : first_kept;
+            widest = kept_frames > 0u && now - kept > widest ? now - kept : widest;
+            kept = now;
+            ++kept_frames;
+        }
+        timed_frames += UiProgressKeeperDraws(began, 0u, now, false, true) ? 1u : 0u;
+        timed_frames += UiProgressKeeperDraws(began, 0u, now, true, true) ? 1u : 0u;
+    }
+    const bool rhythm = UI_PROGRESS_LOOK_NANOSECONDS == 50u * ms &&
+                        UI_PROGRESS_STALE_NANOSECONDS == 1000u * ms &&
+                        UI_PROGRESS_REDRAW_NANOSECONDS == 250u * ms &&
+                        first_kept == began + 1000u * ms && kept_frames == 9u &&
+                        widest == 250u * ms;
+    // The run's thread draws again at the case's end and the keeper keeps off its frame; the
+    // press that cancels is said at once, whenever it comes.
+    const uint64_t ended = began + 3000u * ms;
+    const bool yields = !UiProgressKeeperDraws(ended, kept, ended + 999u * ms, false, false) &&
+                        UiProgressKeeperDraws(ended, kept, ended + 1000u * ms, false, false) &&
+                        UiProgressKeeperDraws(ended, kept, ended + 1u, true, false) &&
+                        !UiProgressKeeperDraws(began, 0, began - 1u, false, false);
+    CHECK_TRUE(SUITE, "inside a case that lasts the running screen is drawn four times a second "
+                      "from its second second on, never in a timed step",
+               CHECK_NONE, rhythm && yields && timed_frames == 0u,
+               "in a case of 3 s: %u frames, the first %u ms in, %u ms at most between two; "
+               "keeps off the run's own frame and says a cancel at once %d; %u frames in a timed "
+               "step",
+               (unsigned)kept_frames, (unsigned)((first_kept - began) / ms),
+               (unsigned)(widest / ms), (int)yields, (unsigned)timed_frames);
+
     UiProgress progress;
     memset(&progress, 0, sizeof(progress));
     progress.heading = "edenprobe 0.3.0 (test)";
@@ -2040,6 +2158,10 @@ static void CheckProgress(Fixture *f) {
     const uint32_t footer =
         CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, RUN_PAGE);
     DumpFrame(&frame, "11-running");
+#ifdef EDENPROBE_HOST
+    CheckKeeperSide(f, &progress);
+    UiComposeProgress(&frame, &progress);
+#endif
     progress.step = 1u;
     UiComposeProgress(&frame, &progress);
     const uint32_t first = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_INK);

@@ -7,7 +7,7 @@ family reports can be believed without them.
   apart and a zero budget rejects them; that an absolute budget is the same on both sides of the
   expected value; that a NaN equals nothing, itself included, whatever the budget; and that three
   units in the last place reach six representable values below a power of two and three above it.
-- **support**, two hundred and thirty one cases, no hardware involved: what the program does
+- **support**, two hundred and thirty two cases, no hardware involved: what the program does
   around a verdict rather than to reach one. First the way the run asks the services a machine may
   answer in a game's own code, by IPC or through the SDK's functions, and what answered them (see
   [The hooks mode](../Hooks.md)); then the pictures a failing case leaves and the names they
