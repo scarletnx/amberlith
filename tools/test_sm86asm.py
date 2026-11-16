@@ -264,13 +264,15 @@ class Programs(unittest.TestCase):
         destination (RZ at 64), the channels at 72 and the level's mode at 87, one for the first level"""
         code, _, _ = asm.assemble(""".stage compute
                 .local 1 1 1
+                R2UR UR9, R7
                 TEX.U.2D.LZ.R R8, [R4], UR8
                 EXIT
         """)
         self.assertEqual(words(code, False), [
+            fix(0x3C2, b16_6=9, b24_8=7),
             fix(0xF60, b16_8=8, b24_8=4, b32_8=255, b40_6=8, b61_3=1, b64_8=255, b72_4=1, b81_3=7, b87_3=1),
             EXIT,
-            bra(2, 2),
+            bra(3, 3),
         ])
 
     def test_a_repeat_writes_its_lines_out(self):
