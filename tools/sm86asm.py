@@ -622,6 +622,13 @@ def encode(program, index, mnemonic, mods, guard, ops):
         word.put(78, 1, got.get("skew", 0), ".SKEW")
         word.put(79, 1, got.get("output", 0), ".O")
         return word
+    if mnemonic == "R2UR":
+        count(mnemonic, ops, 2)
+        modifiers(mnemonic, mods, {})
+        start(word, single(program, mnemonic), guard)
+        word.put(16, 6, reg_of(ops[0], "the destination", mnemonic, uniform=True), "the destination")
+        word.put(24, 8, reg_of(ops[1], "the source", mnemonic), "the source")
+        return word
     if mnemonic == "TEX":
         count(mnemonic, ops, 3)
         known = {"U": ("u", 1), "LZ": ("lod", 1)}
@@ -680,7 +687,7 @@ def encode(program, index, mnemonic, mods, guard, ops):
         word.put(72, 4, got["channels"], "the channels")
         return word
     raise Refused("%s is not an instruction the assembler writes yet: MOV, FADD, FMUL, FFMA, FSETP, ISETP, IADD3, "
-                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, TEX, SULD, SUST, IPA, "
+                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, R2UR, TEX, SULD, SUST, IPA, "
                   "ALD, AST, ISBERD, ISBEWR, BRA, EXIT, KILL and NOP" % mnemonic)
 
 

@@ -8,8 +8,10 @@
 .stage compute
 .local 16 1 1
         S2R R0, SR_TID.X
-        ULDC UR8, c[2][0x170]           ; the texture bound apart in slot 1
-        ULDC UR9, c[2][0x570]           ; the sampler bound apart in slot 1
+        ULDC UR8, c[2][0x170]           ; the texture bound apart in slot 1: its handle's low word
+        MOV R7, c[2][0x570]             ; the sampler bound apart in slot 1: its index is above bit 20,
+        SHF.R.U32 R7, R7, 20, RZ        ; and a texture instruction takes the index itself
+        R2UR UR9, R7
         I2F.U32 R4, R0
         FMUL R4, R4, 0.25f
         FADD R4, R4, 1.125f             ; the column, and the first of the coordinates' two registers
