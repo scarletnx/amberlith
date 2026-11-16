@@ -771,3 +771,44 @@ void Nvnl_nvnCommandBufferSetTiledCacheTileSize(NVNcommandBuffer *cmd, int width
     }
     dkCmdBufSetTileSize(record->cmdbuf, (uint32_t)width, (uint32_t)height);
 }
+
+// ---- lines and conservative rasterization, each deko3d's own command
+
+void Nvnl_nvnCommandBufferSetLineWidth(NVNcommandBuffer *cmd, float width) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetLineWidth");
+    if (record != NULL) {
+        dkCmdBufSetLineWidth(record->cmdbuf, width);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetConservativeRasterEnable(NVNcommandBuffer *cmd,
+                                                      NVNboolean enable) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetConservativeRasterEnable");
+    if (record != NULL) {
+        dkCmdBufSetConservativeRasterEnable(record->cmdbuf, enable != 0);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetConservativeRasterDilate(NVNcommandBuffer *cmd, float dilate) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetConservativeRasterDilate");
+    if (record != NULL) {
+        dkCmdBufSetConservativeRasterDilate(record->cmdbuf, dilate);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetSubpixelPrecisionBias(NVNcommandBuffer *cmd, int x, int y) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetSubpixelPrecisionBias");
+    if (record == NULL) {
+        return;
+    }
+    if (x < 0 || x > 8 || y < 0 || y > 8) {
+        LayerComplain("nvnCommandBufferSetSubpixelPrecisionBias: %d and %d bits, where each is "
+                      "0 to 8",
+                      x, y);
+        return;
+    }
+    dkCmdBufSetSubpixelPrecisionBias(record->cmdbuf, (uint32_t)x, (uint32_t)y);
+}

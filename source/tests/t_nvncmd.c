@@ -220,14 +220,19 @@ static void KitJudgeWith(Kit *kit, const char *name, Expected expected, const ch
             }
         }
     }
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u && why[0] == '\0',
-               "%s%s%u of %u pixels wrong; the first, (%u,%u) in cell %u, holds "
-               "%02x%02x%02x%02x, expected %02x%02x%02x%02x, which is %s",
-               why, why[0] != '\0' ? "; " : "", (unsigned)wrong,
-               (unsigned)(SCENE_SIZE * SCENE_SIZE), (unsigned)first_x, (unsigned)first_y,
-               (unsigned)(first_y / CELL * CELLS_ACROSS + first_x / CELL), first[0], first[1],
-               first[2], first[3], first_want[0], first_want[1], first_want[2], first_want[3],
-               memcmp(first_want, SCENE_CLEAR, 4) == 0 ? "the clear colour" : "a cell's colour");
+    char picture_why[200] = "the picture is right";
+    if (wrong != 0u) {
+        snprintf(picture_why, sizeof(picture_why),
+                 "%u of %u pixels wrong; the first, (%u,%u) in cell %u, holds %02x%02x%02x%02x, "
+                 "expected %02x%02x%02x%02x, which is %s",
+                 (unsigned)wrong, (unsigned)(SCENE_SIZE * SCENE_SIZE), (unsigned)first_x,
+                 (unsigned)first_y, (unsigned)(first_y / CELL * CELLS_ACROSS + first_x / CELL),
+                 first[0], first[1], first[2], first[3], first_want[0], first_want[1],
+                 first_want[2], first_want[3],
+                 memcmp(first_want, SCENE_CLEAR, 4) == 0 ? "the clear colour" : "a cell's colour");
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u && why[0] == '\0', "%s%s%s", why,
+               why[0] != '\0' ? "; " : "", picture_why);
     DrawPathClose(kit->path);
 }
 
@@ -1373,6 +1378,209 @@ static void TilesCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 3 | 1u << 4, why);
 }
 
+// ---- lines and conservative rasterization
+
+/// A quad of the case's own inside @p cell, @p inset pixels in from each of the cell's sides.
+static void InsetQuad(GpuVertex out[6], uint32_t cell, float inset) {
+    const float x0 = (float)(cell % CELLS_ACROSS * CELL) + inset;
+    const float y0 = (float)(cell / CELLS_ACROSS * CELL) + inset;
+    const float x1 = (float)(cell % CELLS_ACROSS * CELL + CELL) - inset;
+    const float y1 = (float)(cell / CELLS_ACROSS * CELL + CELL) - inset;
+    GpuVertex corner[4];
+    for (int i = 0; i < 4; ++i) {
+        corner[i] = OwnVertex(0, 0, cell);
+        corner[i].x = ((i == 1 || i == 2) ? x1 : x0) * 2.0f / (float)SCENE_SIZE - 1.0f;
+        corner[i].y = 1.0f - ((i >= 2) ? y1 : y0) * 2.0f / (float)SCENE_SIZE;
+    }
+    static const uint32_t order[6] = { 0, 1, 2, 0, 2, 3 };
+    for (uint32_t i = 0; i < 6u; ++i) {
+        out[i] = corner[order[i]];
+    }
+}
+
+/// How far in from its cell's sides each quad of the conservative cases is: 0.6 of a pixel
+/// leaves the outer ring of pixels touched with their centres outside, and 1.3 leaves it a
+/// third of a pixel away.
+#define INSET_TOUCHING 0.6f
+#define INSET_NEAR 1.3f
+
+static void TouchedRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    DrawPathDraw(kit->path, 0, 6);
+    n->nvnCommandBufferSetConservativeRasterEnable(cmd, 1);
+    DrawPathDraw(kit->path, 6, 6);
+    n->nvnCommandBufferSetSubpixelPrecisionBias(cmd, 4, 4);
+    DrawPathDraw(kit->path, 12, 6);
+    n->nvnCommandBufferSetSubpixelPrecisionBias(cmd, 0, 0);
+    n->nvnCommandBufferSetConservativeRasterEnable(cmd, 0);
+    DrawPathDraw(kit->path, 18, 6);
+}
+
+/// The picture of the two conservative cases: the cells of ringed (a bit a cell) hold their
+/// colour but for their outer ring of pixels, the cells of whole all of it.
+static uint32_t ringed_cells;
+static uint32_t whole_cells;
+
+static void RingsExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    const bool ring = x % CELL == 0u || x % CELL == CELL - 1u || y % CELL == 0u ||
+                      y % CELL == CELL - 1u;
+    if ((whole_cells >> k & 1u) != 0u || ((ringed_cells >> k & 1u) != 0u && !ring)) {
+        CellColour(k, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+/// Conservative rasterization draws every pixel a primitive touches, where the usual rule
+/// draws the ones whose centre it covers: a quad 0.6 of a pixel inside its cell leaves the
+/// cell's outer ring clear, and with nvnCommandBufferSetConservativeRasterEnable fills the
+/// cell, with or without four more bits of subpixel precision, and leaves the ring clear again
+/// once it is off.
+static void TouchedCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    GpuVertex own[24];
+    for (uint32_t cell = 0; cell < 4u; ++cell) {
+        InsetQuad(own + cell * 6u, cell, INSET_TOUCHING);
+    }
+    memcpy(kit.own.bytes, own, sizeof(own));
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    TouchedRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    ringed_cells = 1u << 0 | 1u << 3;
+    whole_cells = 1u << 1 | 1u << 2;
+    KitJudgeWith(&kit, name, RingsExpected, why);
+}
+
+static void DilatedRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferSetConservativeRasterEnable(cmd, 1);
+    n->nvnCommandBufferSetConservativeRasterDilate(cmd, 0.0f);
+    DrawPathDraw(kit->path, 0, 6);
+    n->nvnCommandBufferSetConservativeRasterDilate(cmd, 0.5f);
+    DrawPathDraw(kit->path, 6, 6);
+    n->nvnCommandBufferSetConservativeRasterDilate(cmd, 0.0f);
+    n->nvnCommandBufferSetConservativeRasterEnable(cmd, 0);
+}
+
+/// A dilation grows a primitive before conservative rasterization looks for the pixels it
+/// touches: a quad 1.3 pixels inside its cell touches nothing of the outer ring, and with
+/// nvnCommandBufferSetConservativeRasterDilate of half a pixel it does, and fills the cell.
+static void DilatedCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    GpuVertex own[12];
+    InsetQuad(own, 8, INSET_NEAR);
+    InsetQuad(own + 6, 9, INSET_NEAR);
+    memcpy(kit.own.bytes, own, sizeof(own));
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    DilatedRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    ringed_cells = 1u << 8;
+    whole_cells = 1u << 9;
+    KitJudgeWith(&kit, name, RingsExpected, why);
+}
+
+/// The line the case draws: across the target's second row of cells, from 8 pixels in to 8
+/// pixels from the far side, along the boundary between two rows of pixels.
+#define LINE_Y 24u
+#define LINE_FROM 8u
+#define LINE_TO 56u
+#define LINE_WIDTH 4u
+/// The cell whose colour the line has.
+#define LINE_CELL 6u
+
+static void LineRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferSetLineWidth(kit->nvn.command, (float)LINE_WIDTH);
+    n->nvnCommandBufferDrawArrays(kit->nvn.command, NVN_DRAW_PRIMITIVE_LINES, 0, 2);
+    n->nvnCommandBufferSetLineWidth(kit->nvn.command, 1.0f);
+}
+
+/// What the target read back holds, for the line's picture, and the first row of the line.
+static const uint8_t *line_pixels;
+static uint32_t line_top;
+
+/// The line's picture: four rows from line_top in the line's colour between its ends, and the
+/// clear colour everywhere else. The two columns at each end, and one beyond, are as they
+/// came: where a wide line's end falls to the pixel is the rasterizer's own.
+static void LineExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const bool row = y >= line_top && y < line_top + LINE_WIDTH;
+    if (row && (x + 3u >= LINE_FROM && x < LINE_FROM + 2u)) {
+        memcpy(out, GpuPixel(line_pixels, SCENE_SIZE, x, y), 4);
+    } else if (row && (x + 2u >= LINE_TO && x < LINE_TO + 3u)) {
+        memcpy(out, GpuPixel(line_pixels, SCENE_SIZE, x, y), 4);
+    } else if (row && x >= LINE_FROM && x < LINE_TO) {
+        CellColour(LINE_CELL, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+/// A line of width four is four pixels thick: drawn level along the boundary between two rows
+/// of pixels, it is four rows in the line's colour from end to end, two each side of the
+/// boundary or shifted by one, which is the rasterizer's rounding and is not asked, and
+/// nothing else.
+static void LineCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    const GpuVertex ends[2] = { OwnVertex(LINE_FROM, LINE_Y, LINE_CELL),
+                                OwnVertex(LINE_TO, LINE_Y, LINE_CELL) };
+    memcpy(kit.own.bytes, ends, sizeof(ends));
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    LineRecorded(&kit);
+    line_top = LINE_Y - LINE_WIDTH / 2u;
+    if (KitEnd(&kit, why, sizeof(why))) {
+        line_pixels = DrawPathRead(kit.path);
+        if (line_pixels != NULL) {
+            // The line's rows in the column half way along it.
+            uint8_t colour[4];
+            CellColour(LINE_CELL, colour);
+            uint32_t rows = 0;
+            uint32_t top = SCENE_SIZE;
+            for (uint32_t y = 0; y < SCENE_SIZE; ++y) {
+                if (memcmp(GpuPixel(line_pixels, SCENE_SIZE, SCENE_SIZE / 2u, y), colour, 4) ==
+                    0) {
+                    ++rows;
+                    top = top == SCENE_SIZE ? y : top;
+                }
+            }
+            if (rows != LINE_WIDTH || top + 3u < LINE_Y || top + 1u > LINE_Y) {
+                snprintf(why, sizeof(why), "half way along, the line of width %u at the top of "
+                         "row %u is %u rows from row %u, where it is %u rows from row %u, %u or "
+                         "%u",
+                         (unsigned)LINE_WIDTH, (unsigned)LINE_Y, (unsigned)rows, (unsigned)top,
+                         (unsigned)LINE_WIDTH, (unsigned)(LINE_Y - 3u), (unsigned)(LINE_Y - 2u),
+                         (unsigned)(LINE_Y - 1u));
+            } else {
+                line_top = top;
+            }
+        }
+    }
+    if (line_pixels == NULL) {
+        // Nothing read: the judge says so, and reads nothing through the picture.
+        KitJudge(&kit, name, 0u, why);
+        return;
+    }
+    KitJudgeWith(&kit, name, LineExpected, why);
+    line_pixels = NULL;
+}
+
 // ---- the debug layer's marks in a list
 
 /// Into the open list, around three draws: markers and groups of each kind, and a checkpoint
@@ -1577,6 +1785,13 @@ void NvnCommandFirst(void) {
                                  "diagonal, through the layer's own NVN functions");
     TilesCase(DRAW_PATH_LAYER, "draws around the tiled cache's actions are as without them, "
                                "through the layer's own NVN functions");
+    TouchedCase(DRAW_PATH_LAYER, "conservative rasterization draws every pixel a quad "
+                                 "touches, through the layer's own NVN functions");
+    DilatedCase(DRAW_PATH_LAYER, "a conservative quad dilated by half a pixel reaches the "
+                                 "pixels a third of one away, through the layer's own NVN "
+                                 "functions");
+    LineCase(DRAW_PATH_LAYER, "a line of width four is four rows of pixels, through the "
+                              "layer's own NVN functions");
     MarksCase(DRAW_PATH_LAYER, "draws between debug markers, groups and checkpoints are as "
                                "without them, through the layer's own NVN functions");
     DeviceCase(DRAW_PATH_LAYER, "the device says its modes and its builder its flags, and "
@@ -1633,6 +1848,12 @@ void NvnCommandLast(void) {
                                "through the NVN the program looks up");
     TilesCase(DRAW_PATH_NVN, "draws around the tiled cache's actions are as without them, "
                              "through the NVN the program looks up");
+    TouchedCase(DRAW_PATH_NVN, "conservative rasterization draws every pixel a quad touches, "
+                               "through the NVN the program looks up");
+    DilatedCase(DRAW_PATH_NVN, "a conservative quad dilated by half a pixel reaches the pixels "
+                               "a third of one away, through the NVN the program looks up");
+    LineCase(DRAW_PATH_NVN, "a line of width four is four rows of pixels, through the NVN the "
+                            "program looks up");
     MarksCase(DRAW_PATH_NVN, "draws between debug markers, groups and checkpoints are as "
                              "without them, through the NVN the program looks up");
     DeviceCase(DRAW_PATH_NVN, "the device says its modes and its builder its flags, and clear "
