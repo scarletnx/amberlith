@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and thirty three functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and seventy two functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -196,8 +196,20 @@ Four hundred and thirty three functions, each recording the deko3d commands that
   target, the flags, the pool and the offset, each as it was set. A builder keeps any number, and one the layer
   cannot make a texture of (a depth, more than one sample, a level too many) is refused when a size is asked or
   the texture is made;
-- **texture views**: the levels, the layers, the format and the target, each set or left to the texture, with the
-  getters that say which, and the comparison;
+- **the rest of what a texture and its builder say**: the channel swizzle and the depth and stencil mode (kept
+  and given back; a draw does not apply them yet), the stride, the GL texture name and the packaged texture's data
+  and layout a builder carries, the texture's storage size and address, and `nvnTextureCompare`, the same
+  description at the same place. A driver's own account of the storage is answered as far as deko3d and
+  ScarletNX's reading of a driver go: the raw storage class by the driver's rule, a sparse tile of noughts (the
+  layer makes no sparse texture), no ZCull area, a storage class with no page kind, no stride (no linear texture),
+  the first level's start for a view offset, and of NVIDIA's surface the width, the height, the offset and the
+  size;
+- **texels moved by the processor**: `nvnTextureWriteTexels`, `nvnTextureReadTexels` and their strided forms go
+  through a queue, a command buffer and a block of 256 KiB the layer keeps for a device, made at the first
+  transfer; a transfer is done when the call returns, so `nvnTextureFlushTexels` and `InvalidateTexels` have
+  nothing left to do. A program whose own queue still has work on the texture finishes it first;
+- **texture views**: the levels, the layers, the format, the target, the swizzle and the depth and stencil mode,
+  each set or left to the texture, with the getters that say which, and the comparison;
 - **copies** between textures and buffers, with the mirror flags (between two textures a mirror is deko3d's
   blit, colour formats only) and a row stride, and through a view of levels,
   whose first level is the one copied; a view with another part set is refused in a copy;

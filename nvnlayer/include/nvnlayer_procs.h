@@ -557,6 +557,81 @@
     X(ptrdiff_t, nvnVertexStreamStateGetStride, (const NVNvertexStreamState *state))              \
     X(int, nvnVertexStreamStateGetDivisor, (const NVNvertexStreamState *state))
 
+// The rest of what a texture, its builder and a view say and take, and texels moved by the
+// processor.
+#define NVN_LAYER_PROCS_TEXTURE_MORE(X)                                                           \
+    X(void, nvnTextureBuilderSetSwizzle,                                                          \
+      (NVNtextureBuilder * builder, NVNtextureSwizzle r, NVNtextureSwizzle g,                     \
+       NVNtextureSwizzle b, NVNtextureSwizzle a))                                                 \
+    X(void, nvnTextureBuilderSetDepthStencilMode,                                                 \
+      (NVNtextureBuilder * builder, NVNtextureDepthStencilMode mode))                             \
+    X(void, nvnTextureBuilderSetStride, (NVNtextureBuilder * builder, ptrdiff_t stride))          \
+    X(void, nvnTextureBuilderSetGLTextureName, (NVNtextureBuilder * builder, uint32_t name))      \
+    X(void, nvnTextureBuilderSetPackagedTextureData,                                              \
+      (NVNtextureBuilder * builder, const void *data))                                            \
+    X(void, nvnTextureBuilderSetPackagedTextureLayout,                                            \
+      (NVNtextureBuilder * builder, const NVNpackagedTextureLayout *layout))                      \
+    X(void, nvnTextureBuilderGetSwizzle,                                                          \
+      (const NVNtextureBuilder *builder, NVNtextureSwizzle *r, NVNtextureSwizzle *g,              \
+       NVNtextureSwizzle *b, NVNtextureSwizzle *a))                                               \
+    X(NVNtextureDepthStencilMode, nvnTextureBuilderGetDepthStencilMode,                           \
+      (const NVNtextureBuilder *builder))                                                         \
+    X(ptrdiff_t, nvnTextureBuilderGetStride, (const NVNtextureBuilder *builder))                  \
+    X(uint32_t, nvnTextureBuilderGetGLTextureName, (const NVNtextureBuilder *builder))            \
+    X(const void *, nvnTextureBuilderGetPackagedTextureData, (const NVNtextureBuilder *builder))  \
+    X(NVNboolean, nvnTextureBuilderGetPackagedTextureLayout,                                      \
+      (const NVNtextureBuilder *builder, NVNpackagedTextureLayout *layout))                       \
+    X(int, nvnTextureBuilderGetRawStorageClass, (const NVNtextureBuilder *builder))               \
+    X(int, nvnTextureBuilderGetStorageClass, (const NVNtextureBuilder *builder))                  \
+    X(size_t, nvnTextureBuilderGetZCullStorageSize, (const NVNtextureBuilder *builder))           \
+    X(void, nvnTextureBuilderGetSparseTileLayout,                                                 \
+      (const NVNtextureBuilder *builder, NVNtextureSparseTileLayout *layout))                     \
+    X(ptrdiff_t, nvnTextureBuilderGetViewOffset,                                                  \
+      (const NVNtextureBuilder *builder, const NVNtextureView *view))                             \
+    X(int, nvnTextureGetStorageSize, (const NVNtexture *texture))                                 \
+    X(NVNtextureDepthStencilMode, nvnTextureGetDepthStencilMode, (const NVNtexture *texture))     \
+    X(void, nvnTextureGetSwizzle,                                                                 \
+      (const NVNtexture *texture, NVNtextureSwizzle *r, NVNtextureSwizzle *g,                     \
+       NVNtextureSwizzle *b, NVNtextureSwizzle *a))                                               \
+    X(NVNbufferAddress, nvnTextureGetTextureAddress, (const NVNtexture *texture))                 \
+    X(NVNboolean, nvnTextureCompare, (const NVNtexture *a, const NVNtexture *b))                  \
+    X(ptrdiff_t, nvnTextureGetStride, (const NVNtexture *texture))                                \
+    X(int, nvnTextureGetRawStorageClass, (const NVNtexture *texture))                             \
+    X(int, nvnTextureGetStorageClass, (const NVNtexture *texture))                                \
+    X(size_t, nvnTextureGetZCullStorageSize, (const NVNtexture *texture))                         \
+    X(void, nvnTextureGetSparseTileLayout,                                                        \
+      (const NVNtexture *texture, NVNtextureSparseTileLayout *layout))                            \
+    X(ptrdiff_t, nvnTextureGetViewOffset,                                                         \
+      (const NVNtexture *texture, const NVNtextureView *view))                                    \
+    X(void, nvnTextureGetNvRmSurfaceNVX,                                                          \
+      (const NVNtexture *texture, void *unused, void *surface))                                   \
+    X(void, nvnTextureViewSetSwizzle,                                                             \
+      (NVNtextureView * view, NVNtextureSwizzle r, NVNtextureSwizzle g, NVNtextureSwizzle b,      \
+       NVNtextureSwizzle a))                                                                      \
+    X(NVNboolean, nvnTextureViewGetSwizzle,                                                       \
+      (const NVNtextureView *view, NVNtextureSwizzle *r, NVNtextureSwizzle *g,                    \
+       NVNtextureSwizzle *b, NVNtextureSwizzle *a))                                               \
+    X(void, nvnTextureViewSetDepthStencilMode,                                                    \
+      (NVNtextureView * view, NVNtextureDepthStencilMode mode))                                   \
+    X(NVNboolean, nvnTextureViewGetDepthStencilMode,                                              \
+      (const NVNtextureView *view, NVNtextureDepthStencilMode *mode))                             \
+    X(void, nvnTextureWriteTexels,                                                                \
+      (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region,        \
+       const void *source))                                                                       \
+    X(void, nvnTextureWriteTexelsStrided,                                                         \
+      (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region,        \
+       const void *source, ptrdiff_t row, ptrdiff_t image))                                       \
+    X(void, nvnTextureReadTexels,                                                                 \
+      (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region,        \
+       void *destination))                                                                        \
+    X(void, nvnTextureReadTexelsStrided,                                                          \
+      (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region,        \
+       void *destination, ptrdiff_t row, ptrdiff_t image))                                        \
+    X(void, nvnTextureFlushTexels,                                                                \
+      (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region))       \
+    X(void, nvnTextureInvalidateTexels,                                                           \
+      (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -652,7 +727,8 @@
     NVN_LAYER_PROCS_STATE(X)                                                                      \
     NVN_LAYER_PROCS_DEBUG(X)                                                                      \
     NVN_LAYER_PROCS_OBJECT(X)                                                                     \
-    NVN_LAYER_PROCS_STATE_OBJECTS(X)
+    NVN_LAYER_PROCS_STATE_OBJECTS(X)                                                              \
+    NVN_LAYER_PROCS_TEXTURE_MORE(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

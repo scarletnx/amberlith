@@ -1815,6 +1815,276 @@ static void PolygonVertexStateCase(const char *name) {
                why[0] != '\0' ? why : NvnLayerError());
 }
 
+// ---- the rest of what a texture says, and texels moved by the processor
+
+/// The channel sources of a swizzle as one number, three bits each from red.
+static long long Swizzle(NVNtextureSwizzle r, NVNtextureSwizzle g, NVNtextureSwizzle b,
+                         NVNtextureSwizzle a) {
+    return (long long)r | (long long)g << 3 | (long long)b << 6 | (long long)a << 9;
+}
+
+/// What a builder and a view keep past the size and the format: the channel swizzle, the depth
+/// and stencil mode, the row stride, the names a builder carries for other libraries. Neither
+/// makes a texture here.
+static void TextureMoreCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static const uint8_t packaged[16] = { 1, 2, 3, 4 };
+    _Alignas(8) NVNtextureBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnTextureBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnTextureBuilderSetDefaults(&builder);
+    nvn.nvn.nvnTextureBuilderSetSwizzle(&builder, NVN_TEXTURE_SWIZZLE_B, NVN_TEXTURE_SWIZZLE_ZERO,
+                                        NVN_TEXTURE_SWIZZLE_R, NVN_TEXTURE_SWIZZLE_ONE);
+    nvn.nvn.nvnTextureBuilderSetDepthStencilMode(&builder, NVN_TEXTURE_DEPTH_STENCIL_MODE_STENCIL);
+    nvn.nvn.nvnTextureBuilderSetStride(&builder, 0x240);
+    nvn.nvn.nvnTextureBuilderSetGLTextureName(&builder, 0x1234abcdu);
+    nvn.nvn.nvnTextureBuilderSetPackagedTextureData(&builder, packaged);
+    // The twelve bits a driver keeps of a packaged texture's layout, in its first two bytes.
+    const NVNpackagedTextureLayout layout = { { 0x23, 0x01, 0, 0, 0, 0, 0, 0 } };
+    nvn.nvn.nvnTextureBuilderSetPackagedTextureLayout(&builder, &layout);
+    NVNtextureSwizzle r = NVN_TEXTURE_SWIZZLE_A, g = NVN_TEXTURE_SWIZZLE_A;
+    NVNtextureSwizzle b = NVN_TEXTURE_SWIZZLE_A, a = NVN_TEXTURE_SWIZZLE_A;
+    nvn.nvn.nvnTextureBuilderGetSwizzle(&builder, &r, &g, &b, &a);
+    Gives(why, sizeof(why), "the builder's swizzle, three bits a channel from red",
+          Swizzle(r, g, b, a),
+          Swizzle(NVN_TEXTURE_SWIZZLE_B, NVN_TEXTURE_SWIZZLE_ZERO, NVN_TEXTURE_SWIZZLE_R,
+                  NVN_TEXTURE_SWIZZLE_ONE));
+    Gives(why, sizeof(why), "the builder's depth and stencil mode",
+          nvn.nvn.nvnTextureBuilderGetDepthStencilMode(&builder),
+          NVN_TEXTURE_DEPTH_STENCIL_MODE_STENCIL);
+    Gives(why, sizeof(why), "the builder's stride",
+          (long long)nvn.nvn.nvnTextureBuilderGetStride(&builder), 0x240);
+    Gives(why, sizeof(why), "the builder's GL texture name",
+          nvn.nvn.nvnTextureBuilderGetGLTextureName(&builder), 0x1234abcdll);
+    Gives(why, sizeof(why), "the builder's packaged texture data",
+          (long long)(uintptr_t)nvn.nvn.nvnTextureBuilderGetPackagedTextureData(&builder),
+          (long long)(uintptr_t)packaged);
+    NVNpackagedTextureLayout back;
+    memset(&back, 0xee, sizeof(back));
+    Gives(why, sizeof(why), "whether the builder has a packaged texture layout",
+          nvn.nvn.nvnTextureBuilderGetPackagedTextureLayout(&builder, &back), 1);
+    Gives(why, sizeof(why), "the layout's first twelve bits",
+          (back.layout[0] | back.layout[1] << 8) & 0xfff, 0x123);
+
+    _Alignas(8) NVNtextureView view;
+    nvn.nvn.nvnTextureViewSetDefaults(&view);
+    NVNtextureDepthStencilMode mode = NVN_TEXTURE_DEPTH_STENCIL_MODE_DEPTH;
+    Gives(why, sizeof(why), "whether a new view has a swizzle set",
+          nvn.nvn.nvnTextureViewGetSwizzle(&view, &r, &g, &b, &a), 0);
+    Gives(why, sizeof(why), "whether a new view has a depth and stencil mode set",
+          nvn.nvn.nvnTextureViewGetDepthStencilMode(&view, &mode), 0);
+    nvn.nvn.nvnTextureViewSetSwizzle(&view, NVN_TEXTURE_SWIZZLE_G, NVN_TEXTURE_SWIZZLE_A,
+                                     NVN_TEXTURE_SWIZZLE_ONE, NVN_TEXTURE_SWIZZLE_B);
+    nvn.nvn.nvnTextureViewSetDepthStencilMode(&view, NVN_TEXTURE_DEPTH_STENCIL_MODE_STENCIL);
+    Gives(why, sizeof(why), "whether a view with a swizzle set says so",
+          nvn.nvn.nvnTextureViewGetSwizzle(&view, &r, &g, &b, &a), 1);
+    Gives(why, sizeof(why), "the view's swizzle, three bits a channel from red",
+          Swizzle(r, g, b, a),
+          Swizzle(NVN_TEXTURE_SWIZZLE_G, NVN_TEXTURE_SWIZZLE_A, NVN_TEXTURE_SWIZZLE_ONE,
+                  NVN_TEXTURE_SWIZZLE_B));
+    Gives(why, sizeof(why), "whether a view with a depth and stencil mode set says so",
+          nvn.nvn.nvnTextureViewGetDepthStencilMode(&view, &mode), 1);
+    Gives(why, sizeof(why), "the view's depth and stencil mode", mode,
+          NVN_TEXTURE_DEPTH_STENCIL_MODE_STENCIL);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// What two textures made from one builder, in the first page of the levels pool, say of
+/// themselves past their size: the swizzle the builder had, the storage's size and address,
+/// that they are the same texture and the levels texture is another, and a driver's own account
+/// of their storage where ScarletNX's reading of a driver gives one to hold them to.
+static void TextureSelfCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNtexture small, twin;
+    _Alignas(8) NVNtextureBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    TextureBuilder(&builder, 16, 16, 0);
+    nvn.nvn.nvnTextureBuilderSetSwizzle(&builder, NVN_TEXTURE_SWIZZLE_B, NVN_TEXTURE_SWIZZLE_G,
+                                        NVN_TEXTURE_SWIZZLE_R, NVN_TEXTURE_SWIZZLE_ONE);
+    nvn.nvn.nvnTextureBuilderSetStorage(&builder, &nvn.levels_pool, 0);
+    const size_t size = nvn.nvn.nvnTextureBuilderGetStorageSize(&builder);
+    if (size == 0u || size > POOL_PAGE || !nvn.nvn.nvnTextureInitialize(&small, &builder)) {
+        char detail[200];
+        snprintf(detail, sizeof(detail), "a 16x16 texture of %zu bytes of storage in a page of "
+                 "0x%x: %s",
+                 size, (unsigned)POOL_PAGE, Why("it did not fit, or nvnTextureInitialize said false"));
+        ReportCase(SUITE, name, CHECK_NONE, false, detail);
+        return;
+    }
+    if (!nvn.nvn.nvnTextureInitialize(&twin, &builder)) {
+        nvn.nvn.nvnTextureFinalize(&small);
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnTextureInitialize answered false"));
+        return;
+    }
+    NVNtextureSwizzle r = NVN_TEXTURE_SWIZZLE_A, g = NVN_TEXTURE_SWIZZLE_A;
+    NVNtextureSwizzle b = NVN_TEXTURE_SWIZZLE_A, a = NVN_TEXTURE_SWIZZLE_A;
+    nvn.nvn.nvnTextureGetSwizzle(&small, &r, &g, &b, &a);
+    Gives(why, sizeof(why), "the texture's swizzle, three bits a channel from red",
+          Swizzle(r, g, b, a),
+          Swizzle(NVN_TEXTURE_SWIZZLE_B, NVN_TEXTURE_SWIZZLE_G, NVN_TEXTURE_SWIZZLE_R,
+                  NVN_TEXTURE_SWIZZLE_ONE));
+    Gives(why, sizeof(why), "the depth and stencil mode of a texture whose builder set none",
+          nvn.nvn.nvnTextureGetDepthStencilMode(&small), NVN_TEXTURE_DEPTH_STENCIL_MODE_DEPTH);
+    Gives(why, sizeof(why), "the texture's storage size, its builder's",
+          nvn.nvn.nvnTextureGetStorageSize(&small), (long long)size);
+    Gives(why, sizeof(why), "the levels texture's address, its pool's and its offset",
+          (long long)nvn.nvn.nvnTextureGetTextureAddress(&nvn.levels),
+          (long long)(nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.levels_pool) +
+                      (uint64_t)nvn.levels_offset));
+    Gives(why, sizeof(why), "whether two textures of one builder at one place are the same",
+          nvn.nvn.nvnTextureCompare(&small, &twin), 1);
+    Gives(why, sizeof(why), "whether the levels texture is the same as the small one",
+          nvn.nvn.nvnTextureCompare(&nvn.levels, &small), 0);
+    Gives(why, sizeof(why), "where no view starts in the texture's storage",
+          (long long)nvn.nvn.nvnTextureGetViewOffset(&nvn.levels, NULL), 0);
+    Gives(why, sizeof(why), "where no view starts in the builder's storage",
+          (long long)nvn.nvn.nvnTextureBuilderGetViewOffset(&builder, NULL), 0);
+    // A driver's own account, by ScarletNX's reading of one: colour is raw storage class 2, a
+    // texture that is not sparse has a tile of noughts, and NVIDIA's surface starts with the
+    // first level's width and height.
+    Gives(why, sizeof(why), "the builder's raw storage class",
+          nvn.nvn.nvnTextureBuilderGetRawStorageClass(&builder), 2);
+    Gives(why, sizeof(why), "the texture's raw storage class",
+          nvn.nvn.nvnTextureGetRawStorageClass(&small), 2);
+    uint32_t tile[2][4];
+    memset(tile, 0xee, sizeof(tile));
+    nvn.nvn.nvnTextureBuilderGetSparseTileLayout(&builder, (NVNtextureSparseTileLayout *)tile[0]);
+    nvn.nvn.nvnTextureGetSparseTileLayout(&small, (NVNtextureSparseTileLayout *)tile[1]);
+    for (int i = 0; i < 4; ++i) {
+        Gives(why, sizeof(why), "a word of the builder's sparse tile layout", tile[0][i], 0);
+        Gives(why, sizeof(why), "a word of the texture's sparse tile layout", tile[1][i], 0);
+    }
+    uint32_t surface[0x58 / 4];
+    memset(surface, 0xee, sizeof(surface));
+    nvn.nvn.nvnTextureGetNvRmSurfaceNVX(&small, NULL, surface);
+    Gives(why, sizeof(why), "the width NVIDIA's surface of the texture starts with", surface[0],
+          16);
+    Gives(why, sizeof(why), "the height that follows it", surface[1], 16);
+    // Answers nothing public defines: asked, and written into the line of a failing case only.
+    const long long classes[2] = { nvn.nvn.nvnTextureBuilderGetStorageClass(&builder),
+                                   nvn.nvn.nvnTextureGetStorageClass(&small) };
+    const long long zcull[2] = { (long long)nvn.nvn.nvnTextureBuilderGetZCullStorageSize(&builder),
+                                 (long long)nvn.nvn.nvnTextureGetZCullStorageSize(&small) };
+    const long long stride = (long long)nvn.nvn.nvnTextureGetStride(&small);
+    nvn.nvn.nvnTextureFinalize(&twin);
+    nvn.nvn.nvnTextureFinalize(&small);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0',
+               "%s (the driver's own: storage classes 0x%llx and 0x%llx, ZCull sizes %lld and "
+               "%lld, stride %lld)",
+               why[0] != '\0' ? why : NvnLayerError(), (unsigned long long)classes[0],
+               (unsigned long long)classes[1], zcull[0], zcull[1], stride);
+}
+
+/// The copy cases' picture written into the first copy texture by the processor, read back by
+/// the processor, and read back again by the graphics unit's copy, which says the texels are
+/// in the texture and not only where the processor's calls keep them.
+static void TexelsCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static uint8_t picture[TARGET_BYTES], back[TARGET_BYTES];
+    for (uint32_t y = 0; y < TARGET_SIZE; ++y) {
+        for (uint32_t x = 0; x < TARGET_SIZE; ++x) {
+            // The copy cases' picture upside down, so that what they left there is not it.
+            Pattern(x, TARGET_SIZE - 1u - y, picture + ((size_t)y * TARGET_SIZE + x) * 4u);
+        }
+    }
+    memset(back, READ_PRESET, sizeof(back));
+    uint8_t *const read = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    if (read == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    memset(read, READ_PRESET, TARGET_BYTES);
+    const NVNcopyRegion whole = { 0, 0, 0, TARGET_SIZE, TARGET_SIZE, 1 };
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnTextureWriteTexels(&nvn.copy_a, NULL, &whole, picture);
+    nvn.nvn.nvnTextureFlushTexels(&nvn.copy_a, NULL, &whole);
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    nvn.nvn.nvnCommandBufferSetCopyRowStride(&nvn.command, 0);
+    nvn.nvn.nvnCommandBufferBarrier(&nvn.command, NVN_BARRIER_ORDER_PRIMITIVES_BIT |
+                                                      NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    nvn.nvn.nvnCommandBufferCopyTextureToBuffer(
+        &nvn.command, &nvn.copy_a, NULL, &whole,
+        nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.read_pool), NVN_COPY_FLAGS_NONE);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnTextureInvalidateTexels(&nvn.copy_a, NULL, &whole);
+    nvn.nvn.nvnTextureReadTexels(&nvn.copy_a, NULL, &whole, back);
+    if (NvnLayerError()[0] != '\0') {
+        ReportCase(SUITE, name, CHECK_NONE, false, NvnLayerError());
+        return;
+    }
+    uint32_t wrong_read = 0, wrong_copy = 0, first = 0;
+    for (uint32_t at = 0; at < TARGET_BYTES; ++at) {
+        if (back[at] != picture[at] && wrong_read++ == 0u && wrong_copy == 0u) {
+            first = at;
+        }
+        if (read[at] != picture[at] && wrong_copy++ == 0u && wrong_read == 0u) {
+            first = at;
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong_read == 0u && wrong_copy == 0u,
+               "of %u bytes written, %u differ as nvnTextureReadTexels gives them back and %u as "
+               "the graphics unit's copy does; byte %u was written 0x%02x and is 0x%02x by the "
+               "read and 0x%02x by the copy (0x%02x is a byte nothing wrote)",
+               (unsigned)TARGET_BYTES, (unsigned)wrong_read, (unsigned)wrong_copy, (unsigned)first,
+               picture[first], back[first], read[first], READ_PRESET);
+}
+
+/// A 16 by 8 part of the first copy texture written from rows 80 bytes apart and read back
+/// into rows 96 apart: the texels, and every byte between the rows of the destination, which a
+/// read leaves as it was.
+static void TexelsStridedCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    enum { WIDTH = 16, HEIGHT = 8, FROM = 80, TO = 96 };
+    static uint8_t source[FROM * HEIGHT], back[TO * HEIGHT];
+    memset(source, 0x5a, sizeof(source));
+    for (uint32_t y = 0; y < HEIGHT; ++y) {
+        for (uint32_t x = 0; x < WIDTH; ++x) {
+            Pattern(x + 40u, y + 20u, source + (size_t)y * FROM + x * 4u);
+        }
+    }
+    memset(back, READ_PRESET, sizeof(back));
+    const NVNcopyRegion part = { 8, 4, 0, WIDTH, HEIGHT, 1 };
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnTextureWriteTexelsStrided(&nvn.copy_a, NULL, &part, source, FROM, 0);
+    nvn.nvn.nvnTextureReadTexelsStrided(&nvn.copy_a, NULL, &part, back, TO, 0);
+    if (NvnLayerError()[0] != '\0') {
+        ReportCase(SUITE, name, CHECK_NONE, false, NvnLayerError());
+        return;
+    }
+    uint32_t wrong = 0, first = 0;
+    uint8_t want_first = 0;
+    for (uint32_t at = 0; at < sizeof(back); ++at) {
+        const uint32_t y = at / TO, in_row = at % TO;
+        const uint8_t want = in_row < WIDTH * 4u ? source[(size_t)y * FROM + in_row] : READ_PRESET;
+        if (back[at] != want && wrong++ == 0u) {
+            first = at;
+            want_first = want;
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
+               "%u of %u bytes wrong; the first, byte %u of row %u, is 0x%02x, expected 0x%02x "
+               "(0x%02x is a byte between rows, which a read leaves)",
+               (unsigned)wrong, (unsigned)sizeof(back), (unsigned)(first % TO),
+               (unsigned)(first / TO), back[first], want_first, READ_PRESET);
+}
+
 // ---- the debug layer's calls
 
 /// How often the debug callback and the database walk were called.
@@ -2449,6 +2719,14 @@ static void LayerCases(void) {
                                              "which of its sizes were set";
     static const char *const EVENT = "an event keeps what the processor signals: a write, an "
                                      "add and an add that wraps";
+    static const char *const TEXTURE_MORE = "a texture builder and a view give back their "
+                                            "swizzle, depth and stencil mode and the rest";
+    static const char *const TEXTURE_SELF = "a texture says its swizzle, storage and address, "
+                                            "and is the same as its twin alone";
+    static const char *const TEXELS = "texels the processor writes into a texture are what it "
+                                      "and the graphics unit read back";
+    static const char *const TEXELS_STRIDED = "a part of a texture written and read with row "
+                                              "strides keeps the bytes between rows";
     static const char *const BLEND_STATE = "a blend state gives back its target, functions, "
                                            "equations and advanced mode";
     static const char *const COLOR_STATE = "a channel mask and a colour state give back a "
@@ -2499,6 +2777,7 @@ static void LayerCases(void) {
                                          BUFFER_RANGE, BUFFER_COPY, DEBUG,
                                          BLEND_STATE, COLOR_STATE, DEPTH_STENCIL_STATE,
                                          MULTISAMPLE_STATE, POLYGON_VERTEX_STATE,
+                                         TEXTURE_MORE, TEXTURE_SELF, TEXELS, TEXELS_STRIDED,
                                          WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
@@ -2658,6 +2937,21 @@ static void LayerCases(void) {
     DepthStencilStateCase(DEPTH_STENCIL_STATE);
     MultisampleStateCase(MULTISAMPLE_STATE);
     PolygonVertexStateCase(POLYGON_VERTEX_STATE);
+    TextureMoreCase(TEXTURE_MORE);
+    if (!nvn.levels_up) {
+        ReportSkip(SUITE, TEXTURE_SELF, REPORT_REASON_DEPENDS,
+                   "the texture of three levels did not come up");
+    } else {
+        TextureSelfCase(TEXTURE_SELF);
+    }
+    if (!nvn.copy_a_up) {
+        ReportSkip(SUITE, TEXELS, REPORT_REASON_DEPENDS, "the copy textures did not come up");
+        ReportSkip(SUITE, TEXELS_STRIDED, REPORT_REASON_DEPENDS,
+                   "the copy textures did not come up");
+    } else {
+        TexelsCase(TEXELS);
+        TexelsStridedCase(TEXELS_STRIDED);
+    }
 
     DebugCase(DEBUG);
     WindowBuilderCase(WINDOW_BUILDER);

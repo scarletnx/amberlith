@@ -190,11 +190,14 @@ NVNtextureHandle Nvnl_nvnDeviceGetTextureHandle(const NVNdevice *device, int tex
     return dkMakeTextureHandle((uint32_t)texture, (uint32_t)sampler);
 }
 
+static void TransferDown(const LayerDevice *owner);
+
 void Nvnl_nvnDeviceFinalize(NVNdevice *device) {
     LayerDevice *const record = DeviceOf(device, "nvnDeviceFinalize");
     if (record == NULL) {
         return;
     }
+    TransferDown(record);
     dkDeviceDestroy(record->device);
     record->magic = 0;
 }
@@ -1129,6 +1132,7 @@ void Nvnl_nvnTextureBuilderSetDefaults(NVNtextureBuilder *builder) {
     record->height = 1;
     record->depth = 1;
     record->levels = 1;
+    record->swizzle = SWIZZLE_IDENTITY;
 }
 
 void Nvnl_nvnTextureBuilderSetDevice(NVNtextureBuilder *builder, NVNdevice *device) {
@@ -1208,7 +1212,155 @@ BUILDER_GET(Levels, int, levels, 0)
 BUILDER_GET(Samples, int, samples, 0)
 BUILDER_GET(MemoryPool, NVNmemoryPool *, pool, NULL)
 BUILDER_GET(MemoryOffset, ptrdiff_t, offset, 0)
+BUILDER_GET(Stride, ptrdiff_t, stride, 0)
+BUILDER_GET(GLTextureName, uint32_t, gl_name, 0)
+BUILDER_GET(PackagedTextureData, const void *, packaged_data, NULL)
+BUILDER_GET(DepthStencilMode, NVNtextureDepthStencilMode, depth_stencil_mode, 0)
 #undef BUILDER_GET
+
+/// Four channel sources as the twelve bits the records keep, or false for a number that is none
+/// of NVN's.
+static bool SwizzleOf(NVNtextureSwizzle r, NVNtextureSwizzle g, NVNtextureSwizzle b,
+                      NVNtextureSwizzle a, uint16_t *swizzle) {
+    if (r < NVN_TEXTURE_SWIZZLE_ZERO || r > NVN_TEXTURE_SWIZZLE_A || g < NVN_TEXTURE_SWIZZLE_ZERO ||
+        g > NVN_TEXTURE_SWIZZLE_A || b < NVN_TEXTURE_SWIZZLE_ZERO || b > NVN_TEXTURE_SWIZZLE_A ||
+        a < NVN_TEXTURE_SWIZZLE_ZERO || a > NVN_TEXTURE_SWIZZLE_A) {
+        return false;
+    }
+    *swizzle = (uint16_t)((unsigned)r | (unsigned)g << 3 | (unsigned)b << 6 | (unsigned)a << 9);
+    return true;
+}
+
+static void SwizzleGive(uint16_t swizzle, NVNtextureSwizzle *r, NVNtextureSwizzle *g,
+                        NVNtextureSwizzle *b, NVNtextureSwizzle *a) {
+    *r = (NVNtextureSwizzle)(swizzle & 7u);
+    *g = (NVNtextureSwizzle)(swizzle >> 3 & 7u);
+    *b = (NVNtextureSwizzle)(swizzle >> 6 & 7u);
+    *a = (NVNtextureSwizzle)(swizzle >> 9 & 7u);
+}
+
+void Nvnl_nvnTextureBuilderSetSwizzle(NVNtextureBuilder *builder, NVNtextureSwizzle r,
+                                      NVNtextureSwizzle g, NVNtextureSwizzle b,
+                                      NVNtextureSwizzle a) {
+    LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetSwizzle");
+    if (record != NULL && !SwizzleOf(r, g, b, a, &record->swizzle)) {
+        LayerComplain("nvnTextureBuilderSetSwizzle: channels %d, %d, %d and %d, of NVN's %d to %d",
+                      (int)r, (int)g, (int)b, (int)a, (int)NVN_TEXTURE_SWIZZLE_ZERO,
+                      (int)NVN_TEXTURE_SWIZZLE_A);
+    }
+}
+
+void Nvnl_nvnTextureBuilderGetSwizzle(const NVNtextureBuilder *builder, NVNtextureSwizzle *r,
+                                      NVNtextureSwizzle *g, NVNtextureSwizzle *b,
+                                      NVNtextureSwizzle *a) {
+    const LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderGetSwizzle");
+    if (record != NULL) {
+        SwizzleGive(record->swizzle, r, g, b, a);
+    }
+}
+
+void Nvnl_nvnTextureBuilderSetDepthStencilMode(NVNtextureBuilder *builder,
+                                               NVNtextureDepthStencilMode mode) {
+    LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetDepthStencilMode");
+    if (record != NULL) {
+        record->depth_stencil_mode = mode == NVN_TEXTURE_DEPTH_STENCIL_MODE_STENCIL;
+    }
+}
+
+void Nvnl_nvnTextureBuilderSetStride(NVNtextureBuilder *builder, ptrdiff_t stride) {
+    LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetStride");
+    if (record != NULL) {
+        record->stride = stride;
+    }
+}
+
+void Nvnl_nvnTextureBuilderSetGLTextureName(NVNtextureBuilder *builder, uint32_t name) {
+    LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetGLTextureName");
+    if (record != NULL) {
+        record->gl_name = name;
+    }
+}
+
+void Nvnl_nvnTextureBuilderSetPackagedTextureData(NVNtextureBuilder *builder, const void *data) {
+    LayerTextureBuilder *const record =
+        Record(builder, "nvnTextureBuilderSetPackagedTextureData");
+    if (record != NULL) {
+        record->packaged_data = data;
+    }
+}
+
+void Nvnl_nvnTextureBuilderSetPackagedTextureLayout(NVNtextureBuilder *builder,
+                                                    const NVNpackagedTextureLayout *layout) {
+    LayerTextureBuilder *const record =
+        Record(builder, "nvnTextureBuilderSetPackagedTextureLayout");
+    if (record == NULL) {
+        return;
+    }
+    record->has_packaged_layout = layout != NULL;
+    memset(record->packaged_layout, 0, sizeof(record->packaged_layout));
+    if (layout != NULL) {
+        memcpy(record->packaged_layout, layout->layout, sizeof(record->packaged_layout));
+    }
+}
+
+NVNboolean Nvnl_nvnTextureBuilderGetPackagedTextureLayout(const NVNtextureBuilder *builder,
+                                                          NVNpackagedTextureLayout *layout) {
+    const LayerTextureBuilder *const record =
+        Record(builder, "nvnTextureBuilderGetPackagedTextureLayout");
+    if (record == NULL) {
+        return 0;
+    }
+    memcpy(layout->layout, record->packaged_layout, sizeof(record->packaged_layout));
+    return record->has_packaged_layout != 0;
+}
+
+// What follows is a driver's own account of a texture's storage, which a program can read and
+// nothing public defines. The layer answers what deko3d and ScarletNX's reading of a driver let
+// it: the raw storage class by the driver's rule as ScarletNX has it, no sparse tile (the layer
+// makes no sparse texture), no ZCull save area and a storage class with no page kind.
+
+/// The raw storage class of @p format: 0 for none, 4 for the 24 bit depth with stencil, 2 for
+/// colour and 32 bit float depth.
+static int RawStorageClassOf(NVNformat format) {
+    return format == NVN_FORMAT_NONE ? 0 : format == NVN_FORMAT_DEPTH24_STENCIL8 ? 4 : 2;
+}
+
+int Nvnl_nvnTextureBuilderGetRawStorageClass(const NVNtextureBuilder *builder) {
+    const LayerTextureBuilder *const record =
+        Record(builder, "nvnTextureBuilderGetRawStorageClass");
+    return record != NULL ? RawStorageClassOf(record->format) : 0;
+}
+
+int Nvnl_nvnTextureBuilderGetStorageClass(const NVNtextureBuilder *builder) {
+    return Record(builder, "nvnTextureBuilderGetStorageClass") != NULL ? 0x100 : 0;
+}
+
+size_t Nvnl_nvnTextureBuilderGetZCullStorageSize(const NVNtextureBuilder *builder) {
+    (void)Record(builder, "nvnTextureBuilderGetZCullStorageSize");
+    return 0;
+}
+
+void Nvnl_nvnTextureBuilderGetSparseTileLayout(const NVNtextureBuilder *builder,
+                                               NVNtextureSparseTileLayout *layout) {
+    // Four words in a driver: the levels with whole tiles, and a tile's width, height and depth.
+    if (Record(builder, "nvnTextureBuilderGetSparseTileLayout") != NULL) {
+        memset(layout, 0, 4 * sizeof(int));
+    }
+}
+
+ptrdiff_t Nvnl_nvnTextureBuilderGetViewOffset(const NVNtextureBuilder *builder,
+                                              const NVNtextureView *view) {
+    // Where a view's first level starts in the storage: nought for no view; deko3d does not
+    // say where its other levels are.
+    const LayerView *const of = view != NULL ? Record(view, "nvnTextureBuilderGetViewOffset") : NULL;
+    if (Record(builder, "nvnTextureBuilderGetViewOffset") != NULL && of != NULL &&
+        (of->set & (VIEW_LEVELS | VIEW_LAYERS)) != 0u && (of->base_level != 0 || of->first_layer != 0)) {
+        LayerComplain("nvnTextureBuilderGetViewOffset: a view from level %d and layer %d, and "
+                      "the layer knows where the first of each starts only",
+                      of->base_level, of->first_layer);
+    }
+    return 0;
+}
 
 /// The deko3d format of an NVN one, or DkImageFormat_None for one the layer has not mapped.
 static DkImageFormat FormatOf(NVNformat format) {
@@ -1345,15 +1497,19 @@ NVNboolean Nvnl_nvnTextureInitialize(NVNtexture *texture,
     dkImageInitialize(&record->image, &layout, pool->block, (uint32_t)from->offset);
     record->magic = MAGIC_TEXTURE;
     record->flags = from->flags;
-    record->target = from->target;
-    record->format = from->format;
+    record->target = (uint8_t)from->target;
+    record->format = (uint16_t)from->format;
     record->width = from->width;
     record->height = from->height;
     record->depth = from->depth;
-    record->levels = from->levels;
-    record->samples = from->samples;
+    record->levels = (uint8_t)from->levels;
+    record->samples = (uint8_t)from->samples;
     record->pool = from->pool;
     record->offset = from->offset;
+    record->swizzle = from->swizzle;
+    record->depth_stencil_mode = from->depth_stencil_mode;
+    record->storage_size = (uint32_t)dkImageLayoutGetSize(&layout);
+    record->device = from->device;
     return 1;
 }
 
@@ -1372,13 +1528,286 @@ TEXTURE_GET(Levels, int, levels, 0)
 TEXTURE_GET(Samples, int, samples, 0)
 TEXTURE_GET(MemoryPool, NVNmemoryPool *, pool, NULL)
 TEXTURE_GET(MemoryOffset, ptrdiff_t, offset, 0)
+TEXTURE_GET(StorageSize, int, storage_size, 0)
+TEXTURE_GET(DepthStencilMode, NVNtextureDepthStencilMode, depth_stencil_mode, 0)
 #undef TEXTURE_GET
+
+void Nvnl_nvnTextureGetSwizzle(const NVNtexture *texture, NVNtextureSwizzle *r,
+                               NVNtextureSwizzle *g, NVNtextureSwizzle *b, NVNtextureSwizzle *a) {
+    const LayerTexture *const record = TextureOf(texture, "nvnTextureGetSwizzle");
+    if (record != NULL) {
+        SwizzleGive(record->swizzle, r, g, b, a);
+    }
+}
+
+NVNbufferAddress Nvnl_nvnTextureGetTextureAddress(const NVNtexture *texture) {
+    static const char *const WHAT = "nvnTextureGetTextureAddress";
+    const LayerTexture *const record = TextureOf(texture, WHAT);
+    const LayerPool *const pool = record != NULL ? PoolOf(record->pool, WHAT) : NULL;
+    // Where its storage is in its pool as NVN counts addresses, which is the address the pool
+    // gives for a buffer: deko3d maps an image a second time for itself, somewhere else.
+    return pool != NULL ? dkMemBlockGetGpuAddr(pool->block) + (uint64_t)record->offset : 0;
+}
+
+NVNboolean Nvnl_nvnTextureCompare(const NVNtexture *a, const NVNtexture *b) {
+    // The same texture: the same description at the same place.
+    const LayerTexture *const x = TextureOf(a, "nvnTextureCompare");
+    const LayerTexture *const y = TextureOf(b, "nvnTextureCompare");
+    return x != NULL && y != NULL && x->flags == y->flags && x->width == y->width &&
+           x->height == y->height && x->depth == y->depth && x->format == y->format &&
+           x->swizzle == y->swizzle && x->target == y->target && x->levels == y->levels &&
+           x->samples == y->samples && x->depth_stencil_mode == y->depth_stencil_mode &&
+           x->pool == y->pool && x->offset == y->offset;
+}
+
+ptrdiff_t Nvnl_nvnTextureGetStride(const NVNtexture *texture) {
+    // The row stride of a linear texture, which the layer makes none of: nought.
+    (void)TextureOf(texture, "nvnTextureGetStride");
+    return 0;
+}
+
+int Nvnl_nvnTextureGetRawStorageClass(const NVNtexture *texture) {
+    const LayerTexture *const record = TextureOf(texture, "nvnTextureGetRawStorageClass");
+    return record != NULL ? RawStorageClassOf((NVNformat)record->format) : 0;
+}
+
+int Nvnl_nvnTextureGetStorageClass(const NVNtexture *texture) {
+    return TextureOf(texture, "nvnTextureGetStorageClass") != NULL ? 0x100 : 0;
+}
+
+size_t Nvnl_nvnTextureGetZCullStorageSize(const NVNtexture *texture) {
+    (void)TextureOf(texture, "nvnTextureGetZCullStorageSize");
+    return 0;
+}
+
+void Nvnl_nvnTextureGetSparseTileLayout(const NVNtexture *texture,
+                                        NVNtextureSparseTileLayout *layout) {
+    if (TextureOf(texture, "nvnTextureGetSparseTileLayout") != NULL) {
+        memset(layout, 0, 4 * sizeof(int));
+    }
+}
+
+ptrdiff_t Nvnl_nvnTextureGetViewOffset(const NVNtexture *texture, const NVNtextureView *view) {
+    const LayerView *const of = view != NULL ? Record(view, "nvnTextureGetViewOffset") : NULL;
+    if (TextureOf(texture, "nvnTextureGetViewOffset") != NULL && of != NULL &&
+        (of->set & (VIEW_LEVELS | VIEW_LAYERS)) != 0u && (of->base_level != 0 || of->first_layer != 0)) {
+        LayerComplain("nvnTextureGetViewOffset: a view from level %d and layer %d, and the layer "
+                      "knows where the first of each starts only",
+                      of->base_level, of->first_layer);
+    }
+    return 0;
+}
+
+void Nvnl_nvnTextureGetNvRmSurfaceNVX(const NVNtexture *texture, void *unused, void *surface) {
+    // NVIDIA's own account of the texture for its other libraries, 0x58 bytes: the layer fills
+    // what it knows of ScarletNX's reading of it (the first level's width and height in the
+    // first two words, the offset in the pool at 0x1c, the storage's size at 0x38) and noughts
+    // the rest, deko3d having no such surface.
+    (void)unused;
+    const LayerTexture *const record = TextureOf(texture, "nvnTextureGetNvRmSurfaceNVX");
+    if (record == NULL || surface == NULL) {
+        return;
+    }
+    uint8_t bytes[0x58];
+    memset(bytes, 0, sizeof(bytes));
+    const uint32_t width = (uint32_t)record->width, height = (uint32_t)record->height;
+    const uint32_t offset = (uint32_t)record->offset;
+    const uint64_t size = record->storage_size;
+    memcpy(bytes + 0x00, &width, 4);
+    memcpy(bytes + 0x04, &height, 4);
+    memcpy(bytes + 0x1c, &offset, 4);
+    memcpy(bytes + 0x38, &size, 8);
+    memcpy(surface, bytes, sizeof(bytes));
+}
 
 void Nvnl_nvnTextureFinalize(NVNtexture *texture) {
     LayerTexture *const record = TextureOf(texture, "nvnTextureFinalize");
     if (record != NULL) {
         record->magic = 0;
     }
+}
+
+// ---- texels by the processor
+
+// nvnTextureWriteTexels and nvnTextureReadTexels move texels between the program's memory and a
+// texture with no queue of the program's. deko3d moves texels with a queue alone, so the layer
+// keeps one of its own for a device, with a command buffer and a block the texels pass through,
+// made at the first transfer and gone with the device. A transfer is done when the call
+// returns. It sees what the graphics unit has finished: a program whose own queue still has
+// work on the texture finishes that first, as a driver's read would wait for it.
+
+static DkImageRect RectOf(const NVNcopyRegion *region);
+static bool CopyView(const char *what, const LayerTexture *texture, const NVNtextureView *view,
+                     DkImageView *out);
+
+#define TRANSFER_BYTES 0x40000u
+#define TRANSFER_COMMAND_BYTES 0x10000u
+
+static struct {
+    const LayerDevice *owner;
+    DkDevice device;
+    DkQueue queue;
+    DkCmdBuf commands;
+    DkMemBlock command_memory;
+    DkMemBlock texels;
+} transfer;
+
+static void MakeTransfer(void) {
+    DkMemBlockMaker block;
+    dkMemBlockMakerDefaults(&block, transfer.device, TRANSFER_COMMAND_BYTES);
+    transfer.command_memory = dkMemBlockCreate(&block);
+    dkMemBlockMakerDefaults(&block, transfer.device, TRANSFER_BYTES);
+    transfer.texels = dkMemBlockCreate(&block);
+    DkCmdBufMaker commands;
+    dkCmdBufMakerDefaults(&commands, transfer.device);
+    transfer.commands = dkCmdBufCreate(&commands);
+    DkQueueMaker queue;
+    dkQueueMakerDefaults(&queue, transfer.device);
+    transfer.queue = dkQueueCreate(&queue);
+}
+
+static void TransferDown(const LayerDevice *owner) {
+    if (transfer.owner != owner || owner == NULL) {
+        return;
+    }
+    dkQueueWaitIdle(transfer.queue);
+    dkQueueDestroy(transfer.queue);
+    dkCmdBufDestroy(transfer.commands);
+    dkMemBlockDestroy(transfer.texels);
+    dkMemBlockDestroy(transfer.command_memory);
+    memset(&transfer, 0, sizeof(transfer));
+}
+
+/// The transfer queue of @p device, made when there is none; false with a complaint.
+static bool TransferUp(LayerDevice *device, const char *what) {
+    if (transfer.owner == device) {
+        return true;
+    }
+    if (transfer.owner != NULL) {
+        LayerComplain("%s: a second device moving texels, and the layer keeps the one queue for "
+                      "that",
+                      what);
+        return false;
+    }
+    memset(&transfer, 0, sizeof(transfer));
+    transfer.device = DeviceUse(device);
+    if (!LayerGuarded(MakeTransfer, what)) {
+        memset(&transfer, 0, sizeof(transfer));
+        return false;
+    }
+    transfer.owner = device;
+    return true;
+}
+
+/// Moves the texels of @p region of @p texture, as @p view sees it, to (@p write false) or from
+/// @p memory, whose rows are @p row bytes apart and whose slices are @p image bytes apart,
+/// nought being packed tight.
+static void Texels(const NVNtexture *texture, const NVNtextureView *view,
+                   const NVNcopyRegion *region, void *memory, ptrdiff_t row, ptrdiff_t image,
+                   bool write, const char *what) {
+    const LayerTexture *const record = TextureOf(texture, what);
+    if (record == NULL) {
+        return;
+    }
+    LayerDevice *const device = DeviceOf(record->device, what);
+    DkImageView of;
+    if (device == NULL || !CopyView(what, record, view, &of)) {
+        return;
+    }
+    // Every format the layer makes a texture of is four bytes a texel.
+    const size_t tight = region != NULL && region->width > 0 ? (size_t)region->width * 4u : 0u;
+    const size_t rows = region != NULL && region->height > 0 ? (size_t)region->height : 0u;
+    const size_t slices = region != NULL && region->depth > 0 ? (size_t)region->depth : 0u;
+    const size_t row_bytes = row != 0 ? (size_t)row : tight;
+    const size_t image_bytes = image != 0 ? (size_t)image : row_bytes * rows;
+    if (memory == NULL || tight == 0u || rows == 0u || slices == 0u || row < 0 || image < 0 ||
+        row_bytes < tight || image_bytes < row_bytes * rows ||
+        tight * rows * slices > TRANSFER_BYTES) {
+        LayerComplain("%s: a region of %dx%dx%d with rows %lld and slices %lld bytes apart, "
+                      "where the layer moves up to 0x%x bytes of texels at a time and takes "
+                      "strides no shorter than the texels",
+                      what, region != NULL ? region->width : 0, region != NULL ? region->height : 0,
+                      region != NULL ? region->depth : 0, (long long)row, (long long)image,
+                      (unsigned)TRANSFER_BYTES);
+        return;
+    }
+    if (!TransferUp(device, what)) {
+        return;
+    }
+    uint8_t *const staged = dkMemBlockGetCpuAddr(transfer.texels);
+    uint8_t *const bytes = memory;
+    if (write) {
+        for (size_t z = 0; z < slices; ++z) {
+            for (size_t y = 0; y < rows; ++y) {
+                memcpy(staged + (z * rows + y) * tight, bytes + z * image_bytes + y * row_bytes,
+                       tight);
+            }
+        }
+    }
+    const DkImageRect rect = RectOf(region);
+    const DkCopyBuf buffer = { dkMemBlockGetGpuAddr(transfer.texels), 0, 0 };
+    dkCmdBufClear(transfer.commands);
+    dkCmdBufAddMemory(transfer.commands, transfer.command_memory, 0, TRANSFER_COMMAND_BYTES);
+    if (write) {
+        dkCmdBufCopyBufferToImage(transfer.commands, &buffer, &of, &rect, 0);
+    } else {
+        dkCmdBufCopyImageToBuffer(transfer.commands, &of, &rect, &buffer, 0);
+    }
+    dkQueueSubmitCommands(transfer.queue, dkCmdBufFinishList(transfer.commands));
+    dkQueueWaitIdle(transfer.queue);
+    if (dkQueueIsInErrorState(transfer.queue)) {
+        LayerComplain("%s: the layer's transfer queue faulted on the graphics unit", what);
+        return;
+    }
+    if (!write) {
+        for (size_t z = 0; z < slices; ++z) {
+            for (size_t y = 0; y < rows; ++y) {
+                memcpy(bytes + z * image_bytes + y * row_bytes, staged + (z * rows + y) * tight,
+                       tight);
+            }
+        }
+    }
+}
+
+void Nvnl_nvnTextureWriteTexels(const NVNtexture *texture, const NVNtextureView *view,
+                                const NVNcopyRegion *region, const void *source) {
+    Texels(texture, view, region, (void *)(uintptr_t)source, 0, 0, true, "nvnTextureWriteTexels");
+}
+
+void Nvnl_nvnTextureWriteTexelsStrided(const NVNtexture *texture, const NVNtextureView *view,
+                                       const NVNcopyRegion *region, const void *source,
+                                       ptrdiff_t row, ptrdiff_t image) {
+    Texels(texture, view, region, (void *)(uintptr_t)source, row, image, true,
+           "nvnTextureWriteTexelsStrided");
+}
+
+void Nvnl_nvnTextureReadTexels(const NVNtexture *texture, const NVNtextureView *view,
+                               const NVNcopyRegion *region, void *destination) {
+    Texels(texture, view, region, destination, 0, 0, false, "nvnTextureReadTexels");
+}
+
+void Nvnl_nvnTextureReadTexelsStrided(const NVNtexture *texture, const NVNtextureView *view,
+                                      const NVNcopyRegion *region, void *destination,
+                                      ptrdiff_t row, ptrdiff_t image) {
+    Texels(texture, view, region, destination, row, image, false,
+           "nvnTextureReadTexelsStrided");
+}
+
+// A transfer has landed when its call returns, on both sides: there is nothing left for these
+// two to write back or to drop.
+
+void Nvnl_nvnTextureFlushTexels(const NVNtexture *texture, const NVNtextureView *view,
+                                const NVNcopyRegion *region) {
+    (void)view;
+    (void)region;
+    (void)TextureOf(texture, "nvnTextureFlushTexels");
+}
+
+void Nvnl_nvnTextureInvalidateTexels(const NVNtexture *texture, const NVNtextureView *view,
+                                     const NVNcopyRegion *region) {
+    (void)view;
+    (void)region;
+    (void)TextureOf(texture, "nvnTextureInvalidateTexels");
 }
 
 // ---- texture views
@@ -1464,6 +1893,51 @@ NVNboolean Nvnl_nvnTextureViewGetTarget(const NVNtextureView *view, NVNtextureTa
     return (record->set & VIEW_TARGET) != 0;
 }
 
+void Nvnl_nvnTextureViewSetSwizzle(NVNtextureView *view, NVNtextureSwizzle r,
+                                   NVNtextureSwizzle g, NVNtextureSwizzle b, NVNtextureSwizzle a) {
+    LayerView *const record = Record(view, "nvnTextureViewSetSwizzle");
+    if (record == NULL) {
+        return;
+    }
+    if (!SwizzleOf(r, g, b, a, &record->swizzle)) {
+        LayerComplain("nvnTextureViewSetSwizzle: channels %d, %d, %d and %d, of NVN's %d to %d",
+                      (int)r, (int)g, (int)b, (int)a, (int)NVN_TEXTURE_SWIZZLE_ZERO,
+                      (int)NVN_TEXTURE_SWIZZLE_A);
+        return;
+    }
+    record->set |= VIEW_SWIZZLE;
+}
+
+NVNboolean Nvnl_nvnTextureViewGetSwizzle(const NVNtextureView *view, NVNtextureSwizzle *r,
+                                         NVNtextureSwizzle *g, NVNtextureSwizzle *b,
+                                         NVNtextureSwizzle *a) {
+    const LayerView *const record = Record(view, "nvnTextureViewGetSwizzle");
+    if (record == NULL) {
+        return 0;
+    }
+    SwizzleGive(record->swizzle, r, g, b, a);
+    return (record->set & VIEW_SWIZZLE) != 0;
+}
+
+void Nvnl_nvnTextureViewSetDepthStencilMode(NVNtextureView *view,
+                                            NVNtextureDepthStencilMode mode) {
+    LayerView *const record = Record(view, "nvnTextureViewSetDepthStencilMode");
+    if (record != NULL) {
+        record->set |= VIEW_DEPTH_STENCIL_MODE;
+        record->depth_stencil_mode = mode == NVN_TEXTURE_DEPTH_STENCIL_MODE_STENCIL;
+    }
+}
+
+NVNboolean Nvnl_nvnTextureViewGetDepthStencilMode(const NVNtextureView *view,
+                                                  NVNtextureDepthStencilMode *mode) {
+    const LayerView *const record = Record(view, "nvnTextureViewGetDepthStencilMode");
+    if (record == NULL) {
+        return 0;
+    }
+    *mode = (NVNtextureDepthStencilMode)record->depth_stencil_mode;
+    return (record->set & VIEW_DEPTH_STENCIL_MODE) != 0;
+}
+
 NVNboolean Nvnl_nvnTextureViewCompare(const NVNtextureView *a, const NVNtextureView *b) {
     const LayerView *const x = Record(a, "nvnTextureViewCompare");
     const LayerView *const y = Record(b, "nvnTextureViewCompare");
@@ -1476,7 +1950,10 @@ NVNboolean Nvnl_nvnTextureViewCompare(const NVNtextureView *a, const NVNtextureV
            ((x->set & VIEW_LAYERS) == 0 ||
             (x->first_layer == y->first_layer && x->layers == y->layers)) &&
            ((x->set & VIEW_FORMAT) == 0 || x->format == y->format) &&
-           ((x->set & VIEW_TARGET) == 0 || x->target == y->target);
+           ((x->set & VIEW_TARGET) == 0 || x->target == y->target) &&
+           ((x->set & VIEW_SWIZZLE) == 0 || x->swizzle == y->swizzle) &&
+           ((x->set & VIEW_DEPTH_STENCIL_MODE) == 0 ||
+            x->depth_stencil_mode == y->depth_stencil_mode);
 }
 
 // ---- command buffers

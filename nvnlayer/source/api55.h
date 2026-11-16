@@ -134,22 +134,41 @@ typedef struct {
     int samples;
     NVNmemoryPool *pool;
     ptrdiff_t offset;
+    ptrdiff_t stride;
+    const void *packaged_data;
+    uint32_t gl_name;
+    /// The four channels' sources, three bits each from red, and whether a setter gave them.
+    uint16_t swizzle;
+    uint8_t depth_stencil_mode;
+    uint8_t has_packaged_layout;
+    uint8_t packaged_layout[8];
 } LayerTextureBuilder;
+
+/// The channels as they are with no swizzle set: red, green, blue, alpha.
+#define SWIZZLE_IDENTITY                                                                          \
+    ((uint16_t)(NVN_TEXTURE_SWIZZLE_R | NVN_TEXTURE_SWIZZLE_G << 3 | NVN_TEXTURE_SWIZZLE_B << 6 | \
+                NVN_TEXTURE_SWIZZLE_A << 9))
 
 typedef struct {
     DkImage image; // first: deko3d wants it at its own alignment, which the object's start has
     uint32_t magic;
     /// What the builder had when the texture was made: a texture answers for itself from then on.
     int flags;
-    NVNtextureTarget target;
-    NVNformat format;
     int width;
     int height;
     int depth;
-    int levels;
-    int samples;
+    uint16_t format;
+    uint16_t swizzle;
+    uint8_t target;
+    uint8_t levels;
+    uint8_t samples;
+    uint8_t depth_stencil_mode;
+    /// The bytes of its storage, as the builder's layout had them.
+    uint32_t storage_size;
     NVNmemoryPool *pool;
     ptrdiff_t offset;
+    /// Its device, for the transfers the processor asks of it with no queue of the program's.
+    NVNdevice *device;
 } LayerTexture;
 
 // The parts of a view a program set: a view says of each whether it has one.
@@ -157,6 +176,8 @@ typedef struct {
 #define VIEW_LAYERS 0x2u
 #define VIEW_FORMAT 0x4u
 #define VIEW_TARGET 0x8u
+#define VIEW_SWIZZLE 0x10u
+#define VIEW_DEPTH_STENCIL_MODE 0x20u
 
 typedef struct {
     uint32_t set;
@@ -166,6 +187,8 @@ typedef struct {
     int layers;
     NVNformat format;
     NVNtextureTarget target;
+    uint16_t swizzle;
+    uint8_t depth_stencil_mode;
 } LayerView;
 
 // The graphics stages, NVN's numbers: vertex, fragment, geometry and the two of tessellation.
