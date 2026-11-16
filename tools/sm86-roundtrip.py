@@ -25,7 +25,9 @@ asm = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(asm)
 
 # a line of the decoder's listing: the index, the guard, the name, the form and the destination
-LISTED = re.compile(r"^\s*(\d+)\s+\S+\s+([A-Z0-9_]+)\s+f(\d)\s+d(\d+)\b")
+LISTED = re.compile(r"^\s*(\d+)\s+\S+\s+([A-Z0-9_.]+)\s+f(\d)\s+d(\d+)\b")
+# the decoder's name for a mnemonic whose modifier picks the table's row
+LISTED_AS = {"SULD": "SULD.P", "SUST": "SUST.P"}
 SECONDS = 60
 
 
@@ -52,7 +54,7 @@ def round_trip(tool, source, out):
         text = file.read()
     code, _, _ = asm.assemble(text)
     program = asm.parse(text, asm.read_table())
-    wrote = [line[2] for line in program.lines] + ["BRA"]
+    wrote = [LISTED_AS.get(line[2], line[2]) for line in program.lines] + ["BRA"]
     name = os.path.splitext(os.path.basename(source))[0]
     body, sph = os.path.join(out, name + ".code"), os.path.join(out, name + ".sph")
     head = 0 if program.stage == "compute" else 128

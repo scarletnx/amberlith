@@ -34,7 +34,7 @@ void RunNvn2(void);
 #define CODE_BYTES 0x10000u
 #define DATA_BYTES 0x10000u
 // The Mandelbrot's target and its depth, with room for each one's alignment.
-#define IMAGE_BYTES (2u * MANDEL_SIZE * MANDEL_SIZE * 8u + 4u * POOL_ALIGNMENT)
+#define IMAGE_BYTES (2u * MANDEL_SIZE * MANDEL_SIZE * 8u + 8u * POOL_ALIGNMENT)
 #define READ_BYTES (MANDEL_SIZE * MANDEL_SIZE * 4u)
 #define READ_PRESET 0xa5u
 
@@ -59,6 +59,21 @@ void RunNvn2(void);
 // The numbers the graphics unit reads for the indirect dispatch and the indirect mesh draws, in
 // the data pool past the matrix case's buffer.
 #define INDIRECT_BYTE 0x3000u
+
+// The image cases' two images, 16 by 16 texels of a word, and the words of both in the data pool
+// past the indirect numbers: what image 1 is filled with, then what image 0 starts as.
+#define IMAGE_SIDE 16u
+#define IMAGE_WORDS (IMAGE_SIDE * IMAGE_SIDE)
+#define IMAGE_SOURCE_BYTE 0x4000u
+#define IMAGE_PRESET_BYTE 0x4400u
+#define IMAGE_DESCRIPTOR_BYTES 32u
+
+/// Which call binds the image program's two images.
+typedef enum {
+    IMAGES_ONE_BY_ONE, ///< nvnCommandBufferBindImage, twice
+    IMAGES_SEVERAL,    ///< nvnCommandBufferBindImages
+    IMAGES_DEFERRED,   ///< nvnCommandBufferBindImagesDeferred
+} ImagesKind;
 
 /// How the scale case's dispatch binds its storage buffer and gives its numbers.
 typedef enum {
@@ -104,6 +119,7 @@ typedef enum {
     PROGRAM_HMMA,
     PROGRAM_PUSHED,
     PROGRAM_MANDEL_PUSHED,
+    PROGRAM_IMAGE,
     PROGRAM_COUNT,
 } ProgramId;
 
@@ -127,6 +143,10 @@ static struct {
     Pool data_pool;
     Pool image_pool;
     Pool read_pool;
+    Pool descriptor_pool;
+    NVNtexturePool texture_pool;
+    NVNtexture images[2];
+    NVNimageHandle image_handles[2];
     void *control;
     size_t code_used;
     size_t image_used;
@@ -136,6 +156,8 @@ static struct {
     bool program_up[PROGRAM_COUNT];
     bool target_up;
     bool depth_up;
+    bool texture_pool_up;
+    int images_up;   ///< how many of the two images were made
     bool counted;   ///< the Mandelbrot's dispatch ran, and its buffer holds the counts
 } n2;
 
@@ -178,6 +200,12 @@ static void TearDown(void) {
             n2.nvn.nvnProgramFinalize(&n2.programs[i]);
         }
     }
+    if (n2.texture_pool_up) {
+        n2.nvn.nvnTexturePoolFinalize(&n2.texture_pool);
+    }
+    for (int i = 0; i < n2.images_up; ++i) {
+        n2.nvn.nvnTextureFinalize(&n2.images[i]);
+    }
     if (n2.depth_up) {
         n2.nvn.nvnTextureFinalize(&n2.depth);
     }
@@ -188,6 +216,7 @@ static void TearDown(void) {
         n2.nvn.nvnCommandBufferFinalize(&n2.command);
     }
     free(n2.control);
+    DropPool(&n2.descriptor_pool);
     DropPool(&n2.read_pool);
     DropPool(&n2.image_pool);
     DropPool(&n2.data_pool);
@@ -202,16 +231,17 @@ static void TearDown(void) {
     memset(&n2, 0, sizeof(n2));
 }
 
-/// A texture of the Mandelbrot's size, its storage carved from the image pool.
-static bool MakeTexture(NVNtexture *texture, NVNformat format, char *why, size_t why_size) {
+/// A square 2D texture of @p side texels with @p flags, its storage carved from the image pool.
+static bool MakeTextureOf(NVNtexture *texture, NVNformat format, uint32_t side, int flags,
+                          char *why, size_t why_size) {
     _Alignas(8) NVNtextureBuilder builder;
     memset(&builder, 0, sizeof(builder));
     n2.nvn.nvnTextureBuilderSetDevice(&builder, &n2.device);
     n2.nvn.nvnTextureBuilderSetDefaults(&builder);
-    n2.nvn.nvnTextureBuilderSetFlags(&builder, 0);
+    n2.nvn.nvnTextureBuilderSetFlags(&builder, flags);
     n2.nvn.nvnTextureBuilderSetTarget(&builder, NVN_TEXTURE_TARGET_2D);
     n2.nvn.nvnTextureBuilderSetFormat(&builder, format);
-    n2.nvn.nvnTextureBuilderSetSize2D(&builder, (int)MANDEL_SIZE, (int)MANDEL_SIZE);
+    n2.nvn.nvnTextureBuilderSetSize2D(&builder, (int)side, (int)side);
     const size_t size = n2.nvn.nvnTextureBuilderGetStorageSize(&builder);
     const size_t alignment = n2.nvn.nvnTextureBuilderGetStorageAlignment(&builder);
     if (size == 0u || alignment == 0u || alignment > POOL_ALIGNMENT) {
@@ -232,6 +262,11 @@ static bool MakeTexture(NVNtexture *texture, NVNformat format, char *why, size_t
         return false;
     }
     return true;
+}
+
+/// A texture of the Mandelbrot's size.
+static bool MakeTexture(NVNtexture *texture, NVNformat format, char *why, size_t why_size) {
+    return MakeTextureOf(texture, format, MANDEL_SIZE, 0, why, why_size);
 }
 
 /// The device, a queue, a command buffer with its memory, the pools a program's code and a
@@ -627,6 +662,133 @@ static const uint8_t *MandelDraw(MeshKind kind, char *why, size_t why_size) {
     return Finish("the readback", why, why_size) ? pixels : NULL;
 }
 
+/// What image 1 holds at (@p x, @p y): every byte of the word different, and no two texels alike.
+static uint32_t ImageInput(uint32_t x, uint32_t y) {
+    return 0x10203040u + (y * IMAGE_SIDE + x) * 0x00010305u;
+}
+
+/// The image cases' own objects, made once: two textures a program may store into, a texture
+/// pool with each registered in it as an image, and each one's handle.
+static bool ImagesUp(char *why, size_t why_size) {
+    if (n2.texture_pool_up) {
+        return true;
+    }
+    int base = 0;
+    n2.nvn.nvnDeviceGetInteger(&n2.device, NVN_DEVICE_INFO_RESERVED_TEXTURE_DESCRIPTORS, &base);
+    if (base < 0 || base > 4096) {
+        snprintf(why, why_size, "the device reserves %d texture descriptors, which the suite has "
+                                "no pool for (0 to 4096)",
+                 base);
+        return false;
+    }
+    while (n2.images_up < 2) {
+        if (!MakeTextureOf(&n2.images[n2.images_up], NVN_FORMAT_R32UI, IMAGE_SIDE,
+                           NVN_TEXTURE_FLAGS_IMAGE, why, why_size)) {
+            return false;
+        }
+        ++n2.images_up;
+    }
+    if (!n2.descriptor_pool.up &&
+        !MakePool(&n2.descriptor_pool, (size_t)(base + 2) * IMAGE_DESCRIPTOR_BYTES,
+                  NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED)) {
+        snprintf(why, why_size, "the descriptors' pool: %s", Why("no memory, or false"));
+        return false;
+    }
+    n2.texture_pool_up = n2.nvn.nvnTexturePoolInitialize(&n2.texture_pool,
+                                                         &n2.descriptor_pool.pool, 0, base + 2);
+    if (!n2.texture_pool_up) {
+        snprintf(why, why_size, "nvnTexturePoolInitialize: %s", Why("false"));
+        return false;
+    }
+    for (int i = 0; i < 2; ++i) {
+        n2.nvn.nvnTexturePoolRegisterImage(&n2.texture_pool, base + i, &n2.images[i], NULL);
+        n2.image_handles[i] = n2.nvn.nvnDeviceGetImageHandle(&n2.device, base + i);
+    }
+    if (NvnLayerError()[0] != '\0') {
+        snprintf(why, why_size, "the images' descriptors: %s", NvnLayerError());
+        return false;
+    }
+    return true;
+}
+
+/// The image case: image 1 filled and image 0 preset from a buffer, the program bound with both
+/// as its images by @p kind's call, one block dispatched, and image 0 copied to memory the
+/// processor reads, every word against three times image 1's plus its column.
+static void ImageCase(const char *name, ImagesKind kind) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    uint8_t *const memory = n->nvnMemoryPoolMap(&n2.data_pool.pool);
+    uint8_t *const read = n->nvnMemoryPoolMap(&n2.read_pool.pool);
+    if (memory == NULL || read == NULL || !ImagesUp(why, sizeof(why))) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   why[0] != '\0' ? why : Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    for (uint32_t i = 0; i < IMAGE_WORDS; ++i) {
+        const uint32_t in = ImageInput(i % IMAGE_SIDE, i / IMAGE_SIDE);
+        const uint32_t preset = 0xdeadbeefu;
+        memcpy(memory + IMAGE_SOURCE_BYTE + 4u * i, &in, sizeof(in));
+        memcpy(memory + IMAGE_PRESET_BYTE + 4u * i, &preset, sizeof(preset));
+    }
+    memset(read, READ_PRESET, 4u * IMAGE_WORDS);
+    const NVNbufferAddress data = n->nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool);
+    const NVNcopyRegion region = { 0, 0, 0, (int)IMAGE_SIDE, (int)IMAGE_SIDE, 1 };
+    n->nvnCommandBufferBeginRecording(&n2.command);
+    n->nvnCommandBufferCopyBufferToTexture(&n2.command, data + IMAGE_PRESET_BYTE, &n2.images[0],
+                                           NULL, &region, NVN_COPY_FLAGS_NONE);
+    n->nvnCommandBufferCopyBufferToTexture(&n2.command, data + IMAGE_SOURCE_BYTE, &n2.images[1],
+                                           NULL, &region, NVN_COPY_FLAGS_NONE);
+    n->nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_INVALIDATE_TEXTURE_BIT |
+                                                NVN_BARRIER_INVALIDATE_SHADER_BIT);
+    n->nvnCommandBufferSetTexturePool(&n2.command, &n2.texture_pool);
+    n->nvnCommandBufferBindProgram(&n2.command, &n2.programs[PROGRAM_IMAGE],
+                                   NVN_SHADER_STAGE_COMPUTE_BIT);
+    // A deferred bind's handles are read when the list runs: they stay where they are.
+    static NVNimageHandle handles[2];
+    handles[0] = n2.image_handles[0];
+    handles[1] = n2.image_handles[1];
+    if (kind == IMAGES_SEVERAL) {
+        n->nvnCommandBufferBindImages(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, 2, handles);
+    } else if (kind == IMAGES_DEFERRED) {
+        n->nvnCommandBufferBindImagesDeferred(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, 2,
+                                              handles);
+    } else {
+        n->nvnCommandBufferBindImage(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, handles[0]);
+        n->nvnCommandBufferBindImage(&n2.command, NVN_SHADER_STAGE_COMPUTE, 1, handles[1]);
+    }
+    n->nvnCommandBufferDispatchCompute(&n2.command, 1, 1, 1);
+    n->nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    n->nvnCommandBufferCopyTextureToBuffer(&n2.command, &n2.images[0], NULL, &region,
+                                           n->nvnMemoryPoolGetBufferAddress(&n2.read_pool.pool),
+                                           NVN_COPY_FLAGS_NONE);
+    if (!Finish("the dispatch into an image", why, sizeof(why))) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    uint32_t wrong = 0;
+    uint32_t first = 0;
+    uint32_t got_first = 0;
+    for (uint32_t i = 0; i < IMAGE_WORDS; ++i) {
+        uint32_t got;
+        memcpy(&got, read + 4u * i, sizeof(got));
+        const uint32_t x = i % IMAGE_SIDE;
+        if (got != ImageInput(x, i / IMAGE_SIDE) * 3u + x && wrong++ == 0u) {
+            first = i;
+            got_first = got;
+        }
+    }
+    const uint32_t first_x = first % IMAGE_SIDE;
+    const uint32_t first_y = first / IMAGE_SIDE;
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
+               "%u of %u texels differ; the first, (%u,%u), is 0x%08x where three times 0x%08x "
+               "plus %u is 0x%08x (0xdeadbeef is a texel nothing stored, 0xa5a5a5a5 one nothing "
+               "copied)",
+               (unsigned)wrong, (unsigned)IMAGE_WORDS, (unsigned)first_x, (unsigned)first_y,
+               (unsigned)got_first, (unsigned)ImageInput(first_x, first_y), (unsigned)first_x,
+               (unsigned)(ImageInput(first_x, first_y) * 3u + first_x));
+}
+
 /// The next element of the matrix case's matrices, in quarters: -6 to 6 and never 0, so every
 /// product and every sum of sixteen is exact in a float, and a sum of nought is +0 whichever
 /// order the products are added in. From a generator's high bits, so no row or column repeats
@@ -885,12 +1047,18 @@ void RunNvn2(void) {
                                               "program reads from a root table pushed";
     static const char *const PICTURE_NO_RATE = "the same picture with no texture bound as the "
                                                "shading rate image";
+    static const char *const IMAGE = "a dispatch loads each texel of one image and stores three "
+                                     "times it plus its column into another";
+    static const char *const IMAGE_SEVERAL = "the same images bound by the call that takes "
+                                             "several";
+    static const char *const IMAGE_DEFERRED = "the same images bound by the deferred call";
     const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, SCALE_BUFFERS,
                                   SCALE_DEFERRED, SCALE_INDIRECT, MANDEL_PROGRAMS,
                                   MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
                                   PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
                                   PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
-                                  PICTURE_PUSHED, PICTURE_NO_RATE };
+                                  PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
+                                  IMAGE_DEFERRED };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -1056,6 +1224,32 @@ void RunNvn2(void) {
         }
         if (ReportStart(SUITE, PICTURE_NO_RATE)) {
             MandelPictureCase(PICTURE_NO_RATE, MESH_NO_RATE);
+        }
+    }
+
+    // Images: textures a program loads from and stores into, each by its handle.
+    bool image = false;
+    if (ReportStart(SUITE, IMAGE)) {
+        NvnLayerClearError();
+        const Stage stage = { image_comp_bin, image_comp_bin_size, image_comp_ctl };
+        image = BuildProgram(PROGRAM_IMAGE, &stage, 1, why, sizeof(why));
+        if (image) {
+            ImageCase(IMAGE, IMAGES_ONE_BY_ONE);
+        } else {
+            ReportCase(SUITE, IMAGE, CHECK_NONE, false, why);
+        }
+    }
+    if (!image) {
+        ReportSkip(SUITE, IMAGE_SEVERAL, REPORT_REASON_DEPENDS,
+                   "the image program made no program");
+        ReportSkip(SUITE, IMAGE_DEFERRED, REPORT_REASON_DEPENDS,
+                   "the image program made no program");
+    } else {
+        if (ReportStart(SUITE, IMAGE_SEVERAL)) {
+            ImageCase(IMAGE_SEVERAL, IMAGES_SEVERAL);
+        }
+        if (ReportStart(SUITE, IMAGE_DEFERRED)) {
+            ImageCase(IMAGE_DEFERRED, IMAGES_DEFERRED);
         }
     }
     TearDown();

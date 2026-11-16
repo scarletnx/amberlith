@@ -241,6 +241,25 @@ class Programs(unittest.TestCase):
             self.assertEqual(one(line), fix(0x23C, b16_8=dst, b24_8=8, b32_8=12, b64_8=c, b72_19=variant))
         self.assertEqual(one("LDC R6, c[1][R1 + 0x10]"), fix(0xB82, b16_8=6, b24_8=1, b38_16=0x10, b54_5=1, b73_3=4))
 
+    def test_an_image_s_load_and_store(self):
+        """SULD.P and SUST.P as ScarletNX's translator reads them (sm86_translate.c, surface): the coordinates'
+        register at 24, a store's value at 32, the handle's place at 40 as its bank above its word, the shape at
+        61 and the channels at 72"""
+        code, _, _ = asm.assemble(""".stage compute
+                .local 1 1 1
+                SULD.P.2D.R R8, [R4], c[2][0x128]
+                SUST.P.2D.R [R4], R8, c[2][0x120]
+                SUST.P.3D.RGBA [R4], R8, c[2][0x130]
+                EXIT
+        """)
+        self.assertEqual(words(code, False), [
+            fix(0xB97, b16_8=8, b24_8=4, b40_19=2 << 14 | 0x4A, b61_3=3, b72_4=1, b81_3=7),
+            fix(0xB9B, b24_8=4, b32_8=8, b40_19=2 << 14 | 0x48, b61_3=3, b72_4=1),
+            fix(0xB9B, b24_8=4, b32_8=8, b40_19=2 << 14 | 0x4C, b61_3=5, b72_4=15),
+            EXIT,
+            bra(4, 4),
+        ])
+
     def test_a_repeat_writes_its_lines_out(self):
         head = ".stage compute\n.local 1 1 1\n"
         body = "IADD3 R1, R1, R1, RZ\nFADD R2, R2, R1\n"
@@ -290,6 +309,9 @@ class Refusals(unittest.TestCase):
     def test_each_names_the_line_and_the_value(self):
         self.refused("FROB R1, R2\nEXIT\n", "line 3: FROB is not an instruction the assembler writes yet")
         self.refused("IMAD R1, -R2, R3, RZ\nEXIT\n", "IMAD: this source takes no -")
+        self.refused("SUST.P.R [R4], R8, c[2][0x120]\nEXIT\n", "SUST needs .P, the image's shape")
+        self.refused("SUST.P.2D.R [R4 + 4], R8, c[2][0x120]\nEXIT\n", "SUST takes [R]")
+        self.refused("SULD.P.2D.R R8, [R4], c[2][0x122]\nEXIT\n", "the offset 290 (0x122)")
         self.refused("IADD3 R1, R2, |R3|, RZ\nEXIT\n", "IADD3: this source takes no | |")
         self.refused("FFMA R1, R2, 1.0f, 2.0f\nEXIT\n", "no form takes these sources together: a number and a number")
         self.refused("MOV R256, R1\nEXIT\n", "R256 is past the last register, 254")
