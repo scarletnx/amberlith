@@ -2030,6 +2030,51 @@ void Nvnl_nvnCommandBufferDrawElementsIndirect(NVNcommandBuffer *cmd, NVNdrawPri
     }
 }
 
+void Nvnl_nvnCommandBufferMultiDrawArraysIndirectCount(NVNcommandBuffer *cmd,
+                                                       NVNdrawPrimitive primitive,
+                                                       NVNbufferAddress indirect,
+                                                       NVNbufferAddress count, int most,
+                                                       ptrdiff_t stride) {
+    (void)cmd;
+    (void)primitive;
+    (void)indirect;
+    (void)count;
+    LayerLack("nvnCommandBufferMultiDrawArraysIndirectCount: up to %d draws %lld bytes apart, as "
+              "many as a word the graphics unit reads says, and deko3d has no draw that reads "
+              "how many draws it is",
+              most, (long long)stride);
+}
+
+void Nvnl_nvnCommandBufferMultiDrawElementsIndirectCount(NVNcommandBuffer *cmd,
+                                                         NVNdrawPrimitive primitive,
+                                                         NVNindexType type,
+                                                         NVNbufferAddress indices,
+                                                         NVNbufferAddress indirect,
+                                                         NVNbufferAddress count, int most,
+                                                         ptrdiff_t stride) {
+    (void)cmd;
+    (void)primitive;
+    (void)type;
+    (void)indices;
+    (void)indirect;
+    (void)count;
+    LayerLack("nvnCommandBufferMultiDrawElementsIndirectCount: up to %d draws %lld bytes apart, "
+              "as many as a word the graphics unit reads says, and deko3d has no draw that "
+              "reads how many draws it is",
+              most, (long long)stride);
+}
+
+void Nvnl_nvnCommandBufferDrawTexture(NVNcommandBuffer *cmd, NVNtextureHandle handle,
+                                      const NVNdrawTextureRegion *destination,
+                                      const NVNdrawTextureRegion *source) {
+    (void)cmd;
+    (void)destination;
+    (void)source;
+    LayerLack("nvnCommandBufferDrawTexture: texture handle 0x%llx drawn with no program, and "
+              "deko3d has no call for the graphics unit's own texture draw",
+              (unsigned long long)handle);
+}
+
 /// An indexed draw of @p count indices of @p type at @p indices, @p base_vertex added to each,
 /// @p instances times from instance @p base_instance.
 static void DrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,

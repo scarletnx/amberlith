@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <nvnlayer.h>
+
 #include "../check.h"
 #include "../drawpath.h"
 #include "../picture.h"
@@ -565,6 +567,116 @@ static bool InstancedDraw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
+// ---- the draws deko3d has none of
+
+// The sixth scene, for the NVN the program looks up alone: deko3d has neither of its draws, so
+// the deko3d way cannot draw it and the layer lacks them, which is a skip where the layer
+// answers. The top left quarter is the first scene's 8 by 8 texture drawn with no program, four
+// pixels a texel (nvnCommandBufferDrawTexture); the top right keeps the clear colour; the
+// bottom row is the instanced scene's cells 4 to 7, two by as many draws of vertices as a word
+// in a buffer says and two by as many draws of indices, each draw one instance from its own
+// base instance. The word says two and the buffers hold a third draw's numbers, cell 0's, so a
+// runtime that draws as many as the most it was given paints over the texture.
+
+static void RareExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    if (y >= INSTANCE_CELL_HEIGHT) {
+        InstanceColour(4u + x / INSTANCE_CELL_WIDTH, out);
+    } else if (x < SCENE_QUARTER) {
+        SceneTexel(x / 4u, y / 4u, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+static const char *RareLooksLike(const uint8_t pixel[4]) {
+    for (uint32_t ty = 0; ty < SCENE_TEXTURE_SIZE; ++ty) {
+        for (uint32_t tx = 0; tx < SCENE_TEXTURE_SIZE; ++tx) {
+            uint8_t texel[4];
+            SceneTexel(tx, ty, texel);
+            if (memcmp(pixel, texel, 4) == 0) {
+                return "a texel of the texture";
+            }
+        }
+    }
+    return InstancedLooksLike(pixel);
+}
+
+static bool RareDraw(DrawPath *path, char *why, size_t why_size) {
+    const int program = DrawPathProgram(path, ShaderData(SHADER_SCENE_INSTANCED_VERT),
+                                        ShaderSize(SHADER_SCENE_INSTANCED_VERT),
+                                        ShaderData(SHADER_SCENE_FRAG),
+                                        ShaderSize(SHADER_SCENE_FRAG));
+    uint8_t texels[SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u];
+    for (uint32_t y = 0; y < SCENE_TEXTURE_SIZE; ++y) {
+        for (uint32_t x = 0; x < SCENE_TEXTURE_SIZE; ++x) {
+            SceneTexel(x, y, texels + (y * SCENE_TEXTURE_SIZE + x) * 4u);
+        }
+    }
+    const int texture =
+        DrawPathTexture(path, SCENE_TEXTURE_SIZE, SCENE_TEXTURE_SIZE, texels, false);
+    DrawBuffer vertices, entries, paint, indices, of_vertices, of_indices, count;
+    const bool ok = program >= 0 && texture >= 0 &&
+                    DrawPathAlloc(path, 6u * (uint32_t)sizeof(GpuVertex), &vertices) &&
+                    DrawPathAlloc(path, INSTANCE_CELLS * (uint32_t)sizeof(DrawInstance),
+                                  &entries) &&
+                    DrawPathAlloc(path, (uint32_t)sizeof(Paint), &paint) &&
+                    DrawPathAlloc(path, 6u * 2u, &indices) &&
+                    DrawPathAlloc(path, 3u * 16u, &of_vertices) &&
+                    DrawPathAlloc(path, 3u * 20u, &of_indices) && DrawPathAlloc(path, 4u, &count);
+    if (!ok) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    GpuVertex quad[6];
+    Quad(quad, 0, 0, INSTANCE_CELL_WIDTH, INSTANCE_CELL_HEIGHT, 0.5f, SCENE_FAR);
+    memcpy(vertices.bytes, quad, sizeof(quad));
+    DrawInstance instances[INSTANCE_CELLS];
+    for (uint32_t i = 0; i < INSTANCE_CELLS; ++i) {
+        uint8_t colour[4];
+        InstanceColour(i, colour);
+        const DrawInstance instance = { { (float)(i % 4u) * 0.5f, -(float)(i / 4u), 0.0f, 0.0f },
+                                        { (float)colour[0] / 255.0f, (float)colour[1] / 255.0f,
+                                          (float)colour[2] / 255.0f, (float)colour[3] / 255.0f } };
+        instances[i] = instance;
+    }
+    memcpy(entries.bytes, instances, sizeof(instances));
+    static const uint16_t order[6] = { 0, 1, 2, 3, 4, 5 };
+    // Three draws' numbers each, of which the word says two: cells 4 and 5, then cell 0; and
+    // cells 6 and 7, then cell 0.
+    static const uint32_t vertex_numbers[3][4] = { { 6, 1, 0, 4 }, { 6, 1, 0, 5 }, { 6, 1, 0, 0 } };
+    static const uint32_t index_numbers[3][5] = { { 6, 1, 0, 0, 6 },
+                                                  { 6, 1, 0, 0, 7 },
+                                                  { 6, 1, 0, 0, 0 } };
+    static const uint32_t two = 2;
+    memcpy(indices.bytes, order, sizeof(order));
+    memcpy(of_vertices.bytes, vertex_numbers, sizeof(vertex_numbers));
+    memcpy(of_indices.bytes, index_numbers, sizeof(index_numbers));
+    memcpy(count.bytes, &two, sizeof(two));
+    const Paint flat = { { 1.0f, 1.0f, 1.0f, 1.0f }, { PAINT_VERTEX, 0, 0, 0 } };
+    memcpy(paint.bytes, &flat, sizeof(flat));
+
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    const DrawElements by_index = { true, DRAW_INDEX_U16, &indices };
+    static const float onto[4] = { 0.0f, 0.0f, (float)SCENE_QUARTER, (float)SCENE_QUARTER };
+    static const float from[4] = { 0.0f, 0.0f, (float)SCENE_TEXTURE_SIZE,
+                                   (float)SCENE_TEXTURE_SIZE };
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathDrawTexture(path, texture, onto, from);
+    DrawPathUseProgram(path, program);
+    DrawPathVertices(path, &vertices, sizeof(quad));
+    DrawPathInstances(path, &entries, sizeof(instances));
+    DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
+    DrawPathDrawIndirectCount(path, NULL, &of_vertices, &count, 3, 16);
+    DrawPathDrawIndirectCount(path, &by_index, &of_indices, &count, 3, 20);
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
 /// A scene the suite draws down each way: what it asks of a way, how it draws, and what each of
 /// its pixels has to hold.
 typedef struct {
@@ -591,6 +703,9 @@ static const Scene FIVE_DEFERRED = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TE
                                      Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_DEFERRED };
 static const Scene UPDATED = { false, 0, 0, UpdatedDraw, IndexedExpected, IndexedLooksLike,
                                DRAW_BINDS_SINGLE };
+static const Scene RARE = { false, 1,           SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
+                            RareDraw, RareExpected, RareLooksLike,
+                            DRAW_BINDS_SINGLE };
 static const Scene INSTANCED = { false,           0, 0, InstancedDraw, InstancedExpected,
                                  InstancedLooksLike, DRAW_BINDS_SINGLE };
 
@@ -622,6 +737,12 @@ static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
     }
     const uint8_t *const pixels =
         scene->draw(path, why, sizeof(why)) ? DrawPathRead(path) : NULL;
+    if (pixels == NULL && NvnLayerLacks()) {
+        // The layer answered, and deko3d gives it no way to draw this at all.
+        ReportSkip(SUITE, name, REPORT_REASON_UNAVAILABLE, NvnLayerError());
+        DrawPathClose(path);
+        return;
+    }
     if (pixels == NULL) {
         char detail[400];
         snprintf(detail, sizeof(detail), "%s",
@@ -725,4 +846,7 @@ void NvnSceneLast(void) {
     SceneCase(DRAW_PATH_NVN, &INSTANCED,
               "the same eight instances through the NVN the program looks up are each in its "
               "cell");
+    SceneCase(DRAW_PATH_NVN, &RARE,
+              "a texture drawn with no program and as many draws as a word says, through the "
+              "NVN the program looks up, are each in its place");
 }

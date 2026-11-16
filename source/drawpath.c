@@ -130,6 +130,17 @@ void DrawPathDrawIndirect(DrawPath *path, const DrawElements *elements,
     path->way->draw_indirect(path, elements, numbers);
 }
 
+void DrawPathDrawIndirectCount(DrawPath *path, const DrawElements *elements,
+                               const DrawBuffer *numbers, const DrawBuffer *count, uint32_t most,
+                               uint32_t stride) {
+    path->way->draw_indirect_count(path, elements, numbers, count, most, stride);
+}
+
+void DrawPathDrawTexture(DrawPath *path, int texture, const float destination[4],
+                         const float source[4]) {
+    path->way->draw_texture(path, texture, destination, source);
+}
+
 void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
                          uint32_t count, int32_t base_vertex) {
     path->way->draw_indexed(path, type, indices, count, base_vertex);
@@ -425,6 +436,26 @@ static void DkDrawIndirect(DrawPath *path, const DrawElements *elements,
     }
 }
 
+static void DkDrawIndirectCount(DrawPath *path, const DrawElements *elements,
+                                const DrawBuffer *numbers, const DrawBuffer *count,
+                                uint32_t most, uint32_t stride) {
+    (void)elements;
+    (void)numbers;
+    (void)count;
+    DrawPathFail(path, "up to %u draws %u bytes apart, as many as a word says: deko3d has no "
+                       "draw that reads how many draws it is",
+                 (unsigned)most, (unsigned)stride);
+}
+
+static void DkDrawTexture(DrawPath *path, int texture, const float destination[4],
+                          const float source[4]) {
+    (void)destination;
+    (void)source;
+    DrawPathFail(path, "texture %d drawn with no program: deko3d has no call for the graphics "
+                       "unit's own texture draw",
+                 texture);
+}
+
 static void DkUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
                      uint32_t offset, const void *data, uint32_t bytes) {
     if (offset > buffer_bytes || bytes > buffer_bytes - offset) {
@@ -455,6 +486,7 @@ static const DrawPathWay DEKO3D_WAY = {
     DkClose, DkProgram, DkTexture, DkAlloc,       DkBegin, DkClear, DkClearDepth, DkDepth,
     DkUseProgram, DkVertices, DkUniform, DkBindTexture, DkDraw,  DkEnd,   DkRead,
     DkDrawIndexed, DkUpdate, DkInstances, DkDrawInstanced, DkDrawIndirect,
+    DkDrawIndirectCount, DkDrawTexture,
 };
 
 DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_size) {
