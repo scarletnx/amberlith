@@ -251,8 +251,14 @@ typedef struct {
     int depth;
 } NVNcopyRegion;
 
+/* The Ounce's builder (API 231) also holds the colour space and the HDR metadata: 0x60 bytes,
+   as ScarletNX's implementation keeps them from 0x2c on (its src/nx/gpu/nvn/nvn_obj.h) */
 typedef struct {
+#if NVN_LAYER_API >= 231
+    char reserved[0x60];
+#else
     char reserved[0x40];
+#endif
 } NVNwindowBuilder;
 
 typedef struct {

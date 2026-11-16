@@ -428,7 +428,23 @@ static void TestControl(void) {
 }
 #endif
 
+// ---- the objects' sizes
+
+/// A window builder holds what the build's NVN writes into it: the Ounce's keeps a colour space
+/// and twelve floats of HDR metadata from 0x2c on, which its nvnWindowBuilderSetDefaults fills.
+static void TestSizes(void) {
+#if NVN_LAYER_API >= 231
+    const size_t builder = 0x2c + sizeof(int32_t) + 12 * sizeof(float);
+#else
+    const size_t builder = 0x40;
+#endif
+    EXPECT(sizeof(NVNwindowBuilder) == builder,
+           "NVNwindowBuilder is 0x%zx bytes, where API %d's NVN writes 0x%zx",
+           sizeof(NVNwindowBuilder), NVN_LAYER_API, builder);
+}
+
 int main(void) {
+    TestSizes();
     TestLookup();
     TestOwn();
     TestLoad();
