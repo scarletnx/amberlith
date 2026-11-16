@@ -321,11 +321,17 @@ class Tree(unittest.TestCase):
                          {"a texture copied into another keeps every texel",
                           "a texture copied into another with MIRROR_X lands mirrored"})
 
-    def test_only_the_looked_up_way_of_the_scene_counts(self):
+    def test_only_the_looked_up_way_of_a_scene_counts(self):
+        # a scene's cases say their way in their names: deko3d's calls are no runtime's NVN, nor are
+        # the layer's own functions a scene records through; the looked up functions are
         called = {case for cases_ in self.table.calls.values() for case in cases_ if case is not tool.OUTSIDE}
-        scene = [case for case in self.table.cases if "scene" in case[1]]
-        self.assertEqual(len(scene), 3)
-        self.assertEqual([case in called for case in scene], [False, False, True])
+        own = [case for case in self.table.cases
+               if "through deko3d" in case[1] or ("the layer's own" in case[1] and "scene" in case[1])]
+        looked_up = [case for case in self.table.cases if "looks up" in case[1] or "looked up" in case[1]]
+        self.assertGreaterEqual(len(own), 2)
+        self.assertGreaterEqual(len(looked_up), 1)
+        self.assertEqual([case for case in own if case in called], [])
+        self.assertEqual([case for case in looked_up if case not in called], [])
 
     def test_a_case_calls_only_what_the_layer_has(self):
         for name in self.table.calls:

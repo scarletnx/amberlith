@@ -41,6 +41,9 @@ typedef struct {
     bool up;
 } Pool;
 
+#define DEFERRED_RANGES 64u
+#define SCRATCH_BYTES 0x1000u
+
 typedef struct {
     DrawPath base;
     NvnProcs nvn;
@@ -80,6 +83,12 @@ typedef struct {
     NVNtextureHandle handles[DRAW_PATH_TEXTURES];
     uint32_t texture_count;
     bool recording;
+    /// The ranges the deferred binds of the list being recorded point at: each bind its own,
+    /// since a driver reads them when the list runs.
+    NVNbufferRange ranges[DEFERRED_RANGES];
+    uint32_t range_count;
+    /// The page of the data pool the plural way lends as shader scratch memory.
+    size_t scratch_at;
 } NvnPath;
 
 static NvnPath nvn_path;
@@ -404,6 +413,25 @@ static void NvBegin(DrawPath *path) {
     const NvnProcs *const n = &nv->nvn;
     n->nvnCommandBufferBeginRecording(&nv->command);
     nv->recording = true;
+    nv->range_count = 0;
+    if (path->spec.binds == DRAW_BINDS_PLURAL) {
+        // The hints: a table no draw here reads, since nothing modulates coverage, and a page of
+        // the data pool that nothing else is in.
+        static const float table[16] = { 0.0625f, 0.125f, 0.1875f, 0.25f, 0.3125f, 0.375f,
+                                         0.4375f, 0.5f,   0.5625f, 0.625f, 0.6875f, 0.75f,
+                                         0.8125f, 0.875f, 0.9375f, 1.0f };
+        n->nvnCommandBufferBindCoverageModulationTable(&nv->command, table);
+        if (nv->scratch_at == SIZE_MAX) {
+            nv->scratch_at = Carve(&nv->data_pool, SCRATCH_BYTES, SCRATCH_BYTES);
+        }
+        if (nv->scratch_at == SIZE_MAX) {
+            DrawPathFail(path, "no 0x%x bytes left in the data pool for shader scratch memory",
+                         (unsigned)SCRATCH_BYTES);
+        } else {
+            n->nvnCommandBufferSetShaderScratchMemory(&nv->command, &nv->data_pool.pool,
+                                                     (ptrdiff_t)nv->scratch_at, SCRATCH_BYTES);
+        }
+    }
     // What the deko3d way's lists start with: the work before this list done, and the caches of
     // what the processor wrote since (texels, programs, descriptors) dropped.
     n->nvnCommandBufferBarrier(&nv->command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
@@ -488,7 +516,12 @@ static void NvVertices(DrawPath *path, const DrawBuffer *vertices, uint32_t byte
     n->nvnVertexStreamStateSetStride(&stream, (ptrdiff_t)sizeof(GpuVertex));
     n->nvnCommandBufferBindVertexAttribState(&nv->command, 3, attributes);
     n->nvnCommandBufferBindVertexStreamState(&nv->command, 1, &stream);
-    n->nvnCommandBufferBindVertexBuffer(&nv->command, 0, vertices->address, bytes);
+    if (path->spec.binds == DRAW_BINDS_SINGLE) {
+        n->nvnCommandBufferBindVertexBuffer(&nv->command, 0, vertices->address, bytes);
+    } else {
+        const NVNbufferRange range = { vertices->address, bytes };
+        n->nvnCommandBufferBindVertexBuffers(&nv->command, 0, 1, &range);
+    }
 }
 
 static NVNshaderStage NvStageOf(DrawStage stage) {
@@ -498,8 +531,29 @@ static NVNshaderStage NvStageOf(DrawStage stage) {
 static void NvUniform(DrawPath *path, DrawStage stage, uint32_t slot, const DrawBuffer *buffer,
                       uint32_t bytes) {
     NvnPath *const nv = Nv(path);
-    nv->nvn.nvnCommandBufferBindUniformBuffer(&nv->command, NvStageOf(stage), (int)slot,
-                                             buffer->address, bytes);
+    const NVNbufferRange range = { buffer->address, bytes };
+    switch (path->spec.binds) {
+    case DRAW_BINDS_PLURAL:
+        nv->nvn.nvnCommandBufferBindUniformBuffers(&nv->command, NvStageOf(stage), (int)slot, 1,
+                                                  &range);
+        break;
+    case DRAW_BINDS_DEFERRED:
+        if (nv->range_count >= DEFERRED_RANGES) {
+            DrawPathFail(path, "deferred bind %u of a list, past the %u ranges the way keeps",
+                         (unsigned)nv->range_count, (unsigned)DEFERRED_RANGES);
+            return;
+        }
+        nv->ranges[nv->range_count] = range;
+        nv->nvn.nvnCommandBufferBindUniformBuffersDeferred(&nv->command, NvStageOf(stage),
+                                                          (int)slot, 1,
+                                                          &nv->ranges[nv->range_count]);
+        ++nv->range_count;
+        break;
+    default:
+        nv->nvn.nvnCommandBufferBindUniformBuffer(&nv->command, NvStageOf(stage), (int)slot,
+                                                 buffer->address, bytes);
+        break;
+    }
 }
 
 static void NvBindTexture(DrawPath *path, DrawStage stage, uint32_t slot, int texture) {
@@ -511,8 +565,28 @@ static void NvBindTexture(DrawPath *path, DrawStage stage, uint32_t slot, int te
                      (unsigned)DRAW_PATH_SLOTS);
         return;
     }
-    nv->nvn.nvnCommandBufferBindTexture(&nv->command, NvStageOf(stage), (int)slot,
-                                       nv->handles[texture]);
+    switch (path->spec.binds) {
+    case DRAW_BINDS_PLURAL:
+        nv->nvn.nvnCommandBufferBindTextures(&nv->command, NvStageOf(stage), (int)slot, 1,
+                                            &nv->handles[texture]);
+        break;
+    case DRAW_BINDS_DEFERRED:
+        // The handles stay where they are for as long as the way is up.
+        nv->nvn.nvnCommandBufferBindTexturesDeferred(&nv->command, NvStageOf(stage), (int)slot,
+                                                    1, &nv->handles[texture]);
+        break;
+    default:
+        nv->nvn.nvnCommandBufferBindTexture(&nv->command, NvStageOf(stage), (int)slot,
+                                           nv->handles[texture]);
+        break;
+    }
+}
+
+static void NvUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
+                     uint32_t offset, const void *data, uint32_t bytes) {
+    NvnPath *const nv = Nv(path);
+    nv->nvn.nvnCommandBufferUpdateUniformBuffer(&nv->command, buffer->address, buffer_bytes,
+                                               (ptrdiff_t)offset, bytes, data);
 }
 
 static void NvDraw(DrawPath *path, uint32_t first, uint32_t count) {
@@ -573,7 +647,7 @@ static const uint8_t *NvRead(DrawPath *path) {
 static const DrawPathWay NVN_WAY = {
     NvClose, NvProgram, NvTexture, NvAlloc,       NvBegin, NvClear, NvClearDepth, NvDepth,
     NvUseProgram, NvVertices, NvUniform, NvBindTexture, NvDraw,  NvEnd,   NvRead,
-    NvDrawIndexed,
+    NvDrawIndexed, NvUpdate,
 };
 
 /// The steps of the bring-up, in order; false with the step in @p why.
@@ -734,6 +808,7 @@ DrawPath *DrawPathOpenNvn(const DrawPathSpec *spec, bool own, char *why, size_t 
     memset(nv, 0, sizeof(*nv));
     nv->base.way = &NVN_WAY;
     nv->base.spec = *spec;
+    nv->scratch_at = SIZE_MAX;
     // deko3d ends the program when it cannot make an object; with gpu.c's guard a bring-up that
     // fails under the layer is a sentence in the report instead.
     NvnLayerSetGuard(AbortGuarded);

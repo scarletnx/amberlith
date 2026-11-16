@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and twenty one functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and twenty nine functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -218,6 +218,13 @@ Four hundred and twenty one functions, each recording the deko3d commands that d
   the graphics unit's in both (the layer's build asserts it), and refuses what deko3d has no state for: an advanced
   blend mode, sixteen samples, the program's own sample locations, coverage truncation. No case draws with the
   blend, stencil, logic, alpha, multisample and polygon mode fields yet: the cases read them back;
+- **the binds of several at once** (vertex buffers, uniform buffers, textures), each the single binds one after
+  another, and the **deferred** ones, which a driver reads when the list runs and the layer as it records: the
+  same to a program that leaves its ranges and handles alone until the list has run;
+  `nvnCommandBufferUpdateUniformBuffer`, deko3d's data pushed into the list; and two hints,
+  `nvnCommandBufferBindCoverageModulationTable` (deko3d's table; no table is refused, deko3d having no call that
+  takes one away) and `nvnCommandBufferSetShaderScratchMemory` (checked against its pool and not recorded:
+  deko3d asks for no such memory);
 - **the binds**: a program, each state, vertex buffers, uniform buffers, textures by handle; and **the draw**,
   `nvnCommandBufferDrawArrays`, with the colour and depth clears.
 
