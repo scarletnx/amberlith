@@ -341,93 +341,6 @@ static void ClearCase(const char *name, const float rgba[4], const uint8_t expec
                expected[1], expected[2], expected[3]);
 }
 
-/// Two textures on the default window, each acquired, cleared and presented once. Nothing is read
-/// back: what reaches the screen is the compositor's, and the case says only whether every step
-/// came back as NVN promises. False with the step in @p why.
-static bool Present(char *why, size_t why_size) {
-    _Alignas(8) NVNtextureBuilder builder;
-    memset(&builder, 0, sizeof(builder));
-    TextureBuilder(&builder, WINDOW_WIDTH, WINDOW_HEIGHT, NVN_TEXTURE_FLAGS_DISPLAY);
-    const size_t size = nvn.nvn.nvnTextureBuilderGetStorageSize(&builder);
-    const size_t alignment = nvn.nvn.nvnTextureBuilderGetStorageAlignment(&builder);
-    if (size == 0u || alignment == 0u || alignment > POOL_PAGE) {
-        snprintf(why, why_size, "a window texture's storage is %zu bytes at an alignment of %zu: "
-                 "%s",
-                 size, alignment, Why("an answer no pool here can hold"));
-        return false;
-    }
-    const size_t stride = RoundUp(size, alignment);
-    static _Alignas(8) NVNmemoryPool pool;
-    static _Alignas(8) NVNtexture textures[WINDOW_TEXTURES];
-    static _Alignas(8) NVNwindow window;
-    void *storage = NULL;
-    bool pool_up = MakePool(&pool, &storage, RoundUp(stride * WINDOW_TEXTURES, POOL_PAGE),
-                            NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS |
-                                NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
-    if (!pool_up) {
-        snprintf(why, why_size, "the window's pool: %s", Why("no memory, or false"));
-        return false;
-    }
-    bool ok = true;
-    int made = 0;
-    for (; made < WINDOW_TEXTURES; ++made) {
-        nvn.nvn.nvnTextureBuilderSetStorage(&builder, &pool, (ptrdiff_t)(stride * (size_t)made));
-        if (!nvn.nvn.nvnTextureInitialize(&textures[made], &builder)) {
-            snprintf(why, why_size, "window texture %d: nvnTextureInitialize: %s", made,
-                     Why("false"));
-            ok = false;
-            break;
-        }
-    }
-    bool window_up = false;
-    if (ok) {
-        NVNtexture *const list[WINDOW_TEXTURES] = { &textures[0], &textures[1] };
-        _Alignas(8) NVNwindowBuilder window_builder;
-        nvn.nvn.nvnWindowBuilderSetDefaults(&window_builder);
-        nvn.nvn.nvnWindowBuilderSetDevice(&window_builder, &nvn.device);
-        nvn.nvn.nvnWindowBuilderSetNativeWindow(&window_builder, nwindowGetDefault());
-        nvn.nvn.nvnWindowBuilderSetTextures(&window_builder, WINDOW_TEXTURES, list);
-        window_up = ok = nvn.nvn.nvnWindowInitialize(&window, &window_builder);
-        if (!ok) {
-            snprintf(why, why_size, "nvnWindowInitialize: %s", Why("false"));
-        }
-    }
-    // Two frames, so that both textures go round once: a cleared green, then a cleared blue.
-    static const float colours[WINDOW_TEXTURES][4] = { { 0.0f, 1.0f, 0.0f, 1.0f },
-                                                       { 0.0f, 0.0f, 1.0f, 1.0f } };
-    for (int frame = 0; ok && frame < WINDOW_TEXTURES; ++frame) {
-        int index = -1;
-        const NVNqueueAcquireTextureResult got =
-            nvn.nvn.nvnQueueAcquireTexture(&nvn.queue, &window, &index);
-        if (got != NVN_QUEUE_ACQUIRE_TEXTURE_RESULT_SUCCESS || index < 0 ||
-            index >= WINDOW_TEXTURES) {
-            snprintf(why, why_size, "frame %d: nvnQueueAcquireTexture answered %d with texture "
-                     "%d of %d: %s",
-                     frame, (int)got, index, WINDOW_TEXTURES, Why("no reason given"));
-            ok = false;
-            break;
-        }
-        nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
-        RecordClear(&textures[index], WINDOW_WIDTH, WINDOW_HEIGHT, colours[frame]);
-        const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
-        nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
-        nvn.nvn.nvnQueuePresentTexture(&nvn.queue, &window, index);
-    }
-    nvn.nvn.nvnQueueFinish(&nvn.queue);
-    if (ok && NvnLayerError()[0] != '\0') {
-        snprintf(why, why_size, "%s", NvnLayerError());
-        ok = false;
-    }
-    if (window_up) {
-        nvn.nvn.nvnWindowFinalize(&window);
-    }
-    for (int i = 0; i < made; ++i) {
-        nvn.nvn.nvnTextureFinalize(&textures[i]);
-    }
-    DropPool(&pool, &storage, &pool_up);
-    return ok;
-}
-
 // ---- copies
 
 // The copies a game's NVN makes between textures and buffers, each through the layer's deko3d
@@ -1640,6 +1553,357 @@ static void BufferCopyCase(const char *name) {
                want_first, READ_PRESET);
 }
 
+// ---- the window
+
+// The suite's one window, which every window case shares: a second swapchain on the default
+// window after a first is what Eden never came back from (the game suite says the same).
+static struct {
+    _Alignas(8) NVNmemoryPool pool;
+    _Alignas(8) NVNtexture textures[WINDOW_TEXTURES];
+    _Alignas(8) NVNwindow window;
+    void *storage;
+    bool pool_up;
+    bool window_up;
+    int made;
+} win;
+
+static void WindowDown(void) {
+    if (win.window_up) {
+        nvn.nvn.nvnWindowFinalize(&win.window);
+        win.window_up = false;
+    }
+    for (int i = 0; i < win.made; ++i) {
+        nvn.nvn.nvnTextureFinalize(&win.textures[i]);
+    }
+    win.made = 0;
+    if (win.pool_up) {
+        DropPool(&win.pool, &win.storage, &win.pool_up);
+    }
+}
+
+/// Two 1280x720 textures in a pool of their own, and a window of them on the default native
+/// window. False with the step in @p why, and nothing left up.
+static bool WindowUp(char *why, size_t why_size) {
+    _Alignas(8) NVNtextureBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    TextureBuilder(&builder, WINDOW_WIDTH, WINDOW_HEIGHT, NVN_TEXTURE_FLAGS_DISPLAY);
+    const size_t size = nvn.nvn.nvnTextureBuilderGetStorageSize(&builder);
+    const size_t alignment = nvn.nvn.nvnTextureBuilderGetStorageAlignment(&builder);
+    if (size == 0u || alignment == 0u || alignment > POOL_PAGE) {
+        snprintf(why, why_size, "a window texture's storage is %zu bytes at an alignment of %zu: "
+                 "%s",
+                 size, alignment, Why("an answer no pool here can hold"));
+        return false;
+    }
+    const size_t stride = RoundUp(size, alignment);
+    win.pool_up = MakePool(&win.pool, &win.storage, RoundUp(stride * WINDOW_TEXTURES, POOL_PAGE),
+                           NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS |
+                               NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+    if (!win.pool_up) {
+        snprintf(why, why_size, "the window's pool: %s", Why("no memory, or false"));
+        return false;
+    }
+    for (win.made = 0; win.made < WINDOW_TEXTURES; ++win.made) {
+        nvn.nvn.nvnTextureBuilderSetStorage(&builder, &win.pool,
+                                            (ptrdiff_t)(stride * (size_t)win.made));
+        if (!nvn.nvn.nvnTextureInitialize(&win.textures[win.made], &builder)) {
+            snprintf(why, why_size, "window texture %d: nvnTextureInitialize: %s", win.made,
+                     Why("false"));
+            WindowDown();
+            return false;
+        }
+    }
+    NVNtexture *const list[WINDOW_TEXTURES] = { &win.textures[0], &win.textures[1] };
+    _Alignas(8) NVNwindowBuilder window_builder;
+    nvn.nvn.nvnWindowBuilderSetDefaults(&window_builder);
+    nvn.nvn.nvnWindowBuilderSetDevice(&window_builder, &nvn.device);
+    nvn.nvn.nvnWindowBuilderSetNativeWindow(&window_builder, nwindowGetDefault());
+    nvn.nvn.nvnWindowBuilderSetTextures(&window_builder, WINDOW_TEXTURES, list);
+    win.window_up = nvn.nvn.nvnWindowInitialize(&win.window, &window_builder);
+    if (!win.window_up) {
+        snprintf(why, why_size, "nvnWindowInitialize: %s", Why("false"));
+        WindowDown();
+        return false;
+    }
+    return true;
+}
+
+/// Clears window texture @p index to @p rgba and presents it.
+static void ClearAndPresent(int index, const float rgba[4]) {
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    RecordClear(&win.textures[index], WINDOW_WIDTH, WINDOW_HEIGHT, rgba);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueuePresentTexture(&nvn.queue, &win.window, index);
+}
+
+/// A texture of the window through the queue's acquire: its index, or -1 with the answer in
+/// @p why.
+static int Acquire(const char *when, char *why, size_t why_size) {
+    int index = -1;
+    const NVNqueueAcquireTextureResult got =
+        nvn.nvn.nvnQueueAcquireTexture(&nvn.queue, &win.window, &index);
+    if (got != NVN_QUEUE_ACQUIRE_TEXTURE_RESULT_SUCCESS || index < 0 ||
+        index >= WINDOW_TEXTURES) {
+        snprintf(why, why_size, "%s: nvnQueueAcquireTexture answered %d with texture %d of %d: "
+                 "%s",
+                 when, (int)got, index, WINDOW_TEXTURES, Why("no reason given"));
+        return -1;
+    }
+    return index;
+}
+
+/// The window's two textures, each acquired, cleared and presented once. Nothing is read back:
+/// what reaches the screen is the compositor's, and the case says only whether every step came
+/// back as NVN promises. False with the step in @p why.
+static bool Present(char *why, size_t why_size) {
+    // Two frames, so that both textures go round once: a cleared green, then a cleared blue.
+    static const float colours[WINDOW_TEXTURES][4] = { { 0.0f, 1.0f, 0.0f, 1.0f },
+                                                       { 0.0f, 0.0f, 1.0f, 1.0f } };
+    static const char *const frames[WINDOW_TEXTURES] = { "frame 0", "frame 1" };
+    bool ok = true;
+    for (int frame = 0; ok && frame < WINDOW_TEXTURES; ++frame) {
+        const int index = Acquire(frames[frame], why, why_size);
+        ok = index >= 0;
+        if (ok) {
+            ClearAndPresent(index, colours[frame]);
+        }
+    }
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    if (ok && NvnLayerError()[0] != '\0') {
+        snprintf(why, why_size, "%s", NvnLayerError());
+        ok = false;
+    }
+    return ok;
+}
+
+/// What a window builder keeps comes back from it: the device, the native window, each texture
+/// and how many, the present interval and the number of textures the window is to hand in
+/// turn. The builder makes no window, and its three textures are only named.
+static void WindowBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNtexture named[3];
+    NVNtexture *const list[3] = { &named[0], &named[1], &named[2] };
+    _Alignas(8) NVNwindowBuilder builder;
+    nvn.nvn.nvnWindowBuilderSetDefaults(&builder);
+    nvn.nvn.nvnWindowBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnWindowBuilderSetNativeWindow(&builder, nwindowGetDefault());
+    nvn.nvn.nvnWindowBuilderSetTextures(&builder, 3, list);
+    nvn.nvn.nvnWindowBuilderSetPresentInterval(&builder, 2);
+    nvn.nvn.nvnWindowBuilderSetNumActiveTextures(&builder, 2);
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnWindowBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's native window",
+          (long long)(uintptr_t)nvn.nvn.nvnWindowBuilderGetNativeWindow(&builder),
+          (long long)(uintptr_t)nwindowGetDefault());
+    Gives(why, sizeof(why), "the builder's number of textures",
+          nvn.nvn.nvnWindowBuilderGetNumTextures(&builder), 3);
+    static const char *const which[3] = { "the builder's texture 0", "the builder's texture 1",
+                                          "the builder's texture 2" };
+    for (int i = 0; i < 3; ++i) {
+        Gives(why, sizeof(why), which[i],
+              (long long)(uintptr_t)nvn.nvn.nvnWindowBuilderGetTexture(&builder, i),
+              (long long)(uintptr_t)list[i]);
+    }
+    Gives(why, sizeof(why), "the builder's present interval",
+          nvn.nvn.nvnWindowBuilderGetPresentInterval(&builder), 2);
+    Gives(why, sizeof(why), "the builder's number of active textures",
+          nvn.nvn.nvnWindowBuilderGetNumActiveTextures(&builder), 2);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The window up: what it says of itself, and that a number of active textures, a present
+/// interval and a crop set on it come back. A frame is presented under the crop and the
+/// interval, and the window is left as it was made.
+static void WindowSaysCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    Gives(why, sizeof(why), "the window's native window",
+          (long long)(uintptr_t)nvn.nvn.nvnWindowGetNativeWindow(&win.window),
+          (long long)(uintptr_t)nwindowGetDefault());
+    Gives(why, sizeof(why), "the window's number of textures",
+          nvn.nvn.nvnWindowGetNumTextures(&win.window), WINDOW_TEXTURES);
+    nvn.nvn.nvnWindowSetNumActiveTextures(&win.window, 1);
+    Gives(why, sizeof(why), "the window's number of active textures after 1 was set",
+          nvn.nvn.nvnWindowGetNumActiveTextures(&win.window), 1);
+    nvn.nvn.nvnWindowSetNumActiveTextures(&win.window, WINDOW_TEXTURES);
+    Gives(why, sizeof(why), "the window's number of active textures after all were set",
+          nvn.nvn.nvnWindowGetNumActiveTextures(&win.window), WINDOW_TEXTURES);
+    nvn.nvn.nvnWindowSetPresentInterval(&win.window, 2);
+    Gives(why, sizeof(why), "the window's present interval",
+          nvn.nvn.nvnWindowGetPresentInterval(&win.window), 2);
+    nvn.nvn.nvnWindowSetCrop(&win.window, 16, 8, 640, 360);
+    NVNrectangle crop = { -1, -1, -1, -1 };
+    nvn.nvn.nvnWindowGetCrop(&win.window, &crop);
+    Gives(why, sizeof(why), "the crop's x", crop.x, 16);
+    Gives(why, sizeof(why), "the crop's y", crop.y, 8);
+    Gives(why, sizeof(why), "the crop's width", crop.width, 640);
+    Gives(why, sizeof(why), "the crop's height", crop.height, 360);
+    // One frame as the window now is: a quarter of a cleared texture, shown for two refreshes.
+    static const float cyan[4] = { 0.0f, 1.0f, 1.0f, 1.0f };
+    char step[160] = "";
+    const int index = Acquire("under the crop", step, sizeof(step));
+    if (index >= 0) {
+        ClearAndPresent(index, cyan);
+    } else if (why[0] == '\0') {
+        snprintf(why, sizeof(why), "%s", step);
+    }
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnWindowSetPresentInterval(&win.window, 1);
+    Gives(why, sizeof(why), "the window's present interval set back",
+          nvn.nvn.nvnWindowGetPresentInterval(&win.window), 1);
+    nvn.nvn.nvnWindowSetCrop(&win.window, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+    nvn.nvn.nvnWindowGetCrop(&win.window, &crop);
+    Gives(why, sizeof(why), "the whole texture's crop width", crop.width, WINDOW_WIDTH);
+    Gives(why, sizeof(why), "the whole texture's crop height", crop.height, WINDOW_HEIGHT);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The window's own acquire, which hands a texture at once with a sync that signals when the
+/// display has let it go: the program waits for the sync itself, where nvnQueueAcquireTexture
+/// has the queue wait. The texture is then cleared and presented.
+static void WindowSyncCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static _Alignas(8) NVNsync sync;
+    if (!nvn.nvn.nvnSyncInitialize(&sync, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnSyncInitialize answered false"));
+        return;
+    }
+    int index = -1;
+    const NVNwindowAcquireTextureResult got =
+        nvn.nvn.nvnWindowAcquireTexture(&win.window, &sync, &index);
+    const bool acquired = got == NVN_WINDOW_ACQUIRE_TEXTURE_RESULT_SUCCESS && index >= 0 &&
+                          index < WINDOW_TEXTURES;
+    NVNsyncWaitResult wait = NVN_SYNC_WAIT_RESULT_FAILED;
+    if (acquired) {
+        wait = nvn.nvn.nvnSyncWait(&sync, SYNC_WAIT_NS);
+        static const float magenta[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+        ClearAndPresent(index, magenta);
+    }
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnSyncFinalize(&sync);
+    const bool free_now = wait == NVN_SYNC_WAIT_RESULT_ALREADY_SIGNALED ||
+                          wait == NVN_SYNC_WAIT_RESULT_CONDITION_SATISFIED;
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, acquired && free_now && NvnLayerError()[0] == '\0',
+               "nvnWindowAcquireTexture answered %d with texture %d of %d; its sync then "
+               "answered a wait of up to 10 s with %d (0 is signalled, 1 satisfied, 2 timed out, "
+               "3 failed, which is also what stands when nothing was acquired): %s",
+               (int)got, index, WINDOW_TEXTURES, (int)wait, Why("no reason given"));
+}
+
+#if NVN_LAYER_API >= 231
+// The Ounce's windows: a colour space and the HDR metadata of the display and of the content.
+
+/// The ten numbers of a display's metadata as the setters take them: the three primaries and
+/// the white point, each x then y, then the least and the greatest luminance.
+#define HDR_DISPLAY 10
+
+/// Keeps in @p why the first of @p got that is not @p want's bits.
+static void HdrGives(char *why, size_t why_size, const char *whose, const float *got,
+                     const float *want, int count) {
+    static const char *const part[HDR_DISPLAY + 2] = {
+        "red x", "red y", "green x", "green y", "blue x", "blue y", "white x", "white y",
+        "least luminance", "greatest luminance", "greatest content light level",
+        "greatest frame average light level" };
+    for (int i = 0; i < count; ++i) {
+        char what[96];
+        snprintf(what, sizeof(what), "%s %s, as bits,", whose, part[i]);
+        Gives(why, why_size, what, Bits(got[i]), Bits(want[i]));
+    }
+}
+
+/// What a new Ounce builder holds, as ScarletNX read it from an Ounce game's driver: colour
+/// space 0, Rec. 709's primaries with a D65 white point, 0.03 to 1000 nits, and content light
+/// levels of 200 and 60. Then a colour space and metadata set on it, none a default and every
+/// float exact, read back.
+static void WindowHdrBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static const float initial[HDR_DISPLAY + 2] = { 0.64f, 0.33f, 0.3f, 0.6f, 0.15f, 0.06f,
+                                                    0.3127f, 0.329f, 0.03f, 1000.0f, 200.0f,
+                                                    60.0f };
+    static const float set[HDR_DISPLAY + 2] = { 0.75f, 0.25f, 0.125f, 0.875f, 0.0625f, 0.03125f,
+                                                0.3125f, 0.328125f, 0.5f, 4000.0f, 1500.0f,
+                                                400.0f };
+    float got[HDR_DISPLAY + 2];
+    _Alignas(8) NVNwindowBuilder builder;
+    nvn.nvn.nvnWindowBuilderSetDefaults(&builder);
+    Gives(why, sizeof(why), "a new builder's colour space",
+          nvn.nvn.nvnWindowBuilderGetColorSpace(&builder), 0);
+    memset(got, 0, sizeof(got));
+    nvn.nvn.nvnWindowBuilderGetHdrDisplayMetadata(&builder, &got[0], &got[1], &got[2], &got[3],
+                                                  &got[4], &got[5], &got[6], &got[7], &got[8],
+                                                  &got[9]);
+    nvn.nvn.nvnWindowBuilderGetHdrContentMetadata(&builder, &got[10], &got[11]);
+    HdrGives(why, sizeof(why), "a new builder's", got, initial, HDR_DISPLAY + 2);
+    nvn.nvn.nvnWindowBuilderSetColorSpace(&builder, 1);
+    nvn.nvn.nvnWindowBuilderSetHdrDisplayMetadata(&builder, set[0], set[1], set[2], set[3],
+                                                  set[4], set[5], set[6], set[7], set[8],
+                                                  set[9]);
+    nvn.nvn.nvnWindowBuilderSetHdrContentMetadata(&builder, set[10], set[11]);
+    Gives(why, sizeof(why), "the builder's colour space",
+          nvn.nvn.nvnWindowBuilderGetColorSpace(&builder), 1);
+    memset(got, 0, sizeof(got));
+    nvn.nvn.nvnWindowBuilderGetHdrDisplayMetadata(&builder, &got[0], &got[1], &got[2], &got[3],
+                                                  &got[4], &got[5], &got[6], &got[7], &got[8],
+                                                  &got[9]);
+    nvn.nvn.nvnWindowBuilderGetHdrContentMetadata(&builder, &got[10], &got[11]);
+    HdrGives(why, sizeof(why), "the builder's", got, set, HDR_DISPLAY + 2);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
+/// The window's own metadata, set on it and read back, and put back to what a new builder has.
+static void WindowHdrCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static const float initial[HDR_DISPLAY + 2] = { 0.64f, 0.33f, 0.3f, 0.6f, 0.15f, 0.06f,
+                                                    0.3127f, 0.329f, 0.03f, 1000.0f, 200.0f,
+                                                    60.0f };
+    static const float set[HDR_DISPLAY + 2] = { 0.6875f, 0.3125f, 0.25f, 0.6875f, 0.125f,
+                                                0.0625f, 0.3125f, 0.34375f, 0.25f, 2000.0f,
+                                                800.0f, 300.0f };
+    float got[HDR_DISPLAY + 2];
+    memset(got, 0, sizeof(got));
+    nvn.nvn.nvnWindowGetHdrDisplayMetadata(&win.window, &got[0], &got[1], &got[2], &got[3],
+                                           &got[4], &got[5], &got[6], &got[7], &got[8], &got[9]);
+    nvn.nvn.nvnWindowGetHdrContentMetadata(&win.window, &got[10], &got[11]);
+    HdrGives(why, sizeof(why), "the window's, from a builder left as new,", got, initial,
+             HDR_DISPLAY + 2);
+    nvn.nvn.nvnWindowSetHdrDisplayMetadata(&win.window, set[0], set[1], set[2], set[3], set[4],
+                                           set[5], set[6], set[7], set[8], set[9]);
+    nvn.nvn.nvnWindowSetHdrContentMetadata(&win.window, set[10], set[11]);
+    memset(got, 0, sizeof(got));
+    nvn.nvn.nvnWindowGetHdrDisplayMetadata(&win.window, &got[0], &got[1], &got[2], &got[3],
+                                           &got[4], &got[5], &got[6], &got[7], &got[8], &got[9]);
+    nvn.nvn.nvnWindowGetHdrContentMetadata(&win.window, &got[10], &got[11]);
+    HdrGives(why, sizeof(why), "the window's", got, set, HDR_DISPLAY + 2);
+    nvn.nvn.nvnWindowSetHdrDisplayMetadata(&win.window, initial[0], initial[1], initial[2],
+                                           initial[3], initial[4], initial[5], initial[6],
+                                           initial[7], initial[8], initial[9]);
+    nvn.nvn.nvnWindowSetHdrContentMetadata(&win.window, initial[10], initial[11]);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+#endif
+
 /// The cases on the suite's own device, from the lookup to the window.
 static void LayerCases(void) {
     static const char *const RESOLVE = "the program's NVN functions resolve";
@@ -1691,13 +1955,29 @@ static void LayerCases(void) {
                                        "as another of that state alone";
     static const char *const DESCRIPTOR_POOLS = "the texture and sampler pools say where they "
                                                 "are, and a builder registers as its sampler";
+    static const char *const WINDOW_BUILDER = "a window builder gives back what it was set";
+    static const char *const WINDOW_SAYS = "a window says what it is of, and keeps the active "
+                                           "textures, the interval and the crop it is set";
+    static const char *const WINDOW_SYNC = "a texture the window hands with a sync is free "
+                                           "once the sync signals, and presents";
+#if NVN_LAYER_API >= 231
+    static const char *const WINDOW_HDR_BUILDER = "an Ounce window builder starts with the "
+                                                  "driver's colour space and HDR metadata, "
+                                                  "and gives back what it is set";
+    static const char *const WINDOW_HDR = "an Ounce window has its builder's HDR metadata, and "
+                                          "gives back what it is set";
+#endif
     const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
                                          UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT,
                                          SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
-                                         BUFFER_RANGE, BUFFER_COPY, WINDOW };
+                                         BUFFER_RANGE, BUFFER_COPY, WINDOW_BUILDER,
+#if NVN_LAYER_API >= 231
+                                         WINDOW_HDR_BUILDER, WINDOW_HDR,
+#endif
+                                         WINDOW, WINDOW_SAYS, WINDOW_SYNC };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
 
     memset(&nvn, 0, sizeof(nvn));
@@ -1847,6 +2127,18 @@ static void LayerCases(void) {
         BufferCopyCase(BUFFER_COPY);
     }
 
+    WindowBuilderCase(WINDOW_BUILDER);
+#if NVN_LAYER_API >= 231
+    WindowHdrBuilderCase(WINDOW_HDR_BUILDER);
+#endif
+
+    // The cases that need the window up, after the one that brings it up.
+    const char *const ON_WINDOW[] = { WINDOW_SAYS, WINDOW_SYNC,
+#if NVN_LAYER_API >= 231
+                                      WINDOW_HDR,
+#endif
+    };
+    const size_t on_window = sizeof(ON_WINDOW) / sizeof(ON_WINDOW[0]);
 #if NVN_LAYER_API < 231
     const bool screen_up = ViewerScreenUp();
 #else
@@ -1857,13 +2149,31 @@ static void LayerCases(void) {
         // the screen is what Eden never came back from (the game suite says the same). The start
         // screen leaves it up to the run's end, noprogress or not; a quick run from the mode file
         // never opens it.
-        ReportSkip(SUITE, WINDOW, REPORT_REASON_UNAVAILABLE,
-                   "the program's screen holds the window: a run begun on the start screen keeps "
-                   "it up to its end, noprogress or not; quick in the mode file runs this case");
+        static const char *const HELD =
+            "the program's screen holds the window: a run begun on the start screen keeps it up "
+            "to its end, noprogress or not; quick in the mode file runs this case";
+        ReportSkip(SUITE, WINDOW, REPORT_REASON_UNAVAILABLE, HELD);
+        for (size_t i = 0; i < on_window; ++i) {
+            ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, HELD);
+        }
     } else if (ReportStart(SUITE, WINDOW)) {
         NvnLayerClearError();
-        const bool presented = Present(why, sizeof(why));
+        const bool window_up = WindowUp(why, sizeof(why));
+        const bool presented = window_up && Present(why, sizeof(why));
         CHECK_TRUE(SUITE, WINDOW, CHECK_NONE, presented, "%s", why);
+        if (!window_up) {
+            for (size_t i = 0; i < on_window; ++i) {
+                ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_DEPENDS,
+                           "the window did not come up");
+            }
+        } else {
+            WindowSaysCase(WINDOW_SAYS);
+            WindowSyncCase(WINDOW_SYNC);
+#if NVN_LAYER_API >= 231
+            WindowHdrCase(WINDOW_HDR);
+#endif
+        }
+        WindowDown();
     }
     TearDown();
 }

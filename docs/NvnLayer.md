@@ -42,11 +42,11 @@ set behind the version.
 
 | Part | Files | In which build |
 | --- | --- | --- |
-| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has thirteen names more (compute, storage buffers and images, the program builder, push constants, mesh draws) |
+| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has twenty three names more (compute, storage buffers and images, the program builder, push constants, mesh draws, a window's colour space and HDR metadata) |
 | the lookup: `nvnBootstrapLoader`, `nvnDeviceGetProcAddress`, `NvnLoadProcs` | `source/layer.c` | both |
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |
-| the types and the object sizes | `include/nvn/nvn.h` | both; the API 231 build adds the Ounce's objects |
+| the types and the object sizes | `include/nvn/nvn.h` | both; the API 231 build adds the Ounce's objects and its larger window builder |
 | NVN on deko3d: every function's body | `source/api55_deko3d.c`, `api55_draw.c` | API 55 |
 | a DKSH as an NVN program's code and control section | `source/api55_shader.c` | API 55 |
 | bodies that stop the program, naming the function | `source/api231_surface.c` | API 231 |
@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and thirty seven functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and fifty four functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -139,6 +139,12 @@ Two hundred and thirty seven functions, each recording the deko3d commands that 
   depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**;
 - **buffers**: a range of a memory pool, with the range's own address and mapping, what the buffer and its
   builder say of it, and the two cache calls, each deko3d's one call over the buffer's part of the pool;
+- **the rest of a window**: what it and its builder answer of themselves (the device, the native window, the
+  textures, which a builder keeps by copy); the present interval, deko3d's swap interval, on a builder and on a
+  window; the crop, deko3d's crop from NVN's corner and size; the number of active textures, which the layer only
+  keeps, refusing an acquire while it is fewer than the window has, since deko3d takes whichever texture the
+  display hands back; and `nvnWindowAcquireTexture`, deko3d's acquire that hands the display's fence, which becomes
+  the sync's;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

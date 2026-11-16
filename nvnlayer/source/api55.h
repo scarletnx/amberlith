@@ -285,16 +285,26 @@ typedef struct {
     uint32_t front : 1;
 } LayerPolygon;
 
+/// A builder keeps its textures themselves, as NVN's does: the program's list need not outlive
+/// the call that gave it. active is the textures the window hands in turn, 0 for all of them.
 typedef struct {
     NVNdevice *device;
     NVNnativeWindow native;
-    int count;
-    NVNtexture *const *textures;
+    NVNtexture *textures[WINDOW_TEXTURES_MAX];
+    int16_t count;
+    int16_t active;
+    int32_t interval;
 } LayerWindowBuilder;
 
 typedef struct {
     uint32_t magic;
     DkSwapchain swapchain;
+    NVNnativeWindow native;
+    int16_t count;
+    int16_t active;
+    int32_t interval;
+    /// x, y, width and height, as nvnWindowSetCrop took them.
+    int32_t crop[4];
 } LayerWindow;
 
 _Static_assert(sizeof(LayerDevice) <= sizeof(NVNdevice), "the device record fits NVNdevice");

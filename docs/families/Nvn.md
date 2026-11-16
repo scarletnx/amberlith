@@ -12,7 +12,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, forty one cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, forty four cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -56,7 +56,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and thirty seven.
+  and fifty four.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -152,11 +152,43 @@ The reference is the graphics unit running what the layer recorded, never the of
   that pool, the first written through `nvnBufferMap` and flushed (`nvnBufferFlushMappedRange`), a copy by the
   graphics unit between their addresses, and the second read through its mapping after
   `nvnBufferInvalidateMappedRange`. Every byte of the pool is judged, the ones around the buffers too.
+- **a window builder gives back what it was set** (exact): the device, the native window, three textures that
+  are only named, each by its place and how many, a present interval of two and two active textures. The builder
+  makes no window.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
   end, `noprogress` or not: a quick run from the mode file runs it, as the game family presents only then, and the
-  start screen says so when the file names nvn.
+  start screen says so when the file names nvn. The two cases after it use its window, and are skipped with it.
+- **a window says what it is of, and keeps the active textures, the interval and the crop it is set** (exact):
+  that window's native window and number of textures; `nvnWindowSetNumActiveTextures` with one and then with both,
+  `nvnWindowSetPresentInterval` with two and `nvnWindowSetCrop` with a quarter of the texture sixteen texels in,
+  each read back; one frame acquired, cleared and presented under that crop and interval; then the interval and
+  the crop set back to the whole texture, and read back.
+- **a texture the window hands with a sync is free once the sync signals, and presents** (exact):
+  `nvnWindowAcquireTexture`, the window's own acquire, which hands a texture at once and a sync for when the
+  display has let it go, where `nvnQueueAcquireTexture` has the queue wait. The answer is success with a texture
+  of the window, and `nvnSyncWait` on that sync within ten seconds is signalled or satisfied; the texture is then
+  cleared and presented.
+
+  What a window getter is held to is that it gives what the setter took. What a new window answers before
+  anything is set (its crop, its active textures) is the driver's, and no case holds a runtime to it. Nor does any
+  hold it to which textures a window with fewer active ones hands: deko3d takes whichever the display gives back,
+  so the layer refuses an acquire from such a window, and the case sets all of them active before it acquires.
+
+The Switch 2 program runs these and two more, of the Ounce's windows (API 231):
+
+- **an Ounce window builder starts with the driver's colour space and HDR metadata, and gives back what it is
+  set** (exact): a new builder has colour space 0, Rec. 709's primaries with a D65 white point, a display of 0.03
+  to 1000 nits and content light levels of 200 and 60, which is what ScarletNX read in an Ounce game's driver; then
+  a colour space, a display's ten numbers and a content's two, none of them a default and every float exact, come
+  back bit for bit.
+- **an Ounce window has its builder's HDR metadata, and gives back what it is set** (exact): the suite's window,
+  made from a builder left as new, answers those first numbers; `nvnWindowSetHdrDisplayMetadata` and
+  `nvnWindowSetHdrContentMetadata` with others come back bit for bit.
+
+  No machine but ScarletNX runs that program, so these two say that its API 231 windows keep the numbers; the
+  first numbers are its reading of the driver, which no console has been asked here.
 
 ## The scene, down three ways
 
