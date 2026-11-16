@@ -2085,6 +2085,180 @@ static void TexelsStridedCase(const char *name) {
                (unsigned)(first / TO), back[first], want_first, READ_PRESET);
 }
 
+// ---- the other texture targets, and the rest of a queue
+
+/// A texture of one row, an array of three layers and a 3D texture of four slices, each layer
+/// and slice given a picture of its own through a copy region's depth and read back from it.
+/// Every byte of the readback is judged, so a layer that took another's picture shows.
+static void TargetsCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    enum { SIDE = 16, LAYERS = 3, SLICES = 4, ROW = 64, KINDS = 3 };
+    static _Alignas(8) NVNtexture textures[KINDS];
+    static _Alignas(8) NVNmemoryPool pool;
+    static const struct {
+        NVNtextureTarget target;
+        int width, height, depth;
+        const char *what;
+    } KIND[KINDS] = {
+        { NVN_TEXTURE_TARGET_1D, ROW, 1, 1, "the 1D texture" },
+        { NVN_TEXTURE_TARGET_2D_ARRAY, SIDE, SIDE, LAYERS, "the 2D array" },
+        { NVN_TEXTURE_TARGET_3D, SIDE, SIDE, SLICES, "the 3D texture" },
+    };
+    char why[256] = "";
+    _Alignas(8) NVNtextureBuilder builders[KINDS];
+    size_t offsets[KINDS], total = 0;
+    for (int k = 0; k < KINDS; ++k) {
+        memset(&builders[k], 0, sizeof(builders[k]));
+        TextureBuilder(&builders[k], KIND[k].width, KIND[k].height, 0);
+        nvn.nvn.nvnTextureBuilderSetTarget(&builders[k], KIND[k].target);
+        if (KIND[k].target == NVN_TEXTURE_TARGET_1D) {
+            nvn.nvn.nvnTextureBuilderSetSize1D(&builders[k], KIND[k].width);
+        } else if (KIND[k].target == NVN_TEXTURE_TARGET_3D) {
+            nvn.nvn.nvnTextureBuilderSetSize3D(&builders[k], KIND[k].width, KIND[k].height,
+                                               KIND[k].depth);
+        } else {
+            nvn.nvn.nvnTextureBuilderSetDepth(&builders[k], KIND[k].depth);
+        }
+        const size_t size = nvn.nvn.nvnTextureBuilderGetStorageSize(&builders[k]);
+        const size_t alignment = nvn.nvn.nvnTextureBuilderGetStorageAlignment(&builders[k]);
+        if (size == 0u || alignment == 0u || alignment > POOL_PAGE) {
+            snprintf(why, sizeof(why), "%s has a storage of %zu bytes at an alignment of %zu: %s",
+                     KIND[k].what, size, alignment, Why("an answer no pool here can hold"));
+            ReportCase(SUITE, name, CHECK_NONE, false, why);
+            return;
+        }
+        offsets[k] = total;
+        total += RoundUp(size, POOL_PAGE);
+    }
+    void *storage = NULL;
+    bool pool_up = MakePool(&pool, &storage, total,
+                            NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+    int made = 0;
+    for (; pool_up && made < KINDS; ++made) {
+        nvn.nvn.nvnTextureBuilderSetStorage(&builders[made], &pool, (ptrdiff_t)offsets[made]);
+        if (!nvn.nvn.nvnTextureInitialize(&textures[made], &builders[made])) {
+            snprintf(why, sizeof(why), "nvnTextureInitialize of %s: %s", KIND[made].what,
+                     Why("false"));
+            break;
+        }
+    }
+    uint8_t *const stage = nvn.nvn.nvnMemoryPoolMap(&nvn.stage_pool);
+    uint8_t *const read = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    uint32_t wrong = 0, first = 0, bytes = 0;
+    uint8_t want_first = 0;
+    if (!pool_up || stage == NULL || read == NULL) {
+        snprintf(why, sizeof(why), "the targets' pool or a mapping: %s", Why("no memory, or false"));
+    } else if (made == KINDS) {
+        // Every layer's picture one after another in the staging pool, and read back the same.
+        uint32_t at = 0;
+        memset(read, READ_PRESET, READ_POOL_BYTES);
+        const NVNbufferAddress picture = nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.stage_pool);
+        const NVNbufferAddress readback = nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.read_pool);
+        nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+        nvn.nvn.nvnCommandBufferSetCopyRowStride(&nvn.command, 0);
+        for (int pass = 0; pass < 2; ++pass) {
+            at = 0;
+            for (int k = 0; k < KINDS; ++k) {
+                for (int z = 0; z < KIND[k].depth; ++z) {
+                    const NVNcopyRegion region = { 0, 0, z, KIND[k].width, KIND[k].height, 1 };
+                    const uint32_t size = (uint32_t)(KIND[k].width * KIND[k].height * 4);
+                    if (pass == 0) {
+                        for (int y = 0; y < KIND[k].height; ++y) {
+                            for (int x = 0; x < KIND[k].width; ++x) {
+                                LevelTexel((uint32_t)(k * 4 + z), (uint32_t)x, (uint32_t)y,
+                                           stage + at + (size_t)(y * KIND[k].width + x) * 4u);
+                            }
+                        }
+                        nvn.nvn.nvnCommandBufferCopyBufferToTexture(&nvn.command, picture + at,
+                                                                    &textures[k], NULL, &region,
+                                                                    NVN_COPY_FLAGS_NONE);
+                    } else {
+                        nvn.nvn.nvnCommandBufferCopyTextureToBuffer(&nvn.command, &textures[k],
+                                                                    NULL, &region, readback + at,
+                                                                    NVN_COPY_FLAGS_NONE);
+                    }
+                    at += size;
+                }
+            }
+            if (pass == 0) {
+                nvn.nvn.nvnCommandBufferBarrier(&nvn.command,
+                                                NVN_BARRIER_ORDER_PRIMITIVES_BIT |
+                                                    NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+            }
+        }
+        bytes = at;
+        const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+        nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+        nvn.nvn.nvnQueueFinish(&nvn.queue);
+        for (uint32_t i = 0; i < READ_POOL_BYTES; ++i) {
+            const uint8_t want = i < bytes ? stage[i] : READ_PRESET;
+            if (read[i] != want && wrong++ == 0u) {
+                first = i;
+                want_first = want;
+            }
+        }
+        if (NvnLayerError()[0] != '\0') {
+            snprintf(why, sizeof(why), "%s", NvnLayerError());
+        }
+    }
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    for (int k = 0; k < made; ++k) {
+        nvn.nvn.nvnTextureFinalize(&textures[k]);
+    }
+    DropPool(&pool, &storage, &pool_up);
+    if (why[0] != '\0') {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
+               "%u of %u bytes wrong; the first, byte %u of the %u that hold the 1D texture's "
+               "256, the array's three layers of 1024 and the 3D texture's four slices of 1024, "
+               "is 0x%02x, expected 0x%02x (0x%02x is a byte nothing copied)",
+               (unsigned)wrong, (unsigned)READ_POOL_BYTES, (unsigned)first, (unsigned)bytes,
+               read != NULL ? read[first] : 0u, want_first, READ_PRESET);
+}
+
+/// What a queue builder keeps of the memory, the priority and the primary queue a program
+/// gives it, and the memory a queue says it has used once its counts are reset.
+static void QueueRestCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static uint8_t memory[64];
+    _Alignas(8) NVNqueueBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnQueueBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnQueueBuilderSetDefaults(&builder);
+    nvn.nvn.nvnQueueBuilderSetQueueMemory(&builder, memory, 0x7000);
+    nvn.nvn.nvnQueueBuilderSetQueuePriority(&builder, 37);
+    nvn.nvn.nvnQueueBuilderSetPrimaryQueue(&builder, &nvn.queue);
+    Gives(why, sizeof(why), "the builder's queue memory",
+          (long long)(uintptr_t)nvn.nvn.nvnQueueBuilderGetMemory(&builder),
+          (long long)(uintptr_t)memory);
+    Gives(why, sizeof(why), "the builder's queue memory size",
+          (long long)nvn.nvn.nvnQueueBuilderGetMemorySize(&builder), 0x7000);
+    Gives(why, sizeof(why), "the builder's queue priority",
+          nvn.nvn.nvnQueueBuilderGetQueuePriority(&builder), 37);
+    // What a driver would need of the program for such a queue: its own number.
+    const long long needed = (long long)nvn.nvn.nvnQueueBuilderGetQueueMemorySize(&builder);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnQueueResetMemoryUsageCounts(&nvn.queue);
+    Gives(why, sizeof(why), "the command memory the queue used since its counts were reset",
+          (long long)nvn.nvn.nvnQueueGetTotalCommandMemoryUsed(&nvn.queue), 0);
+    Gives(why, sizeof(why), "the control memory the queue used since its counts were reset",
+          (long long)nvn.nvn.nvnQueueGetTotalControlMemoryUsed(&nvn.queue), 0);
+    Gives(why, sizeof(why), "the compute memory the queue used since its counts were reset",
+          (long long)nvn.nvn.nvnQueueGetTotalComputeMemoryUsed(&nvn.queue), 0);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0',
+               "%s (the queue memory a queue of the builder needs, a driver's own: %lld)",
+               why[0] != '\0' ? why : NvnLayerError(), needed);
+}
+
 // ---- the debug layer's calls
 
 /// How often the debug callback and the database walk were called.
@@ -2719,6 +2893,10 @@ static void LayerCases(void) {
                                              "which of its sizes were set";
     static const char *const EVENT = "an event keeps what the processor signals: a write, an "
                                      "add and an add that wraps";
+    static const char *const TARGETS = "a 1D texture, each layer of an array and each slice "
+                                       "of a 3D texture keep a picture of their own";
+    static const char *const QUEUE_REST = "a queue builder gives back its memory and priority, "
+                                          "and a queue's memory counts are nought once reset";
     static const char *const TEXTURE_MORE = "a texture builder and a view give back their "
                                             "swizzle, depth and stencil mode and the rest";
     static const char *const TEXTURE_SELF = "a texture says its swizzle, storage and address, "
@@ -2778,6 +2956,7 @@ static void LayerCases(void) {
                                          BLEND_STATE, COLOR_STATE, DEPTH_STENCIL_STATE,
                                          MULTISAMPLE_STATE, POLYGON_VERTEX_STATE,
                                          TEXTURE_MORE, TEXTURE_SELF, TEXELS, TEXELS_STRIDED,
+                                         TARGETS, QUEUE_REST,
                                          WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
@@ -2952,6 +3131,12 @@ static void LayerCases(void) {
         TexelsCase(TEXELS);
         TexelsStridedCase(TEXELS_STRIDED);
     }
+    if (!nvn.stage_pool_up) {
+        ReportSkip(SUITE, TARGETS, REPORT_REASON_DEPENDS, "the staging pool did not come up");
+    } else {
+        TargetsCase(TARGETS);
+    }
+    QueueRestCase(QUEUE_REST);
 
     DebugCase(DEBUG);
     WindowBuilderCase(WINDOW_BUILDER);

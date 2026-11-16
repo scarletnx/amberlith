@@ -66,7 +66,12 @@ typedef struct {
     NVNdevice *device;
     int flags;
     uint32_t set;
-    size_t sizes[QUEUE_SIZES];
+    /// 32 bits each, as a driver keeps them.
+    uint32_t sizes[QUEUE_SIZES];
+    void *memory;
+    size_t memory_size;
+    int priority;
+    NVNqueue *primary;
 } LayerQueueBuilder;
 
 /// A sync is as large as deko3d's fence, with no room for the layer's own words beside it: the

@@ -22,7 +22,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty one cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty three cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -66,7 +66,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
-  and seventy two.
+  and eighty five.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -199,6 +199,14 @@ The reference is the graphics unit running what the layer recorded, never the of
 - **a part of a texture written and read with row strides keeps the bytes between rows** (exact): a 16 by 8 part
   at (8, 4), `nvnTextureWriteTexelsStrided` from rows 80 bytes apart and `nvnTextureReadTexelsStrided` into rows
   96 apart, the bytes between the destination's rows as they were.
+- **a 1D texture, each layer of an array and each slice of a 3D texture keep a picture of their own** (exact): a
+  texture of 64 texels in a row (`nvnTextureBuilderSetSize1D`), a 16x16 array of three layers and a 16x16x4
+  texture (`nvnTextureBuilderSetSize3D`), each layer and slice copied into through a copy region's depth and read
+  back from it, every byte of the readback judged.
+- **a queue builder gives back its memory and priority, and a queue's memory counts are nought once reset**
+  (exact): `nvnQueueBuilderSetQueueMemory`, `SetQueuePriority` and `SetPrimaryQueue` with their getters, and the
+  command, control and compute memory a queue has used right after `nvnQueueResetMemoryUsageCounts`. What the
+  counts come to after work is a driver's own, as the queue memory a builder asks for is, and held to nothing.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
