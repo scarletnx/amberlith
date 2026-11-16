@@ -393,7 +393,7 @@ int Nvnl_nvnQueueBuilderGetFlags(const NVNqueueBuilder *builder) {
         LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSet" #name);            \
         if (record != NULL) {                                                                     \
             record->set |= 1u << (which);                                                         \
-            record->sizes[which] = size;                                                          \
+            record->sizes[which] = (uint32_t)size;                                                \
         }                                                                                         \
     }                                                                                             \
     NVNboolean Nvnl_nvnQueueBuilderGet##name(const NVNqueueBuilder *builder, int *size) {         \
@@ -407,6 +407,75 @@ QUEUE_SIZE(ComputeMemorySize, QUEUE_SIZE_COMPUTE)
 QUEUE_SIZE(ControlMemorySize, QUEUE_SIZE_CONTROL)
 QUEUE_SIZE(CommandFlushThreshold, QUEUE_SIZE_FLUSH)
 #undef QUEUE_SIZE
+
+// The memory a program gives a queue, its priority and its primary queue are a driver's to use:
+// deko3d's queue keeps its own memory and has neither of the others. The builder keeps what it
+// is given, and a queue is made the same whatever they are.
+
+void Nvnl_nvnQueueBuilderSetQueueMemory(NVNqueueBuilder *builder, void *memory, size_t size) {
+    LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSetQueueMemory");
+    if (record != NULL) {
+        record->memory = memory;
+        record->memory_size = size;
+    }
+}
+
+void *Nvnl_nvnQueueBuilderGetMemory(const NVNqueueBuilder *builder) {
+    const LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderGetMemory");
+    return record != NULL ? record->memory : NULL;
+}
+
+size_t Nvnl_nvnQueueBuilderGetMemorySize(const NVNqueueBuilder *builder) {
+    const LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderGetMemorySize");
+    return record != NULL ? record->memory_size : 0;
+}
+
+size_t Nvnl_nvnQueueBuilderGetQueueMemorySize(const NVNqueueBuilder *builder) {
+    // What a queue made from the builder needs of the program: nothing, under deko3d.
+    (void)Record(builder, "nvnQueueBuilderGetQueueMemorySize");
+    return 0;
+}
+
+void Nvnl_nvnQueueBuilderSetQueuePriority(NVNqueueBuilder *builder, int priority) {
+    LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSetQueuePriority");
+    if (record != NULL) {
+        record->priority = priority;
+    }
+}
+
+int Nvnl_nvnQueueBuilderGetQueuePriority(const NVNqueueBuilder *builder) {
+    const LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderGetQueuePriority");
+    return record != NULL ? record->priority : 0;
+}
+
+void Nvnl_nvnQueueBuilderSetPrimaryQueue(NVNqueueBuilder *builder, NVNqueue *primary) {
+    LayerQueueBuilder *const record = Record(builder, "nvnQueueBuilderSetPrimaryQueue");
+    if (record != NULL) {
+        record->primary = primary;
+    }
+}
+
+// The queue memory a driver has used since the counts were reset. deko3d's queue takes none of
+// the program's and counts none: nought, always.
+
+size_t Nvnl_nvnQueueGetTotalCommandMemoryUsed(NVNqueue *queue) {
+    (void)QueueOf(queue, "nvnQueueGetTotalCommandMemoryUsed");
+    return 0;
+}
+
+size_t Nvnl_nvnQueueGetTotalControlMemoryUsed(NVNqueue *queue) {
+    (void)QueueOf(queue, "nvnQueueGetTotalControlMemoryUsed");
+    return 0;
+}
+
+size_t Nvnl_nvnQueueGetTotalComputeMemoryUsed(NVNqueue *queue) {
+    (void)QueueOf(queue, "nvnQueueGetTotalComputeMemoryUsed");
+    return 0;
+}
+
+void Nvnl_nvnQueueResetMemoryUsageCounts(NVNqueue *queue) {
+    (void)QueueOf(queue, "nvnQueueResetMemoryUsageCounts");
+}
 
 // ---- syncs
 
@@ -1171,6 +1240,25 @@ void Nvnl_nvnTextureBuilderSetSize2D(NVNtextureBuilder *builder, int width, int 
     }
 }
 
+void Nvnl_nvnTextureBuilderSetSize1D(NVNtextureBuilder *builder, int width) {
+    LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetSize1D");
+    if (record != NULL) {
+        record->width = width;
+        record->height = 1;
+        record->depth = 1;
+    }
+}
+
+void Nvnl_nvnTextureBuilderSetSize3D(NVNtextureBuilder *builder, int width, int height,
+                                     int depth) {
+    LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetSize3D");
+    if (record != NULL) {
+        record->width = width;
+        record->height = height;
+        record->depth = depth;
+    }
+}
+
 void Nvnl_nvnTextureBuilderSetStorage(NVNtextureBuilder *builder, NVNmemoryPool *pool,
                                              ptrdiff_t offset) {
     LayerTextureBuilder *const record = Record(builder, "nvnTextureBuilderSetStorage");
@@ -1393,9 +1481,31 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
     if (device == NULL) {
         return false;
     }
-    if (builder->target != NVN_TEXTURE_TARGET_2D) {
-        LayerComplain("%s: texture target %d, and the layer takes 2D (%d) only", what,
-                      (int)builder->target, (int)NVN_TEXTURE_TARGET_2D);
+    // The targets, with whether the depth is theirs to have: an array's layers or a 3D
+    // texture's slices.
+    DkImageType type = DkImageType_None;
+    bool deep = false;
+    switch (builder->target) {
+    case NVN_TEXTURE_TARGET_1D:
+        type = DkImageType_1D;
+        break;
+    case NVN_TEXTURE_TARGET_2D:
+        type = DkImageType_2D;
+        break;
+    case NVN_TEXTURE_TARGET_2D_ARRAY:
+        type = DkImageType_2DArray;
+        deep = true;
+        break;
+    case NVN_TEXTURE_TARGET_3D:
+        type = DkImageType_3D;
+        deep = true;
+        break;
+    default:
+        LayerComplain("%s: texture target %d, and the layer takes 1D (%d), 2D (%d), 2D array (%d) "
+                      "and 3D (%d)",
+                      what, (int)builder->target, (int)NVN_TEXTURE_TARGET_1D,
+                      (int)NVN_TEXTURE_TARGET_2D, (int)NVN_TEXTURE_TARGET_2D_ARRAY,
+                      (int)NVN_TEXTURE_TARGET_3D);
         return false;
     }
     const DkImageFormat format = FormatOf(builder->format);
@@ -1426,21 +1536,29 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
                       builder->levels, builder->width, builder->height, most);
         return false;
     }
-    if (builder->depth != 1 || builder->samples > 1 || builder->samples < 0) {
-        LayerComplain("%s: a depth of %d and %d samples, and the layer takes a depth of 1 and no "
-                      "multisampling (0 or 1 samples) yet",
-                      what, builder->depth, builder->samples);
+    if (builder->depth < 1 || (!deep && builder->depth != 1) ||
+        (type == DkImageType_1D && builder->height != 1) || builder->samples > 1 ||
+        builder->samples < 0) {
+        LayerComplain("%s: a %dx%dx%d texture of target %d with %d samples, where a depth past 1 "
+                      "is an array's or a 3D texture's, a 1D texture is one row, and the layer "
+                      "does no multisampling (0 or 1 samples) yet",
+                      what, builder->width, builder->height, builder->depth, (int)builder->target,
+                      builder->samples);
         return false;
     }
     DkImageLayoutMaker maker;
     dkImageLayoutMakerDefaults(&maker, DeviceUse(device));
-    maker.type = DkImageType_2D;
+    maker.type = type;
     maker.format = format;
-    // Any NVN texture can be drawn into, and one of a colour format copied by either engine,
-    // so every one here says so: the 2D engine is where a mirrored copy goes.
-    maker.flags = DkImageFlags_UsageRender;
-    if (format == DkImageFormat_RGBA8_Unorm || format == DkImageFormat_BGRA8_Unorm) {
-        maker.flags |= DkImageFlags_Usage2DEngine;
+    // Any 2D NVN texture can be drawn into, and one of a colour format copied by either engine,
+    // so every one here says so: the 2D engine is where a mirrored copy goes. The other targets
+    // are copied into and out of, by the copy engine.
+    maker.flags = 0;
+    if (type == DkImageType_2D) {
+        maker.flags = DkImageFlags_UsageRender;
+        if (format == DkImageFormat_RGBA8_Unorm || format == DkImageFormat_BGRA8_Unorm) {
+            maker.flags |= DkImageFlags_Usage2DEngine;
+        }
     }
     if ((builder->flags & NVN_TEXTURE_FLAGS_DISPLAY) != 0) {
         maker.flags |= DkImageFlags_UsagePresent;
@@ -1450,6 +1568,7 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
     }
     maker.dimensions[0] = (uint32_t)builder->width;
     maker.dimensions[1] = (uint32_t)builder->height;
+    maker.dimensions[2] = (uint32_t)builder->depth;
     maker.mipLevels = (uint32_t)builder->levels;
     dkImageLayoutInitialize(layout, &maker);
     return true;

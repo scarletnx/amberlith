@@ -632,6 +632,24 @@
     X(void, nvnTextureInvalidateTexels,                                                           \
       (const NVNtexture *texture, const NVNtextureView *view, const NVNcopyRegion *region))
 
+// The other texture sizes, and the rest of a queue and its builder.
+#define NVN_LAYER_PROCS_REST(X)                                                                   \
+    X(void, nvnTextureBuilderSetSize1D, (NVNtextureBuilder * builder, int width))                 \
+    X(void, nvnTextureBuilderSetSize3D,                                                           \
+      (NVNtextureBuilder * builder, int width, int height, int depth))                            \
+    X(void, nvnQueueBuilderSetQueueMemory,                                                        \
+      (NVNqueueBuilder * builder, void *memory, size_t size))                                     \
+    X(void *, nvnQueueBuilderGetMemory, (const NVNqueueBuilder *builder))                         \
+    X(size_t, nvnQueueBuilderGetMemorySize, (const NVNqueueBuilder *builder))                     \
+    X(size_t, nvnQueueBuilderGetQueueMemorySize, (const NVNqueueBuilder *builder))                \
+    X(void, nvnQueueBuilderSetQueuePriority, (NVNqueueBuilder * builder, int priority))           \
+    X(int, nvnQueueBuilderGetQueuePriority, (const NVNqueueBuilder *builder))                     \
+    X(void, nvnQueueBuilderSetPrimaryQueue, (NVNqueueBuilder * builder, NVNqueue *primary))       \
+    X(size_t, nvnQueueGetTotalCommandMemoryUsed, (NVNqueue * queue))                              \
+    X(size_t, nvnQueueGetTotalControlMemoryUsed, (NVNqueue * queue))                              \
+    X(size_t, nvnQueueGetTotalComputeMemoryUsed, (NVNqueue * queue))                              \
+    X(void, nvnQueueResetMemoryUsageCounts, (NVNqueue * queue))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -728,7 +746,8 @@
     NVN_LAYER_PROCS_DEBUG(X)                                                                      \
     NVN_LAYER_PROCS_OBJECT(X)                                                                     \
     NVN_LAYER_PROCS_STATE_OBJECTS(X)                                                              \
-    NVN_LAYER_PROCS_TEXTURE_MORE(X)
+    NVN_LAYER_PROCS_TEXTURE_MORE(X)                                                               \
+    NVN_LAYER_PROCS_REST(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

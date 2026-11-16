@@ -48,6 +48,7 @@ LISTS = {"NVN_LAYER_PROCS_BASE": (55, 231), "NVN_LAYER_PROCS_TEXTURE": (55, 231)
          "NVN_LAYER_PROCS_OBJECT": (55, 231), "NVN_LAYER_PROCS_PROGRAM_231": (231,),
          "NVN_LAYER_PROCS_STATE_OBJECTS": (55, 231),
          "NVN_LAYER_PROCS_TEXTURE_MORE": (55, 231),
+         "NVN_LAYER_PROCS_REST": (55, 231),
          "NVN_LAYER_PROCS_DRAW": (55, 231), "NVN_LAYER_PROCS_231": (231,)}
 # What the layer carries outside its lists (nvnlayer_procs.h says why), in every build.
 BY_HAND = ("nvnBootstrapLoader", "nvnDeviceGetInteger", "nvnDeviceGetProcAddress")

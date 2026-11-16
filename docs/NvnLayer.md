@@ -130,13 +130,19 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and seventy two functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and eighty five functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
   mode, until the first object is made from the device. A mode set after that is refused, saying so.
-- **queues**, **memory pools** (shader code pools among them), **2D textures** of RGBA8, BGRA8, RGBA8UI, RGBA8I, 32-bit float
-  depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**;
+- **queues**, **memory pools** (shader code pools among them), **textures** of RGBA8, BGRA8, RGBA8UI, RGBA8I, 32-bit
+  float depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**. A texture is 2D,
+  1D, a 2D array or 3D; a 2D one can be drawn into and mirrored in a copy, the others are copied into and out of, a
+  layer or a slice at a time through a copy region's depth;
+- **the rest of a queue**: the queue memory, the priority and the primary queue a builder is given, kept and
+  given back, deko3d's queue having its own memory and neither of the others; a queue made from such a builder
+  needs no memory of the program (`nvnQueueBuilderGetQueueMemorySize` is nought) and says it has used none
+  (`nvnQueueGetTotalCommandMemoryUsed` and its two fellows), deko3d counting none;
 - **buffers**: a range of a memory pool, with the range's own address and mapping, what the buffer and its
   builder say of it, and the two cache calls, each deko3d's one call over the buffer's part of the pool;
 - **the rest of a window**: what it and its builder answer of themselves (the device, the native window, the
