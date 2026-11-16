@@ -63,7 +63,11 @@ void Nvnl_nvnProgramFinalize(NVNprogram *program) {
 
 NVNboolean Nvnl_nvnProgramSetShaders(NVNprogram *program, int count,
                                      const NVNshaderData *shaders) {
-    static const char *const WHAT = "nvnProgramSetShaders";
+    return LayerProgramSetShaders(program, count, shaders, "nvnProgramSetShaders");
+}
+
+NVNboolean LayerProgramSetShaders(NVNprogram *program, int count, const NVNshaderData *shaders,
+                                  const char *WHAT) {
     LayerProgram *const record = ProgramOf(program, WHAT);
     if (record == NULL) {
         return 0;

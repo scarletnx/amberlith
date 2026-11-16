@@ -77,5 +77,5 @@ NVNboolean Nvnl_nvnProgramSetShadersExt(NVNprogram *program, int count, const vo
     for (int i = 0; i < count; ++i) {
         plain[i] = ((const ShaderDataExt *)stages)[i].data;
     }
-    return Nvnl_nvnProgramSetShaders(program, count, plain);
+    return LayerProgramSetShaders(program, count, plain, "nvnProgramSetShadersExt");
 }
