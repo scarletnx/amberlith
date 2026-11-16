@@ -64,6 +64,15 @@ static void CloseScreen(void) {
     }
 }
 
+// Whether the running screen is what the window shows: the last frame drawn into it was that
+// screen's own. A demo's or a step's frames, the pad's screen and the listening screen take the
+// window from it, and B is not the running screen's to read until it has drawn again.
+static bool progress_shown;
+
+static void ProgressLostWindow(void) {
+    __atomic_store_n(&progress_shown, false, __ATOMIC_RELEASE);
+}
+
 static void ReadPad(PadState *pad) {
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(pad);
@@ -630,6 +639,7 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
         }
     }
     framebufferEnd(&screen);
+    ProgressLostWindow();
     if (!demo.on || demo.paused) {
         // A frame shown again under the menu is no new frame, and its time no frame's.
         demo.last = 0u;
@@ -661,6 +671,7 @@ static UiProgress progress;
 // The pad the running screen reads for B, which cancels a run a person attends.
 static PadState progress_pad;
 static bool progress_pad_open;
+static UiProgressCancel progress_cancel;
 static UiProgressCount progress_count;
 static uint64_t progress_began;
 static uint64_t progress_drawn;
@@ -677,11 +688,13 @@ static void ProgressDraw(bool step_began) {
     if (!progress_on || !screen_open || listen_open || pad_open) {
         return;
     }
-    if (progress_pad_open && !progress.quick && !progress.cancelling) {
-        // Held as well as pressed: between two cases is when this is read.
+    if (!__atomic_load_n(&progress_shown, __ATOMIC_ACQUIRE)) {
+        UiProgressCancelReset(&progress_cancel);
+    } else if (progress_pad_open && !progress.quick && !progress.cancelling) {
+        // Held, not newly pressed: between two cases is when this is read.
         padUpdate(&progress_pad);
-        if (((padGetButtonsDown(&progress_pad) | padGetButtons(&progress_pad)) &
-             HidNpadButton_B) != 0u) {
+        if (UiProgressCancelLook(&progress_cancel,
+                                 (padGetButtons(&progress_pad) & HidNpadButton_B) != 0u)) {
             ReportCancel();
             progress.cancelling = true;
             step_began = true;
@@ -711,6 +724,7 @@ static void ProgressDraw(bool step_began) {
         UiComposeProgress(&frame, &progress);
     }
     framebufferEnd(&screen);
+    __atomic_store_n(&progress_shown, true, __ATOMIC_RELEASE);
     progress_drawn = now;
     progress_drawn_once = true;
 }
@@ -741,6 +755,7 @@ void ViewerProgressBegin(const char *heading, const char *folder, uint32_t steps
     UiProgressCountReset(&progress_count);
     progress_began = armGetSystemTick();
     progress_drawn_once = false;
+    ProgressLostWindow();
     progress_on = true;
     ReportSetWatcher(ProgressWatch);
 }
@@ -811,6 +826,7 @@ void ViewerListenShow(UiListenScreen shown, double left, double right) {
     const UiFrame frame = { pixels, SCREEN_WIDTH, SCREEN_HEIGHT, stride };
     UiComposeListen(&frame, shown, left, right);
     framebufferEnd(&screen);
+    ProgressLostWindow();
     listen_screen = shown;
     listen_left = left;
     listen_right = right;
@@ -885,6 +901,7 @@ bool ViewerPadShow(const UiPadScreen *shown) {
         UiComposePad(&frame, shown);
     }
     framebufferEnd(&screen);
+    ProgressLostWindow();
     return true;
 }
 
@@ -910,6 +927,7 @@ bool ViewerTouchShow(const UiTouchScreen *shown) {
         UiComposeTouch(&frame, shown);
     }
     framebufferEnd(&screen);
+    ProgressLostWindow();
     return true;
 }
 
