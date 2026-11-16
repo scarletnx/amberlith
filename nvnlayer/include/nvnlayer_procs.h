@@ -15,8 +15,8 @@
 /// Three lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
-///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING and
-///   NVN_LAYER_PROCS_CLEAR, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING,
+///   NVN_LAYER_PROCS_CLEAR and NVN_LAYER_PROCS_STATE, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, a part of it written apart): the
@@ -307,6 +307,31 @@
     X(void, nvnCommandBufferDiscardColor, (NVNcommandBuffer * cmd, int index))                    \
     X(void, nvnCommandBufferDiscardDepthStencil, (NVNcommandBuffer * cmd))
 
+// The render state a list sets by itself: viewports and scissors by number, depth ranges and
+// bounds, the rasterizer's switches, the point size, the restart index, and the tiled cache.
+#define NVN_LAYER_PROCS_STATE(X)                                                                  \
+    X(void, nvnCommandBufferSetViewports,                                                         \
+      (NVNcommandBuffer * cmd, int first, int count, const float *rectangles))                    \
+    X(void, nvnCommandBufferSetScissors,                                                          \
+      (NVNcommandBuffer * cmd, int first, int count, const int *rectangles))                      \
+    X(void, nvnCommandBufferSetDepthRange, (NVNcommandBuffer * cmd, float near, float far))       \
+    X(void, nvnCommandBufferSetDepthRanges,                                                       \
+      (NVNcommandBuffer * cmd, int first, int count, const float *ranges))                        \
+    X(void, nvnCommandBufferSetViewportSwizzles,                                                  \
+      (NVNcommandBuffer * cmd, int first, int count, const NVNviewportSwizzle *swizzles))         \
+    X(void, nvnCommandBufferSetDepthBounds,                                                       \
+      (NVNcommandBuffer * cmd, NVNboolean enable, float least, float most))                       \
+    X(void, nvnCommandBufferSetRasterizerDiscard, (NVNcommandBuffer * cmd, NVNboolean discard))   \
+    X(void, nvnCommandBufferSetDepthClamp, (NVNcommandBuffer * cmd, NVNboolean clamp))            \
+    X(void, nvnCommandBufferSetProvokingVertexMode, (NVNcommandBuffer * cmd, int mode))           \
+    X(void, nvnCommandBufferSetPointSize, (NVNcommandBuffer * cmd, float size))                   \
+    X(void, nvnCommandBufferSetPrimitiveRestart,                                                  \
+      (NVNcommandBuffer * cmd, NVNboolean enable, int index))                                     \
+    X(void, nvnCommandBufferSetTiledCacheAction,                                                  \
+      (NVNcommandBuffer * cmd, NVNtiledCacheAction action))                                       \
+    X(void, nvnCommandBufferSetTiledCacheTileSize,                                                \
+      (NVNcommandBuffer * cmd, int width, int height))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -398,7 +423,8 @@
     NVN_LAYER_PROCS_WINDOW(X)                                                                     \
     NVN_LAYER_PROCS_COUNTER(X)                                                                    \
     NVN_LAYER_PROCS_RECORDING(X)                                                                  \
-    NVN_LAYER_PROCS_CLEAR(X)
+    NVN_LAYER_PROCS_CLEAR(X)                                                                      \
+    NVN_LAYER_PROCS_STATE(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

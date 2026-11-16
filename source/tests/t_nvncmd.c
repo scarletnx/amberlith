@@ -50,9 +50,16 @@ typedef struct {
     int program;
     DrawBuffer vertices;
     DrawBuffer move;
+    /// The same quads a whole depth range further from the eye: past the far plane.
+    DrawBuffer far;
     DrawBuffer paint;
     DrawBuffer page;
+    /// Vertices and indices of a case's own.
+    DrawBuffer own;
+    DrawBuffer indices;
 } Kit;
+
+#define OWN_VERTICES 32u
 
 /// Cell @p k's colour: no two cells alike in any channel but alpha, none the clear colour.
 static void CellColour(uint32_t k, uint8_t out[4]) {
@@ -96,7 +103,10 @@ static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *nam
     if (!DrawPathNvn(kit->path, &kit->nvn) || kit->program < 0 ||
         !DrawPathAlloc(kit->path, CELLS * 6u * (uint32_t)sizeof(GpuVertex), &kit->vertices) ||
         !DrawPathAlloc(kit->path, (uint32_t)sizeof(Move), &kit->move) ||
+        !DrawPathAlloc(kit->path, (uint32_t)sizeof(Move), &kit->far) ||
         !DrawPathAlloc(kit->path, (uint32_t)sizeof(Paint), &kit->paint) ||
+        !DrawPathAlloc(kit->path, OWN_VERTICES * (uint32_t)sizeof(GpuVertex), &kit->own) ||
+        !DrawPathAlloc(kit->path, 0x100u, &kit->indices) ||
         !DrawPathAlloc(kit->path, PAGE_BYTES, &kit->page)) {
         snprintf(detail, sizeof(detail), "bringing up what the case draws with through %s: %s",
                  DrawPathName(kind), DrawPathFailure(kit->path));
@@ -132,6 +142,8 @@ static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *nam
     const Move still = { { 0.0f, 0.0f, 0.0f, 0.0f } };
     // Mode 1 of the scene's fragment stage: the vertex's own colour.
     const Paint flat = { { 0.0f, 0.0f, 0.0f, 0.0f }, { 1, 0, 0, 0 } };
+    const Move beyond = { { 0.0f, 0.0f, 1.0f, 0.0f } };
+    memcpy(kit->far.bytes, &beyond, sizeof(beyond));
     memcpy(kit->move.bytes, &still, sizeof(still));
     memcpy(kit->paint.bytes, &flat, sizeof(flat));
     memset(kit->page.bytes, PAGE_PRESET, PAGE_BYTES);
@@ -170,10 +182,13 @@ static uint64_t PageWord(const Kit *kit, uint32_t at) {
     return word;
 }
 
-/// Ends the case: the target read and every pixel judged, a cell of @p drawn (a bit a cell)
-/// holding its colour and any other the clear colour, together with @p why, the case's own
-/// finding about what the list wrote to memory ("" for none). Takes the way down.
-static void KitJudge(Kit *kit, const char *name, uint32_t drawn, const char *why) {
+/// What a pixel has to hold.
+typedef void (*Expected)(uint32_t x, uint32_t y, uint8_t out[4]);
+
+/// Ends the case: the target read and every pixel judged against @p expected, together with
+/// @p why, the case's own finding about what the list wrote to memory ("" for none). Takes the
+/// way down.
+static void KitJudgeWith(Kit *kit, const char *name, Expected expected, const char *why) {
     const uint8_t *const pixels = DrawPathRead(kit->path);
     if (pixels == NULL || DrawPathFailure(kit->path)[0] != '\0') {
         char detail[400];
@@ -192,13 +207,8 @@ static void KitJudge(Kit *kit, const char *name, uint32_t drawn, const char *why
     uint8_t first_want[4] = { 0, 0, 0, 0 };
     for (uint32_t y = 0; y < SCENE_SIZE; ++y) {
         for (uint32_t x = 0; x < SCENE_SIZE; ++x) {
-            const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
             uint8_t want[4];
-            if ((drawn >> k & 1u) != 0u) {
-                CellColour(k, want);
-            } else {
-                memcpy(want, SCENE_CLEAR, 4);
-            }
+            expected(x, y, want);
             const uint8_t *const pixel = GpuPixel(pixels, SCENE_SIZE, x, y);
             const bool right = memcmp(pixel, want, 4) == 0;
             PictureSet(picture, x, y, want, right ? PICTURE_MATCHED : PICTURE_WRONG);
@@ -210,16 +220,34 @@ static void KitJudge(Kit *kit, const char *name, uint32_t drawn, const char *why
             }
         }
     }
-    const uint32_t cell = first_y / CELL * CELLS_ACROSS + first_x / CELL;
     CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u && why[0] == '\0',
-               "%s%s%u of %u pixels wrong; the first, (%u,%u) in cell %u, which is %s, holds "
-               "%02x%02x%02x%02x, expected %02x%02x%02x%02x",
+               "%s%s%u of %u pixels wrong; the first, (%u,%u) in cell %u, holds "
+               "%02x%02x%02x%02x, expected %02x%02x%02x%02x, which is %s",
                why, why[0] != '\0' ? "; " : "", (unsigned)wrong,
                (unsigned)(SCENE_SIZE * SCENE_SIZE), (unsigned)first_x, (unsigned)first_y,
-               (unsigned)cell, (drawn >> cell & 1u) != 0u ? "drawn" : "left clear", first[0],
-               first[1], first[2], first[3], first_want[0], first_want[1], first_want[2],
-               first_want[3]);
+               (unsigned)(first_y / CELL * CELLS_ACROSS + first_x / CELL), first[0], first[1],
+               first[2], first[3], first_want[0], first_want[1], first_want[2], first_want[3],
+               memcmp(first_want, SCENE_CLEAR, 4) == 0 ? "the clear colour" : "a cell's colour");
     DrawPathClose(kit->path);
+}
+
+/// The cells KitJudge expects drawn, a bit a cell.
+static uint32_t judged_cells;
+
+static void CellsExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    if ((judged_cells >> k & 1u) != 0u) {
+        CellColour(k, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+/// KitJudgeWith for a picture of whole cells: a cell of @p drawn (a bit a cell) holds its
+/// colour and any other the clear colour.
+static void KitJudge(Kit *kit, const char *name, uint32_t drawn, const char *why) {
+    judged_cells = drawn;
+    KitJudgeWith(kit, name, CellsExpected, why);
 }
 
 /// Ends the open list; false with the way's failure in @p why.
@@ -1048,6 +1076,303 @@ static void DiscardsCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 2, why);
 }
 
+// ---- the render state a list sets by itself
+
+/// A vertex of a case's own at a pixel boundary, in a cell's colour.
+static GpuVertex OwnVertex(uint32_t x, uint32_t y, uint32_t cell) {
+    uint8_t colour[4];
+    CellColour(cell, colour);
+    const GpuVertex vertex = { ClipX(x), ClipY(y), 0.5f, 0.0f, 0.0f, (float)colour[0] / 255.0f,
+                               (float)colour[1] / 255.0f, (float)colour[2] / 255.0f, 1.0f };
+    return vertex;
+}
+
+/// Binds the case's own vertices for the draws after it.
+static void OwnBound(Kit *kit) {
+    DrawPathVertices(kit->path, &kit->own, OWN_VERTICES * (uint32_t)sizeof(GpuVertex));
+}
+
+static void ViewsRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    static const int square[4] = { 4, 4, 8, 8 };
+    static const int whole[4] = { 0, 0, (int)SCENE_SIZE, (int)SCENE_SIZE };
+    static const float quarter[4] = { 32.0f, 32.0f, 32.0f, 32.0f };
+    static const float all[4] = { 0.0f, 0.0f, (float)SCENE_SIZE, (float)SCENE_SIZE };
+    n->nvnCommandBufferSetScissors(cmd, 0, 1, square);
+    KitCell(kit, 0);
+    n->nvnCommandBufferSetScissors(cmd, 0, 1, whole);
+    n->nvnCommandBufferSetViewports(cmd, 0, 1, quarter);
+    KitCell(kit, 0);
+    n->nvnCommandBufferSetViewports(cmd, 0, 1, all);
+    KitCell(kit, 15);
+}
+
+static void ViewsExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    if ((x >= 4u && x < 12u && y >= 4u && y < 12u) ||
+        (x >= 32u && x < 40u && y >= 32u && y < 40u)) {
+        CellColour(0, out);
+    } else if (x >= 48u && y >= 48u) {
+        CellColour(15, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+/// The scissors and the viewports set by number, one of each: cell 0's quad under a scissor of
+/// the eight pixels in its middle is that square alone; the same quad through a viewport of the
+/// target's lower right quarter is the quarter's own top left sixteenth, eight pixels a side at
+/// (32,32); and with both back over the whole target a cell is where it always is.
+static void ViewsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    ViewsRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudgeWith(&kit, name, ViewsExpected, why);
+}
+
+/// Into the open list, whose depth target holds 0.6 and whose depth test passes what is nearer:
+/// a cell under each depth range and each depth bounds. The quads are at 0.5 of the range.
+static void DepthsRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    static const float far_range[2] = { 0.9f, 1.0f };
+    static const float whole_range[2] = { 0.0f, 1.0f };
+    KitCell(kit, 0);
+    n->nvnCommandBufferSetDepthRange(cmd, 0.8f, 1.0f);
+    KitCell(kit, 1);
+    n->nvnCommandBufferSetDepthRange(cmd, 0.0f, 0.4f);
+    KitCell(kit, 2);
+    n->nvnCommandBufferSetDepthRanges(cmd, 0, 1, far_range);
+    KitCell(kit, 3);
+    n->nvnCommandBufferSetDepthRanges(cmd, 0, 1, whole_range);
+    KitCell(kit, 4);
+    n->nvnCommandBufferSetDepthBounds(cmd, 1, 0.7f, 1.0f);
+    KitCell(kit, 5);
+    n->nvnCommandBufferSetDepthBounds(cmd, 1, 0.5f, 0.7f);
+    KitCell(kit, 6);
+    n->nvnCommandBufferSetDepthBounds(cmd, 0, 0.7f, 1.0f);
+    KitCell(kit, 7);
+}
+
+/// A depth range moves a quad's depth before the test, and the depth bounds test what the
+/// target already holds: over a depth target of 0.6, a quad half way down its range is drawn
+/// with the range 0 to 1 or 0 to 0.4 and hidden with 0.8 to 1 or 0.9 to 1, whichever call set
+/// it; it is hidden while the bounds 0.7 to 1 are on, and drawn with 0.5 to 0.7, or with the
+/// bounds off.
+static void DepthsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpenWith(&kit, kind, true, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    DrawPathClearDepth(kit.path, 0.6f);
+    DrawPathDepth(kit.path, true, false);
+    DepthsRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 0 | 1u << 2 | 1u << 4 | 1u << 6 | 1u << 7, why);
+}
+
+/// Into the open list: a cell with the rasterizer off and one with it on; a cell past the far
+/// plane without the depth clamp and one with it; and two quads of the case's own, whose first
+/// and last vertices differ in colour, one under each provoking vertex.
+static void RasterRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferSetRasterizerDiscard(cmd, 1);
+    KitCell(kit, 0);
+    n->nvnCommandBufferSetRasterizerDiscard(cmd, 0);
+    KitCell(kit, 1);
+    DrawPathUniform(kit->path, DRAW_STAGE_VERTEX, 0, &kit->far, sizeof(Move));
+    n->nvnCommandBufferSetDepthClamp(cmd, 0);
+    KitCell(kit, 2);
+    n->nvnCommandBufferSetDepthClamp(cmd, 1);
+    KitCell(kit, 3);
+    n->nvnCommandBufferSetDepthClamp(cmd, 0);
+    DrawPathUniform(kit->path, DRAW_STAGE_VERTEX, 0, &kit->move, sizeof(Move));
+    OwnBound(kit);
+    n->nvnCommandBufferSetProvokingVertexMode(cmd, 0);
+    DrawPathDraw(kit->path, 0, 6);
+    n->nvnCommandBufferSetProvokingVertexMode(cmd, 1);
+    DrawPathDraw(kit->path, 6, 6);
+}
+
+/// The rasterizer's three switches: nothing is drawn while it discards; a quad past the far
+/// plane is clipped away, and drawn once the depth clamp holds it at the plane; and a
+/// triangle's flat colour is its first vertex's in mode 0 and its last's in mode 1. Cells 4 and
+/// 5 are each two triangles whose one vertex of the cell's colour is the first, or the last,
+/// the other two being another cell's.
+static void RasterCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    GpuVertex own[12];
+    for (uint32_t quad = 0; quad < 2u; ++quad) {
+        const uint32_t cell = 4u + quad;
+        const uint32_t x0 = cell % CELLS_ACROSS * CELL;
+        const uint32_t y0 = cell / CELLS_ACROSS * CELL;
+        // The corners, top left, top right, bottom right, bottom left, in another cell's colour.
+        GpuVertex corner[4] = { OwnVertex(x0, y0, 14), OwnVertex(x0 + CELL, y0, 14),
+                                OwnVertex(x0 + CELL, y0 + CELL, 14),
+                                OwnVertex(x0, y0 + CELL, 14) };
+        static const uint32_t order[6] = { 0, 1, 2, 0, 2, 3 };
+        for (uint32_t i = 0; i < 6u; ++i) {
+            GpuVertex vertex = corner[order[i]];
+            // The first vertex of each triangle for the first quad, the last for the second.
+            if (i % 3u == (quad == 0u ? 0u : 2u)) {
+                const GpuVertex mine = OwnVertex(0, 0, cell);
+                vertex.r = mine.r;
+                vertex.g = mine.g;
+                vertex.b = mine.b;
+            }
+            own[quad * 6u + i] = vertex;
+        }
+    }
+    memcpy(kit.own.bytes, own, sizeof(own));
+    KitBegin(&kit, true);
+    RasterRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 1 | 1u << 3 | 1u << 4 | 1u << 5, why);
+}
+
+static void PointRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferSetPointSize(kit->nvn.command, (float)CELL);
+    n->nvnCommandBufferDrawArrays(kit->nvn.command, NVN_DRAW_PRIMITIVE_POINTS, 0, 1);
+}
+
+/// A point of sixteen pixels at the middle of cell 2 is the cell: the square of that side
+/// around it, every pixel whose centre is inside.
+static void PointCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    const GpuVertex point = OwnVertex(2u * CELL + CELL / 2u, CELL / 2u, 2);
+    memcpy(kit.own.bytes, &point, sizeof(point));
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    PointRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 2, why);
+}
+
+#define RESTART_INDEX 0xffffu
+
+static void RestartRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferSetPrimitiveRestart(kit->nvn.command, 1, (int)RESTART_INDEX);
+    n->nvnCommandBufferDrawElements(kit->nvn.command, NVN_DRAW_PRIMITIVE_TRIANGLE_STRIP,
+                                    NVN_INDEX_TYPE_UNSIGNED_SHORT, 9, kit->indices.address);
+    n->nvnCommandBufferSetPrimitiveRestart(kit->nvn.command, 0, 0);
+}
+
+/// A triangle strip of nine indices whose fifth is the restart index is two strips: the quads
+/// of cells 8 and 10, with nothing drawn between them, where a strip that went on through the
+/// index would join them across cell 9.
+static void RestartCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    GpuVertex own[8];
+    static const uint32_t cells[2] = { 8, 10 };
+    for (uint32_t quad = 0; quad < 2u; ++quad) {
+        const uint32_t x0 = cells[quad] % CELLS_ACROSS * CELL;
+        const uint32_t y0 = cells[quad] / CELLS_ACROSS * CELL;
+        own[quad * 4u + 0u] = OwnVertex(x0, y0, cells[quad]);
+        own[quad * 4u + 1u] = OwnVertex(x0 + CELL, y0, cells[quad]);
+        own[quad * 4u + 2u] = OwnVertex(x0, y0 + CELL, cells[quad]);
+        own[quad * 4u + 3u] = OwnVertex(x0 + CELL, y0 + CELL, cells[quad]);
+    }
+    memcpy(kit.own.bytes, own, sizeof(own));
+    static const uint16_t indices[9] = { 0, 1, 2, 3, RESTART_INDEX, 4, 5, 6, 7 };
+    memcpy(kit.indices.bytes, indices, sizeof(indices));
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    RestartRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 8 | 1u << 10, why);
+}
+
+static void SwizzleRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    static const NVNviewportSwizzle swapped[4] = { NVN_VIEWPORT_SWIZZLE_POSITIVE_Y,
+                                                   NVN_VIEWPORT_SWIZZLE_POSITIVE_X,
+                                                   NVN_VIEWPORT_SWIZZLE_POSITIVE_Z,
+                                                   NVN_VIEWPORT_SWIZZLE_POSITIVE_W };
+    static const NVNviewportSwizzle straight[4] = { NVN_VIEWPORT_SWIZZLE_POSITIVE_X,
+                                                    NVN_VIEWPORT_SWIZZLE_POSITIVE_Y,
+                                                    NVN_VIEWPORT_SWIZZLE_POSITIVE_Z,
+                                                    NVN_VIEWPORT_SWIZZLE_POSITIVE_W };
+    n->nvnCommandBufferSetViewportSwizzles(kit->nvn.command, 0, 1, swapped);
+    KitCell(kit, 1);
+    n->nvnCommandBufferSetViewportSwizzles(kit->nvn.command, 0, 1, straight);
+    KitCell(kit, 0);
+}
+
+static void SwizzleExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    if (k == 11u) {
+        CellColour(1, out);
+    } else if (k == 0u) {
+        CellColour(0, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+/// A viewport swizzle that gives x the position's y and y its x turns cell 1's quad about the
+/// target's diagonal: with the top left origin the cases draw in, it lands on cell 11, in cell
+/// 1's colour. With the swizzle straight again a cell is where it always is.
+static void SwizzleCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    SwizzleRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudgeWith(&kit, name, SwizzleExpected, why);
+}
+
+static void TilesRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferSetTiledCacheTileSize(cmd, 64, 64);
+    n->nvnCommandBufferSetTiledCacheAction(cmd, NVN_TILED_CACHE_ACTION_FLUSH);
+    n->nvnCommandBufferSetTiledCacheAction(cmd, NVN_TILED_CACHE_ACTION_DISABLE);
+    KitCell(kit, 3);
+    n->nvnCommandBufferSetTiledCacheAction(cmd, NVN_TILED_CACHE_ACTION_ENABLE);
+    KitCell(kit, 4);
+    n->nvnCommandBufferSetTiledCacheAction(cmd, NVN_TILED_CACHE_ACTION_FLUSH);
+}
+
+/// The tiled cache is how the graphics unit orders its work, and no picture shows it: with a
+/// tile size set and the cache flushed, turned off and on around two draws, both cells are
+/// there as without it.
+static void TilesCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    TilesRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 3 | 1u << 4, why);
+}
+
 // ---- the cases, by way
 
 void NvnCommandFirst(void) {
@@ -1083,6 +1408,22 @@ void NvnCommandFirst(void) {
                                  "through the layer's own NVN functions");
     DiscardsCase(DRAW_PATH_LAYER, "targets discarded, then cleared and drawn, hold the clear "
                                   "and the draw, through the layer's own NVN functions");
+    ViewsCase(DRAW_PATH_LAYER, "a scissor and a viewport set by number bound and place a "
+                               "quad, through the layer's own NVN functions");
+    DepthsCase(DRAW_PATH_LAYER, "depth ranges move a quad across the depth test and depth "
+                                "bounds test the target's depth, through the layer's own NVN "
+                                "functions");
+    RasterCase(DRAW_PATH_LAYER, "the rasterizer discards, clamps depth and takes a flat colour "
+                                "from the provoking vertex, through the layer's own NVN "
+                                "functions");
+    PointCase(DRAW_PATH_LAYER, "a point of sixteen pixels fills its cell, through the layer's "
+                               "own NVN functions");
+    RestartCase(DRAW_PATH_LAYER, "a strip with a restart index is two quads, through the "
+                                 "layer's own NVN functions");
+    SwizzleCase(DRAW_PATH_LAYER, "a viewport swizzle of x and y turns a quad about the "
+                                 "diagonal, through the layer's own NVN functions");
+    TilesCase(DRAW_PATH_LAYER, "draws around the tiled cache's actions are as without them, "
+                               "through the layer's own NVN functions");
 }
 
 void NvnCommandLast(void) {
@@ -1118,4 +1459,19 @@ void NvnCommandLast(void) {
                                "through the NVN the program looks up");
     DiscardsCase(DRAW_PATH_NVN, "targets discarded, then cleared and drawn, hold the clear and "
                                 "the draw, through the NVN the program looks up");
+    ViewsCase(DRAW_PATH_NVN, "a scissor and a viewport set by number bound and place a quad, "
+                             "through the NVN the program looks up");
+    DepthsCase(DRAW_PATH_NVN, "depth ranges move a quad across the depth test and depth bounds "
+                              "test the target's depth, through the NVN the program looks up");
+    RasterCase(DRAW_PATH_NVN, "the rasterizer discards, clamps depth and takes a flat colour "
+                              "from the provoking vertex, through the NVN the program looks "
+                              "up");
+    PointCase(DRAW_PATH_NVN, "a point of sixteen pixels fills its cell, through the NVN the "
+                             "program looks up");
+    RestartCase(DRAW_PATH_NVN, "a strip with a restart index is two quads, through the NVN the "
+                               "program looks up");
+    SwizzleCase(DRAW_PATH_NVN, "a viewport swizzle of x and y turns a quad about the diagonal, "
+                               "through the NVN the program looks up");
+    TilesCase(DRAW_PATH_NVN, "draws around the tiled cache's actions are as without them, "
+                             "through the NVN the program looks up");
 }

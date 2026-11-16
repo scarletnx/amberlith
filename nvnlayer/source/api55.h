@@ -205,6 +205,28 @@ typedef struct {
     DkScissor scissor;
 } LayerTargets;
 
+// NVN's and deko3d's number of viewports.
+#define LAYER_VIEWPORTS 16
+
+/// What NVN sets by itself and deko3d takes with something else: a viewport's depth range,
+/// which deko3d takes with its rectangle, and three switches deko3d keeps in the rasterizer
+/// state it takes for NVN's polygon state. Each call records the whole of what it is part of
+/// (LayerBindRasterizer, LayerBindViewport).
+typedef struct {
+    /// The rectangle and the range of each viewport, the range 0 to 1 until ranged says it was
+    /// set (a bit a viewport).
+    DkViewport viewports[LAYER_VIEWPORTS];
+    uint16_t ranged;
+    /// The polygon state last bound, as nvnCommandBufferBindPolygonState took it.
+    uint8_t cull;
+    uint8_t front;
+    bool discard;
+    bool depth_clamp;
+    bool provoking_first;
+} LayerDynamic;
+
+/// Records @p record's rasterizer state from its polygon state and its switches, and viewport
+/// @p index from its rectangle and its range.
 /// What a command buffer keeps for its draws, too large for the NVN object: allocated with it.
 typedef struct {
     /// The part of the command memory the layer keeps to itself, where each draw's copy of the
@@ -225,6 +247,8 @@ typedef struct {
     LayerTargets targets;
     /// nvnCommandBufferSetCopyImageStride's, kept for its getter.
     ptrdiff_t copy_image_stride;
+    /// The state NVN sets by itself and deko3d takes together with another's (api55_command.c).
+    LayerDynamic dynamic;
 } LayerDraw;
 
 typedef struct {
@@ -234,6 +258,11 @@ typedef struct {
     uint32_t copy_row_stride;
     LayerDraw *draw;
 } LayerCommandBuffer;
+
+/// Records @p record's rasterizer state from its polygon state and its switches, and viewport
+/// @p index from its rectangle and its range (api55_command.c).
+void LayerBindRasterizer(const LayerCommandBuffer *record);
+void LayerBindViewport(const LayerCommandBuffer *record, int index);
 
 typedef struct {
     uint32_t magic;

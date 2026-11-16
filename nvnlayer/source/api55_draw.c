@@ -905,12 +905,9 @@ void Nvnl_nvnCommandBufferBindPolygonState(NVNcommandBuffer *cmd, const NVNpolyg
     if (record == NULL || from == NULL) {
         return;
     }
-    DkRasterizerState raster;
-    dkRasterizerStateDefaults(&raster);
-    // NVN's faces are deko3d's numbers, none 0 to both 3, and its front faces too.
-    raster.cullMode = (DkFace)from->cull;
-    raster.frontFace = (DkFrontFace)from->front;
-    dkCmdBufBindRasterizerState(record->cmdbuf, &raster);
+    record->draw->dynamic.cull = (uint8_t)from->cull;
+    record->draw->dynamic.front = (uint8_t)from->front;
+    LayerBindRasterizer(record);
 }
 
 /// deko3d's attribute size and type for an NVN format, or false for one the layer has not
