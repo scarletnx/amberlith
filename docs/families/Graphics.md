@@ -1136,8 +1136,13 @@ origin is signed, as the emulators read it (`maxwell_3d.h`, `DrawTexture`).
 
 ## query
 
-Twenty five cases and three notes. The samples passed counter over quads of whole
+Twenty six cases and three notes. The samples passed counter over quads of whole
 pixels, exact: 9600 for a 32 by 300 quad, 11200 with a second quad of 1600, nought after a reset.
+The graphics unit's timer, read through nvhost-ctrl-gpu's GET_GPU_TIME and through a timestamp
+report's word, each twice a quarter second of the processor's tick apart: both are held to 614.4
+MHz within 1% (switchbrew gives the ioctl's tick as 1.625 ns, and deko3d converts both by 625 /
+384), and the detail says each rate measured, which a console run turns into the hardware's
+answer.
 The target is 320 rows tall, past the 288 an emulator that scales render targets starts at, so a
 run with scaling at 2x says whether a game is handed the console's count or four times it (Ryujinx
 divides by the scale squared; a failing case names the factor). Then the render enable, which the
