@@ -22,7 +22,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and sixteen cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty one cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -66,7 +66,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
-  and thirty three.
+  and seventy two.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -182,6 +182,23 @@ The reference is the graphics unit running what the layer recorded, never the of
   leaves the one beside it; the grid of sixteen sample locations with eight raster samples is one pixel by two,
   which is ScarletNX's answer for a driver and the layer's too. No state here is bound: what a draw makes of the
   fields is for cases that draw with them.
+- **a texture builder and a view give back their swizzle, depth and stencil mode and the rest** (exact): the
+  channel swizzle, the depth and stencil mode, the stride, the GL texture name, the packaged texture's data and
+  the twelve bits of its layout a driver keeps, on a builder; the swizzle and the mode on a view, unset on a new
+  one.
+- **a texture says its swizzle, storage and address, and is the same as its twin alone** (exact): two 16x16
+  textures from one builder at one place: the swizzle the builder had, the builder's storage size, the levels
+  texture's address (its pool's and its offset), `nvnTextureCompare` for the twins and against the levels
+  texture, a view offset of nought for no view. Of a driver's own account three things are held to ScarletNX's
+  reading of a driver: raw storage class 2 for a colour format, a sparse tile of noughts for a texture that is
+  not sparse, and the width and height NVIDIA's surface starts with. The storage classes, the ZCull sizes and the
+  stride are asked and compared with nothing: a failing line carries them.
+- **texels the processor writes into a texture are what it and the graphics unit read back** (exact):
+  `nvnTextureWriteTexels` of a 64x64 picture, `nvnTextureFlushTexels`, the graphics unit's copy of the texture
+  to the readback pool, `nvnTextureInvalidateTexels` and `nvnTextureReadTexels`: both readbacks, every byte.
+- **a part of a texture written and read with row strides keeps the bytes between rows** (exact): a 16 by 8 part
+  at (8, 4), `nvnTextureWriteTexelsStrided` from rows 80 bytes apart and `nvnTextureReadTexelsStrided` into rows
+  96 apart, the bytes between the destination's rows as they were.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
