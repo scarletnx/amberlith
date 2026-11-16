@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <switch.h>
+
 #include "../check.h"
 #include "../gpu.h"
 #include "../rawref.h"
@@ -12,7 +14,8 @@
 #include "../shaders.h"
 #include "tests.h"
 
-// The samples passed counter and the render enable that reads counters back.
+// The samples passed counter, the render enable that reads counters back, and the timer reports
+// carry.
 //
 // Counts: quads whose edges sit on pixel edges, so the count is the rectangle's area and no
 // pixel centre is left to the coverage rule. The target is 320 rows tall, past the 288 an
@@ -27,6 +30,9 @@
 // finished before, since an emulator can take these apart (plain memory, a query synced at the
 // wait, a query from an earlier submission). CONDITIONAL, which looks at one address, gets notes
 // rather than cases: which bytes it reads is not settled.
+//
+// Timer: the graphics unit's timer through GET_GPU_TIME and a timestamp report, each read twice a
+// quarter second apart on the processor's tick, so a console run says the rate of both.
 
 static const char *const SUITE = "query";
 
@@ -160,6 +166,73 @@ static void CountCase(QueryContext *q, const char *name, CountShape shape, uint6
                got == want * 4u   ? " (four times: a target scaled by two each way)"
                : got == want * 9u ? " (nine times: a target scaled by three each way)"
                                   : "");
+}
+
+// ---- The graphics unit's timer
+
+/// The system tick's stretch between the timer case's two readings.
+#define TIMER_STRETCH_NS 250000000ull
+/// The rate both readings are held to: switchbrew's nvhost-ctrl-gpu GET_GPU_TIME is the timer's raw
+/// count, a tick every 1.625 ns, and deko3d turns a report's word and that count into nanoseconds
+/// alike, times 625 / 384: 384 ticks every 625 ns.
+#define TIMER_HZ 614400000.0
+/// How far from it a rate may be: the two readings are a list's drain and an ioctl apart, tens of
+/// microseconds of a 250 ms stretch.
+#define TIMER_TOLERANCE 0.01
+
+/// The graphics unit's timer read two ways, each twice, the system tick's TIMER_STRETCH_NS apart:
+/// nvhost-ctrl-gpu's GET_GPU_TIME (libnx's nvGpuGetTimestamp) and a timestamp report's word. Each
+/// one's rate is its count over the processor's tick, which the detail says whatever the verdict:
+/// on a console it is the hardware's answer.
+static void TimerCase(QueryContext *q, const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    DkGpuAddr address = 0;
+    Report *const reports = Reports(q, &address);
+    if (reports == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, "no scratch left for the reports");
+        return;
+    }
+    uint64_t ticks[2] = { 0, 0 };
+    uint64_t gpu_time[2] = { 0, 0 };
+    for (uint32_t i = 0; i < 2u; ++i) {
+        if (i == 1u) {
+            svcSleepThread((int64_t)TIMER_STRETCH_NS);
+        }
+        GpuBeginPass(&q->gpu);
+        dkCmdBufReportCounter(q->gpu.cmdbuf, DkCounter_Timestamp, address + i * sizeof(Report));
+        GpuSubmit(&q->gpu);
+        ticks[i] = armGetSystemTick();
+        const Result rc = nvGpuGetTimestamp(&gpu_time[i]);
+        if (R_FAILED(rc)) {
+            char why[96];
+            snprintf(why, sizeof(why), "GET_GPU_TIME failed with 0x%x", (unsigned)rc);
+            ReportCase(SUITE, name, CHECK_NONE, false, why);
+            return;
+        }
+    }
+    if (!q->gpu.ready) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   q->gpu.failure[0] != '\0' ? q->gpu.failure : "the lists were not recorded");
+        return;
+    }
+    const uint64_t freq = armGetSystemTickFreq();
+    const double seconds = (double)(ticks[1] - ticks[0]) / (double)freq;
+    const uint64_t counted = gpu_time[1] - gpu_time[0];
+    const uint64_t reported = reports[1].timestamp - reports[0].timestamp;
+    const double ioctl_hz = (double)counted / seconds;
+    const double report_hz = (double)reported / seconds;
+    const bool held = ioctl_hz > TIMER_HZ * (1.0 - TIMER_TOLERANCE) &&
+                      ioctl_hz < TIMER_HZ * (1.0 + TIMER_TOLERANCE) &&
+                      report_hz > TIMER_HZ * (1.0 - TIMER_TOLERANCE) &&
+                      report_hz < TIMER_HZ * (1.0 + TIMER_TOLERANCE);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_LEVEL, REPORT_FROM_SPEC, held,
+                    "over %" PRIu64 " system ticks at %" PRIu64 " Hz (%.6f s), GET_GPU_TIME counted %"
+                    PRIu64 " and the reports' words %" PRIu64 ": %.3f MHz and %.3f MHz, the ioctl's "
+                    "%.4f times the reports', where both are 614.4 MHz within 1%%",
+                    ticks[1] - ticks[0], freq, seconds, counted, reported, ioctl_hz / 1e6,
+                    report_hz / 1e6, report_hz > 0.0 ? ioctl_hz / report_hz : 0.0);
 }
 
 // ---- Render enable
@@ -355,6 +428,7 @@ void RunQuery(void) {
     CountCase(&q, "a second quad of 1600 pixels adds to the count, 11200", COUNT_TWO,
               Area(FIRST) + Area(SECOND));
     CountCase(&q, "a reset after a draw leaves a count of nought", COUNT_AFTER, 0u);
+    TimerCase(&q, "GET_GPU_TIME and a timestamp report count 614.4 MHz on the processor's tick");
 
     EnableCase(&q, "render enable FALSE skips the draw", VALUES_NONE, RAW_RENDER_FALSE, 0, 0,
                false, false);
