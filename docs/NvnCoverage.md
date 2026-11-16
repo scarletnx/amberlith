@@ -29,8 +29,8 @@
 <!-- Written by tools/nvn-coverage.py: change the cases, the layer or the tool, and run it. -->
 
 Which of the NVN functions ScarletNX answers a case of the probe calls. ScarletNX's `nvn.hook` at 3f7d34fadf3f
-names 677; the layer has 489 of them in its API 55 build and 539 in its API 231 build; a case calls 534. The
-other 143 have no call at all: a runtime could answer any of them wrongly and every case would still pass.
+names 677; the layer has 492 of them in its API 55 build and 542 in its API 231 build; a case calls 537. The
+other 140 have no call at all: a runtime could answer any of them wrongly and every case would still pass.
 
 ## How to read it
 
@@ -83,13 +83,13 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | [Counters and queries](#counters-and-queries) | 6 | 6 | 6 | 6 | 0 |
 | [Commands: memory and recording](#commands-memory-and-recording) | 25 | 22 | 22 | 22 | 3 |
 | [Commands: binds](#commands-binds) | 41 | 22 | 28 | 25 | 16 |
-| [Commands: draws and dispatches](#commands-draws-and-dispatches) | 26 | 7 | 18 | 18 | 8 |
+| [Commands: draws and dispatches](#commands-draws-and-dispatches) | 26 | 10 | 21 | 21 | 5 |
 | [Commands: clears and copies](#commands-clears-and-copies) | 25 | 18 | 18 | 18 | 7 |
 | [Commands: render state](#commands-render-state) | 36 | 23 | 23 | 23 | 13 |
 | [DLSS](#dlss) | 58 | 0 | 0 | 0 | 58 |
 | [Ray tracing](#ray-tracing) | 15 | 0 | 6 | 6 | 9 |
 | [Debug](#debug) | 44 | 36 | 42 | 42 | 2 |
-| **All** | **677** | **489** | **539** | **534** | **143** |
+| **All** | **677** | **492** | **542** | **537** | **140** |
 
 ## The cases
 
@@ -193,38 +193,39 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | nvn-96 | nvn | the scene of five draws bound through the looked up deferred calls holds what the processor works out | the NRO |
 | nvn-97 | nvn | the same four quads of an updated uniform buffer through the NVN the program looks up are each its own colour | the NRO |
 | nvn-98 | nvn | the same eight instances through the NVN the program looks up are each in its cell | the NRO |
-| nvn-99 | nvn | the samples counter reports a quad's 256 pixels and none after a reset, through the NVN the program looks up | the NRO |
-| nvn-100 | nvn | two values a list reports are in memory once it has run, through the NVN the program looks up | the NRO |
-| nvn-101 | nvn | two timestamp reports hold no count and times between the device's clock before and after, through the NVN the program looks up | the NRO |
-| nvn-102 | nvn | a timestamp report's word is the graphics unit's ticks, 384 every 625 nanoseconds, through the NVN the program looks up | the NRO |
-| nvn-103 | nvn | the render enable draws under on and under a condition that holds and skips the rest, through the NVN the program looks up | the NRO |
-| nvn-104 | nvn | a command buffer's memory used and free come to what it was given, and draws take some, through the NVN the program looks up | the NRO |
-| nvn-105 | nvn | a list out of command memory asks the program's callback and draws on, through the NVN the program looks up | the NRO |
-| nvn-106 | nvn | a list called from another and a list copied into it draw their cells, through the NVN the program looks up | the NRO |
-| nvn-107 | nvn | clears of an unsigned and a signed integer target hold the integers given, through the NVN the program looks up | the NRO |
-| nvn-108 | nvn | a clear of a texture that is no target reaches its region and its mask's channels, through the NVN the program looks up | the NRO |
-| nvn-109 | nvn | a range of a buffer cleared to a word holds it, and nothing beside the range, through the NVN the program looks up | the NRO |
-| nvn-110 | nvn | a command buffer gives back the copy strides it was set, through the NVN the program looks up | the NRO |
-| nvn-111 | nvn | targets discarded, then cleared and drawn, hold the clear and the draw, through the NVN the program looks up | the NRO |
-| nvn-112 | nvn | a scissor and a viewport set by number bound and place a quad, through the NVN the program looks up | the NRO |
-| nvn-113 | nvn | depth ranges move a quad across the depth test and depth bounds test the target's depth, through the NVN the program looks up | the NRO |
-| nvn-114 | nvn | the rasterizer discards, clamps depth and takes a flat colour from the provoking vertex, through the NVN the program looks up | the NRO |
-| nvn-115 | nvn | a point of sixteen pixels fills its cell, through the NVN the program looks up | the NRO |
-| nvn-116 | nvn | a strip with a restart index is two quads, through the NVN the program looks up | the NRO |
-| nvn-117 | nvn | a viewport swizzle of x and y turns a quad about the diagonal, through the NVN the program looks up | the NRO |
-| nvn-118 | nvn | draws around the tiled cache's actions are as without them, through the NVN the program looks up | the NRO |
-| nvn-119 | nvn | conservative rasterization draws every pixel a quad touches, through the NVN the program looks up | the NRO |
-| nvn-120 | nvn | a conservative quad dilated by half a pixel reaches the pixels a third of one away, through the NVN the program looks up | the NRO |
-| nvn-121 | nvn | a line of width four is four rows of pixels, through the NVN the program looks up | the NRO |
-| nvn-122 | nvn | patches of the size and the outer levels a list sets fill their cells, through the NVN the program looks up | the NRO |
-| nvn-123 | nvn | draws between debug markers, groups and checkpoints are as without them, through the NVN the program looks up | the NRO |
-| nvn-124 | nvn | the device says its modes and its builder its flags, and clear values register, through the NVN the program looks up | the NRO |
-| nvn-125 | nvn | a program set from the longer shader data draws, through the NVN the program looks up | the NRO |
-| nvn-126 | nvn | a texture's handle and a sampler's put together sample, and a texel fetch handle fetches, through the NVN the program looks up | the NRO |
-| nvn-127 | nvn | a clear between the Ounce's graphics and compute markers and groups is the clear | the Switch 2 program |
-| nvn-128 | nvn | an Ounce program builder gives back what it was set, a ray tracing program's numbers too | the Switch 2 program |
-| nvn-129 | nvn | an Ounce window builder starts with the driver's colour space and HDR metadata, and gives back what it is set | the Switch 2 program |
-| nvn-130 | nvn | an Ounce window has its builder's HDR metadata, and gives back what it is set | the Switch 2 program |
+| nvn-99 | nvn | a texture drawn with no program and as many draws as a word says, through the NVN the program looks up, are each in its place | the NRO |
+| nvn-100 | nvn | the samples counter reports a quad's 256 pixels and none after a reset, through the NVN the program looks up | the NRO |
+| nvn-101 | nvn | two values a list reports are in memory once it has run, through the NVN the program looks up | the NRO |
+| nvn-102 | nvn | two timestamp reports hold no count and times between the device's clock before and after, through the NVN the program looks up | the NRO |
+| nvn-103 | nvn | a timestamp report's word is the graphics unit's ticks, 384 every 625 nanoseconds, through the NVN the program looks up | the NRO |
+| nvn-104 | nvn | the render enable draws under on and under a condition that holds and skips the rest, through the NVN the program looks up | the NRO |
+| nvn-105 | nvn | a command buffer's memory used and free come to what it was given, and draws take some, through the NVN the program looks up | the NRO |
+| nvn-106 | nvn | a list out of command memory asks the program's callback and draws on, through the NVN the program looks up | the NRO |
+| nvn-107 | nvn | a list called from another and a list copied into it draw their cells, through the NVN the program looks up | the NRO |
+| nvn-108 | nvn | clears of an unsigned and a signed integer target hold the integers given, through the NVN the program looks up | the NRO |
+| nvn-109 | nvn | a clear of a texture that is no target reaches its region and its mask's channels, through the NVN the program looks up | the NRO |
+| nvn-110 | nvn | a range of a buffer cleared to a word holds it, and nothing beside the range, through the NVN the program looks up | the NRO |
+| nvn-111 | nvn | a command buffer gives back the copy strides it was set, through the NVN the program looks up | the NRO |
+| nvn-112 | nvn | targets discarded, then cleared and drawn, hold the clear and the draw, through the NVN the program looks up | the NRO |
+| nvn-113 | nvn | a scissor and a viewport set by number bound and place a quad, through the NVN the program looks up | the NRO |
+| nvn-114 | nvn | depth ranges move a quad across the depth test and depth bounds test the target's depth, through the NVN the program looks up | the NRO |
+| nvn-115 | nvn | the rasterizer discards, clamps depth and takes a flat colour from the provoking vertex, through the NVN the program looks up | the NRO |
+| nvn-116 | nvn | a point of sixteen pixels fills its cell, through the NVN the program looks up | the NRO |
+| nvn-117 | nvn | a strip with a restart index is two quads, through the NVN the program looks up | the NRO |
+| nvn-118 | nvn | a viewport swizzle of x and y turns a quad about the diagonal, through the NVN the program looks up | the NRO |
+| nvn-119 | nvn | draws around the tiled cache's actions are as without them, through the NVN the program looks up | the NRO |
+| nvn-120 | nvn | conservative rasterization draws every pixel a quad touches, through the NVN the program looks up | the NRO |
+| nvn-121 | nvn | a conservative quad dilated by half a pixel reaches the pixels a third of one away, through the NVN the program looks up | the NRO |
+| nvn-122 | nvn | a line of width four is four rows of pixels, through the NVN the program looks up | the NRO |
+| nvn-123 | nvn | patches of the size and the outer levels a list sets fill their cells, through the NVN the program looks up | the NRO |
+| nvn-124 | nvn | draws between debug markers, groups and checkpoints are as without them, through the NVN the program looks up | the NRO |
+| nvn-125 | nvn | the device says its modes and its builder its flags, and clear values register, through the NVN the program looks up | the NRO |
+| nvn-126 | nvn | a program set from the longer shader data draws, through the NVN the program looks up | the NRO |
+| nvn-127 | nvn | a texture's handle and a sampler's put together sample, and a texel fetch handle fetches, through the NVN the program looks up | the NRO |
+| nvn-128 | nvn | a clear between the Ounce's graphics and compute markers and groups is the clear | the Switch 2 program |
+| nvn-129 | nvn | an Ounce program builder gives back what it was set, a ray tracing program's numbers too | the Switch 2 program |
+| nvn-130 | nvn | an Ounce window builder starts with the driver's colour space and HDR metadata, and gives back what it is set | the Switch 2 program |
+| nvn-131 | nvn | an Ounce window has its builder's HDR metadata, and gives back what it is set | the Switch 2 program |
 | nvn2-1 | nvn2 | a device, a queue, a command buffer, their pools and a 256x256 target with its depth come up | the Switch 2 program |
 | nvn2-2 | nvn2 | a compute program assembled by hand makes a program through the builder | the Switch 2 program |
 | nvn2-3 | nvn2 | a dispatch's writes to a storage buffer, as the processor reads them once the queue finishes | the Switch 2 program |
@@ -250,32 +251,32 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
-| `nvnBootstrapLoader` | 55, 231 | nvn-41, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
-| `nvnDeviceGetProcAddress` | 55, 231 | nvn-41, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
+| `nvnBootstrapLoader` | 55, 231 | nvn-41, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
+| `nvnDeviceGetProcAddress` | 55, 231 | nvn-41, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
 | `nvnDeviceApplyDeferredFinalizes` |  |  |
-| `nvnDeviceBuilderGetFlags` | 55, 231 | nvn-124 |
-| `nvnDeviceFinalize` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnDeviceRegisterFastClearColori` | 55, 231 | nvn-124 |
-| `nvnDeviceRegisterFastClearColorui` | 55, 231 | nvn-124 |
+| `nvnDeviceBuilderGetFlags` | 55, 231 | nvn-125 |
+| `nvnDeviceFinalize` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnDeviceRegisterFastClearColori` | 55, 231 | nvn-125 |
+| `nvnDeviceRegisterFastClearColorui` | 55, 231 | nvn-125 |
 | `nvnDeviceSetIntermediateShaderCache` |  |  |
-| `nvnDeviceBuilderSetDefaults` | 55, 231 | nvn-42, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-124, nvn2-1 |
-| `nvnDeviceBuilderSetFlags` | 55, 231 | nvn-42, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-124, nvn2-1 |
+| `nvnDeviceBuilderSetDefaults` | 55, 231 | nvn-42, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-125, nvn2-1 |
+| `nvnDeviceBuilderSetFlags` | 55, 231 | nvn-42, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-125, nvn2-1 |
 | `nvnDeviceGetImageHandle` | 231 |  |
 | `nvnDeviceFinalizeCommandHandle` |  |  |
-| `nvnDeviceGetCurrentTimestampInNanoseconds` | 55, 231 | nvn-15, nvn-16, nvn-101, nvn-102 |
-| `nvnDeviceGetDepthMode` | 55, 231 | nvn-124 |
-| `nvnDeviceGetInteger` | 55, 231 | nvn-43, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
-| `nvnDeviceGetWindowOriginMode` | 55, 231 | nvn-124 |
-| `nvnDeviceGetSeparateSamplerHandle` | 55, 231 | nvn-126 |
-| `nvnDeviceGetSeparateTextureHandle` | 55, 231 | nvn-126 |
-| `nvnDeviceGetTexelFetchHandle` | 55, 231 | nvn-126 |
-| `nvnDeviceGetTextureHandle` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnDeviceInitialize` | 55, 231 | nvn-42, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
-| `nvnDeviceRegisterFastClearColor` | 55, 231 | nvn-124 |
-| `nvnDeviceRegisterFastClearDepth` | 55, 231 | nvn-124 |
-| `nvnDeviceRegisterFastClearStencil` | 55, 231 | nvn-124 |
-| `nvnDeviceSetDepthMode` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98 |
-| `nvnDeviceSetWindowOriginMode` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98 |
+| `nvnDeviceGetCurrentTimestampInNanoseconds` | 55, 231 | nvn-15, nvn-16, nvn-102, nvn-103 |
+| `nvnDeviceGetDepthMode` | 55, 231 | nvn-125 |
+| `nvnDeviceGetInteger` | 55, 231 | nvn-43, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
+| `nvnDeviceGetWindowOriginMode` | 55, 231 | nvn-125 |
+| `nvnDeviceGetSeparateSamplerHandle` | 55, 231 | nvn-127 |
+| `nvnDeviceGetSeparateTextureHandle` | 55, 231 | nvn-127 |
+| `nvnDeviceGetTexelFetchHandle` | 55, 231 | nvn-127 |
+| `nvnDeviceGetTextureHandle` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnDeviceInitialize` | 55, 231 | nvn-42, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
+| `nvnDeviceRegisterFastClearColor` | 55, 231 | nvn-125 |
+| `nvnDeviceRegisterFastClearDepth` | 55, 231 | nvn-125 |
+| `nvnDeviceRegisterFastClearStencil` | 55, 231 | nvn-125 |
+| `nvnDeviceSetDepthMode` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99 |
+| `nvnDeviceSetWindowOriginMode` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99 |
 | `nvnDeviceGetUniformBufferHandle` |  |  |
 | `nvnDeviceCommandBufferSetDefaults` |  |  |
 | `nvnDeviceCommandBufferSetDevice` |  |  |
@@ -297,19 +298,19 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnMemoryPoolBuilderGetFlags` | 55, 231 | nvn-58 |
 | `nvnMemoryPoolBuilderGetMemory` | 55, 231 | nvn-58 |
 | `nvnMemoryPoolBuilderGetSize` | 55, 231 | nvn-58 |
-| `nvnMemoryPoolBuilderSetDefaults` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn2-1 |
-| `nvnMemoryPoolBuilderSetDevice` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn2-1 |
-| `nvnMemoryPoolBuilderSetFlags` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn2-1 |
-| `nvnMemoryPoolBuilderSetStorage` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn2-1 |
+| `nvnMemoryPoolBuilderSetDefaults` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn2-1 |
+| `nvnMemoryPoolBuilderSetDevice` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn2-1 |
+| `nvnMemoryPoolBuilderSetFlags` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn2-1 |
+| `nvnMemoryPoolBuilderSetStorage` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn2-1 |
 | `nvnMemoryPoolBuilderSetNativeHandleNVX` |  |  |
-| `nvnMemoryPoolFinalize` | 55, 231 | nvn-21, nvn-22, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126 |
+| `nvnMemoryPoolFinalize` | 55, 231 | nvn-21, nvn-22, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127 |
 | `nvnMemoryPoolFlushMappedRange` | 55, 231 | nvn-59, nvn-71 |
-| `nvnMemoryPoolGetBufferAddress` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-70, nvn-78, nvn-79, nvn-81, nvn-85, nvn-86, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-2, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-8, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnMemoryPoolGetBufferAddress` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-70, nvn-78, nvn-79, nvn-81, nvn-85, nvn-86, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-2, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-8, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnMemoryPoolGetFlags` | 55, 231 | nvn-58 |
 | `nvnMemoryPoolGetSize` | 55, 231 | nvn-58, nvn-87 |
-| `nvnMemoryPoolInitialize` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn2-1 |
+| `nvnMemoryPoolInitialize` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-58, nvn-81, nvn-86, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn2-1 |
 | `nvnMemoryPoolInvalidateMappedRange` | 55, 231 | nvn-59 |
-| `nvnMemoryPoolMap` | 55, 231 | nvn-45, nvn-46, nvn-47, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-58, nvn-59, nvn-60, nvn-61, nvn-62, nvn-66, nvn-69, nvn-70, nvn-71, nvn-79, nvn-81, nvn-85, nvn-86, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-2, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-8, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnMemoryPoolMap` | 55, 231 | nvn-45, nvn-46, nvn-47, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-58, nvn-59, nvn-60, nvn-61, nvn-62, nvn-66, nvn-69, nvn-70, nvn-71, nvn-79, nvn-81, nvn-85, nvn-86, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-2, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-8, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnMemoryPoolMapVirtual` | 55, 231 | nvn-86 |
 
 ## Buffers
@@ -365,34 +366,34 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnTextureBuilderGetHeight` | 55, 231 | nvn-54 |
 | `nvnTextureBuilderGetLevels` | 55, 231 | nvn-54 |
 | `nvnTextureBuilderGetSamples` | 55, 231 | nvn-54 |
-| `nvnTextureBuilderGetStorageAlignment` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-56, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderGetStorageAlignment` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-56, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderGetStorageClass` | 55, 231 | nvn-78 |
-| `nvnTextureBuilderGetStorageSize` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderGetStorageSize` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderGetStride` | 55, 231 | nvn-77 |
 | `nvnTextureBuilderGetTarget` | 55, 231 | nvn-54 |
 | `nvnTextureBuilderGetWidth` | 55, 231 | nvn-54 |
 | `nvnTextureBuilderGetZCullStorageSize` | 55, 231 | nvn-78 |
-| `nvnTextureBuilderSetDefaults` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-77, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderSetDefaults` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-77, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderSetDepth` | 55, 231 | nvn-54, nvn-56, nvn-81 |
 | `nvnTextureBuilderSetDepthStencilMode` | 55, 231 | nvn-77 |
-| `nvnTextureBuilderSetDevice` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-77, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
-| `nvnTextureBuilderSetFlags` | 55, 231 | nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-1 |
-| `nvnTextureBuilderSetFormat` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderSetDevice` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-77, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
+| `nvnTextureBuilderSetFlags` | 55, 231 | nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-1 |
+| `nvnTextureBuilderSetFormat` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderSetHeight` | 55, 231 | nvn-54 |
 | `nvnTextureBuilderSetLevels` | 55, 231 | nvn-54, nvn-56 |
 | `nvnTextureBuilderSetPackagedTextureData` | 55, 231 | nvn-77 |
 | `nvnTextureBuilderSetPackagedTextureLayout` | 55, 231 | nvn-77 |
 | `nvnTextureBuilderSetSamples` | 55, 231 | nvn-54, nvn-56 |
 | `nvnTextureBuilderSetSize1D` | 55, 231 | nvn-81 |
-| `nvnTextureBuilderSetSize2D` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderSetSize2D` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderSetSize3D` | 55, 231 | nvn-81 |
-| `nvnTextureBuilderSetStorage` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderSetStorage` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderSetStride` | 55, 231 | nvn-77 |
 | `nvnTextureBuilderSetSwizzle` | 55, 231 | nvn-77, nvn-78 |
-| `nvnTextureBuilderSetTarget` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
+| `nvnTextureBuilderSetTarget` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-54, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
 | `nvnTextureBuilderSetWidth` | 55, 231 | nvn-54 |
 | `nvnTextureCompare` | 55, 231 | nvn-78 |
-| `nvnTextureFinalize` | 55, 231 | nvn-21, nvn-22, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126 |
+| `nvnTextureFinalize` | 55, 231 | nvn-21, nvn-22, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127 |
 | `nvnTextureFlushTexels` | 55, 231 | nvn-79 |
 | `nvnTextureGetDepth` | 55, 231 | nvn-56 |
 | `nvnTextureGetDepthStencilMode` | 55, 231 | nvn-78 |
@@ -412,14 +413,14 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnTextureGetViewOffset` | 55, 231 | nvn-78 |
 | `nvnTextureGetWidth` | 55, 231 | nvn-56, nvn-87 |
 | `nvnTextureGetZCullStorageSize` | 55, 231 | nvn-78 |
-| `nvnTextureInitialize` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn2-1 |
-| `nvnTexturePoolFinalize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnTextureInitialize` | 55, 231 | nvn-21, nvn-22, nvn-44, nvn-47, nvn-56, nvn-78, nvn-81, nvn-89, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn2-1 |
+| `nvnTexturePoolFinalize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnTexturePoolGetMemoryOffset` | 55, 231 | nvn-69 |
 | `nvnTexturePoolGetMemoryPool` | 55, 231 | nvn-69 |
 | `nvnTexturePoolGetSize` | 55, 231 | nvn-69, nvn-87 |
-| `nvnTexturePoolInitialize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98 |
+| `nvnTexturePoolInitialize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99 |
 | `nvnTexturePoolRegisterImage` | 231 |  |
-| `nvnTexturePoolRegisterTexture` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnTexturePoolRegisterTexture` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnTextureReadTexels` | 55, 231 | nvn-79 |
 | `nvnTextureViewGetDepthStencilMode` | 55, 231 | nvn-77 |
 | `nvnTextureViewGetFormat` | 55, 231 | nvn-55 |
@@ -459,20 +460,20 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnSamplerGetBorderColori` | 55, 231 | nvn-68 |
 | `nvnSamplerGetBorderColorui` | 55, 231 | nvn-68 |
 | `nvnSamplerPoolRegisterSamplerBuilder` | 55, 231 | nvn-69 |
-| `nvnSamplerBuilderSetBorderColor` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerBuilderSetBorderColor` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnSamplerBuilderSetCompare` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87 |
-| `nvnSamplerBuilderSetDefaults` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnSamplerBuilderSetDevice` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerBuilderSetDefaults` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnSamplerBuilderSetDevice` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnSamplerBuilderSetLodBias` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87 |
 | `nvnSamplerBuilderSetLodClamp` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87 |
 | `nvnSamplerBuilderGetLodSnap` | 55, 231 | nvn-67 |
 | `nvnSamplerBuilderSetLodSnap` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87 |
 | `nvnSamplerBuilderSetMaxAnisotropy` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87 |
-| `nvnSamplerBuilderSetMinMagFilter` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerBuilderSetMinMagFilter` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnSamplerBuilderSetReductionFilter` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87 |
-| `nvnSamplerBuilderSetWrapMode` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerBuilderSetWrapMode` | 55, 231 | nvn-67, nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnSamplerCompare` | 55, 231 | nvn-68 |
-| `nvnSamplerFinalize` | 55, 231 | nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerFinalize` | 55, 231 | nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnSamplerGetBorderColor` | 55, 231 | nvn-68 |
 | `nvnSamplerGetCompare` | 55, 231 | nvn-68 |
 | `nvnSamplerGetLodBias` | 55, 231 | nvn-68 |
@@ -481,13 +482,13 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnSamplerGetMinMagFilter` | 55, 231 | nvn-68 |
 | `nvnSamplerGetReductionFilter` | 55, 231 | nvn-68 |
 | `nvnSamplerGetWrapMode` | 55, 231 | nvn-68 |
-| `nvnSamplerInitialize` | 55, 231 | nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnSamplerPoolFinalize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerInitialize` | 55, 231 | nvn-68, nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnSamplerPoolFinalize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnSamplerPoolGetMemoryOffset` | 55, 231 | nvn-69 |
 | `nvnSamplerPoolGetMemoryPool` | 55, 231 | nvn-69 |
 | `nvnSamplerPoolGetSize` | 55, 231 | nvn-69, nvn-87 |
-| `nvnSamplerPoolInitialize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98 |
-| `nvnSamplerPoolRegisterSampler` | 55, 231 | nvn-69, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnSamplerPoolInitialize` | 55, 231 | nvn-69, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99 |
+| `nvnSamplerPoolRegisterSampler` | 55, 231 | nvn-69, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 
 ## Programs
 
@@ -499,18 +500,18 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnProgramGetScratchBytesPerWarp` |  |  |
 | `nvnProgramSetSampleShading` |  |  |
 | `nvnProgramSetSubroutineLinkage` |  |  |
-| `nvnProgramFinalize` | 55, 231 | nvn-36, nvn-39, nvn-40, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-125, nvn-126 |
-| `nvnProgramInitialize` | 55, 231 | nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-125, nvn-126 |
-| `nvnProgramSetShaders` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnProgramSetShadersExt` | 55, 231 | nvn-125 |
-| `nvnProgramBuilderSetDefaults` | 231 | nvn-128, nvn2-2, nvn2-8, nvn2-18 |
-| `nvnProgramBuilderSetDevice` | 231 | nvn-128, nvn2-2, nvn2-8, nvn2-18 |
-| `nvnProgramBuilderGetDevice` | 231 | nvn-128 |
-| `nvnProgramBuilderSetSampleShading` | 231 | nvn-128 |
-| `nvnProgramBuilderGetSampleShading` | 231 | nvn-128 |
-| `nvnProgramBuilderSetShaders` | 231 | nvn-128, nvn2-2, nvn2-8, nvn2-18 |
-| `nvnProgramBuilderGetShaders` | 231 | nvn-128 |
-| `nvnProgramBuilderGetShaderCount` | 231 | nvn-128 |
+| `nvnProgramFinalize` | 55, 231 | nvn-36, nvn-39, nvn-40, nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-126, nvn-127 |
+| `nvnProgramInitialize` | 55, 231 | nvn-87, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-126, nvn-127 |
+| `nvnProgramSetShaders` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnProgramSetShadersExt` | 55, 231 | nvn-126 |
+| `nvnProgramBuilderSetDefaults` | 231 | nvn-129, nvn2-2, nvn2-8, nvn2-18 |
+| `nvnProgramBuilderSetDevice` | 231 | nvn-129, nvn2-2, nvn2-8, nvn2-18 |
+| `nvnProgramBuilderGetDevice` | 231 | nvn-129 |
+| `nvnProgramBuilderSetSampleShading` | 231 | nvn-129 |
+| `nvnProgramBuilderGetSampleShading` | 231 | nvn-129 |
+| `nvnProgramBuilderSetShaders` | 231 | nvn-129, nvn2-2, nvn2-8, nvn2-18 |
+| `nvnProgramBuilderGetShaders` | 231 | nvn-129 |
+| `nvnProgramBuilderGetShaderCount` | 231 | nvn-129 |
 | `nvnProgramBuilderSetSubroutineLinkage` |  |  |
 | `nvnProgramBuilderGetSubroutineLinkage` |  |  |
 | `nvnProgramBuilderGetSubroutineLinkageCount` |  |  |
@@ -535,36 +536,36 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnBlendStateSetBlendEquation` | 55, 231 | nvn-72 |
 | `nvnBlendStateSetBlendFunc` | 55, 231 | nvn-72 |
 | `nvnBlendStateSetBlendTarget` | 55, 231 | nvn-72 |
-| `nvnBlendStateSetDefaults` | 55, 231 | nvn-72, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnBlendStateSetDefaults` | 55, 231 | nvn-72, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnChannelMaskStateSetChannelMask` | 55, 231 | nvn-73 |
-| `nvnChannelMaskStateSetDefaults` | 55, 231 | nvn-73, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnChannelMaskStateSetDefaults` | 55, 231 | nvn-73, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnColorStateGetBlendEnable` | 55, 231 | nvn-73 |
 | `nvnColorStateSetAlphaTest` | 55, 231 | nvn-73 |
 | `nvnColorStateSetBlendEnable` | 55, 231 | nvn-73 |
-| `nvnColorStateSetDefaults` | 55, 231 | nvn-73, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnColorStateSetDefaults` | 55, 231 | nvn-73, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnColorStateSetLogicOp` | 55, 231 | nvn-73 |
-| `nvnDepthStencilStateSetDefaults` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnDepthStencilStateSetDepthFunc` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnDepthStencilStateSetDepthTestEnable` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnDepthStencilStateSetDepthWriteEnable` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnDepthStencilStateSetDefaults` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnDepthStencilStateSetDepthFunc` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnDepthStencilStateSetDepthTestEnable` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnDepthStencilStateSetDepthWriteEnable` | 55, 231 | nvn-74, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnDepthStencilStateSetStencilFunc` | 55, 231 | nvn-74 |
 | `nvnDepthStencilStateSetStencilOp` | 55, 231 | nvn-74 |
 | `nvnDepthStencilStateSetStencilTestEnable` | 55, 231 | nvn-74 |
 | `nvnMultisampleStateSetAlphaToCoverageEnable` | 55, 231 | nvn-75 |
-| `nvnMultisampleStateSetDefaults` | 55, 231 | nvn-75, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnMultisampleStateSetDefaults` | 55, 231 | nvn-75, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnMultisampleStateSetMultisampleEnable` | 55, 231 | nvn-75 |
 | `nvnMultisampleStateSetSamples` | 55, 231 | nvn-75 |
-| `nvnPolygonStateSetCullFace` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnPolygonStateSetDefaults` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnPolygonStateSetFrontFace` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnPolygonStateSetCullFace` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnPolygonStateSetDefaults` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnPolygonStateSetFrontFace` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnPolygonStateSetPolygonMode` | 55, 231 | nvn-76 |
 | `nvnPolygonStateSetPolygonOffsetEnables` | 55, 231 | nvn-76 |
-| `nvnVertexAttribStateSetDefaults` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnVertexAttribStateSetFormat` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnVertexAttribStateSetStreamIndex` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnVertexStreamStateSetDefaults` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnVertexStreamStateSetDivisor` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnVertexStreamStateSetStride` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnVertexAttribStateSetDefaults` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnVertexAttribStateSetFormat` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnVertexAttribStateSetStreamIndex` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnVertexStreamStateSetDefaults` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnVertexStreamStateSetDivisor` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnVertexStreamStateSetStride` | 55, 231 | nvn-76, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnBlendStateGetBlendEquation` | 55, 231 | nvn-72 |
 | `nvnBlendStateGetBlendFunc` | 55, 231 | nvn-72 |
 | `nvnBlendStateGetBlendTarget` | 55, 231 | nvn-72 |
@@ -628,18 +629,18 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnQueueBuilderSetCommandMemorySize` | 55, 231 | nvn-65 |
 | `nvnQueueBuilderSetComputeMemorySize` | 55, 231 | nvn-65 |
 | `nvnQueueBuilderSetControlMemorySize` | 55, 231 | nvn-65 |
-| `nvnQueueBuilderSetDefaults` | 55, 231 | nvn-44, nvn-65, nvn-82, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
-| `nvnQueueBuilderSetDevice` | 55, 231 | nvn-44, nvn-65, nvn-82, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
+| `nvnQueueBuilderSetDefaults` | 55, 231 | nvn-44, nvn-65, nvn-82, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
+| `nvnQueueBuilderSetDevice` | 55, 231 | nvn-44, nvn-65, nvn-82, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
 | `nvnQueueBuilderSetFlags` | 55, 231 | nvn-65 |
 | `nvnQueueBuilderGetQueuePriority` | 55, 231 | nvn-82 |
 | `nvnQueueBuilderSetQueuePriority` | 55, 231 | nvn-82 |
 | `nvnQueueBuilderSetQueueMemory` | 55, 231 | nvn-82 |
-| `nvnQueueFinalize` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnQueueFinish` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-64, nvn-71, nvn-79, nvn-80, nvn-81, nvn-82, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnQueueFinalize` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnQueueFinish` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-64, nvn-71, nvn-79, nvn-80, nvn-81, nvn-82, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnQueueFlush` | 55, 231 | nvn-60, nvn-61, nvn-62, nvn-85 |
 | `nvnQueueGetError` | 55, 231 | nvn-64, nvn-87 |
-| `nvnQueueInitialize` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
-| `nvnQueueSubmitCommands` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-71, nvn-79, nvn-81, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnQueueInitialize` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
+| `nvnQueueSubmitCommands` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-71, nvn-79, nvn-81, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnQueueBuilderSetPrimaryQueue` | 55, 231 | nvn-82 |
 
 ## Sync and events
@@ -694,22 +695,22 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnWindowGetCrop` | 55, 231 | nvn-90 |
 | `nvnWindowGetPresentInterval` | 55, 231 | nvn-90 |
 | `nvnWindowAcquireTexture` | 55, 231 | nvn-91 |
-| `nvnWindowBuilderSetDefaults` | 55, 231 | nvn-88, nvn-89, nvn-129 |
+| `nvnWindowBuilderSetDefaults` | 55, 231 | nvn-88, nvn-89, nvn-130 |
 | `nvnWindowBuilderSetDevice` | 55, 231 | nvn-88, nvn-89 |
 | `nvnWindowBuilderSetNativeWindow` | 55, 231 | nvn-88, nvn-89 |
 | `nvnWindowBuilderSetNumActiveTextures` | 55, 231 | nvn-88 |
 | `nvnWindowBuilderSetPresentInterval` | 55, 231 | nvn-88 |
 | `nvnWindowBuilderSetTextures` | 55, 231 | nvn-88, nvn-89 |
-| `nvnWindowBuilderSetColorSpace` | 231 | nvn-129 |
-| `nvnWindowBuilderGetColorSpace` | 231 | nvn-129 |
-| `nvnWindowBuilderSetHdrDisplayMetadata` | 231 | nvn-129 |
-| `nvnWindowBuilderGetHdrDisplayMetadata` | 231 | nvn-129 |
-| `nvnWindowBuilderSetHdrContentMetadata` | 231 | nvn-129 |
-| `nvnWindowBuilderGetHdrContentMetadata` | 231 | nvn-129 |
-| `nvnWindowSetHdrDisplayMetadata` | 231 | nvn-130 |
-| `nvnWindowGetHdrDisplayMetadata` | 231 | nvn-130 |
-| `nvnWindowSetHdrContentMetadata` | 231 | nvn-130 |
-| `nvnWindowGetHdrContentMetadata` | 231 | nvn-130 |
+| `nvnWindowBuilderSetColorSpace` | 231 | nvn-130 |
+| `nvnWindowBuilderGetColorSpace` | 231 | nvn-130 |
+| `nvnWindowBuilderSetHdrDisplayMetadata` | 231 | nvn-130 |
+| `nvnWindowBuilderGetHdrDisplayMetadata` | 231 | nvn-130 |
+| `nvnWindowBuilderSetHdrContentMetadata` | 231 | nvn-130 |
+| `nvnWindowBuilderGetHdrContentMetadata` | 231 | nvn-130 |
+| `nvnWindowSetHdrDisplayMetadata` | 231 | nvn-131 |
+| `nvnWindowGetHdrDisplayMetadata` | 231 | nvn-131 |
+| `nvnWindowSetHdrContentMetadata` | 231 | nvn-131 |
+| `nvnWindowGetHdrContentMetadata` | 231 | nvn-131 |
 | `nvnWindowFinalize` | 55, 231 | nvn-89 |
 | `nvnWindowInitialize` | 55, 231 | nvn-89 |
 | `nvnWindowSetCrop` | 55, 231 | nvn-90 |
@@ -721,12 +722,12 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
-| `nvnDeviceGetTimestampInNanoseconds` | 55, 231 | nvn-15, nvn-16, nvn-101, nvn-102 |
-| `nvnCommandBufferReportCounter` | 55, 231 | nvn-99, nvn-101, nvn-102, nvn-103 |
-| `nvnCommandBufferReportValue` | 55, 231 | nvn-100 |
-| `nvnCommandBufferResetCounter` | 55, 231 | nvn-99, nvn-103 |
-| `nvnCommandBufferSetRenderEnable` | 55, 231 | nvn-103 |
-| `nvnCommandBufferSetRenderEnableConditional` | 55, 231 | nvn-103 |
+| `nvnDeviceGetTimestampInNanoseconds` | 55, 231 | nvn-15, nvn-16, nvn-102, nvn-103 |
+| `nvnCommandBufferReportCounter` | 55, 231 | nvn-100, nvn-102, nvn-103, nvn-104 |
+| `nvnCommandBufferReportValue` | 55, 231 | nvn-101 |
+| `nvnCommandBufferResetCounter` | 55, 231 | nvn-100, nvn-104 |
+| `nvnCommandBufferSetRenderEnable` | 55, 231 | nvn-104 |
+| `nvnCommandBufferSetRenderEnableConditional` | 55, 231 | nvn-104 |
 
 ## Commands: memory and recording
 
@@ -734,31 +735,31 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
-| `nvnCommandBufferGetCommandMemoryFree` | 55, 231 | nvn-104 |
-| `nvnCommandBufferGetCommandMemorySize` | 55, 231 | nvn-104 |
-| `nvnCommandBufferGetControlMemoryFree` | 55, 231 | nvn-104 |
-| `nvnCommandBufferGetControlMemorySize` | 55, 231 | nvn-104 |
-| `nvnCommandBufferSetControlMemoryCallbackEnabled` | 55, 231 | nvn-105 |
-| `nvnCommandBufferAddCommandMemory` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-104, nvn-105, nvn2-1 |
-| `nvnCommandBufferAddControlMemory` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-104, nvn2-1 |
-| `nvnCommandBufferBarrier` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-51, nvn-52, nvn-53, nvn-57, nvn-60, nvn-61, nvn-62, nvn-79, nvn-81, nvn-85, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn-127, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
-| `nvnCommandBufferBeginRecording` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-71, nvn-79, nvn-81, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnCommandBufferGetCommandMemoryFree` | 55, 231 | nvn-105 |
+| `nvnCommandBufferGetCommandMemorySize` | 55, 231 | nvn-105 |
+| `nvnCommandBufferGetControlMemoryFree` | 55, 231 | nvn-105 |
+| `nvnCommandBufferGetControlMemorySize` | 55, 231 | nvn-105 |
+| `nvnCommandBufferSetControlMemoryCallbackEnabled` | 55, 231 | nvn-106 |
+| `nvnCommandBufferAddCommandMemory` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-105, nvn-106, nvn2-1 |
+| `nvnCommandBufferAddControlMemory` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-105, nvn2-1 |
+| `nvnCommandBufferBarrier` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-51, nvn-52, nvn-53, nvn-57, nvn-60, nvn-61, nvn-62, nvn-79, nvn-81, nvn-85, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn-128, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnCommandBufferBeginRecording` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-71, nvn-79, nvn-81, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnCommandBufferSetRecordingMode` |  |  |
 | `nvnCommandBufferSetComputeOverlapMode` |  |  |
-| `nvnCommandBufferCallCommands` | 55, 231 | nvn-106 |
-| `nvnCommandBufferCopyCommands` | 55, 231 | nvn-106 |
-| `nvnCommandBufferEndRecording` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-71, nvn-79, nvn-81, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-106, nvn-122, nvn-126, nvn-127, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
-| `nvnCommandBufferFinalize` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferGetCommandMemoryUsed` | 55, 231 | nvn-104 |
-| `nvnCommandBufferGetControlMemoryUsed` | 55, 231 | nvn-104 |
-| `nvnCommandBufferGetMemoryCallback` | 55, 231 | nvn-105 |
-| `nvnCommandBufferGetMemoryCallbackData` | 55, 231 | nvn-105 |
-| `nvnCommandBufferInitialize` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn2-1 |
-| `nvnCommandBufferIsRecording` | 55, 231 | nvn-104 |
-| `nvnCommandBufferSetCommandMemoryCallbackEnabled` | 55, 231 | nvn-105 |
+| `nvnCommandBufferCallCommands` | 55, 231 | nvn-107 |
+| `nvnCommandBufferCopyCommands` | 55, 231 | nvn-107 |
+| `nvnCommandBufferEndRecording` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-59, nvn-60, nvn-61, nvn-62, nvn-71, nvn-79, nvn-81, nvn-83, nvn-84, nvn-85, nvn-86, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-107, nvn-123, nvn-127, nvn-128, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnCommandBufferFinalize` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferGetCommandMemoryUsed` | 55, 231 | nvn-105 |
+| `nvnCommandBufferGetControlMemoryUsed` | 55, 231 | nvn-105 |
+| `nvnCommandBufferGetMemoryCallback` | 55, 231 | nvn-106 |
+| `nvnCommandBufferGetMemoryCallbackData` | 55, 231 | nvn-106 |
+| `nvnCommandBufferInitialize` | 55, 231 | nvn-44, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn2-1 |
+| `nvnCommandBufferIsRecording` | 55, 231 | nvn-105 |
+| `nvnCommandBufferSetCommandMemoryCallbackEnabled` | 55, 231 | nvn-106 |
 | `nvnCommandBufferSetComputeWorkloadPriority` |  |  |
-| `nvnCommandBufferSetMemoryCallback` | 55, 231 | nvn-105 |
-| `nvnCommandBufferSetMemoryCallbackData` | 55, 231 | nvn-105 |
+| `nvnCommandBufferSetMemoryCallback` | 55, 231 | nvn-106 |
+| `nvnCommandBufferSetMemoryCallbackData` | 55, 231 | nvn-106 |
 
 ## Commands: binds
 
@@ -766,55 +767,55 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
-| `nvnCommandBufferBindCoverageModulationTable` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnCommandBufferBindCoverageModulationTable` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnCommandBufferBindImagesDeferred` |  |  |
 | `nvnCommandBufferBindSeparateSamplersDeferred` |  |  |
 | `nvnCommandBufferBindSeparateTexturesDeferred` |  |  |
 | `nvnCommandBufferBindStorageBuffersDeferred` | 231 | nvn2-6 |
-| `nvnCommandBufferBindUniformBuffersDeferred` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnCommandBufferBindUniformBuffersDeferred` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnCommandBufferSetProgramSubroutines` |  |  |
 | `nvnCommandBufferBindShadingRateImage` |  |  |
 | `nvnCommandBufferShadingRateImagePalette` |  |  |
 | `nvnCommandBufferPushGraphicsConstants` | 231 |  |
 | `nvnCommandBufferPushComputeConstants` | 231 |  |
-| `nvnCommandBufferBindBlendState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferBindChannelMaskState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferBindColorState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferBindDepthStencilState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferBindBlendState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferBindChannelMaskState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferBindColorState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferBindDepthStencilState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnCommandBufferBindImage` | 231 |  |
 | `nvnCommandBufferBindImages` |  |  |
-| `nvnCommandBufferBindMultisampleState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferBindPolygonState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferBindProgram` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-125, nvn-126, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
+| `nvnCommandBufferBindMultisampleState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferBindPolygonState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferBindProgram` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-126, nvn-127, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnCommandBufferBindSeparateSampler` |  |  |
 | `nvnCommandBufferBindSeparateSamplers` |  |  |
 | `nvnCommandBufferBindSeparateTexture` |  |  |
 | `nvnCommandBufferBindSeparateTextures` |  |  |
 | `nvnCommandBufferBindStorageBuffer` | 231 | nvn2-3, nvn2-4, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnCommandBufferBindStorageBuffers` | 231 | nvn2-5 |
-| `nvnCommandBufferBindTexture` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindTextures` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindTexturesDeferred` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnCommandBufferBindTexture` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindTextures` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindTexturesDeferred` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnCommandBufferBindTransformFeedbackBuffer` |  |  |
 | `nvnCommandBufferBindTransformFeedbackBuffers` |  |  |
-| `nvnCommandBufferBindUniformBuffer` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindUniformBuffers` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindVertexAttribState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindVertexBuffer` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindVertexBuffers` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferBindVertexStreamState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferSetSamplerPool` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferSetShaderScratchMemory` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferSetTexturePool` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferUpdateUniformBuffer` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnCommandBufferBindUniformBuffer` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindUniformBuffers` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindVertexAttribState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindVertexBuffer` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindVertexBuffers` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferBindVertexStreamState` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferSetSamplerPool` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferSetShaderScratchMemory` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferSetTexturePool` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferUpdateUniformBuffer` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 
 ## Commands: draws and dispatches
 
-26 functions, 8 with no case.
+26 functions, 5 with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
-| `nvnCommandBufferDrawTexture` |  |  |
+| `nvnCommandBufferDrawTexture` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnCommandBufferBeginTransformFeedback` |  |  |
 | `nvnCommandBufferSetGeometryProcessingMode` | 231 | nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnCommandBufferDrawMeshTasks` | 231 | nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
@@ -827,17 +828,17 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnCommandBufferMultiDrawMeshTasks3DIndirectCount` | 231 | nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnCommandBufferDispatchCompute` | 231 | nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
 | `nvnCommandBufferDispatchComputeIndirect` | 231 | nvn2-7 |
-| `nvnCommandBufferDrawArrays` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-115, nvn-121, nvn-122, nvn-126 |
-| `nvnCommandBufferDrawArraysIndirect` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferDrawArraysInstanced` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferDrawElements` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-116, nvn-122, nvn-126 |
-| `nvnCommandBufferDrawElementsBaseVertex` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferDrawElementsIndirect` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferDrawElementsInstanced` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
+| `nvnCommandBufferDrawArrays` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-116, nvn-122, nvn-123, nvn-127 |
+| `nvnCommandBufferDrawArraysIndirect` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferDrawArraysInstanced` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferDrawElements` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-117, nvn-123, nvn-127 |
+| `nvnCommandBufferDrawElementsBaseVertex` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferDrawElementsIndirect` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferDrawElementsInstanced` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnCommandBufferDrawTransformFeedback` |  |  |
 | `nvnCommandBufferEndTransformFeedback` |  |  |
-| `nvnCommandBufferMultiDrawArraysIndirectCount` |  |  |
-| `nvnCommandBufferMultiDrawElementsIndirectCount` |  |  |
+| `nvnCommandBufferMultiDrawArraysIndirectCount` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferMultiDrawElementsIndirectCount` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
 | `nvnCommandBufferPauseTransformFeedback` |  |  |
 | `nvnCommandBufferResumeTransformFeedback` |  |  |
 
@@ -847,31 +848,31 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
-| `nvnCommandBufferClearTexturei` | 55, 231 | nvn-108 |
-| `nvnCommandBufferGetCopyImageStride` | 55, 231 | nvn-110 |
-| `nvnCommandBufferGetCopyRowStride` | 55, 231 | nvn-110 |
+| `nvnCommandBufferClearTexturei` | 55, 231 | nvn-109 |
+| `nvnCommandBufferGetCopyImageStride` | 55, 231 | nvn-111 |
+| `nvnCommandBufferGetCopyRowStride` | 55, 231 | nvn-111 |
 | `nvnCommandBufferResolveDepthBuffer` |  |  |
 | `nvnCommandBufferTiledDownsample` |  |  |
 | `nvnCommandBufferTiledDownsampleTextureView` |  |  |
-| `nvnCommandBufferClearBuffer` | 55, 231 | nvn-109 |
-| `nvnCommandBufferClearColor` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferClearColori` | 55, 231 | nvn-107 |
-| `nvnCommandBufferClearColorui` | 55, 231 | nvn-107 |
-| `nvnCommandBufferClearDepthStencil` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferClearTexture` | 55, 231 | nvn-108 |
-| `nvnCommandBufferClearTextureui` | 55, 231 | nvn-108 |
+| `nvnCommandBufferClearBuffer` | 55, 231 | nvn-110 |
+| `nvnCommandBufferClearColor` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferClearColori` | 55, 231 | nvn-108 |
+| `nvnCommandBufferClearColorui` | 55, 231 | nvn-108 |
+| `nvnCommandBufferClearDepthStencil` | 55, 231 | nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferClearTexture` | 55, 231 | nvn-109 |
+| `nvnCommandBufferClearTextureui` | 55, 231 | nvn-109 |
 | `nvnCommandBufferCopyBufferToBuffer` | 55, 231 | nvn-50, nvn-59, nvn-71, nvn-86, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18 |
-| `nvnCommandBufferCopyBufferToTexture` | 55, 231 | nvn-48, nvn-49, nvn-51, nvn-52, nvn-53, nvn-57, nvn-81, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126 |
-| `nvnCommandBufferCopyTextureToBuffer` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-51, nvn-52, nvn-53, nvn-57, nvn-60, nvn-61, nvn-62, nvn-79, nvn-81, nvn-85, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-108, nvn-122, nvn-126, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferCopyBufferToTexture` | 55, 231 | nvn-48, nvn-49, nvn-51, nvn-52, nvn-53, nvn-57, nvn-81, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127 |
+| `nvnCommandBufferCopyTextureToBuffer` | 55, 231 | nvn-45, nvn-46, nvn-48, nvn-49, nvn-51, nvn-52, nvn-53, nvn-57, nvn-60, nvn-61, nvn-62, nvn-79, nvn-81, nvn-85, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-109, nvn-123, nvn-127, nvn-128, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnCommandBufferCopyTextureToTexture` | 55, 231 | nvn-49, nvn-52 |
-| `nvnCommandBufferDiscardColor` | 55, 231 | nvn-111 |
-| `nvnCommandBufferDiscardDepthStencil` | 55, 231 | nvn-111 |
+| `nvnCommandBufferDiscardColor` | 55, 231 | nvn-112 |
+| `nvnCommandBufferDiscardDepthStencil` | 55, 231 | nvn-112 |
 | `nvnCommandBufferDownsample` |  |  |
 | `nvnCommandBufferDownsampleTextureView` |  |  |
 | `nvnCommandBufferRestoreZCullData` |  |  |
 | `nvnCommandBufferSaveZCullData` |  |  |
-| `nvnCommandBufferSetCopyImageStride` | 55, 231 | nvn-110 |
-| `nvnCommandBufferSetCopyRowStride` | 55, 231 | nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-79, nvn-81, nvn-110 |
+| `nvnCommandBufferSetCopyImageStride` | 55, 231 | nvn-111 |
+| `nvnCommandBufferSetCopyRowStride` | 55, 231 | nvn-48, nvn-49, nvn-50, nvn-51, nvn-52, nvn-53, nvn-57, nvn-79, nvn-81, nvn-111 |
 
 ## Commands: render state
 
@@ -882,39 +883,39 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnCommandBufferOverrideSubtileSize` |  |  |
 | `nvnCommandBufferSetColorReductionEnable` |  |  |
 | `nvnCommandBufferSetColorReductionThresholds` |  |  |
-| `nvnCommandBufferSetConservativeRasterDilate` | 55, 231 | nvn-120 |
-| `nvnCommandBufferSetInnerTessellationLevels` | 55, 231 | nvn-122 |
-| `nvnCommandBufferSetOuterTessellationLevels` | 55, 231 | nvn-122 |
-| `nvnCommandBufferSetProvokingVertexMode` | 55, 231 | nvn-114 |
-| `nvnCommandBufferSetSubpixelPrecisionBias` | 55, 231 | nvn-119 |
+| `nvnCommandBufferSetConservativeRasterDilate` | 55, 231 | nvn-121 |
+| `nvnCommandBufferSetInnerTessellationLevels` | 55, 231 | nvn-123 |
+| `nvnCommandBufferSetOuterTessellationLevels` | 55, 231 | nvn-123 |
+| `nvnCommandBufferSetProvokingVertexMode` | 55, 231 | nvn-115 |
+| `nvnCommandBufferSetSubpixelPrecisionBias` | 55, 231 | nvn-120 |
 | `nvnCommandBufferSetZCullZF32CompressionEnable` |  |  |
 | `nvnCommandBufferSetShadingRatePaletteMode` |  |  |
 | `nvnCommandBufferSetAlphaRef` |  |  |
 | `nvnCommandBufferSetBlendColor` |  |  |
-| `nvnCommandBufferSetConservativeRasterEnable` | 55, 231 | nvn-119, nvn-120 |
-| `nvnCommandBufferSetDepthBounds` | 55, 231 | nvn-113 |
-| `nvnCommandBufferSetDepthClamp` | 55, 231 | nvn-114 |
-| `nvnCommandBufferSetDepthRange` | 55, 231 | nvn-113 |
-| `nvnCommandBufferSetDepthRanges` | 55, 231 | nvn-113 |
-| `nvnCommandBufferSetLineWidth` | 55, 231 | nvn-121 |
-| `nvnCommandBufferSetPatchSize` | 55, 231 | nvn-122 |
-| `nvnCommandBufferSetPointSize` | 55, 231 | nvn-115 |
+| `nvnCommandBufferSetConservativeRasterEnable` | 55, 231 | nvn-120, nvn-121 |
+| `nvnCommandBufferSetDepthBounds` | 55, 231 | nvn-114 |
+| `nvnCommandBufferSetDepthClamp` | 55, 231 | nvn-115 |
+| `nvnCommandBufferSetDepthRange` | 55, 231 | nvn-114 |
+| `nvnCommandBufferSetDepthRanges` | 55, 231 | nvn-114 |
+| `nvnCommandBufferSetLineWidth` | 55, 231 | nvn-122 |
+| `nvnCommandBufferSetPatchSize` | 55, 231 | nvn-123 |
+| `nvnCommandBufferSetPointSize` | 55, 231 | nvn-116 |
 | `nvnCommandBufferSetPolygonOffsetClamp` |  |  |
-| `nvnCommandBufferSetPrimitiveRestart` | 55, 231 | nvn-116 |
-| `nvnCommandBufferSetRasterizerDiscard` | 55, 231 | nvn-114 |
-| `nvnCommandBufferSetRenderTargets` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-122, nvn-126, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferSetPrimitiveRestart` | 55, 231 | nvn-117 |
+| `nvnCommandBufferSetRasterizerDiscard` | 55, 231 | nvn-115 |
+| `nvnCommandBufferSetRenderTargets` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-123, nvn-127, nvn-128, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
 | `nvnCommandBufferSetSampleMask` |  |  |
-| `nvnCommandBufferSetScissor` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-107, nvn-122, nvn-126, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferSetScissors` | 55, 231 | nvn-112 |
+| `nvnCommandBufferSetScissor` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-108, nvn-123, nvn-127, nvn-128, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferSetScissors` | 55, 231 | nvn-113 |
 | `nvnCommandBufferSetStencilCullCriteria` |  |  |
 | `nvnCommandBufferSetStencilMask` |  |  |
 | `nvnCommandBufferSetStencilRef` |  |  |
 | `nvnCommandBufferSetStencilValueMask` |  |  |
-| `nvnCommandBufferSetTiledCacheAction` | 55, 231 | nvn-118 |
-| `nvnCommandBufferSetTiledCacheTileSize` | 55, 231 | nvn-118 |
-| `nvnCommandBufferSetViewport` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-122, nvn-126, nvn-127, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
-| `nvnCommandBufferSetViewportSwizzles` | 55, 231 | nvn-117 |
-| `nvnCommandBufferSetViewports` | 55, 231 | nvn-112 |
+| `nvnCommandBufferSetTiledCacheAction` | 55, 231 | nvn-119 |
+| `nvnCommandBufferSetTiledCacheTileSize` | 55, 231 | nvn-119 |
+| `nvnCommandBufferSetViewport` | 55, 231 | nvn-45, nvn-46, nvn-60, nvn-61, nvn-62, nvn-85, nvn-89, nvn-90, nvn-91, nvn-92, nvn-93, nvn-94, nvn-95, nvn-96, nvn-97, nvn-98, nvn-99, nvn-123, nvn-127, nvn-128, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17 |
+| `nvnCommandBufferSetViewportSwizzles` | 55, 231 | nvn-118 |
+| `nvnCommandBufferSetViewports` | 55, 231 | nvn-113 |
 
 ## DLSS
 
@@ -990,12 +991,12 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnDeviceCalculateAccelerationStructureMemoryRequirements` |  |  |
 | `nvnProgramGetShaderGroupHandle` |  |  |
 | `nvnProgramBuilderSetRayTracingModules` |  |  |
-| `nvnProgramBuilderSetMaxCallableRecursionDepth` | 231 | nvn-128 |
-| `nvnProgramBuilderGetMaxCallableRecursionDepth` | 231 | nvn-128 |
-| `nvnProgramBuilderSetMaxTraceRecursionDepth` | 231 | nvn-128 |
-| `nvnProgramBuilderGetMaxTraceRecursionDepth` | 231 | nvn-128 |
-| `nvnProgramBuilderSetProgramRayTracingFlags` | 231 | nvn-128 |
-| `nvnProgramBuilderGetProgramRayTracingFlags` | 231 | nvn-128 |
+| `nvnProgramBuilderSetMaxCallableRecursionDepth` | 231 | nvn-129 |
+| `nvnProgramBuilderGetMaxCallableRecursionDepth` | 231 | nvn-129 |
+| `nvnProgramBuilderSetMaxTraceRecursionDepth` | 231 | nvn-129 |
+| `nvnProgramBuilderGetMaxTraceRecursionDepth` | 231 | nvn-129 |
+| `nvnProgramBuilderSetProgramRayTracingFlags` | 231 | nvn-129 |
+| `nvnProgramBuilderGetProgramRayTracingFlags` | 231 | nvn-129 |
 | `nvnQueueBuilderGetRayTracingMemorySize` |  |  |
 | `nvnQueueBuilderSetRayTracingMemorySize` |  |  |
 | `nvnQueueGetTotalRayTracingMemoryUsed` |  |  |
@@ -1010,7 +1011,7 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | Function | Layer | Cases |
 | --- | --- | --- |
 | `nvnSetExternalDebuggerEnabledNVX` | 55, 231 | nvn-87 |
-| `nvnDeviceGenerateDebugDomainId` | 55, 231 | nvn-87, nvn-123, nvn-127 |
+| `nvnDeviceGenerateDebugDomainId` | 55, 231 | nvn-87, nvn-124, nvn-128 |
 | `nvnDeviceInstallDebugCallback` | 55, 231 | nvn-87 |
 | `nvnDeviceIsExternalDebuggerAttached` | 55, 231 | nvn-87 |
 | `nvnDeviceSetAutomaticCheckpointsByDebugGroup` | 55, 231 | nvn-87 |
@@ -1029,22 +1030,22 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnSamplerSetDebugLabel` | 55, 231 | nvn-87 |
 | `nvnProgramBuilderSetDebugDataHashes` |  |  |
 | `nvnProgramBuilderGetDebugDataHashes` |  |  |
-| `nvnCommandBufferInsertCheckpointDynamic` | 55, 231 | nvn-123 |
-| `nvnCommandBufferInsertCheckpointStatic` | 55, 231 | nvn-123 |
-| `nvnCommandBufferInsertDebugMarkerGraphics` | 231 | nvn-127 |
-| `nvnCommandBufferInsertDebugMarkerCompute` | 231 | nvn-127 |
-| `nvnCommandBufferPushDebugGroupGraphics` | 231 | nvn-127 |
-| `nvnCommandBufferPushDebugGroupCompute` | 231 | nvn-127 |
-| `nvnCommandBufferPopDebugGroupGraphics` | 231 | nvn-127 |
-| `nvnCommandBufferPopDebugGroupCompute` | 231 | nvn-127 |
-| `nvnCommandBufferInsertDebugMarker` | 55, 231 | nvn-123 |
-| `nvnCommandBufferInsertDebugMarkerDynamic` | 55, 231 | nvn-123 |
-| `nvnCommandBufferInsertDebugMarkerStatic` | 55, 231 | nvn-123 |
-| `nvnCommandBufferPopDebugGroup` | 55, 231 | nvn-123 |
-| `nvnCommandBufferPopDebugGroupId` | 55, 231 | nvn-123 |
-| `nvnCommandBufferPushDebugGroup` | 55, 231 | nvn-123 |
-| `nvnCommandBufferPushDebugGroupDynamic` | 55, 231 | nvn-123 |
-| `nvnCommandBufferPushDebugGroupStatic` | 55, 231 | nvn-123 |
+| `nvnCommandBufferInsertCheckpointDynamic` | 55, 231 | nvn-124 |
+| `nvnCommandBufferInsertCheckpointStatic` | 55, 231 | nvn-124 |
+| `nvnCommandBufferInsertDebugMarkerGraphics` | 231 | nvn-128 |
+| `nvnCommandBufferInsertDebugMarkerCompute` | 231 | nvn-128 |
+| `nvnCommandBufferPushDebugGroupGraphics` | 231 | nvn-128 |
+| `nvnCommandBufferPushDebugGroupCompute` | 231 | nvn-128 |
+| `nvnCommandBufferPopDebugGroupGraphics` | 231 | nvn-128 |
+| `nvnCommandBufferPopDebugGroupCompute` | 231 | nvn-128 |
+| `nvnCommandBufferInsertDebugMarker` | 55, 231 | nvn-124 |
+| `nvnCommandBufferInsertDebugMarkerDynamic` | 55, 231 | nvn-124 |
+| `nvnCommandBufferInsertDebugMarkerStatic` | 55, 231 | nvn-124 |
+| `nvnCommandBufferPopDebugGroup` | 55, 231 | nvn-124 |
+| `nvnCommandBufferPopDebugGroupId` | 55, 231 | nvn-124 |
+| `nvnCommandBufferPushDebugGroup` | 55, 231 | nvn-124 |
+| `nvnCommandBufferPushDebugGroupDynamic` | 55, 231 | nvn-124 |
+| `nvnCommandBufferPushDebugGroupStatic` | 55, 231 | nvn-124 |
 | `nvnCommandBufferSetDebugLabel` | 55, 231 | nvn-87 |
 | `nvnDeviceSetDebugLabel` | 55, 231 | nvn-87 |
 | `nvnProgramSetDebugLabel` | 55, 231 | nvn-87 |

@@ -195,6 +195,17 @@ void DrawPathDrawInstanced(DrawPath *path, const DrawElements *elements, uint32_
 /// instance).
 void DrawPathDrawIndirect(DrawPath *path, const DrawElements *elements,
                           const DrawBuffer *numbers);
+/// As many of the draws whose numbers are @p stride bytes apart at @p numbers as the word at
+/// @p count says, @p most at the most, the graphics unit reading the word. NVN's alone: the
+/// deko3d way fails it, deko3d having no such draw.
+void DrawPathDrawIndirectCount(DrawPath *path, const DrawElements *elements,
+                               const DrawBuffer *numbers, const DrawBuffer *count, uint32_t most,
+                               uint32_t stride);
+/// The texels from (@p source 0, 1) to (2, 3) of @p texture drawn over the target's pixels from
+/// (@p destination 0, 1) to (2, 3) with no program, through the texture's own sampler. NVN's
+/// alone, as the draw above is.
+void DrawPathDrawTexture(DrawPath *path, int texture, const float destination[4],
+                         const float source[4]);
 /// Ends the list, submits it and waits for the graphics unit. False when anything since
 /// DrawPathBegin failed, with DrawPathFailure saying what.
 bool DrawPathEnd(DrawPath *path);

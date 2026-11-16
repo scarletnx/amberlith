@@ -104,7 +104,9 @@ if (!nvn.nvnDeviceInitialize(&device, &builder)) { /* NvnLayerError() says why, 
   the value refused, or `""`. NVN's own results have no room for a reason. Under ScarletNX it is always `""`.
 - **`NvnLayerLacks()`** is whether a call since the last clear was one deko3d gives the layer no way to do at
   all, whatever its arguments: a virtual memory pool and `nvnMemoryPoolMapVirtual`, a list that waits on an event
-  (`nvnCommandBufferWaitEvent`) or adds to one (`nvnCommandBufferSignalEvent` in its add mode). A program that
+  (`nvnCommandBufferWaitEvent`) or adds to one (`nvnCommandBufferSignalEvent` in its add mode), as many draws
+  as a word the graphics unit reads says (`nvnCommandBufferMultiDrawArraysIndirectCount` and
+  `MultiDrawElementsIndirectCount`), a texture drawn with no program (`nvnCommandBufferDrawTexture`). A program that
   can do without tells that from a call it got wrong; edenprobe's cases skip as unavailable on it. Never under
   ScarletNX.
 - **`NvnLayerSetGuard(guard)`**: deko3d ends the program when it cannot make an object. A program that can turn
@@ -135,7 +137,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and eighty eight functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and ninety one functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the

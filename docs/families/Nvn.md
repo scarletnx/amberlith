@@ -11,6 +11,7 @@
   * [The binds that take several, and the deferred ones](#the-binds-that-take-several-and-the-deferred-ones)
   * [A uniform buffer updated inside the list](#a-uniform-buffer-updated-inside-the-list)
   * [Instanced draws, and draws that read their numbers](#instanced-draws-and-draws-that-read-their-numbers)
+  * [The draws deko3d has none of](#the-draws-deko3d-has-none-of)
 * [The command buffer, down two ways](#the-command-buffer-down-two-ways)
   * [Counters and the render enable](#counters-and-the-render-enable)
   * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
@@ -22,7 +23,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty seven cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty eight cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -66,7 +67,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
-  and eighty eight.
+  and ninety one.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -373,6 +374,25 @@ numbers, are each in its cell**, **the same eight instances through the layer's 
 cell** and **the same eight instances through the NVN the program looks up are each in its cell** (exact). A draw
 that starts at instance nought draws the first two cells again and leaves its own the clear colour; a failing
 case says whose colour the first wrong pixel has.
+
+### The draws deko3d has none of
+
+A sixth scene, for the NVN the program looks up alone: deko3d has neither of its draws, so the deko3d way cannot
+draw it and the layer lacks them.
+
+- the top left quarter: the first scene's 8 by 8 texture drawn with no program, four pixels a texel, through its
+  own sampler (`nvnCommandBufferDrawTexture`, its two regions each a corner's x and y and the other corner's, in
+  the target's pixels and the texture's texels);
+- the top right quarter: the clear colour;
+- the bottom row: the instanced scene's cells 4 to 7, two by `nvnCommandBufferMultiDrawArraysIndirectCount` and
+  two by `nvnCommandBufferMultiDrawElementsIndirectCount`, each draw one instance from its own base instance.
+  The word the graphics unit reads says two draws, and each buffer holds a third draw's numbers, cell 0's: a
+  runtime that draws as many as the most it was given paints over the texture.
+
+The case is **a texture drawn with no program and as many draws as a word says, through the NVN the program looks
+up, are each in its place** (exact), skipped as `unavailable` where the layer answers. Which row of the target a
+region's y of nought is follows the device's window origin, the upper left here, as every draw of the scenes
+does; no console has said so of this draw.
 
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the

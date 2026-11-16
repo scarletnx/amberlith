@@ -34,6 +34,11 @@ typedef struct {
                            uint32_t count, uint32_t base_instance, uint32_t instances);
     void (*draw_indirect)(DrawPath *path, const DrawElements *elements,
                           const DrawBuffer *numbers);
+    void (*draw_indirect_count)(DrawPath *path, const DrawElements *elements,
+                                const DrawBuffer *numbers, const DrawBuffer *count,
+                                uint32_t most, uint32_t stride);
+    void (*draw_texture)(DrawPath *path, int texture, const float destination[4],
+                         const float source[4]);
 } DrawPathWay;
 
 /// What every way starts with: its functions, what it was asked for and its failure.

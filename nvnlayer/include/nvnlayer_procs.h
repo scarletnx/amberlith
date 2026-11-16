@@ -849,6 +849,16 @@
     X(void, nvnCommandBufferDrawElementsIndirect,                                                 \
       (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,                      \
        NVNbufferAddress indices, NVNbufferAddress indirect))                                      \
+    X(void, nvnCommandBufferMultiDrawArraysIndirectCount,                                         \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNbufferAddress indirect,              \
+       NVNbufferAddress count, int most, ptrdiff_t stride))                                       \
+    X(void, nvnCommandBufferMultiDrawElementsIndirectCount,                                       \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,                      \
+       NVNbufferAddress indices, NVNbufferAddress indirect, NVNbufferAddress count, int most,     \
+       ptrdiff_t stride))                                                                         \
+    X(void, nvnCommandBufferDrawTexture,                                                          \
+      (NVNcommandBuffer *cmd, NVNtextureHandle handle, const NVNdrawTextureRegion *destination,   \
+       const NVNdrawTextureRegion *source))                                                       \
     X(void, nvnCommandBufferBindVertexBuffers,                                                    \
       (NVNcommandBuffer *cmd, int first, int count, const NVNbufferRange *ranges))                \
     X(void, nvnCommandBufferBindUniformBuffers,                                                   \

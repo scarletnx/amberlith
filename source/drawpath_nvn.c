@@ -566,6 +566,36 @@ static void NvDrawIndirect(DrawPath *path, const DrawElements *elements,
     }
 }
 
+static void NvDrawIndirectCount(DrawPath *path, const DrawElements *elements,
+                                const DrawBuffer *numbers, const DrawBuffer *count,
+                                uint32_t most, uint32_t stride) {
+    NvnPath *const nv = Nv(path);
+    if (elements != NULL && elements->indexed) {
+        nv->nvn.nvnCommandBufferMultiDrawElementsIndirectCount(
+            &nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES, NV_INDEX_TYPES[elements->type],
+            elements->indices->address, numbers->address, count->address, (int)most,
+            (ptrdiff_t)stride);
+    } else {
+        nv->nvn.nvnCommandBufferMultiDrawArraysIndirectCount(
+            &nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES, numbers->address, count->address,
+            (int)most, (ptrdiff_t)stride);
+    }
+}
+
+static void NvDrawTexture(DrawPath *path, int texture, const float destination[4],
+                          const float source[4]) {
+    NvnPath *const nv = Nv(path);
+    if (texture < 0 || (uint32_t)texture >= nv->texture_count) {
+        DrawPathFail(path, "texture %d drawn, where the scene made %u", texture,
+                     (unsigned)nv->texture_count);
+        return;
+    }
+    // A region is its four numbers: x and y of one corner, then of the other.
+    nv->nvn.nvnCommandBufferDrawTexture(&nv->command, nv->handles[texture],
+                                       (const NVNdrawTextureRegion *)destination,
+                                       (const NVNdrawTextureRegion *)source);
+}
+
 static void NvVertices(DrawPath *path, const DrawBuffer *vertices, uint32_t bytes) {
     NvnPath *const nv = Nv(path);
     const NvnProcs *const n = &nv->nvn;
@@ -702,6 +732,7 @@ static const DrawPathWay NVN_WAY = {
     NvClose, NvProgram, NvTexture, NvAlloc,       NvBegin, NvClear, NvClearDepth, NvDepth,
     NvUseProgram, NvVertices, NvUniform, NvBindTexture, NvDraw,  NvEnd,   NvRead,
     NvDrawIndexed, NvUpdate, NvInstances, NvDrawInstanced, NvDrawIndirect,
+    NvDrawIndirectCount, NvDrawTexture,
 };
 
 /// The steps of the bring-up, in order; false with the step in @p why.
