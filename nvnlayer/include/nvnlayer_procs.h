@@ -21,7 +21,8 @@
 ///   NVN_LAYER_PROCS_DRAW: both API versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231,
-///   NVN_LAYER_PROCS_PROGRAM_231 and NVN_LAYER_PROCS_DLSS_231, parts of it written apart): the
+///   NVN_LAYER_PROCS_PROGRAM_231, NVN_LAYER_PROCS_RAY_231 and NVN_LAYER_PROCS_DLSS_231, parts of
+///   it written apart): the
 ///   functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
 
@@ -459,6 +460,22 @@
       (const NVNprogramBuilder *builder))                                                         \
     X(int, nvnProgramBuilderGetSubroutineLinkageCount, (const NVNprogramBuilder *builder))        \
     X(uint64_t, nvnProgramGetScratchBytesPerWarp, (const NVNprogram *program))
+
+// What the Ounce (API 231) answers of ray tracing where no ray is traced: the modules a program
+// builder is given, a shader group's handle, and a queue's ray tracing memory, the size its
+// builder is set and what it has used. ScarletNX's nvn.hook has no arguments for the handle past
+// the program, and an unsigned size as the size's getter's answer: these are the ones an Ounce
+// game's driver takes, a group by value and 32 bytes to write, and the getter of every other
+// size of a queue builder.
+#define NVN_LAYER_PROCS_RAY_231(X)                                                                \
+    X(void, nvnProgramBuilderSetRayTracingModules,                                                \
+      (NVNprogramBuilder * builder, int count, const void *modules))                              \
+    X(void, nvnProgramGetShaderGroupHandle,                                                       \
+      (const NVNprogram *program, NVNshaderGroup group, void *handle))                            \
+    X(void, nvnQueueBuilderSetRayTracingMemorySize, (NVNqueueBuilder * builder, size_t size))     \
+    X(NVNboolean, nvnQueueBuilderGetRayTracingMemorySize,                                         \
+      (const NVNqueueBuilder *builder, int *size))                                                \
+    X(size_t, nvnQueueGetTotalRayTracingMemoryUsed, (NVNqueue * queue))
 
 // The Ounce's DLSS (API 231): the network's builder, the network, the parameters of an
 // evaluation and the evaluation.
@@ -1156,6 +1173,7 @@
     NVN_LAYER_PROCS_WINDOW_231(X)                                                                 \
     NVN_LAYER_PROCS_DEBUG_231(X)                                                                  \
     NVN_LAYER_PROCS_PROGRAM_231(X)                                                                \
+    NVN_LAYER_PROCS_RAY_231(X)                                                                    \
     NVN_LAYER_PROCS_DLSS_231(X)
 
 #if NVN_LAYER_API >= 231

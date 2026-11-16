@@ -2859,6 +2859,117 @@ static void ProgramScratchCase(const char *name) {
     CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
 }
 
+/// A shader group's handle is 32 bytes a ray tracing program writes for one of its groups. An
+/// Ounce game's driver writes none for a program with no ray tracing part, and a program no
+/// module was given has none: the bytes handed, and a guard of eight on each side, stay as they
+/// were.
+#define GROUP_HANDLE_BYTES 32u
+#define GROUP_GUARD_BYTES 8u
+static void ProgramGroupCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNprogram program;
+    if (!nvn.nvn.nvnProgramInitialize(&program, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnProgramInitialize answered false"));
+        return;
+    }
+    uint8_t handle[GROUP_GUARD_BYTES + GROUP_HANDLE_BYTES + GROUP_GUARD_BYTES];
+    memset(handle, 0x5a, sizeof(handle));
+    const NVNshaderGroup group = { { 0, -1, -1 } };
+    nvn.nvn.nvnProgramGetShaderGroupHandle(&program, group, handle + GROUP_GUARD_BYTES);
+    int changed = 0;
+    for (size_t i = 0; i < sizeof(handle); ++i) {
+        changed += handle[i] != 0x5a ? 1 : 0;
+    }
+    Gives(why, sizeof(why), "the bytes written of a shader group's handle and its guards, for a "
+                            "program with no ray tracing,",
+          changed, 0);
+    nvn.nvn.nvnProgramFinalize(&program);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
+/// The ray tracing modules a builder is given, an array by its address and their number, have
+/// a place of their own in it: an Ounce game's driver writes the two where no getter reads, and
+/// every number the builder answers is the one it was set before the modules were.
+static void ProgramBuilderModulesCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    char why[256] = "";
+    static const NVNshaderData named[2];
+    static const uint8_t modules[64];
+    _Alignas(8) NVNprogramBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnProgramBuilderSetDefaults(&builder);
+    nvn.nvn.nvnProgramBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnProgramBuilderSetShaders(&builder, 2, named);
+    nvn.nvn.nvnProgramBuilderSetSampleShading(&builder, 1);
+    nvn.nvn.nvnProgramBuilderSetMaxCallableRecursionDepth(&builder, 3);
+    nvn.nvn.nvnProgramBuilderSetMaxTraceRecursionDepth(&builder, 5);
+    nvn.nvn.nvnProgramBuilderSetProgramRayTracingFlags(&builder, 6);
+    nvn.nvn.nvnProgramBuilderSetRayTracingModules(&builder, 4, modules);
+    Gives(why, sizeof(why), "the builder's device, after the modules,",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's shader data, after the modules,",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetShaders(&builder),
+          (long long)(uintptr_t)named);
+    Gives(why, sizeof(why), "the builder's number of shaders, after the modules,",
+          nvn.nvn.nvnProgramBuilderGetShaderCount(&builder), 2);
+    Gives(why, sizeof(why), "the builder's sample shading, after the modules,",
+          nvn.nvn.nvnProgramBuilderGetSampleShading(&builder), 1);
+    Gives(why, sizeof(why), "the builder's greatest callable recursion depth, after the modules,",
+          nvn.nvn.nvnProgramBuilderGetMaxCallableRecursionDepth(&builder), 3);
+    Gives(why, sizeof(why), "the builder's greatest trace recursion depth, after the modules,",
+          nvn.nvn.nvnProgramBuilderGetMaxTraceRecursionDepth(&builder), 5);
+    Gives(why, sizeof(why), "the builder's ray tracing flags, after the modules,",
+          nvn.nvn.nvnProgramBuilderGetProgramRayTracingFlags(&builder), 6);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
+/// A queue builder's ray tracing memory size is one more of its sizes: unset on a new builder,
+/// and once set said to be, with the size, as an Ounce game's driver keeps it beside the others.
+/// The builder makes no queue.
+static void QueueRayBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNqueueBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnQueueBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnQueueBuilderSetDefaults(&builder);
+    int size = -1;
+    Gives(why, sizeof(why), "whether a new builder has a ray tracing memory size set",
+          nvn.nvn.nvnQueueBuilderGetRayTracingMemorySize(&builder, &size), 0);
+    nvn.nvn.nvnQueueBuilderSetRayTracingMemorySize(&builder, 0x300000);
+    Gives(why, sizeof(why), "whether a ray tracing memory size that was set is said to be",
+          nvn.nvn.nvnQueueBuilderGetRayTracingMemorySize(&builder, &size), 1);
+    Gives(why, sizeof(why), "the builder's ray tracing memory size", size, 0x300000);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The ray tracing memory a queue has used is one of the counts nvnQueueResetMemoryUsageCounts
+/// puts back to nought, in an Ounce game's driver as the other three: nought right after it.
+static void QueueRayUsedCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnQueueResetMemoryUsageCounts(&nvn.queue);
+    Gives(why, sizeof(why), "the ray tracing memory the queue used since its counts were reset",
+          (long long)nvn.nvn.nvnQueueGetTotalRayTracingMemoryUsed(&nvn.queue), 0);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 /// A clear recorded inside the Ounce's debug groups, between its markers, is the clear: the
 /// markers name work for the debug layer and record nothing a picture shows.
 static void OunceMarkersCase(const char *name, const float rgba[4], const uint8_t expected[4]) {
@@ -3386,6 +3497,14 @@ static void LayerCases(LayerWay way) {
                                                "subroutine linkage it was set, and none before");
     const char *const PROGRAM_SCRATCH = Way("an Ounce program with no ray tracing asks for no "
                                                "scratch memory per warp");
+    const char *const PROGRAM_GROUP = Way("an Ounce program with no ray tracing leaves a "
+                                             "shader group's handle as it was");
+    const char *const BUILDER_MODULES = Way("ray tracing modules given to an Ounce program "
+                                               "builder leave what it answers as set");
+    const char *const QUEUE_RAY_BUILDER = Way("an Ounce queue builder says whether its ray "
+                                                 "tracing memory size was set, and gives it back");
+    const char *const QUEUE_RAY_USED = Way("an Ounce queue's ray tracing memory count is "
+                                              "nought once its counts are reset");
 #endif
     const char *const WINDOW_BUILDER = Way("a window builder gives back what it was set");
     const char *const WINDOW_SAYS = Way("a window says what it is of, and keeps the active "
@@ -3418,6 +3537,8 @@ static void LayerCases(LayerWay way) {
 #if NVN_LAYER_API >= 231
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
                                          WINDOW_HDR, BUILDER_LINKAGE, PROGRAM_SCRATCH,
+                                         PROGRAM_GROUP, BUILDER_MODULES, QUEUE_RAY_BUILDER,
+                                         QUEUE_RAY_USED,
 #endif
                                          WINDOW, WINDOW_SAYS, WINDOW_SYNC };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
@@ -3617,6 +3738,10 @@ static void LayerCases(LayerWay way) {
     ProgramBuilderCase(PROGRAM_BUILDER);
     ProgramBuilderLinkageCase(BUILDER_LINKAGE);
     ProgramScratchCase(PROGRAM_SCRATCH);
+    ProgramGroupCase(PROGRAM_GROUP);
+    ProgramBuilderModulesCase(BUILDER_MODULES);
+    QueueRayBuilderCase(QUEUE_RAY_BUILDER);
+    QueueRayUsedCase(QUEUE_RAY_USED);
     WindowHdrBuilderCase(WINDOW_HDR_BUILDER);
 #endif
 

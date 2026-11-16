@@ -42,7 +42,7 @@ set behind the version.
 
 | Part | Files | In which build |
 | --- | --- | --- |
-| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has a hundred and thirty six names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
+| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has a hundred and forty one names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work, what a program, its builder and a queue answer of ray tracing where no ray is traced) |
 | the lookup: `nvnBootstrapLoader`, `nvnDeviceGetProcAddress`, `NvnLoadProcs` | `source/layer.c` | both |
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |
@@ -410,7 +410,11 @@ The layer's reference is the graphics unit running what the layer recorded, neve
   ScarletNX carries it (`src/nx/gpu/nvn/nvn.h`, from nxnative's `dm/gfx/nvn/include/nvn.h`), with the format
   numbers written out from ScarletNX's `nvn_tic_format.inc` and, for API 231, the Ounce's object sizes from the
   same header.
-- The prototypes of `include/nvnlayer_procs.h` follow ScarletNX's `gpu/nvn/nvn.hook`.
+- The prototypes of `include/nvnlayer_procs.h` follow ScarletNX's `gpu/nvn/nvn.hook`. Two say more than the hook
+  does at this pin, as an Ounce game's driver takes them: `nvnProgramGetShaderGroupHandle`, which the hook gives
+  the program alone, takes a shader group by value and 32 bytes to write; and
+  `nvnQueueBuilderGetRayTracingMemorySize`, which the hook has return a size, answers whether one was set and
+  writes it, as the getters of a queue builder's other sizes do.
 - The control section's offsets are the ones ScarletNX's `nvn_object.c` reads (`stage_of`), and the constant
   buffers' layout is its `docs/layers/gpu/nvn.md`, "Constant buffer banks".
 - The DKSH's layout and the constant buffers deko3d binds are deko3d's `source/dksh.h` and

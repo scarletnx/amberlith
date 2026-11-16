@@ -655,7 +655,7 @@ and its `nvnCommandBufferShadingRateImagePalette` by that suite's draw under a p
   failing pixel is the other texture's (the wrong descriptor), an edge texel drawn out (the first texture's own
   sampler), or nothing.
 
-The Switch 2 program has three more of a program and its builder (API 231), in the suite's first part:
+The Switch 2 program has seven more, of a program, its builder and a queue (API 231), in the suite's first part:
 
 - **an Ounce program builder gives back what it was set, a ray tracing program's numbers too** (exact): the
   builder's device, its shader data by address and count, its sample shading mode, and the greatest callable and
@@ -671,9 +671,29 @@ The Switch 2 program has three more of a program and its builder (API 231), in t
   program's ray tracing part, and an Ounce game's driver answers nought for a program that has none. ScarletNX
   75b49fbec2 answers 0x1000 for every program, a number it makes up for the games that size memory by it, so
   the case fails on it.
+- **an Ounce program with no ray tracing leaves a shader group's handle as it was** (exact):
+  `nvnProgramGetShaderGroupHandle` for a group of the program's first shader alone, into 32 bytes with a guard
+  of eight on each side: not a byte changes. A handle is a ray tracing program's to write, and an Ounce game's
+  driver returns at once for a program with no ray tracing part.
+- **ray tracing modules given to an Ounce program builder leave what it answers as set** (exact):
+  `nvnProgramBuilderSetRayTracingModules` with four modules that are only named, after every number of the
+  program builder's case was set: each getter still answers its own. An Ounce game's driver keeps the modules'
+  number and address apart from every field a getter reads, and NVN has no getter for the two.
+- **an Ounce queue builder says whether its ray tracing memory size was set, and gives it back** (exact):
+  `nvnQueueBuilderGetRayTracingMemorySize` answers false for a new builder, and true with 0x300000 once
+  `nvnQueueBuilderSetRayTracingMemorySize` set that: the getter a queue builder's every other size has, which is
+  what the code of an Ounce game's driver is. ScarletNX 75b49fbec2 takes the getter for one that returns a size,
+  answers nought and writes none, so the case fails on it.
+- **an Ounce queue's ray tracing memory count is nought once its counts are reset** (exact):
+  `nvnQueueGetTotalRayTracingMemoryUsed` right after `nvnQueueResetMemoryUsageCounts`, which in an Ounce game's
+  driver puts it back to nought with the other three counts.
 
-ScarletNX draws no ray tracing yet, so nothing else of it has a case: the acceleration structures, a program's
-shader groups and a queue's ray tracing memory are answers it makes up.
+No case traces a ray, and four functions are left without one until a machine that runs this program does:
+`nvnDeviceCalculateAccelerationStructureMemoryRequirements`, whose three sizes the driver's ray tracing core works
+out of a structure's geometry, so that only a console says them (ScarletNX makes up 0x10000 for each); and
+`nvnCommandBufferBuildAccelerationStructures`, `CompactAccelerationStructure` and `BindAccelerationStructure`, which
+record work on structures only that core builds, for the rays of a ray tracing program. The probe has no such
+program: its assembler writes none of the ray tracing stages, and no machine it runs on would check one.
 
 Without a case: a linkage map that is taken, and the subroutines a list then chooses, which need shaders with
 subroutines and the map a console's compiler writes of them; and `nvnProgramSetSampleShading`'s modes past the
