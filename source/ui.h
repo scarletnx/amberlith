@@ -961,6 +961,21 @@ typedef struct {
     uint32_t seconds_left;
 } UiBrowseInfo;
 
+/// How long the browser the mode file's word opened waits for a first press before the program
+/// leaves, its countdown on the screen: a person has a minute to read the first screen, and an
+/// emulator a script launched with the word still stops. The start screen's browser waits for
+/// ever: a person opened it.
+#define UI_BROWSE_NANOSECONDS 60000000000ull
+
+/// The browser's wait for a first press: UI_BROWSE_NANOSECONDS when the mode file's word opened
+/// it, nought, no end, when the start screen did.
+uint64_t UiBrowseUnattendedNanoseconds(bool by_word);
+
+/// Whole seconds left of @p limit_ns once @p elapsed_ns have passed, rounded up, as the
+/// countdown says them: nought for no limit and once the limit is reached, when the browser
+/// leaves.
+uint32_t UiBrowseSecondsLeft(uint64_t limit_ns, uint64_t elapsed_ns);
+
 /// The options a session runs with, which start as the mode file leaves them.
 typedef struct {
     bool timing;
