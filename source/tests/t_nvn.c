@@ -2839,6 +2839,28 @@ static void ProgramBuilderLinkageCase(const char *name) {
     CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
 }
 
+/// The Ounce's program builder keeps the hashes of its shaders' debug data it is given, by
+/// their address, and has none until then: an Ounce game's driver writes their number and their
+/// address in the builder, reads the address back, and its defaults put nought in both. The
+/// builder is filled with a byte first, and makes no program, so the hashes are only named.
+static void ProgramBuilderHashesCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    char why[256] = "";
+    static const uint8_t named[2 * 32];
+    _Alignas(8) NVNprogramBuilder builder;
+    memset(&builder, 0xa5, sizeof(builder));
+    nvn.nvn.nvnProgramBuilderSetDefaults(&builder);
+    Gives(why, sizeof(why), "a new builder's debug data hashes",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetDebugDataHashes(&builder), 0);
+    nvn.nvn.nvnProgramBuilderSetDebugDataHashes(&builder, 2, named);
+    Gives(why, sizeof(why), "the builder's debug data hashes",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetDebugDataHashes(&builder),
+          (long long)(uintptr_t)named);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
 /// The scratch memory a warp of a program's ray tracing needs is a number of its ray tracing
 /// part, which a program has once ray tracing modules made it one: an Ounce game's driver
 /// answers nought for a program without that part, and a program no module was given has none.
@@ -3497,6 +3519,8 @@ static void LayerCases(LayerWay way) {
                                                "subroutine linkage it was set, and none before");
     const char *const PROGRAM_SCRATCH = Way("an Ounce program with no ray tracing asks for no "
                                                "scratch memory per warp");
+    const char *const BUILDER_HASHES = Way("an Ounce program builder gives back the debug "
+                                              "data hashes it was set, and none before");
     const char *const PROGRAM_GROUP = Way("an Ounce program with no ray tracing leaves a "
                                              "shader group's handle as it was");
     const char *const BUILDER_MODULES = Way("ray tracing modules given to an Ounce program "
@@ -3538,7 +3562,7 @@ static void LayerCases(LayerWay way) {
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
                                          WINDOW_HDR, BUILDER_LINKAGE, PROGRAM_SCRATCH,
                                          PROGRAM_GROUP, BUILDER_MODULES, QUEUE_RAY_BUILDER,
-                                         QUEUE_RAY_USED,
+                                         QUEUE_RAY_USED, BUILDER_HASHES,
 #endif
                                          WINDOW, WINDOW_SAYS, WINDOW_SYNC };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
@@ -3737,6 +3761,7 @@ static void LayerCases(LayerWay way) {
     OunceMarkersCase(OUNCE_MARKERS, teal, teal_bytes);
     ProgramBuilderCase(PROGRAM_BUILDER);
     ProgramBuilderLinkageCase(BUILDER_LINKAGE);
+    ProgramBuilderHashesCase(BUILDER_HASHES);
     ProgramScratchCase(PROGRAM_SCRATCH);
     ProgramGroupCase(PROGRAM_GROUP);
     ProgramBuilderModulesCase(BUILDER_MODULES);

@@ -402,7 +402,8 @@
     X(NVNboolean, nvnCommandBufferInsertCheckpointStatic,                                         \
       (NVNcommandBuffer * cmd, const char *label))
 
-// The Ounce's markers and groups (API 231), which say whether they name graphics or compute work.
+// The Ounce's markers and groups (API 231), which say whether they name graphics or compute work,
+// and the hashes of its shaders' debug data a program builder keeps.
 #define NVN_LAYER_PROCS_DEBUG_231(X)                                                              \
     X(void, nvnCommandBufferInsertDebugMarkerGraphics,                                            \
       (NVNcommandBuffer * cmd, NVNdebugDomainId domain, const char *text))                        \
@@ -415,7 +416,10 @@
     X(void, nvnCommandBufferPopDebugGroupGraphics,                                                \
       (NVNcommandBuffer * cmd, NVNdebugDomainId domain))                                          \
     X(void, nvnCommandBufferPopDebugGroupCompute,                                                 \
-      (NVNcommandBuffer * cmd, NVNdebugDomainId domain))
+      (NVNcommandBuffer * cmd, NVNdebugDomainId domain))                                          \
+    X(void, nvnProgramBuilderSetDebugDataHashes,                                                  \
+      (NVNprogramBuilder * builder, int count, const void *hashes))                               \
+    X(const void *, nvnProgramBuilderGetDebugDataHashes, (const NVNprogramBuilder *builder))
 
 // What a device and its builder answer of themselves, the clear values registered with a
 // device, a program set from NVN 55's longer shader data, and the handles of a texture and of

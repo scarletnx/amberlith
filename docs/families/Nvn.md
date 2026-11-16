@@ -655,7 +655,7 @@ and its `nvnCommandBufferShadingRateImagePalette` by that suite's draw under a p
   failing pixel is the other texture's (the wrong descriptor), an edge texel drawn out (the first texture's own
   sampler), or nothing.
 
-The Switch 2 program has seven more, of a program, its builder and a queue (API 231), in the suite's first part:
+The Switch 2 program has eight more, of a program, its builder and a queue (API 231), in the suite's first part:
 
 - **an Ounce program builder gives back what it was set, a ray tracing program's numbers too** (exact): the
   builder's device, its shader data by address and count, its sample shading mode, and the greatest callable and
@@ -666,6 +666,11 @@ The Switch 2 program has seven more, of a program, its builder and a queue (API 
   nought of both on a new builder, which is filled with a byte before its defaults are set. An Ounce game's
   driver keeps the two in the builder and its defaults put nought there. ScarletNX 75b49fbec2 answers nought to
   both getters whatever was set, so the case fails on it.
+- **an Ounce program builder gives back the debug data hashes it was set, and none before** (exact):
+  `nvnProgramBuilderSetDebugDataHashes` with two hashes that are only named, then
+  `nvnProgramBuilderGetDebugDataHashes`: their address, and nought on a new builder, filled with a byte before its
+  defaults are set. An Ounce game's driver keeps their number and their address in the builder, and NVN has a
+  getter for the address alone. ScarletNX 75b49fbec2 answers nought whatever was set, so the case fails on it.
 - **an Ounce program with no ray tracing asks for no scratch memory per warp** (exact):
   `nvnProgramGetScratchBytesPerWarp` of a program no ray tracing module was given is nought. The number is of a
   program's ray tracing part, and an Ounce game's driver answers nought for a program that has none. ScarletNX
