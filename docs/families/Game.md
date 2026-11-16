@@ -197,7 +197,9 @@ its others `depends`: the levels run in a quick run from the mode file.
 
 **What is judged** is five frames of a run: its first, each quarter of the way and its last
 (frames 0, 149, 299, 449 and 599 of 600), so the camera's whole path, which ends with the run
-whatever `frames=` is. The render thread copies each out after its present and keeps it, and once
+whatever `frames=` is. The render thread copies each out after its present and keeps it (the
+copy is in that frame's time to the next present, so present to present leaves the judged frames
+out, as it leaves the warm-up), and once
 the frames are over each is held to what the processor works out, a case a frame. A frame's image
 depends on its number and the run's length alone.
 
