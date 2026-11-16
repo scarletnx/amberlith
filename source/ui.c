@@ -1238,9 +1238,6 @@ static const char *ResultWord(ReportResult result) {
 #define EDGE 16u
 #define LIST_X (EDGE + 2u * CW)
 #define RULE_Y (UI_TABS_TOP + BH + 6u)
-// The frieze: a rule two pixels thick, a notch every 52 pixels (the theme's spacing of 26 at its
-// scale) and three dots between two notches.
-#define FRIEZE_SPACING 52u
 
 static uint32_t Grain(uint32_t x, uint32_t y) {
     uint32_t h = x * 374761393u + y * 668265263u;
@@ -1248,14 +1245,12 @@ static uint32_t Grain(uint32_t x, uint32_t y) {
     return h ^ (h >> 16);
 }
 
-/// The page of @p look at one pixel: its colour, the grid (or the run's lines), a diagonal every
-/// 330 pixels a third of the way to the dim colour, the corners down by up to three in a hundred,
-/// as a convex screen's, and a grain of three either way.
+/// The page of @p look at one pixel: its colour, the grid (or the run's lines), the corners down by
+/// up to three in a hundred, as a convex screen's, and a grain of three either way.
 static void PageColourOf(const Look *look, uint32_t x, uint32_t y, uint32_t width,
                          uint32_t height, uint8_t out[4]) {
     const bool line = look->grid ? x % GRID == 0u || y % GRID == 0u : y % 4u == 3u;
     const uint8_t *const base = line ? look->ground : look->page;
-    const bool diagonal = (x + 3300u - y % 3300u) % 330u == 0u;
     const int64_t dx = (int64_t)x - (int64_t)width / 2;
     const int64_t dy = (int64_t)y - (int64_t)height / 2;
     const int64_t half_w = width > 1u ? (int64_t)width / 2 : 1;
@@ -1265,9 +1260,6 @@ static void PageColourOf(const Look *look, uint32_t x, uint32_t y, uint32_t widt
     const int grain = (int)(Grain(x, y) % 7u) - 3;
     for (int k = 0; k < 3; ++k) {
         int64_t value = base[k];
-        if (diagonal) {
-            value += ((int64_t)look->dim[k] - value) / 3;
-        }
         value -= value * far * 3 / 20000;
         value += grain;
         out[k] = (uint8_t)(value < 0 ? 0 : value > 255 ? 255 : value);
@@ -1289,28 +1281,6 @@ static void Backdrop(const UiFrame *frame, uint32_t x, uint32_t y, uint32_t widt
         for (uint32_t column = x; column < x + width && column < frame->width; ++column) {
             PageColourOf(g_look, column, row, frame->width, frame->height,
                          line + (size_t)column * 4u);
-        }
-    }
-}
-
-/// The frieze along the top and the bottom of a rectangle, the bottom's the top's upside down.
-static void Frieze(const UiFrame *frame, uint32_t x, uint32_t top, uint32_t width,
-                   uint32_t height) {
-    for (int bottom = 0; bottom < 2; ++bottom) {
-        const uint32_t rule = bottom ? top + height - 6u : top + 4u;
-        FillRect(frame, x, rule, width, 2u, TEXT);
-        for (uint32_t at = 0; at < width; at += FRIEZE_SPACING) {
-            const uint32_t notch = bottom ? rule - 4u : rule + 2u;
-            const uint32_t dots = bottom ? rule - 10u : rule + 6u;
-            const uint32_t low = bottom ? rule - 16u : rule + 12u;
-            const uint32_t left = at >= 4u ? at - 4u : 0u;
-            FillRect(frame, x + left, notch, at >= 4u ? (at + 4u < width ? 8u : width - left) : 4u,
-                     4u, TEXT);
-            if (at + 32u <= width) {
-                FillRect(frame, x + at + 20u, dots, 4u, 4u, TEXT);
-                FillRect(frame, x + at + 28u, dots, 4u, 4u, TEXT);
-                FillRect(frame, x + at + 24u, low, 4u, 4u, TEXT);
-            }
         }
     }
 }
@@ -1377,32 +1347,30 @@ static UiTab TabAt(const UiTap *tap) {
     return UI_TABS;
 }
 
-/// The head: the frieze, the page, the tabs with @p shown inverted (none past the last), the rule
-/// under them, and the title four times the font with its shadow, @p right at its right.
+/// The head: the page, the tabs with @p shown inverted (none past the last), and the rule under
+/// them. A screen with no tabs shown names itself with @p title where they would be; @p right
+/// goes against the right of that row.
 static void Head(const UiFrame *frame, uint32_t shown, const char *title, const char *right) {
     Backdrop(frame, 0, 0, frame->width, frame->height);
-    Frieze(frame, 0, 0, frame->width, frame->height);
-    for (uint32_t i = 0; i < UI_TABS && shown <= UI_TABS; ++i) {
-        if (shown == UI_TABS) {
-            break;
-        }
+    uint32_t end = EDGE;
+    for (uint32_t i = 0; i < UI_TABS && shown < UI_TABS; ++i) {
         const UiRect rect = TabRect(i);
         FillRect(frame, rect.x, rect.y, rect.width, rect.height, i == shown ? TEXT : BORDER);
-        Big(frame, rect.x + CW, rect.y + 2u * SC, i == shown ? BACKGROUND : TEXT,
+        Big(frame, rect.x + CW, rect.y + (BH - CH) / 2u, i == shown ? BACKGROUND : TEXT,
             UiTabName((UiTab)i));
+        end = rect.x + rect.width;
     }
-    FillRect(frame, EDGE, RULE_Y, frame->width - 2u * EDGE, SC, BORDER);
-    UiText(frame, EDGE + 4u, UI_TITLE_TOP + 4u, 2u * SC, BORDER, title);
-    UiText(frame, EDGE, UI_TITLE_TOP, 2u * SC, TEXT, title);
+    if (shown >= UI_TABS && title != NULL) {
+        end = BigFit(frame, EDGE, UI_TABS_TOP + (BH - CH) / 2u, frame->width / 2u, TEXT, title);
+    }
+    FillRect(frame, EDGE, RULE_Y, frame->width - 2u * EDGE, 2u, BORDER);
     if (right != NULL && right[0] != '\0') {
-        const uint32_t title_end = EDGE + (uint32_t)strlen(title) * 2u * CW + 2u * CW;
         char fitted[96];
-        const uint32_t room = frame->width - EDGE > title_end ? (frame->width - EDGE - title_end) / CW
-                                                              : 0u;
+        const uint32_t room =
+            frame->width - EDGE > end + 2u * CW ? (frame->width - EDGE - end - 2u * CW) / CW : 0u;
         Fit(fitted, sizeof(fitted), right, room);
         const uint32_t width = (uint32_t)strlen(fitted) * CW;
-        Big(frame, frame->width - EDGE - width, UI_TITLE_TOP + FONTVGA_HEIGHT * 2u - CH / 2u,
-            DIM, fitted);
+        Big(frame, frame->width - EDGE - width, UI_TABS_TOP + (BH - CH) / 2u, DIM, fitted);
     }
 }
 
@@ -1447,17 +1415,24 @@ typedef enum {
     MARK_ALL,
 } Mark;
 
-/// The theme's square, as whether the row is in the next run: hollow, half, full.
+/// The theme's square, as whether the row is in the next run: hollow, half, full; a cell and a
+/// quarter of the font across, so it sits in the margin before the row's words.
+#define MARKER_SIZE 10u
 static void Marker(const UiFrame *frame, uint32_t x, uint32_t y, Mark mark,
                    const uint8_t colour[4]) {
-    const uint32_t top = y + (UI_ROW_BOX - 14u) / 2u;
-    Outline(frame, x, top, 14u, 14u, colour);
-    Outline(frame, x + 1u, top + 1u, 12u, 12u, colour);
+    const uint32_t top = y + (UI_ROW_BOX - MARKER_SIZE) / 2u;
+    Outline(frame, x, top, MARKER_SIZE, MARKER_SIZE, colour);
+    Outline(frame, x + 1u, top + 1u, MARKER_SIZE - 2u, MARKER_SIZE - 2u, colour);
     if (mark == MARK_ALL) {
-        FillRect(frame, x + 4u, top + 4u, 6u, 6u, colour);
+        FillRect(frame, x + 3u, top + 3u, MARKER_SIZE - 6u, MARKER_SIZE - 6u, colour);
     } else if (mark == MARK_SOME) {
-        FillRect(frame, x + 4u, top + 6u, 6u, 2u, colour);
+        FillRect(frame, x + 3u, top + MARKER_SIZE / 2u - 1u, MARKER_SIZE - 6u, 2u, colour);
     }
+}
+
+/// A foot key's button across: the key, a cell, what it does, and the pad either side.
+static uint32_t FootKeyWidth(const UiKey *key) {
+    return ((uint32_t)strlen(key->key) + 1u + (uint32_t)strlen(key->what)) * CELL + 2u * KEY_PAD;
 }
 
 UiRect UiFootKey(uint32_t frame_width, uint32_t frame_height, const UiKey *keys, uint32_t count,
@@ -1467,28 +1442,18 @@ UiRect UiFootKey(uint32_t frame_width, uint32_t frame_height, const UiKey *keys,
         frame_height < UI_MIN_HEIGHT) {
         return none;
     }
-    uint32_t text = 0;
-    for (uint32_t i = 0; i < count; ++i) {
-        text += ((uint32_t)strlen(keys[i].key) + 1u + (uint32_t)strlen(keys[i].what)) * CW;
+    // Left to right from the margin on the band, as the run screens' keys are; one that would
+    // run past the margin on the right has no button.
+    uint32_t x = MARGIN;
+    for (uint32_t i = 0; i < index; ++i) {
+        x += FootKeyWidth(&keys[i]) + KEY_GAP;
     }
-    // Two cells between keys, or one where two would push the first off the foot: the results of
-    // a run the browser can run again name seven.
-    const uint32_t room = frame_width - 2u * EDGE - 4u * CW;
-    const uint32_t gap = text + (count - 1u) * 2u * CW <= room ? 2u * CW : CW;
-    const uint32_t width = text + (count - 1u) * gap;
-    if (width > room) {
+    const uint32_t width = FootKeyWidth(&keys[index]);
+    if (x + width > frame_width - MARGIN) {
         return none;
     }
-    uint32_t x = frame_width - EDGE - CW - width;
-    for (uint32_t i = 0; i < index; ++i) {
-        x += ((uint32_t)strlen(keys[i].key) + 1u + (uint32_t)strlen(keys[i].what)) * CW + gap;
-    }
-    const UiRect rect = {
-        x - SC, UI_FOOT_TOP(frame_height) + 8u + CH,
-        ((uint32_t)strlen(keys[index].key) + 1u + (uint32_t)strlen(keys[index].what)) * CW +
-            2u * SC,
-        CH
-    };
+    const UiRect rect = { x, frame_height - UI_FOOT_BAND + (UI_FOOT_BAND - KEY_HEIGHT) / 2u, width,
+                          KEY_HEIGHT };
     return rect;
 }
 
@@ -1503,27 +1468,28 @@ uint32_t UiFootKeyAt(const UiTap *tap, uint32_t frame_width, uint32_t frame_heig
     return UINT32_MAX;
 }
 
-/// The foot: a box with the ink's bar at its left, @p tip on its first row in @p tip_colour, and
-/// on its second the keys against its right, each key inverted and what it does after it.
+/// The foot: @p tip in @p tip_colour on the row over the band, the launcher's bar before it, and
+/// the keys on the band as the run screens' are, each framed with its key on the dim colour.
 static void Foot(const UiFrame *frame, const char *tip, const uint8_t *tip_colour,
                  const UiKey *keys, uint32_t count) {
     const uint32_t y = UI_FOOT_TOP(frame->height);
-    FillRect(frame, EDGE, y, frame->width - 2u * EDGE, UI_FOOT_HEIGHT, BACKGROUND);
-    Outline(frame, EDGE, y, frame->width - 2u * EDGE, UI_FOOT_HEIGHT, BORDER);
-    FillRect(frame, EDGE + 6u, y + 6u, 6u, UI_FOOT_HEIGHT - 12u, TEXT);
     if (tip != NULL) {
-        BigFit(frame, EDGE + 3u * CW, y + 6u, frame->width - EDGE - CW,
-               tip_colour != NULL ? tip_colour : TEXT, tip);
+        FillRect(frame, MARGIN - 12u, y + 2u, 3u, FONTVGA_HEIGHT, TEXT);
+        BigFit(frame, MARGIN, y + 2u, frame->width - MARGIN, tip_colour != NULL ? tip_colour : TEXT,
+               tip);
     }
+    FootBand(frame);
     for (uint32_t i = 0; i < count; ++i) {
         const UiRect rect = UiFootKey(frame->width, frame->height, keys, count, i);
         if (rect.width == 0u) {
             continue;
         }
-        const uint32_t kw = (uint32_t)strlen(keys[i].key) * CW;
-        FillRect(frame, rect.x, rect.y, kw + 2u * SC, CH, TEXT);
-        Big(frame, rect.x + SC, rect.y, BACKGROUND, keys[i].key);
-        Big(frame, rect.x + SC + kw + CW, rect.y, TEXT, keys[i].what);
+        const uint32_t key_columns = (uint32_t)strlen(keys[i].key);
+        FillRect(frame, rect.x + KEY_PAD - 1u, rect.y + 2u, key_columns * CELL + 2u, FONTVGA_HEIGHT,
+                 DIM);
+        Outline(frame, rect.x, rect.y, rect.width, rect.height, DIM);
+        const uint32_t after = Say(frame, rect.x + KEY_PAD, rect.y + 2u, BACKGROUND, keys[i].key);
+        Say(frame, after + CELL, rect.y + 2u, BACKGROUND, keys[i].what);
     }
 }
 
@@ -2920,10 +2886,15 @@ void UiComposeProgress(const UiFrame *frame, const UiProgress *progress) {
     snprintf(text, sizeof(text), "folder: %s", progress->folder != NULL ? progress->folder : "");
     SayFitted(frame, LIST_X, y + CH + 4u, DIM, text);
 
-    Foot(frame,
-         progress->quick ? "Nothing to press: the program leaves when the run ends"
-                         : "Nothing to press: the results come up when the run ends",
-         DIM, NULL, 0u);
+    static const UiKey CANCEL[1] = { { "B", "cancel, back to the start", 0 } };
+    if (progress->cancelling) {
+        Foot(frame, "Cancelling: the case under way ends, then the start screen comes up", DIM,
+             NULL, 0u);
+    } else if (progress->quick) {
+        Foot(frame, "Nothing to press: the program leaves when the run ends", DIM, NULL, 0u);
+    } else {
+        Foot(frame, "The results come up when the run ends", DIM, CANCEL, 1u);
+    }
 }
 
 // The listening sequence, one row per screen, in the order a run with no button plays them.
@@ -4041,7 +4012,7 @@ static void ComposeSuites(const UiFrame *frame, const UiBrowseInfo *info,
         if (state->level == 0u) {
             const UiFamily family = (UiFamily)row;
             const uint8_t *const ink = ListRow(frame, LIST_X, y, width, UI_ROW_BOX, selected);
-            Marker(frame, LIST_X + 8u, y, FamilyMark(state, info, family),
+            Marker(frame, LIST_X + 2u, y, FamilyMark(state, info, family),
                    family == UI_FAMILY_JUDGE && !selected ? DIM : ink);
             char name[24];
             snprintf(name, sizeof(name), "%s", UiFamilyName(family));
@@ -4057,7 +4028,7 @@ static void ComposeSuites(const UiFrame *frame, const UiBrowseInfo *info,
             const uint32_t suite = FamilySuiteAt((UiFamily)state->family, row);
             CatalogueCounts(info, UI_FAMILY_OTHER, suite, counts);
             const uint8_t *const ink = ListRow(frame, LIST_X, y, width, UI_ROW_BOX, selected);
-            Marker(frame, LIST_X + 8u, y, SuiteMark(state, info, suite),
+            Marker(frame, LIST_X + 2u, y, SuiteMark(state, info, suite),
                    Markable(suite) || selected ? ink : DIM);
             BigFit(frame, LIST_X + 2u * CW, y + 2u, LIST_X + 14u * CW,
                    selected || counts[1] == 0u ? ink : FAILED, UiBrowseSuite(suite));
@@ -4091,7 +4062,7 @@ static void ComposeSuites(const UiFrame *frame, const UiBrowseInfo *info,
                                   ? MARK_ALL
                               : bring_up ? MARK_SOME
                                          : MARK_NONE;
-            Marker(frame, LIST_X + 8u, y, mark, bring_up && !selected ? DIM : ink);
+            Marker(frame, LIST_X + 2u, y, mark, bring_up && !selected ? DIM : ink);
             BigVerdict(frame, LIST_X + 2u * CW + 2u, y + 2u, record->result);
             if (selected) {
                 TextWrapped(frame, name_x, y + 2u, SC, CH, ink, record->name, columns, 3u);
@@ -4215,7 +4186,7 @@ static void ComposeDemos(const UiFrame *frame, const UiBrowseInfo *info,
         const uint32_t y = UI_BODY_TOP + 6u + r * UI_ROW_PITCH;
         const bool selected = row == state->demo;
         const uint8_t *const ink = ListRow(frame, LIST_X, y, width, UI_ROW_BOX, selected);
-        Marker(frame, LIST_X + 8u, y,
+        Marker(frame, LIST_X + 2u, y,
                row < 32u && (state->demo_marks >> row & 1u) != 0u ? MARK_ALL : MARK_NONE, ink);
         BigFit(frame, LIST_X + 2u * CW, y + 2u, LIST_X + width - CW / 2u, ink,
                info->demos[row].name);
@@ -4563,15 +4534,17 @@ void UiComposeHud(const UiFrame *frame, const UiHud *hud) {
     // Top right: the frame times, against the display's two periods at 60 a second.
     const uint32_t graph_width = 352u;
     const uint32_t gx = frame->width - EDGE - graph_width;
-    y = HudBox(frame, gx, EDGE, graph_width, BH + 4u + 3u * CH + 8u, "FRAME TIMES", "ms");
-    const uint32_t base = y + 3u * CH - 4u;
+    // The graph's own height, whatever the text's size: three pixels a millisecond up to 32.
+    const uint32_t graph = 96u;
+    y = HudBox(frame, gx, EDGE, graph_width, BH + 4u + graph + 8u, "FRAME TIMES", "ms");
+    const uint32_t base = y + graph - 4u;
     // Three pixels a millisecond: 33.3 ms is a hundred.
     const uint32_t count = hud->time_count < UI_HUD_TIMES ? hud->time_count : UI_HUD_TIMES;
     uint32_t previous = 0;
     for (uint32_t i = 0; i < count; ++i) {
         uint32_t height = hud->times[i] * 3u / 1000u;
-        if (height > 3u * CH - 8u) {
-            height = 3u * CH - 8u;
+        if (height > graph - 8u) {
+            height = graph - 8u;
         }
         const uint32_t from = i == 0u ? height : previous;
         const uint32_t low = from < height ? from : height;
@@ -4711,9 +4684,7 @@ void UiComposePause(const UiFrame *frame, const UiPauseInfo *info, const UiPause
     Backdrop(frame, bx, by, width, height);
     Outline(frame, bx, by, width, height, TEXT);
     Outline(frame, bx + 1u, by + 1u, width - 2u, height - 2u, TEXT);
-    Frieze(frame, bx, by, width, height);
-    UiText(frame, bx + 3u * CW + 4u, by + 38u, 2u * SC, BORDER, "PAUSED");
-    UiText(frame, bx + 3u * CW, by + 34u, 2u * SC, TEXT, "PAUSED");
+    Big(frame, bx + 3u * CW, by + 34u, TEXT, "PAUSED");
     if (info->name != NULL) {
         Big(frame, bx + width - 3u * CW - (uint32_t)strlen(info->name) * CW, by + 50u, DIM,
             info->name);

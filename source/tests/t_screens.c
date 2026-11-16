@@ -695,14 +695,14 @@ static void CheckOverflow(Fixture *f) {
                                                 UI_ROW_HEIGHT;
     const uint32_t right = FRAME_WIDTH - 32u - 80u;
     const uint32_t below_at_top =
-        CountColour(&frame, right, list_end, FRAME_WIDTH - 32u, list_end + UI_ROW_HEIGHT, SOFT);
+        CountColour(&frame, right, list_end, FRAME_WIDTH - 32u, list_end + 2u * UI_ROW_HEIGHT, SOFT);
     const uint32_t above_at_top = CountColour(&frame, right, UI_LIST_TOP - UI_ROW_HEIGHT,
                                               FRAME_WIDTH - 32u, UI_LIST_TOP, SOFT);
     UiState last = UiStart(&f->small);
     last.group = f->small.group_count - 1u;
     UiCompose(&frame, &f->small, last, NULL);
     const uint32_t below_at_end =
-        CountColour(&frame, right, list_end, FRAME_WIDTH - 32u, list_end + UI_ROW_HEIGHT, SOFT);
+        CountColour(&frame, right, list_end, FRAME_WIDTH - 32u, list_end + 2u * UI_ROW_HEIGHT, SOFT);
     const uint32_t above_at_end = CountColour(&frame, right, UI_LIST_TOP - UI_ROW_HEIGHT,
                                               FRAME_WIDTH - 32u, UI_LIST_TOP, SOFT);
     CHECK_TRUE(SUITE, "a list longer than the overview says there is more, whole, where there is",
@@ -2005,7 +2005,7 @@ static void CheckProgress(Fixture *f) {
     // screen fills its bar.
     const uint32_t bar = UI_PROGRESS_BAR_TOP;
     const uint32_t bar_end = bar + UI_PROGRESS_BAR_HEIGHT;
-    const uint32_t width = FRAME_WIDTH - 64u;
+    const uint32_t width = FRAME_WIDTH - 32u - 2u * UI_CELL_WIDTH;
     UiComposeProgress(&frame, &progress);
     const uint32_t done = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_INK);
     const uint32_t under_way = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_SOFT);
@@ -2245,7 +2245,7 @@ static void CheckListen(Fixture *f) {
     UiComposeListen(&frame, UI_LISTEN_A1, 0.0, 0.0);
     DumpFrame(&frame, "12-listening");
     const uint32_t listen_header = CountLit(&frame, 8u, 24u);
-    const uint32_t listen_second = CountLit(&frame, UI_TITLE_TOP, UI_TITLE_TOP + 64u);
+    const uint32_t listen_second = CountLit(&frame, UI_BODY_TOP, UI_BODY_TOP + 64u);
     uint32_t same = 0;
     for (size_t i = 0; i < 6u; ++i) {
         for (size_t j = i + 1u; j < 6u; ++j) {
@@ -2266,7 +2266,7 @@ static void CheckListen(Fixture *f) {
     // colours: the steps done in the ink and the one playing in the soft colour.
     const uint32_t bar = UI_PROGRESS_BAR_TOP;
     const uint32_t bar_end = bar + UI_PROGRESS_BAR_HEIGHT;
-    const uint32_t width = FRAME_WIDTH - 64u;
+    const uint32_t width = FRAME_WIDTH - 32u - 2u * UI_CELL_WIDTH;
     const uint32_t n = UI_LISTEN_CLOSING + 1u;
     UiComposeListen(&frame, UI_LISTEN_A1, 0.0, 0.0);
     const uint32_t done = CountColour(&frame, 0, bar, FRAME_WIDTH, bar_end, RUN_INK);
@@ -2355,7 +2355,7 @@ static void CheckPad(Fixture *f) {
     const uint32_t bar_done =
         CountColour(&frame, 0, UI_PAD_BAR_TOP, FRAME_WIDTH,
                     UI_PAD_BAR_TOP + UI_PAD_BAR_HEIGHT, RUN_INK);
-    const uint32_t width = FRAME_WIDTH - 64u;
+    const uint32_t width = FRAME_WIDTH - 32u - 2u * UI_CELL_WIDTH;
     const bool bar_right = bar_done == (width * 1u / screen.prompts) * UI_PAD_BAR_HEIGHT;
 
     // A word too long for eight times the cell comes down a size rather than off the frame.
