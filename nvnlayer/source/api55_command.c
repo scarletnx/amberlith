@@ -368,3 +368,190 @@ void Nvnl_nvnCommandBufferCopyCommands(NVNcommandBuffer *cmd, int count,
                                        const NVNcommandHandle *handles) {
     CallLists(cmd, count, handles, "nvnCommandBufferCopyCommands");
 }
+
+// ---- clears past the float clear of a target
+
+void Nvnl_nvnCommandBufferClearColori(NVNcommandBuffer *cmd, int index, const int *rgba,
+                                      int mask) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferClearColori");
+    if (record != NULL) {
+        dkCmdBufClearColorSint(record->cmdbuf, (uint32_t)index,
+                               (uint32_t)mask & DkColorMask_RGBA, rgba[0], rgba[1], rgba[2],
+                               rgba[3]);
+    }
+}
+
+void Nvnl_nvnCommandBufferClearColorui(NVNcommandBuffer *cmd, int index, const uint32_t *rgba,
+                                       int mask) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferClearColorui");
+    if (record != NULL) {
+        dkCmdBufClearColorUint(record->cmdbuf, (uint32_t)index,
+                               (uint32_t)mask & DkColorMask_RGBA, rgba[0], rgba[1], rgba[2],
+                               rgba[3]);
+    }
+}
+
+/// How a clear's four words are read.
+typedef enum {
+    WORDS_FLOAT,
+    WORDS_SIGNED,
+    WORDS_UNSIGNED,
+} ClearWords;
+
+/// A clear of a texture that is no target. deko3d clears targets only: the texture is bound as
+/// the one target, the scissor put over the region, the clear recorded, and the targets and the
+/// scissor the program last set put back.
+static void ClearTexture(NVNcommandBuffer *cmd, const NVNtexture *texture,
+                         const NVNtextureView *view, const NVNcopyRegion *region,
+                         const void *rgba, int mask, ClearWords words, const char *what) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, what);
+    const LayerTexture *const to = TextureOf(texture, what);
+    if (record == NULL || to == NULL) {
+        return;
+    }
+    if (view != NULL || region->zoffset != 0 || region->depth != 1 ||
+        to->format == NVN_FORMAT_DEPTH32F || to->format == NVN_FORMAT_DEPTH24_STENCIL8) {
+        LayerComplain("%s: %s view, layers %d to %d and NVN format 0x%x, and the layer clears "
+                      "the one layer of a colour texture with no view",
+                      what, view != NULL ? "a" : "no", region->zoffset,
+                      region->zoffset + region->depth, (unsigned)to->format);
+        return;
+    }
+    if (region->xoffset < 0 || region->yoffset < 0 || region->width <= 0 || region->height <= 0 ||
+        region->xoffset + region->width > to->width ||
+        region->yoffset + region->height > to->height) {
+        LayerComplain("%s: the region %d,%d %dx%d is not inside the %dx%d texture", what,
+                      region->xoffset, region->yoffset, region->width, region->height, to->width,
+                      to->height);
+        return;
+    }
+    DkImageView target;
+    dkImageViewDefaults(&target, &to->image);
+    const DkImageView *const one = &target;
+    dkCmdBufBindRenderTargets(record->cmdbuf, &one, 1, NULL);
+    const DkScissor over = { (uint32_t)region->xoffset, (uint32_t)region->yoffset,
+                             (uint32_t)region->width, (uint32_t)region->height };
+    dkCmdBufSetScissors(record->cmdbuf, 0, &over, 1);
+    const uint32_t channels = (uint32_t)mask & DkColorMask_RGBA;
+    if (words == WORDS_FLOAT) {
+        const float *const value = rgba;
+        dkCmdBufClearColorFloat(record->cmdbuf, 0, channels, value[0], value[1], value[2],
+                                value[3]);
+    } else if (words == WORDS_SIGNED) {
+        const int32_t *const value = rgba;
+        dkCmdBufClearColorSint(record->cmdbuf, 0, channels, value[0], value[1], value[2],
+                               value[3]);
+    } else {
+        const uint32_t *const value = rgba;
+        dkCmdBufClearColorUint(record->cmdbuf, 0, channels, value[0], value[1], value[2],
+                               value[3]);
+    }
+    // Back to what the program set.
+    const LayerTargets *const kept = &record->draw->targets;
+    DkImageView colors[COLOR_TARGETS_MAX];
+    DkImageView const *bound[COLOR_TARGETS_MAX];
+    for (int i = 0; i < kept->count; ++i) {
+        dkImageViewDefaults(&colors[i], &((const LayerTexture *)(const void *)kept->colors[i])->image);
+        bound[i] = &colors[i];
+    }
+    DkImageView depth;
+    if (kept->depth != NULL) {
+        dkImageViewDefaults(&depth, &((const LayerTexture *)(const void *)kept->depth)->image);
+    }
+    dkCmdBufBindRenderTargets(record->cmdbuf, bound, (uint32_t)kept->count,
+                              kept->depth != NULL ? &depth : NULL);
+    if (kept->scissor_set) {
+        dkCmdBufSetScissors(record->cmdbuf, 0, &kept->scissor, 1);
+    }
+}
+
+void Nvnl_nvnCommandBufferClearTexture(NVNcommandBuffer *cmd, const NVNtexture *texture,
+                                       const NVNtextureView *view, const NVNcopyRegion *region,
+                                       const float *rgba, int mask) {
+    ClearTexture(cmd, texture, view, region, rgba, mask, WORDS_FLOAT,
+                 "nvnCommandBufferClearTexture");
+}
+
+void Nvnl_nvnCommandBufferClearTexturei(NVNcommandBuffer *cmd, const NVNtexture *texture,
+                                        const NVNtextureView *view, const NVNcopyRegion *region,
+                                        const int *rgba, int mask) {
+    ClearTexture(cmd, texture, view, region, rgba, mask, WORDS_SIGNED,
+                 "nvnCommandBufferClearTexturei");
+}
+
+void Nvnl_nvnCommandBufferClearTextureui(NVNcommandBuffer *cmd, const NVNtexture *texture,
+                                         const NVNtextureView *view, const NVNcopyRegion *region,
+                                         const uint32_t *rgba, int mask) {
+    ClearTexture(cmd, texture, view, region, rgba, mask, WORDS_UNSIGNED,
+                 "nvnCommandBufferClearTextureui");
+}
+
+/// A range of a buffer filled with one word. deko3d has no fill: the word fills a unit of the
+/// layer's memory, and the graphics unit copies from it, a unit's bytes at a time.
+void Nvnl_nvnCommandBufferClearBuffer(NVNcommandBuffer *cmd, NVNbufferAddress address,
+                                      size_t size, uint32_t value) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferClearBuffer");
+    if (record == NULL || size == 0u) {
+        return;
+    }
+    if ((address & 3u) != 0u || (size & 3u) != 0u) {
+        LayerComplain("nvnCommandBufferClearBuffer: 0x%zx bytes at 0x%llx, and the layer fills "
+                      "whole words on a four byte boundary",
+                      size, (unsigned long long)address);
+        return;
+    }
+    const long unit = Unit(record, "nvnCommandBufferClearBuffer");
+    if (unit < 0) {
+        return;
+    }
+    const LayerDraw *const draw = record->draw;
+    for (uint32_t at = 0; at < LAYER_HANDLE_BYTES; at += 4u) {
+        memcpy(draw->handle_cpu + unit + at, &value, 4);
+    }
+    for (size_t done = 0; done < size; done += LAYER_HANDLE_BYTES) {
+        const size_t part = size - done < LAYER_HANDLE_BYTES ? size - done : LAYER_HANDLE_BYTES;
+        dkCmdBufCopyBuffer(record->cmdbuf, draw->handle_memory + (uint64_t)unit, address + done,
+                           (uint32_t)part);
+    }
+}
+
+// ---- what a copy and a target keep
+
+/// Kept for its getter: the layer copies the one layer of a 2D texture, which has no image
+/// after it for the stride to reach.
+void Nvnl_nvnCommandBufferSetCopyImageStride(NVNcommandBuffer *cmd, ptrdiff_t stride) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetCopyImageStride");
+    if (record != NULL) {
+        record->draw->copy_image_stride = stride;
+    }
+}
+
+ptrdiff_t Nvnl_nvnCommandBufferGetCopyImageStride(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetCopyImageStride");
+    return record != NULL ? record->draw->copy_image_stride : 0;
+}
+
+ptrdiff_t Nvnl_nvnCommandBufferGetCopyRowStride(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetCopyRowStride");
+    return record != NULL ? (ptrdiff_t)record->copy_row_stride : 0;
+}
+
+void Nvnl_nvnCommandBufferDiscardColor(NVNcommandBuffer *cmd, int index) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferDiscardColor");
+    if (record == NULL) {
+        return;
+    }
+    if (index < 0 || index >= COLOR_TARGETS_MAX) {
+        LayerComplain("nvnCommandBufferDiscardColor: colour target %d, where there are 0 to %d",
+                      index, COLOR_TARGETS_MAX - 1);
+        return;
+    }
+    dkCmdBufDiscardColor(record->cmdbuf, (uint32_t)index);
+}
+
+void Nvnl_nvnCommandBufferDiscardDepthStencil(NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferDiscardDepthStencil");
+    if (record != NULL) {
+        dkCmdBufDiscardDepthStencil(record->cmdbuf);
+    }
+}

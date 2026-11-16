@@ -11,11 +11,12 @@
 * [The command buffer, down two ways](#the-command-buffer-down-two-ways)
   * [Counters and the render enable](#counters-and-the-render-enable)
   * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
+  * [Clears, strides and discards](#clears-strides-and-discards)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, sixty cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, seventy cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -59,7 +60,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and seventy six.
+  and eighty seven.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -335,6 +336,36 @@ expects. Exact tier.
 
 `nvnCommandBufferSetRecordingMode`, `SetComputeOverlapMode` and `SetComputeWorkloadPriority` have no case: nothing
 a program can read or draw changes with them here, and what they change on a console is the driver's.
+
+### Clears, strides and discards
+
+Three of these make 16 by 16 textures of their own, in a pool of their own, and read each back with
+`nvnCommandBufferCopyTextureToBuffer`, every texel judged.
+
+- **clears of an unsigned and a signed integer target hold the integers given**: an RGBA8UI and an RGBA8I
+  texture, each bound as the target and cleared whole (`nvnCommandBufferClearColorui` with 1, 200, 255 and 7;
+  `nvnCommandBufferClearColori` with -1, 127, -128 and 5), then cleared again through a mask of two channels,
+  which changes those two and no other. The way's own target is bound again after them, and a cell drawn there.
+- **a clear of a texture that is no target reaches its region and its mask's channels**: `nvnCommandBufferClearTexture`
+  on an RGBA8 texture, `ClearTextureui` and `ClearTexturei` on the two integer ones: each texture cleared whole,
+  then the square from (4,4) to (12,12) through a mask. Inside the square the masked channels are the second
+  clear's and the others the first's; outside it everything is the first's. The cell drawn after the clears, with
+  no target bound again, is in the way's target: a clear of a texture leaves the list's targets and scissor alone.
+  The layer has to bind the texture to clear it, deko3d clearing targets only, and puts both back.
+- **a range of a buffer cleared to a word holds it, and nothing beside the range**: `nvnCommandBufferClearBuffer`
+  over 0x60 bytes at 0x10 of the page, every word of the page judged. deko3d has no fill: the layer fills a unit
+  of its own memory with the word and has the graphics unit copy from it.
+- **a command buffer gives back the copy strides it was set**: `nvnCommandBufferSetCopyRowStride` and
+  `SetCopyImageStride`, then `GetCopyRowStride` and `GetCopyImageStride`: 288 and 0x4800, and 0 and 0 once set
+  back. What an image stride does to a copy of several layers is not asked: the layer has textures of one.
+- **targets discarded, then cleared and drawn, hold the clear and the draw**: a cell drawn,
+  `nvnCommandBufferDiscardColor` and `DiscardDepthStencil`, which leave the targets undefined, then both cleared
+  and another cell drawn under the depth test: the first cell is gone and the second there, as with no discard.
+  What a discarded target holds before it is cleared is not asked.
+
+`nvnCommandBufferDownsample` and its three kin wait for multisampled textures in the layer.
+`nvnCommandBufferResolveDepthBuffer`, `SaveZCullData` and `RestoreZCullData` have no case: they move the graphics
+unit's own depth culling data, which no program reads and no picture shows.
 
 ## Where nvn/nvn.h comes from
 

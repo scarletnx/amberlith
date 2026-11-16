@@ -197,6 +197,14 @@ typedef struct {
 } LayerCommandMemory;
 #define LAYER_UNUSED_BYTE 0xa5u
 
+typedef struct {
+    int count;
+    const NVNtexture *colors[COLOR_TARGETS_MAX];
+    const NVNtexture *depth;
+    bool scissor_set;
+    DkScissor scissor;
+} LayerTargets;
+
 /// What a command buffer keeps for its draws, too large for the NVN object: allocated with it.
 typedef struct {
     /// The part of the command memory the layer keeps to itself, where each draw's copy of the
@@ -212,6 +220,11 @@ typedef struct {
     uint8_t dirty;
     /// What the command buffer answers of its memory and of its recording (api55_command.c).
     LayerCommandMemory memory;
+    /// The targets and the scissor the program last set, which a clear of a texture that is no
+    /// target puts back when it is done (api55_command.c).
+    LayerTargets targets;
+    /// nvnCommandBufferSetCopyImageStride's, kept for its getter.
+    ptrdiff_t copy_image_stride;
 } LayerDraw;
 
 typedef struct {
