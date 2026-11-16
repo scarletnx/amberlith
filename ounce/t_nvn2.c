@@ -34,7 +34,7 @@ void RunNvn2(void);
 #define CODE_BYTES 0x10000u
 #define DATA_BYTES 0x10000u
 // The Mandelbrot's target and its depth, with room for each one's alignment.
-#define IMAGE_BYTES (2u * MANDEL_SIZE * MANDEL_SIZE * 8u + 8u * POOL_ALIGNMENT)
+#define IMAGE_BYTES (2u * MANDEL_SIZE * MANDEL_SIZE * 8u + 12u * POOL_ALIGNMENT)
 #define READ_BYTES (MANDEL_SIZE * MANDEL_SIZE * 4u)
 #define READ_PRESET 0xa5u
 
@@ -71,6 +71,16 @@ void RunNvn2(void);
 // The case of a texture and a sampler bound apart: 4 by 4 textures, sixteen words written, the
 // output and the textures' texels in the data pool past the images' words.
 #define APART_SIDE 4u
+
+// DLSS: the bytes of texture IDs a network builder keeps; the most storage the suite gives a
+// network; the evaluation's picture, 64 by 64 in the data pool past the textures' texels, a
+// quarter of the target a side; and a tenth of a channel's range, which the evaluation is held to.
+#define DLSS_ID_BYTES 0x80u
+#define DLSS_STORAGE_MOST 0x1000000u
+#define DLSS_INPUT_SIDE 64u
+#define DLSS_SCALE (MANDEL_SIZE / DLSS_INPUT_SIDE)
+#define DLSS_PICTURE_BYTE 0x5000u
+#define DLSS_TENTH 26u
 #define APART_WORDS 16u
 #define APART_OUT_BYTE 0x4800u
 #define APART_TEXELS_BYTE 0x4900u
@@ -157,6 +167,7 @@ static struct {
     NVNtexture images[2];
     NVNimageHandle image_handles[2];
     NVNtexture apart_textures[2];
+    NVNtexture dlss_textures[3];   ///< the evaluation's picture, its depth, its motion vectors
     NVNsampler apart_samplers[2];
     NVNseparateTextureHandle apart_texture_handles[2];
     NVNseparateSamplerHandle apart_sampler_handles[2];
@@ -176,6 +187,7 @@ static struct {
     int images_up;   ///< how many of the two images were made
     bool images_ready;
     int apart_textures_up;
+    int dlss_textures_up;
     int apart_samplers_up;
     bool apart_ready;
     bool counted;   ///< the Mandelbrot's dispatch ran, and its buffer holds the counts
@@ -231,6 +243,9 @@ static void TearDown(void) {
     }
     for (int i = 0; i < n2.apart_textures_up; ++i) {
         n2.nvn.nvnTextureFinalize(&n2.apart_textures[i]);
+    }
+    for (int i = 0; i < n2.dlss_textures_up; ++i) {
+        n2.nvn.nvnTextureFinalize(&n2.dlss_textures[i]);
     }
     for (int i = 0; i < n2.images_up; ++i) {
         n2.nvn.nvnTextureFinalize(&n2.images[i]);
@@ -1012,6 +1027,394 @@ static void ImageCase(const char *name, ImagesKind kind) {
                (unsigned)(ImageInput(first_x, first_y) * 3u + first_x));
 }
 
+// ---- DLSS
+
+/// Adds to @p why, when it is still empty, that @p what is @p got where @p want was set.
+static void Same(char *why, size_t why_size, const char *what, long long got, long long want) {
+    if (why[0] == '\0' && got != want) {
+        snprintf(why, why_size, "%s is %lld (0x%llx), expected %lld (0x%llx)", what, got,
+                 (unsigned long long)got, want, (unsigned long long)want);
+    }
+}
+
+/// The same for a float, which has to be the very float set.
+static void SameFloat(char *why, size_t why_size, const char *what, float got, float want) {
+    if (why[0] == '\0' && memcmp(&got, &want, sizeof(got)) != 0) {
+        snprintf(why, why_size, "%s is %g, expected %g", what, (double)got, (double)want);
+    }
+}
+
+/// A network builder keeps each number it is given. Its defaults keep the device and take one
+/// evaluation entry, as the driver's do.
+static void DlssBuilderCase(const char *name) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    static uint8_t storage[16];
+    static _Alignas(8) NVNtexturePool pool;   // only named: the builder keeps its address
+    uint8_t ids[DLSS_ID_BYTES];
+    uint8_t ids_back[DLSS_ID_BYTES];
+    for (uint32_t i = 0; i < DLSS_ID_BYTES; ++i) {
+        ids[i] = (uint8_t)(0x11u + 3u * i);
+    }
+    memset(ids_back, 0, sizeof(ids_back));
+    _Alignas(8) NVNdlssNetworkBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    n->nvnDlssNetworkBuilderSetDevice(&builder, &n2.device);
+    n->nvnDlssNetworkBuilderSetDefaults(&builder);
+    Same(why, sizeof(why), "the device after the defaults",
+         (long long)(uintptr_t)n->nvnDlssNetworkBuilderGetDevice(&builder),
+         (long long)(uintptr_t)&n2.device);
+    Same(why, sizeof(why), "the evaluation entries of the defaults",
+         n->nvnDlssNetworkBuilderGetMaxEvaluationEntries(&builder), 1);
+    n->nvnDlssNetworkBuilderSetFlags(&builder, 0x46);
+    n->nvnDlssNetworkBuilderSetMethod(&builder, 2);
+    n->nvnDlssNetworkBuilderSetPreset(&builder, 3);
+    n->nvnDlssNetworkBuilderSetOutputResolution(&builder, 1280, 720);
+    n->nvnDlssNetworkBuilderSetMaxEvaluationEntries(&builder, 3);
+    n->nvnDlssNetworkBuilderSetStorage(&builder, storage, 0x123000u);
+    n->nvnDlssNetworkBuilderSetTextureIDs(&builder, &pool, ids);
+    int width = -1, height = -1;
+    n->nvnDlssNetworkBuilderGetOutputResolution(&builder, &width, &height);
+    n->nvnDlssNetworkBuilderGetTextureIDs(&builder, ids_back);
+    Same(why, sizeof(why), "the flags", n->nvnDlssNetworkBuilderGetFlags(&builder), 0x46);
+    Same(why, sizeof(why), "the method", n->nvnDlssNetworkBuilderGetMethod(&builder), 2);
+    Same(why, sizeof(why), "the preset", n->nvnDlssNetworkBuilderGetPreset(&builder), 3);
+    Same(why, sizeof(why), "the output's width", width, 1280);
+    Same(why, sizeof(why), "the output's height", height, 720);
+    Same(why, sizeof(why), "the evaluation entries",
+         n->nvnDlssNetworkBuilderGetMaxEvaluationEntries(&builder), 3);
+    Same(why, sizeof(why), "the storage's memory",
+         (long long)(uintptr_t)n->nvnDlssNetworkBuilderGetMemory(&builder),
+         (long long)(uintptr_t)storage);
+    Same(why, sizeof(why), "the storage's size",
+         (long long)n->nvnDlssNetworkBuilderGetMemorySize(&builder), 0x123000);
+    Same(why, sizeof(why), "the texture pool",
+         (long long)(uintptr_t)n->nvnDlssNetworkBuilderGetTexturePool(&builder),
+         (long long)(uintptr_t)&pool);
+    Same(why, sizeof(why), "whether the 128 bytes of texture IDs came back",
+         memcmp(ids, ids_back, sizeof(ids)) == 0, 1);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// An evaluation's parameters keep each number they are given, and start as the driver's do:
+/// a motion vector scale and a pre-exposure of one, everything else nought. The six textures
+/// and the four overlays have no getter: they are set, and the evaluation case reads four.
+static void DlssParametersCase(const char *name) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    _Alignas(8) NVNdlssParameters p;
+    memset(&p, 0xff, sizeof(p));
+    n->nvnDlssParametersSetDefaults(&p);
+    float x = -1.0f, y = -1.0f;
+    int a = -1, b = -1;
+    n->nvnDlssParametersGetJitterOffset(&p, &x, &y);
+    SameFloat(why, sizeof(why), "the jitter's x of the defaults", x, 0.0f);
+    SameFloat(why, sizeof(why), "the jitter's y of the defaults", y, 0.0f);
+    n->nvnDlssParametersGetMotionVectorScale(&p, &x, &y);
+    SameFloat(why, sizeof(why), "the motion vector scale's x of the defaults", x, 1.0f);
+    SameFloat(why, sizeof(why), "the motion vector scale's y of the defaults", y, 1.0f);
+    SameFloat(why, sizeof(why), "the pre-exposure of the defaults",
+              n->nvnDlssParametersGetPreExposure(&p), 1.0f);
+    Same(why, sizeof(why), "the history reset of the defaults",
+         n->nvnDlssParametersGetHistoryReset(&p), 0);
+    Same(why, sizeof(why), "the evaluation index of the defaults",
+         n->nvnDlssParametersGetEvaluationIndex(&p), 0);
+
+    n->nvnDlssParametersSetJitterOffset(&p, 0.25f, -0.5f);
+    n->nvnDlssParametersSetMotionVectorScale(&p, 2.0f, -3.0f);
+    n->nvnDlssParametersSetPreExposure(&p, 1.5f);
+    n->nvnDlssParametersSetHistoryReset(&p, 1);
+    n->nvnDlssParametersSetEvaluationIndex(&p, 2);
+    n->nvnDlssParametersSetInputSubrectangleSize(&p, 640, 360);
+    n->nvnDlssParametersSetInputColorSubrectangleBase(&p, 1, 2);
+    n->nvnDlssParametersSetDepthSubrectangleBase(&p, 3, 4);
+    n->nvnDlssParametersSetMotionVectorSubrectangleBase(&p, 5, 6);
+    n->nvnDlssParametersSetBiasCurrentColorSubrectangleBase(&p, 7, 8);
+    n->nvnDlssParametersSetOutputSubrectangleBase(&p, 9, 10);
+    n->nvnDlssParametersSetInputColor(&p, NULL, NULL);
+    n->nvnDlssParametersSetOutputColor(&p, NULL, NULL);
+    n->nvnDlssParametersSetMotionVectors(&p, NULL, NULL);
+    n->nvnDlssParametersSetDepth(&p, NULL, NULL);
+    n->nvnDlssParametersSetBiasCurrentColorMask(&p, NULL, NULL);
+    n->nvnDlssParametersSetExposureTexture(&p, NULL, NULL);
+    n->nvnDlssParametersSetOverlayDebugLayer(&p, 0);
+    n->nvnDlssParametersSetOverlayFullScreen(&p, 0);
+    n->nvnDlssParametersSetOverlayShowNans(&p, 0);
+    n->nvnDlssParametersSetOverlayJitterDebug(&p, 0);
+
+    n->nvnDlssParametersGetJitterOffset(&p, &x, &y);
+    SameFloat(why, sizeof(why), "the jitter's x", x, 0.25f);
+    SameFloat(why, sizeof(why), "the jitter's y", y, -0.5f);
+    n->nvnDlssParametersGetMotionVectorScale(&p, &x, &y);
+    SameFloat(why, sizeof(why), "the motion vector scale's x", x, 2.0f);
+    SameFloat(why, sizeof(why), "the motion vector scale's y", y, -3.0f);
+    SameFloat(why, sizeof(why), "the pre-exposure", n->nvnDlssParametersGetPreExposure(&p), 1.5f);
+    Same(why, sizeof(why), "the history reset", n->nvnDlssParametersGetHistoryReset(&p), 1);
+    Same(why, sizeof(why), "the evaluation index", n->nvnDlssParametersGetEvaluationIndex(&p), 2);
+    n->nvnDlssParametersGetInputSubrectangleSize(&p, &a, &b);
+    Same(why, sizeof(why), "the input rectangle's width", a, 640);
+    Same(why, sizeof(why), "the input rectangle's height", b, 360);
+    n->nvnDlssParametersGetInputColorSubrectangleBase(&p, &a, &b);
+    Same(why, sizeof(why), "the input colour's corner, a hundred times x plus y", a * 100 + b, 102);
+    n->nvnDlssParametersGetDepthSubrectangleBase(&p, &a, &b);
+    Same(why, sizeof(why), "the depth's corner, a hundred times x plus y", a * 100 + b, 304);
+    n->nvnDlssParametersGetMotionVectorSubrectangleBase(&p, &a, &b);
+    Same(why, sizeof(why), "the motion vectors' corner, a hundred times x plus y", a * 100 + b,
+         506);
+    n->nvnDlssParametersGetBiasCurrentColorSubrectangleBase(&p, &a, &b);
+    Same(why, sizeof(why), "the bias mask's corner, a hundred times x plus y", a * 100 + b, 708);
+    n->nvnDlssParametersGetOutputSubrectangleBase(&p, &a, &b);
+    Same(why, sizeof(why), "the output's corner, a hundred times x plus y", a * 100 + b, 910);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// A builder for an output of @p side by @p side.
+static void DlssBuilder(NVNdlssNetworkBuilder *builder, int side) {
+    memset(builder, 0, sizeof(*builder));
+    n2.nvn.nvnDlssNetworkBuilderSetDevice(builder, &n2.device);
+    n2.nvn.nvnDlssNetworkBuilderSetDefaults(builder);
+    n2.nvn.nvnDlssNetworkBuilderSetOutputResolution(builder, side, side);
+}
+
+/// The storage a network of @p builder asks for, allocated; NULL with @p why said.
+static void *DlssStorage(const NVNdlssNetworkBuilder *builder, size_t *bytes, char *why,
+                         size_t why_size) {
+    *bytes = n2.nvn.nvnDlssNetworkBuilderGetStorageSize(builder);
+    if (*bytes == 0u || *bytes > DLSS_STORAGE_MOST) {
+        snprintf(why, why_size, "a network's storage is %zu bytes, where the suite has 1 to %u "
+                                "for it",
+                 *bytes, (unsigned)DLSS_STORAGE_MOST);
+        return NULL;
+    }
+    void *const storage = aligned_alloc(POOL_PAGE, RoundUp(*bytes, POOL_PAGE));
+    if (storage == NULL) {
+        snprintf(why, why_size, "no %zu bytes of memory for a network's storage", *bytes);
+    }
+    return storage;
+}
+
+/// The sizes a builder says a picture is best rendered at lie between the least and the most it
+/// gives, none past the output; and a network is resized to an output within its builder's and
+/// to none past it. Which sizes a method gives is the network's own.
+static void DlssSizesCase(const char *name) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    _Alignas(8) NVNdlssNetworkBuilder builder;
+    DlssBuilder(&builder, (int)MANDEL_SIZE);
+    int best[2] = { -1, -1 }, most[2] = { -1, -1 }, least[2] = { -1, -1 };
+    const NVNboolean said = n->nvnDlssNetworkBuilderGetOptimalSettings(
+        &builder, &best[0], &best[1], &most[0], &most[1], &least[0], &least[1]);
+    Same(why, sizeof(why), "whether the builder gave its render sizes", said, 1);
+    for (int axis = 0; axis < 2 && why[0] == '\0'; ++axis) {
+        if (least[axis] < 1 || least[axis] > best[axis] || best[axis] > most[axis] ||
+            most[axis] > (int)MANDEL_SIZE) {
+            snprintf(why, sizeof(why), "along %s the least render size is %d, the best %d and "
+                                       "the most %d, for an output of %u: they are not in order "
+                                       "from 1 to the output",
+                     axis == 0 ? "x" : "y", least[axis], best[axis], most[axis],
+                     (unsigned)MANDEL_SIZE);
+        }
+    }
+    size_t bytes = 0;
+    void *const storage = why[0] == '\0' ? DlssStorage(&builder, &bytes, why, sizeof(why)) : NULL;
+    if (storage == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    n->nvnDlssNetworkBuilderSetStorage(&builder, storage, bytes);
+    static _Alignas(8) NVNdlssNetwork network;
+    if (!n->nvnDlssNetworkInitialize(&network, &builder)) {
+        free(storage);
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnDlssNetworkInitialize answered false"));
+        return;
+    }
+    Same(why, sizeof(why), "whether the network took an output of half its builder's",
+         n->nvnDlssNetworkResize(&network, (int)MANDEL_SIZE / 2, (int)MANDEL_SIZE / 2), 1);
+    Same(why, sizeof(why), "whether the network took an output of twice its builder's",
+         n->nvnDlssNetworkResize(&network, (int)MANDEL_SIZE * 2, (int)MANDEL_SIZE * 2), 0);
+    n->nvnDlssNetworkFinalize(&network);
+    free(storage);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The picture the evaluation is given at (@p x, @p y): red grows across and green down, four a
+/// texel, blue stays, so its neighbours never differ by more than four of 255.
+static void DlssTexel(uint32_t x, uint32_t y, uint8_t out[4]) {
+    out[0] = (uint8_t)(4u * x);
+    out[1] = (uint8_t)(4u * y);
+    out[2] = 0x40;
+    out[3] = 0xff;
+}
+
+/// What a plain filter makes of the picture at the output's pixel (@p x, @p y), four output
+/// pixels a texel: each channel between the texels around the pixel's centre.
+static void DlssExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const float at[2] = { ((float)x + 0.5f) / (float)DLSS_SCALE - 0.5f,
+                          ((float)y + 0.5f) / (float)DLSS_SCALE - 0.5f };
+    uint32_t low[2], high[2];
+    float part[2];
+    for (int axis = 0; axis < 2; ++axis) {
+        const float clamped = at[axis] < 0.0f ? 0.0f : at[axis];
+        low[axis] = (uint32_t)clamped;
+        if (low[axis] > DLSS_INPUT_SIDE - 1u) {
+            low[axis] = DLSS_INPUT_SIDE - 1u;
+        }
+        high[axis] = low[axis] + 1u < DLSS_INPUT_SIDE ? low[axis] + 1u : low[axis];
+        part[axis] = clamped - (float)low[axis];
+    }
+    uint8_t corner[4][4];
+    DlssTexel(low[0], low[1], corner[0]);
+    DlssTexel(high[0], low[1], corner[1]);
+    DlssTexel(low[0], high[1], corner[2]);
+    DlssTexel(high[0], high[1], corner[3]);
+    for (int c = 0; c < 4; ++c) {
+        const float top =
+            (float)corner[0][c] + ((float)corner[1][c] - (float)corner[0][c]) * part[0];
+        const float bottom =
+            (float)corner[2][c] + ((float)corner[3][c] - (float)corner[2][c]) * part[0];
+        out[c] = (uint8_t)(top + (bottom - top) * part[1] + 0.5f);
+    }
+}
+
+/// The evaluation: a picture of 64 by 64 with its depth and its motion vectors, none moving,
+/// evaluated into the 256 by 256 target, every pixel of which is held to a tenth of the range
+/// around what a plain filter makes of the picture on the processor. What a network adds to a
+/// smooth picture stays within that; a target the evaluation never wrote does not.
+static void DlssEvaluateCase(const char *name) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    uint8_t *const memory = n->nvnMemoryPoolMap(&n2.data_pool.pool);
+    uint8_t *const pixels = n->nvnMemoryPoolMap(&n2.read_pool.pool);
+    if (memory == NULL || pixels == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    while (n2.dlss_textures_up < 3) {
+        static const NVNformat FORMATS[3] = { NVN_FORMAT_RGBA8, NVN_FORMAT_DEPTH32F,
+                                              NVN_FORMAT_RG16F };
+        if (!MakeTextureOf(&n2.dlss_textures[n2.dlss_textures_up],
+                           FORMATS[n2.dlss_textures_up], DLSS_INPUT_SIDE, 0, why, sizeof(why))) {
+            ReportCase(SUITE, name, CHECK_NONE, false, why);
+            return;
+        }
+        ++n2.dlss_textures_up;
+    }
+    NVNtexture *const input = &n2.dlss_textures[0];
+    NVNtexture *const depth = &n2.dlss_textures[1];
+    NVNtexture *const motion = &n2.dlss_textures[2];
+    for (uint32_t i = 0; i < DLSS_INPUT_SIDE * DLSS_INPUT_SIDE; ++i) {
+        DlssTexel(i % DLSS_INPUT_SIDE, i / DLSS_INPUT_SIDE, memory + DLSS_PICTURE_BYTE + 4u * i);
+    }
+    _Alignas(8) NVNdlssNetworkBuilder builder;
+    DlssBuilder(&builder, (int)MANDEL_SIZE);
+    size_t bytes = 0;
+    void *const storage = DlssStorage(&builder, &bytes, why, sizeof(why));
+    if (storage == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    n->nvnDlssNetworkBuilderSetStorage(&builder, storage, bytes);
+    static _Alignas(8) NVNdlssNetwork network;
+    if (!n->nvnDlssNetworkInitialize(&network, &builder)) {
+        free(storage);
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnDlssNetworkInitialize answered false"));
+        return;
+    }
+    _Alignas(8) NVNdlssParameters parameters;
+    n->nvnDlssParametersSetDefaults(&parameters);
+    n->nvnDlssParametersSetInputColor(&parameters, input, NULL);
+    n->nvnDlssParametersSetOutputColor(&parameters, &n2.target, NULL);
+    n->nvnDlssParametersSetDepth(&parameters, depth, NULL);
+    n->nvnDlssParametersSetMotionVectors(&parameters, motion, NULL);
+    n->nvnDlssParametersSetInputSubrectangleSize(&parameters, (int)DLSS_INPUT_SIDE,
+                                                 (int)DLSS_INPUT_SIDE);
+    n->nvnDlssParametersSetHistoryReset(&parameters, 1);
+
+    // The picture uploaded; its depth the far plane and its motion vectors nought, by clears;
+    // the target a colour the picture has nowhere, so a pixel nothing evaluated is told.
+    static const float still[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    static const float unwritten[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+    const NVNcopyRegion small = { 0, 0, 0, (int)DLSS_INPUT_SIDE, (int)DLSS_INPUT_SIDE, 1 };
+    const NVNcopyRegion large = { 0, 0, 0, (int)MANDEL_SIZE, (int)MANDEL_SIZE, 1 };
+    const NVNtexture *const vectors[1] = { motion };
+    const NVNtexture *const target[1] = { &n2.target };
+    memset(pixels, READ_PRESET, READ_BYTES);
+    n->nvnCommandBufferBeginRecording(&n2.command);
+    n->nvnCommandBufferCopyBufferToTexture(
+        &n2.command, n->nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + DLSS_PICTURE_BYTE,
+        input, NULL, &small, NVN_COPY_FLAGS_NONE);
+    _Alignas(8) NVNchannelMaskState mask;
+    n->nvnChannelMaskStateSetDefaults(&mask);
+    n->nvnCommandBufferBindChannelMaskState(&n2.command, &mask);
+    n->nvnCommandBufferSetRenderTargets(&n2.command, 1, vectors, NULL, depth, NULL);
+    n->nvnCommandBufferSetViewport(&n2.command, 0, 0, (int)DLSS_INPUT_SIDE, (int)DLSS_INPUT_SIDE);
+    n->nvnCommandBufferSetScissor(&n2.command, 0, 0, (int)DLSS_INPUT_SIDE, (int)DLSS_INPUT_SIDE);
+    n->nvnCommandBufferClearColor(&n2.command, 0, still, NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferClearDepthStencil(&n2.command, 1.0f, 1, 0, 0);
+    n->nvnCommandBufferSetRenderTargets(&n2.command, 1, target, NULL, NULL, NULL);
+    n->nvnCommandBufferSetViewport(&n2.command, 0, 0, (int)MANDEL_SIZE, (int)MANDEL_SIZE);
+    n->nvnCommandBufferSetScissor(&n2.command, 0, 0, (int)MANDEL_SIZE, (int)MANDEL_SIZE);
+    n->nvnCommandBufferClearColor(&n2.command, 0, unwritten, NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
+                                                NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    n->nvnCommandBufferEvaluateDlss(&n2.command, &network, &parameters);
+    n->nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
+                                                NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    n->nvnCommandBufferCopyTextureToBuffer(&n2.command, &n2.target, NULL, &large,
+                                           n->nvnMemoryPoolGetBufferAddress(&n2.read_pool.pool),
+                                           NVN_COPY_FLAGS_NONE);
+    const bool ran = Finish("the evaluation", why, sizeof(why));
+    n->nvnDlssNetworkFinalize(&network);
+    free(storage);
+    if (!ran) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    Picture *const picture = PictureBegin(MANDEL_SIZE, MANDEL_SIZE, PICTURE_COLOUR, pixels);
+    uint32_t wrong = 0;
+    uint32_t most = 0;
+    uint32_t first_x = 0;
+    uint32_t first_y = 0;
+    uint8_t first[4] = { 0, 0, 0, 0 };
+    uint8_t first_want[4] = { 0, 0, 0, 0 };
+    for (uint32_t y = 0; y < MANDEL_SIZE; ++y) {
+        for (uint32_t x = 0; x < MANDEL_SIZE; ++x) {
+            uint8_t want[4];
+            DlssExpected(x, y, want);
+            const uint8_t *const pixel = pixels + ((size_t)y * MANDEL_SIZE + x) * 4u;
+            uint32_t off = 0;
+            for (int c = 0; c < 4; ++c) {
+                const uint32_t d = pixel[c] > want[c] ? (uint32_t)(pixel[c] - want[c])
+                                                      : (uint32_t)(want[c] - pixel[c]);
+                off = d > off ? d : off;
+            }
+            most = off > most ? off : most;
+            const bool right = off <= DLSS_TENTH;
+            PictureSet(picture, x, y, want, right ? PICTURE_MATCHED : PICTURE_WRONG);
+            if (!right && wrong++ == 0u) {
+                first_x = x;
+                first_y = y;
+                memcpy(first, pixel, 4);
+                memcpy(first_want, want, 4);
+            }
+        }
+    }
+    CHECK_TRUE(SUITE, name, CHECK_BOUND, wrong == 0u,
+               "%u of %u pixels are more than %u of 255 from the processor's; the first, "
+               "(%u,%u), holds %02x%02x%02x%02x where a plain filter gives %02x%02x%02x%02x; the "
+               "furthest channel anywhere is %u off (0000ffff is a pixel nothing evaluated)",
+               (unsigned)wrong, (unsigned)(MANDEL_SIZE * MANDEL_SIZE), (unsigned)DLSS_TENTH,
+               (unsigned)first_x, (unsigned)first_y, first[0], first[1], first[2], first[3],
+               first_want[0], first_want[1], first_want[2], first_want[3], (unsigned)most);
+}
+
 /// The next element of the matrix case's matrices, in quarters: -6 to 6 and never 0, so every
 /// product and every sum of sixteen is exact in a float, and a sum of nought is +0 whichever
 /// order the products are added in. From a generator's high bits, so no row or column repeats
@@ -1281,13 +1684,21 @@ void RunNvn2(void) {
                                              "that take several";
     static const char *const APART_DEFERRED = "the same texture and sampler bound by the "
                                               "deferred calls";
+    static const char *const DLSS_BUILDER = "a DLSS network builder gives back what it was set";
+    static const char *const DLSS_PARAMETERS = "the parameters of a DLSS evaluation give back "
+                                               "what they were set";
+    static const char *const DLSS_SIZES = "a DLSS builder's render sizes are in order within its "
+                                          "output, and a network is resized within it alone";
+    static const char *const DLSS_EVALUATE = "a DLSS evaluation of a smooth picture into four "
+                                             "times its side is within a tenth of a plain filter";
     const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, SCALE_BUFFERS,
                                   SCALE_DEFERRED, SCALE_INDIRECT, MANDEL_PROGRAMS,
                                   MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
                                   PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
                                   PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
                                   PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
-                                  IMAGE_DEFERRED, APART, APART_SEVERAL, APART_DEFERRED };
+                                  IMAGE_DEFERRED, APART, APART_SEVERAL, APART_DEFERRED,
+                                  DLSS_BUILDER, DLSS_PARAMETERS, DLSS_SIZES, DLSS_EVALUATE };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -1506,6 +1917,20 @@ void RunNvn2(void) {
         if (ReportStart(SUITE, APART_DEFERRED)) {
             ApartCase(APART_DEFERRED, IMAGES_DEFERRED);
         }
+    }
+
+    // DLSS: the builder and the parameters as records, then a network and an evaluation.
+    if (ReportStart(SUITE, DLSS_BUILDER)) {
+        DlssBuilderCase(DLSS_BUILDER);
+    }
+    if (ReportStart(SUITE, DLSS_PARAMETERS)) {
+        DlssParametersCase(DLSS_PARAMETERS);
+    }
+    if (ReportStart(SUITE, DLSS_SIZES)) {
+        DlssSizesCase(DLSS_SIZES);
+    }
+    if (ReportStart(SUITE, DLSS_EVALUATE)) {
+        DlssEvaluateCase(DLSS_EVALUATE);
     }
     TearDown();
 }

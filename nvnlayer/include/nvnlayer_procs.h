@@ -20,8 +20,8 @@
 ///   and NVN_LAYER_PROCS_STATE_OBJECTS, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
-/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231 and
-///   NVN_LAYER_PROCS_PROGRAM_231, parts of it written apart): the
+/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231,
+///   NVN_LAYER_PROCS_PROGRAM_231 and NVN_LAYER_PROCS_DLSS_231, parts of it written apart): the
 ///   functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
 
@@ -452,6 +452,100 @@
     X(int, nvnProgramBuilderGetMaxTraceRecursionDepth, (const NVNprogramBuilder *builder))        \
     X(void, nvnProgramBuilderSetProgramRayTracingFlags, (NVNprogramBuilder * builder, int flags)) \
     X(int, nvnProgramBuilderGetProgramRayTracingFlags, (const NVNprogramBuilder *builder))
+
+// The Ounce's DLSS (API 231): the network's builder, the network, the parameters of an
+// evaluation and the evaluation.
+#define NVN_LAYER_PROCS_DLSS_231(X)                                                               \
+    X(void, nvnDlssNetworkBuilderSetDefaults, (NVNdlssNetworkBuilder *builder))                   \
+    X(void, nvnDlssNetworkBuilderSetDevice, (NVNdlssNetworkBuilder *builder, NVNdevice *device))  \
+    X(NVNdevice *, nvnDlssNetworkBuilderGetDevice, (const NVNdlssNetworkBuilder *builder))        \
+    X(void, nvnDlssNetworkBuilderSetFlags, (NVNdlssNetworkBuilder *builder, int flags))           \
+    X(int, nvnDlssNetworkBuilderGetFlags, (const NVNdlssNetworkBuilder *builder))                 \
+    X(void, nvnDlssNetworkBuilderSetMethod, (NVNdlssNetworkBuilder *builder, int method))         \
+    X(int, nvnDlssNetworkBuilderGetMethod, (const NVNdlssNetworkBuilder *builder))                \
+    X(void, nvnDlssNetworkBuilderSetPreset, (NVNdlssNetworkBuilder *builder, int preset))         \
+    X(int, nvnDlssNetworkBuilderGetPreset, (const NVNdlssNetworkBuilder *builder))                \
+    X(void, nvnDlssNetworkBuilderSetOutputResolution,                                             \
+      (NVNdlssNetworkBuilder *builder, int width, int height))                                    \
+    X(void, nvnDlssNetworkBuilderGetOutputResolution,                                             \
+      (const NVNdlssNetworkBuilder *builder, int *width, int *height))                            \
+    X(void, nvnDlssNetworkBuilderSetMaxEvaluationEntries,                                         \
+      (NVNdlssNetworkBuilder *builder, int count))                                                \
+    X(int, nvnDlssNetworkBuilderGetMaxEvaluationEntries, (const NVNdlssNetworkBuilder *builder))  \
+    X(void, nvnDlssNetworkBuilderSetStorage,                                                      \
+      (NVNdlssNetworkBuilder *builder, void *memory, uint64_t size))                              \
+    X(void *, nvnDlssNetworkBuilderGetMemory, (const NVNdlssNetworkBuilder *builder))             \
+    X(uint64_t, nvnDlssNetworkBuilderGetMemorySize, (const NVNdlssNetworkBuilder *builder))       \
+    X(void, nvnDlssNetworkBuilderSetTextureIDs,                                                   \
+      (NVNdlssNetworkBuilder *builder, const NVNtexturePool *pool, const void *ids))              \
+    X(const NVNtexturePool *, nvnDlssNetworkBuilderGetTexturePool,                                \
+      (const NVNdlssNetworkBuilder *builder))                                                     \
+    X(void, nvnDlssNetworkBuilderGetTextureIDs,                                                   \
+      (const NVNdlssNetworkBuilder *builder, void *ids))                                          \
+    X(NVNboolean, nvnDlssNetworkBuilderGetOptimalSettings,                                        \
+      (const NVNdlssNetworkBuilder *builder, int *width, int *height, int *max_width,             \
+       int *max_height, int *min_width, int *min_height))                                         \
+    X(uint64_t, nvnDlssNetworkBuilderGetStorageSize, (const NVNdlssNetworkBuilder *builder))      \
+    X(NVNboolean, nvnDlssNetworkInitialize,                                                       \
+      (NVNdlssNetwork *network, const NVNdlssNetworkBuilder *builder))                            \
+    X(void, nvnDlssNetworkFinalize, (NVNdlssNetwork *network))                                    \
+    X(NVNboolean, nvnDlssNetworkResize, (NVNdlssNetwork *network, int width, int height))         \
+    X(void, nvnCommandBufferEvaluateDlss,                                                         \
+      (NVNcommandBuffer *cmd, NVNdlssNetwork *network, const NVNdlssParameters *parameters))      \
+    X(void, nvnDlssParametersSetDefaults, (NVNdlssParameters *parameters))                        \
+    X(void, nvnDlssParametersSetInputColor,                                                       \
+      (NVNdlssParameters *parameters, const NVNtexture *texture, const NVNtextureView *view))     \
+    X(void, nvnDlssParametersSetOutputColor,                                                      \
+      (NVNdlssParameters *parameters, const NVNtexture *texture, const NVNtextureView *view))     \
+    X(void, nvnDlssParametersSetMotionVectors,                                                    \
+      (NVNdlssParameters *parameters, const NVNtexture *texture, const NVNtextureView *view))     \
+    X(void, nvnDlssParametersSetDepth,                                                            \
+      (NVNdlssParameters *parameters, const NVNtexture *texture, const NVNtextureView *view))     \
+    X(void, nvnDlssParametersSetBiasCurrentColorMask,                                             \
+      (NVNdlssParameters *parameters, const NVNtexture *texture, const NVNtextureView *view))     \
+    X(void, nvnDlssParametersSetExposureTexture,                                                  \
+      (NVNdlssParameters *parameters, const NVNtexture *texture, const NVNtextureView *view))     \
+    X(void, nvnDlssParametersSetJitterOffset, (NVNdlssParameters *parameters, float x, float y))  \
+    X(void, nvnDlssParametersGetJitterOffset,                                                     \
+      (const NVNdlssParameters *parameters, float *x, float *y))                                  \
+    X(void, nvnDlssParametersSetMotionVectorScale,                                                \
+      (NVNdlssParameters *parameters, float x, float y))                                          \
+    X(void, nvnDlssParametersGetMotionVectorScale,                                                \
+      (const NVNdlssParameters *parameters, float *x, float *y))                                  \
+    X(void, nvnDlssParametersSetPreExposure, (NVNdlssParameters *parameters, float exposure))         \
+    X(float, nvnDlssParametersGetPreExposure, (const NVNdlssParameters *parameters))              \
+    X(void, nvnDlssParametersSetHistoryReset, (NVNdlssParameters *parameters, NVNboolean reset))  \
+    X(NVNboolean, nvnDlssParametersGetHistoryReset, (const NVNdlssParameters *parameters))        \
+    X(void, nvnDlssParametersSetEvaluationIndex, (NVNdlssParameters *parameters, int index))      \
+    X(int, nvnDlssParametersGetEvaluationIndex, (const NVNdlssParameters *parameters))            \
+    X(void, nvnDlssParametersSetInputSubrectangleSize,                                            \
+      (NVNdlssParameters *parameters, int width, int height))                                     \
+    X(void, nvnDlssParametersGetInputSubrectangleSize,                                            \
+      (const NVNdlssParameters *parameters, int *width, int *height))                             \
+    X(void, nvnDlssParametersSetInputColorSubrectangleBase,                                       \
+      (NVNdlssParameters *parameters, int x, int y))                                              \
+    X(void, nvnDlssParametersGetInputColorSubrectangleBase,                                       \
+      (const NVNdlssParameters *parameters, int *x, int *y))                                      \
+    X(void, nvnDlssParametersSetDepthSubrectangleBase,                                            \
+      (NVNdlssParameters *parameters, int x, int y))                                              \
+    X(void, nvnDlssParametersGetDepthSubrectangleBase,                                            \
+      (const NVNdlssParameters *parameters, int *x, int *y))                                      \
+    X(void, nvnDlssParametersSetMotionVectorSubrectangleBase,                                     \
+      (NVNdlssParameters *parameters, int x, int y))                                              \
+    X(void, nvnDlssParametersGetMotionVectorSubrectangleBase,                                     \
+      (const NVNdlssParameters *parameters, int *x, int *y))                                      \
+    X(void, nvnDlssParametersSetBiasCurrentColorSubrectangleBase,                                 \
+      (NVNdlssParameters *parameters, int x, int y))                                              \
+    X(void, nvnDlssParametersGetBiasCurrentColorSubrectangleBase,                                 \
+      (const NVNdlssParameters *parameters, int *x, int *y))                                      \
+    X(void, nvnDlssParametersSetOutputSubrectangleBase,                                           \
+      (NVNdlssParameters *parameters, int x, int y))                                              \
+    X(void, nvnDlssParametersGetOutputSubrectangleBase,                                           \
+      (const NVNdlssParameters *parameters, int *x, int *y))                                      \
+    X(void, nvnDlssParametersSetOverlayDebugLayer, (NVNdlssParameters *parameters, int on))       \
+    X(void, nvnDlssParametersSetOverlayFullScreen, (NVNdlssParameters *parameters, int on))       \
+    X(void, nvnDlssParametersSetOverlayShowNans, (NVNdlssParameters *parameters, int on))         \
+    X(void, nvnDlssParametersSetOverlayJitterDebug, (NVNdlssParameters *parameters, int on))
 
 // The rest of the state objects: every setter, and what each state says of itself.
 #define NVN_LAYER_PROCS_STATE_OBJECTS(X)                                                          \
@@ -975,7 +1069,8 @@
        ptrdiff_t stride))                                                                         \
     NVN_LAYER_PROCS_WINDOW_231(X)                                                                 \
     NVN_LAYER_PROCS_DEBUG_231(X)                                                                  \
-    NVN_LAYER_PROCS_PROGRAM_231(X)
+    NVN_LAYER_PROCS_PROGRAM_231(X)                                                                \
+    NVN_LAYER_PROCS_DLSS_231(X)
 
 #if NVN_LAYER_API >= 231
 #define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_231(X)
