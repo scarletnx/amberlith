@@ -103,6 +103,7 @@ typedef struct {
     void *storage;
     size_t size;
     int flags;
+    int native;   ///< a native handle given in place of storage, nought for none
 } LayerPoolBuilder;
 
 typedef struct {
