@@ -492,30 +492,84 @@ static void NvUseProgram(DrawPath *path, int program) {
                                        NVN_SHADER_STAGE_VERTEX_BIT | NVN_SHADER_STAGE_FRAGMENT_BIT);
 }
 
-static void NvVertices(DrawPath *path, const DrawBuffer *vertices, uint32_t bytes) {
-    NvnPath *const nv = Nv(path);
+/// The attribute and stream states: GpuVertex's three attributes from stream 0, and with
+/// @p instanced DrawInstance's two from stream 1, which steps once an instance.
+static void NvLayout(NvnPath *nv, bool instanced) {
     const NvnProcs *const n = &nv->nvn;
-    // GpuVertex field for field, the offsets from the structure so the two cannot drift.
-    _Alignas(8) NVNvertexAttribState attributes[3];
+    // Field for field, the offsets from the structures so they cannot drift.
+    _Alignas(8) NVNvertexAttribState attributes[5];
     static const struct {
         NVNformat format;
         size_t offset;
-    } FIELDS[3] = {
-        { NVN_FORMAT_RGB32F, offsetof(GpuVertex, x) },
-        { NVN_FORMAT_RG32F, offsetof(GpuVertex, u) },
-        { NVN_FORMAT_RGBA32F, offsetof(GpuVertex, r) },
+        int stream;
+    } FIELDS[5] = {
+        { NVN_FORMAT_RGB32F, offsetof(GpuVertex, x), 0 },
+        { NVN_FORMAT_RG32F, offsetof(GpuVertex, u), 0 },
+        { NVN_FORMAT_RGBA32F, offsetof(GpuVertex, r), 0 },
+        { NVN_FORMAT_RGBA32F, offsetof(DrawInstance, place), 1 },
+        { NVN_FORMAT_RGBA32F, offsetof(DrawInstance, tint), 1 },
     };
-    for (int i = 0; i < 3; ++i) {
+    const int count = instanced ? 5 : 3;
+    for (int i = 0; i < count; ++i) {
         n->nvnVertexAttribStateSetDefaults(&attributes[i]);
         n->nvnVertexAttribStateSetFormat(&attributes[i], FIELDS[i].format,
                                          (ptrdiff_t)FIELDS[i].offset);
-        n->nvnVertexAttribStateSetStreamIndex(&attributes[i], 0);
+        n->nvnVertexAttribStateSetStreamIndex(&attributes[i], FIELDS[i].stream);
     }
-    _Alignas(8) NVNvertexStreamState stream;
-    n->nvnVertexStreamStateSetDefaults(&stream);
-    n->nvnVertexStreamStateSetStride(&stream, (ptrdiff_t)sizeof(GpuVertex));
-    n->nvnCommandBufferBindVertexAttribState(&nv->command, 3, attributes);
-    n->nvnCommandBufferBindVertexStreamState(&nv->command, 1, &stream);
+    _Alignas(8) NVNvertexStreamState streams[2];
+    n->nvnVertexStreamStateSetDefaults(&streams[0]);
+    n->nvnVertexStreamStateSetStride(&streams[0], (ptrdiff_t)sizeof(GpuVertex));
+    n->nvnVertexStreamStateSetDefaults(&streams[1]);
+    n->nvnVertexStreamStateSetStride(&streams[1], (ptrdiff_t)sizeof(DrawInstance));
+    n->nvnVertexStreamStateSetDivisor(&streams[1], 1);
+    n->nvnCommandBufferBindVertexAttribState(&nv->command, count, attributes);
+    n->nvnCommandBufferBindVertexStreamState(&nv->command, instanced ? 2 : 1, streams);
+}
+
+static void NvInstances(DrawPath *path, const DrawBuffer *instances, uint32_t bytes) {
+    NvnPath *const nv = Nv(path);
+    NvLayout(nv, true);
+    nv->nvn.nvnCommandBufferBindVertexBuffer(&nv->command, 1, instances->address, bytes);
+}
+
+static const NVNindexType NV_INDEX_TYPES[] = { NVN_INDEX_TYPE_UNSIGNED_BYTE,
+                                               NVN_INDEX_TYPE_UNSIGNED_SHORT,
+                                               NVN_INDEX_TYPE_UNSIGNED_INT };
+
+static void NvDrawInstanced(DrawPath *path, const DrawElements *elements, uint32_t first,
+                            uint32_t count, uint32_t base_instance, uint32_t instances) {
+    NvnPath *const nv = Nv(path);
+    if (elements != NULL && elements->indexed) {
+        // NVN's indexed draws start at the first index of the buffer they are given.
+        nv->nvn.nvnCommandBufferDrawElementsInstanced(
+            &nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES, NV_INDEX_TYPES[elements->type], (int)count,
+            elements->indices->address + ((uint64_t)first << elements->type), 0,
+            (int)base_instance, (int)instances);
+    } else {
+        nv->nvn.nvnCommandBufferDrawArraysInstanced(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                                   (int)first, (int)count, (int)base_instance,
+                                                   (int)instances);
+    }
+}
+
+static void NvDrawIndirect(DrawPath *path, const DrawElements *elements,
+                           const DrawBuffer *numbers) {
+    NvnPath *const nv = Nv(path);
+    if (elements != NULL && elements->indexed) {
+        nv->nvn.nvnCommandBufferDrawElementsIndirect(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                                    NV_INDEX_TYPES[elements->type],
+                                                    elements->indices->address,
+                                                    numbers->address);
+    } else {
+        nv->nvn.nvnCommandBufferDrawArraysIndirect(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                                  numbers->address);
+    }
+}
+
+static void NvVertices(DrawPath *path, const DrawBuffer *vertices, uint32_t bytes) {
+    NvnPath *const nv = Nv(path);
+    const NvnProcs *const n = &nv->nvn;
+    NvLayout(nv, false);
     if (path->spec.binds == DRAW_BINDS_SINGLE) {
         n->nvnCommandBufferBindVertexBuffer(&nv->command, 0, vertices->address, bytes);
     } else {
@@ -647,7 +701,7 @@ static const uint8_t *NvRead(DrawPath *path) {
 static const DrawPathWay NVN_WAY = {
     NvClose, NvProgram, NvTexture, NvAlloc,       NvBegin, NvClear, NvClearDepth, NvDepth,
     NvUseProgram, NvVertices, NvUniform, NvBindTexture, NvDraw,  NvEnd,   NvRead,
-    NvDrawIndexed, NvUpdate,
+    NvDrawIndexed, NvUpdate, NvInstances, NvDrawInstanced, NvDrawIndirect,
 };
 
 /// The steps of the bring-up, in order; false with the step in @p why.

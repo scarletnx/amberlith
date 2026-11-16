@@ -10,6 +10,7 @@
   * [Indexed draws](#indexed-draws)
   * [The binds that take several, and the deferred ones](#the-binds-that-take-several-and-the-deferred-ones)
   * [A uniform buffer updated inside the list](#a-uniform-buffer-updated-inside-the-list)
+  * [Instanced draws, and draws that read their numbers](#instanced-draws-and-draws-that-read-their-numbers)
 * [The command buffer, down two ways](#the-command-buffer-down-two-ways)
   * [Counters and the render enable](#counters-and-the-render-enable)
   * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
@@ -21,7 +22,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and thirteen cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and sixteen cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -65,7 +66,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
-  and twenty nine.
+  and thirty three.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -316,6 +317,25 @@ updated before each are each its own colour**, **the same four quads of an updat
 layer's own NVN functions are each its own colour** and **... through the NVN the program looks up ...** (exact):
 updates that do not land leave the clear colour, and updates that all land before the first draw make the four
 quads the last colour.
+
+### Instanced draws, and draws that read their numbers
+
+A fifth scene the three ways: eight cells, four across and two down, each one instance of the same quad. The
+quad's vertices are the first cell's; an instance's entry of a second vertex stream, which steps once an instance
+(`nvnVertexStreamStateSetDivisor`, `DrawPathInstances`), moves it to its cell and colours it
+(`scene_instanced.vert.glsl`). Two instances a draw:
+
+- cells 0 and 1: `nvnCommandBufferDrawArraysInstanced`;
+- cells 2 and 3: `nvnCommandBufferDrawElementsInstanced`, from base instance 2;
+- cells 4 and 5: `nvnCommandBufferDrawArraysIndirect`, its count, instances, first vertex and base instance 4 in a
+  buffer the graphics unit reads;
+- cells 6 and 7: `nvnCommandBufferDrawElementsIndirect`, from base instance 6.
+
+The cases are **eight instances of a quad drawn through deko3d, by instanced draws and by draws that read their
+numbers, are each in its cell**, **the same eight instances through the layer's own NVN functions are each in its
+cell** and **the same eight instances through the NVN the program looks up are each in its cell** (exact). A draw
+that starts at instance nought draws the first two cells again and leaves its own the clear colour; a failing
+case says whose colour the first wrong pixel has.
 
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the

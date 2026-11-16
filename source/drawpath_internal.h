@@ -29,6 +29,11 @@ typedef struct {
                          uint32_t count, int32_t base_vertex);
     void (*update)(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
                    uint32_t offset, const void *data, uint32_t bytes);
+    void (*instances)(DrawPath *path, const DrawBuffer *instances, uint32_t bytes);
+    void (*draw_instanced)(DrawPath *path, const DrawElements *elements, uint32_t first,
+                           uint32_t count, uint32_t base_instance, uint32_t instances);
+    void (*draw_indirect)(DrawPath *path, const DrawElements *elements,
+                          const DrawBuffer *numbers);
 } DrawPathWay;
 
 /// What every way starts with: its functions, what it was asked for and its failure.

@@ -1962,18 +1962,89 @@ void Nvnl_nvnCommandBufferDrawArrays(NVNcommandBuffer *cmd, NVNdrawPrimitive pri
     dkCmdBufDraw(record->cmdbuf, (DkPrimitive)primitive, (uint32_t)count, 1, (uint32_t)first, 0);
 }
 
-/// An indexed draw of @p count indices of @p type at @p indices, @p base_vertex added to each.
+void Nvnl_nvnCommandBufferDrawArraysInstanced(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive,
+                                              int first, int count, int base_instance,
+                                              int instances) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferDrawArraysInstanced");
+    if (record == NULL) {
+        return;
+    }
+    if (primitive < NVN_DRAW_PRIMITIVE_POINTS || primitive > NVN_DRAW_PRIMITIVE_PATCHES ||
+        first < 0 || count < 0 || base_instance < 0 || instances < 0) {
+        LayerComplain("nvnCommandBufferDrawArraysInstanced: primitive %d, %d vertices from %d, "
+                      "%d instances from %d",
+                      (int)primitive, count, first, instances, base_instance);
+        return;
+    }
+    if (!FlushHandles(record, "nvnCommandBufferDrawArraysInstanced")) {
+        return;
+    }
+    dkCmdBufDraw(record->cmdbuf, (DkPrimitive)primitive, (uint32_t)count, (uint32_t)instances,
+                 (uint32_t)first, (uint32_t)base_instance);
+}
+
+// NVN's indirect draws read the words deko3d's read, in the same order: the count, the
+// instances, the first vertex or index, for an indexed draw the base vertex, the base instance.
+
+/// What the draws that read their numbers from a buffer check; false with a complaint.
+static bool IndirectTaken(LayerCommandBuffer *record, NVNdrawPrimitive primitive,
+                          NVNbufferAddress indirect, const char *what) {
+    if (record == NULL) {
+        return false;
+    }
+    if (primitive < NVN_DRAW_PRIMITIVE_POINTS || primitive > NVN_DRAW_PRIMITIVE_PATCHES ||
+        indirect == 0u || (indirect & 3u) != 0u) {
+        LayerComplain("%s: primitive %d with its numbers at 0x%llx, where the layer takes them "
+                      "on a four byte boundary",
+                      what, (int)primitive, (unsigned long long)indirect);
+        return false;
+    }
+    return FlushHandles(record, what);
+}
+
+void Nvnl_nvnCommandBufferDrawArraysIndirect(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive,
+                                             NVNbufferAddress indirect) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferDrawArraysIndirect");
+    if (IndirectTaken(record, primitive, indirect, "nvnCommandBufferDrawArraysIndirect")) {
+        dkCmdBufDrawIndirect(record->cmdbuf, (DkPrimitive)primitive, indirect);
+    }
+}
+
+void Nvnl_nvnCommandBufferDrawElementsIndirect(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive,
+                                               NVNindexType type, NVNbufferAddress indices,
+                                               NVNbufferAddress indirect) {
+    static const char *const WHAT = "nvnCommandBufferDrawElementsIndirect";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    if (type < NVN_INDEX_TYPE_UNSIGNED_BYTE || type > NVN_INDEX_TYPE_UNSIGNED_INT ||
+        indices == 0u) {
+        LayerComplain("%s: indices of type %d at 0x%llx", WHAT, (int)type,
+                      (unsigned long long)indices);
+        return;
+    }
+    if (IndirectTaken(record, primitive, indirect, WHAT)) {
+        dkCmdBufBindIdxBuffer(record->cmdbuf, (DkIdxFormat)type, indices);
+        dkCmdBufDrawIndexedIndirect(record->cmdbuf, (DkPrimitive)primitive, indirect);
+    }
+}
+
+/// An indexed draw of @p count indices of @p type at @p indices, @p base_vertex added to each,
+/// @p instances times from instance @p base_instance.
 static void DrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,
-                         int count, NVNbufferAddress indices, int base_vertex, const char *what) {
+                         int count, NVNbufferAddress indices, int base_vertex, int base_instance,
+                         int instances, const char *what) {
     LayerCommandBuffer *const record = CmdOf(cmd, what);
     if (record == NULL) {
         return;
     }
     if (primitive < NVN_DRAW_PRIMITIVE_POINTS || primitive > NVN_DRAW_PRIMITIVE_PATCHES ||
         type < NVN_INDEX_TYPE_UNSIGNED_BYTE || type > NVN_INDEX_TYPE_UNSIGNED_INT || count < 0 ||
-        indices == 0u) {
-        LayerComplain("%s: primitive %d, %d indices of type %d at 0x%llx", what, (int)primitive,
-                      count, (int)type, (unsigned long long)indices);
+        indices == 0u || base_instance < 0 || instances < 0) {
+        LayerComplain("%s: primitive %d, %d indices of type %d at 0x%llx, %d instances from %d",
+                      what, (int)primitive, count, (int)type, (unsigned long long)indices,
+                      instances, base_instance);
         return;
     }
     if (!FlushHandles(record, what)) {
@@ -1981,19 +2052,28 @@ static void DrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNi
     }
     // NVN's index types are deko3d's numbers: a byte 0, two 1, four 2.
     dkCmdBufBindIdxBuffer(record->cmdbuf, (DkIdxFormat)type, indices);
-    dkCmdBufDrawIndexed(record->cmdbuf, (DkPrimitive)primitive, (uint32_t)count, 1, 0,
-                        base_vertex, 0);
+    dkCmdBufDrawIndexed(record->cmdbuf, (DkPrimitive)primitive, (uint32_t)count,
+                        (uint32_t)instances, 0, base_vertex, (uint32_t)base_instance);
+}
+
+void Nvnl_nvnCommandBufferDrawElementsInstanced(NVNcommandBuffer *cmd,
+                                                NVNdrawPrimitive primitive, NVNindexType type,
+                                                int count, NVNbufferAddress indices,
+                                                int base_vertex, int base_instance,
+                                                int instances) {
+    DrawElements(cmd, primitive, type, count, indices, base_vertex, base_instance, instances,
+                 "nvnCommandBufferDrawElementsInstanced");
 }
 
 void Nvnl_nvnCommandBufferDrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive,
                                        NVNindexType type, int count, NVNbufferAddress indices) {
-    DrawElements(cmd, primitive, type, count, indices, 0, "nvnCommandBufferDrawElements");
+    DrawElements(cmd, primitive, type, count, indices, 0, 0, 1, "nvnCommandBufferDrawElements");
 }
 
 void Nvnl_nvnCommandBufferDrawElementsBaseVertex(NVNcommandBuffer *cmd,
                                                  NVNdrawPrimitive primitive, NVNindexType type,
                                                  int count, NVNbufferAddress indices,
                                                  int base_vertex) {
-    DrawElements(cmd, primitive, type, count, indices, base_vertex,
+    DrawElements(cmd, primitive, type, count, indices, base_vertex, 0, 1,
                  "nvnCommandBufferDrawElementsBaseVertex");
 }

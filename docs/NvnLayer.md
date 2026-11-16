@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and twenty nine functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and thirty three functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -225,12 +225,15 @@ Four hundred and twenty nine functions, each recording the deko3d commands that 
   `nvnCommandBufferBindCoverageModulationTable` (deko3d's table; no table is refused, deko3d having no call that
   takes one away) and `nvnCommandBufferSetShaderScratchMemory` (checked against its pool and not recorded:
   deko3d asks for no such memory);
+- **instanced draws** (`nvnCommandBufferDrawArraysInstanced`, `DrawElementsInstanced`) and **draws whose
+  numbers the graphics unit reads** from a buffer (`DrawArraysIndirect`, `DrawElementsIndirect`): NVN's words
+  there are deko3d's, in the same order;
 - **the binds**: a program, each state, vertex buffers, uniform buffers, textures by handle; and **the draw**,
   `nvnCommandBufferDrawArrays`, with the colour and depth clears.
 
 A choice NVN has and the layer has not made yet (a format, a target, a flag, a view, a setter) is refused with its
 value in `NvnLayerError`, or is a name the lookup does not have; none is filled in with a guess. Compute, storage
-buffers, images, and instanced and indirect draws are not there yet.
+buffers and images are not there yet.
 
 `nvnDeviceGetInteger` answers the items deko3d fixes (alignments, counts, the code pool's padding) and NVN's own
 count of reserved descriptors, 256 in each pool, so a program numbers its textures and samplers from the same
