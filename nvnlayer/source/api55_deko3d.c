@@ -1591,6 +1591,9 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
     case NVN_TEXTURE_TARGET_2D:
         type = DkImageType_2D;
         break;
+    case NVN_TEXTURE_TARGET_2D_MULTISAMPLE:
+        type = DkImageType_2DMS;
+        break;
     case NVN_TEXTURE_TARGET_2D_ARRAY:
         type = DkImageType_2DArray;
         deep = true;
@@ -1600,11 +1603,11 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
         deep = true;
         break;
     default:
-        LayerComplain("%s: texture target %d, and the layer takes 1D (%d), 2D (%d), 2D array (%d) "
-                      "and 3D (%d)",
+        LayerComplain("%s: texture target %d, and the layer takes 1D (%d), 2D (%d), 2D array (%d), "
+                      "3D (%d) and multisampled 2D (%d)",
                       what, (int)builder->target, (int)NVN_TEXTURE_TARGET_1D,
                       (int)NVN_TEXTURE_TARGET_2D, (int)NVN_TEXTURE_TARGET_2D_ARRAY,
-                      (int)NVN_TEXTURE_TARGET_3D);
+                      (int)NVN_TEXTURE_TARGET_3D, (int)NVN_TEXTURE_TARGET_2D_MULTISAMPLE);
         return false;
     }
     const DkImageFormat format = FormatOf(builder->format);
@@ -1635,20 +1638,32 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
                       builder->levels, builder->width, builder->height, most);
         return false;
     }
+    // A multisampled texture has two, four or eight samples and one level; any other has one
+    // sample, which a builder says as nought or as one.
+    const bool multisampled = type == DkImageType_2DMS;
+    const bool samples_fit =
+        multisampled ? (builder->samples == 2 || builder->samples == 4 || builder->samples == 8) &&
+                           builder->levels == 1
+                     : builder->samples == 0 || builder->samples == 1;
     if (builder->depth < 1 || (!deep && builder->depth != 1) ||
-        (type == DkImageType_1D && builder->height != 1) || builder->samples > 1 ||
-        builder->samples < 0) {
-        LayerComplain("%s: a %dx%dx%d texture of target %d with %d samples, where a depth past 1 "
-                      "is an array's or a 3D texture's, a 1D texture is one row, and the layer "
-                      "does no multisampling (0 or 1 samples) yet",
+        (type == DkImageType_1D && builder->height != 1) || !samples_fit) {
+        LayerComplain("%s: a %dx%dx%d texture of target %d with %d samples and %d levels, where "
+                      "a depth past 1 is an array's or a 3D texture's, a 1D texture is one row, "
+                      "and a multisampled texture has 2, 4 or 8 samples and one level, any other "
+                      "0 or 1 samples",
                       what, builder->width, builder->height, builder->depth, (int)builder->target,
-                      builder->samples);
+                      builder->samples, builder->levels);
         return false;
     }
     DkImageLayoutMaker maker;
     dkImageLayoutMakerDefaults(&maker, DeviceUse(device));
     maker.type = type;
     maker.format = format;
+    if (multisampled) {
+        maker.msMode = builder->samples == 2   ? DkMsMode_2x
+                       : builder->samples == 4 ? DkMsMode_4x
+                                               : DkMsMode_8x;
+    }
     // Any 2D NVN texture can be drawn into, and one of a colour format copied by either engine,
     // so every one here says so: the 2D engine is where a mirrored copy goes. The other targets
     // are copied into and out of, by the copy engine.
@@ -1658,6 +1673,9 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
         if (format == DkImageFormat_RGBA8_Unorm || format == DkImageFormat_BGRA8_Unorm) {
             maker.flags |= DkImageFlags_Usage2DEngine;
         }
+    } else if (multisampled) {
+        // Drawn into, and resolved from by the engine a draw runs on.
+        maker.flags = DkImageFlags_UsageRender;
     }
     if ((builder->flags & NVN_TEXTURE_FLAGS_DISPLAY) != 0) {
         maker.flags |= DkImageFlags_UsagePresent;
@@ -2507,6 +2525,58 @@ void Nvnl_nvnCommandBufferCopyBufferToTexture(NVNcommandBuffer *cmd, NVNbufferAd
     const DkImageRect rect = RectOf(region);
     const DkCopyBuf from = { buffer, record->copy_row_stride, 0 };
     dkCmdBufCopyBufferToImage(record->cmdbuf, &from, &to, &rect, blit);
+}
+
+/// A multisampled texture resolved into one of a sample a texel, which is deko3d's resolve
+/// whichever of NVN's four calls asked: the tiled ones are the same resolve made a tile of the
+/// tiled cache at a time, which changes no texel.
+static void Resolve(NVNcommandBuffer *cmd, const NVNtexture *source,
+                    const NVNtextureView *source_view, const NVNtexture *destination,
+                    const NVNtextureView *destination_view, const char *what) {
+    LayerCommandBuffer *const record = CmdOf(cmd, what);
+    const LayerTexture *const from = TextureOf(source, what);
+    const LayerTexture *const to = TextureOf(destination, what);
+    DkImageView src, dst;
+    if (record == NULL || from == NULL || to == NULL ||
+        !CopyView(what, from, source_view, &src) || !CopyView(what, to, destination_view, &dst)) {
+        return;
+    }
+    if (from->samples < 2 || to->samples > 1 || from->width != to->width ||
+        from->height != to->height) {
+        LayerComplain("%s: a %dx%d texture of %d samples into a %dx%d one of %d, where a resolve "
+                      "is from a multisampled texture into one of its size with one sample",
+                      what, (int)from->width, (int)from->height, (int)from->samples,
+                      (int)to->width, (int)to->height, (int)to->samples);
+        return;
+    }
+    dkCmdBufResolveImage(record->cmdbuf, &src, &dst);
+}
+
+void Nvnl_nvnCommandBufferDownsample(NVNcommandBuffer *cmd, const NVNtexture *source,
+                                     const NVNtexture *destination) {
+    Resolve(cmd, source, NULL, destination, NULL, "nvnCommandBufferDownsample");
+}
+
+void Nvnl_nvnCommandBufferDownsampleTextureView(NVNcommandBuffer *cmd, const NVNtexture *source,
+                                                const NVNtextureView *source_view,
+                                                const NVNtexture *destination,
+                                                const NVNtextureView *destination_view) {
+    Resolve(cmd, source, source_view, destination, destination_view,
+            "nvnCommandBufferDownsampleTextureView");
+}
+
+void Nvnl_nvnCommandBufferTiledDownsample(NVNcommandBuffer *cmd, const NVNtexture *source,
+                                          const NVNtexture *destination) {
+    Resolve(cmd, source, NULL, destination, NULL, "nvnCommandBufferTiledDownsample");
+}
+
+void Nvnl_nvnCommandBufferTiledDownsampleTextureView(NVNcommandBuffer *cmd,
+                                                     const NVNtexture *source,
+                                                     const NVNtextureView *source_view,
+                                                     const NVNtexture *destination,
+                                                     const NVNtextureView *destination_view) {
+    Resolve(cmd, source, source_view, destination, destination_view,
+            "nvnCommandBufferTiledDownsampleTextureView");
 }
 
 void Nvnl_nvnCommandBufferCopyTextureToTexture(

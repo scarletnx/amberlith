@@ -24,7 +24,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and ninety eight cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, two hundred cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -68,7 +68,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
-  and twenty eight.
+  and thirty two.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -526,7 +526,6 @@ Three of these make 16 by 16 textures of their own, in a pool of their own, and 
   and another cell drawn under the depth test: the first cell is gone and the second there, as with no discard.
   What a discarded target holds before it is cleared is not asked.
 
-`nvnCommandBufferDownsample` and its three kin wait for multisampled textures in the layer.
 
 ### The debug layer's marks
 
@@ -587,6 +586,11 @@ hashes set is the driver's, and ScarletNX keeps none.
   with nought before the shaders are set, and `nvnProgramGetSubtileSize`, which is nought for every program: a
   driver's `nvnProgramSetShaders` leaves it there and nothing in NVN sets it. The layer lacks the other modes of
   sample shading, deko3d running a fragment stage as its code says.
+- **a cleared target of four samples resolves into its colour by each of the four downsamples**:
+  `nvnCommandBufferDownsample`, `DownsampleTextureView`, `TiledDownsample` and `TiledDownsampleTextureView`, each
+  from a 16 by 16 texture of four samples cleared to a colour of its own into a texture of one sample, which is
+  then read: every texel is the clear's colour. The tiled ones are the same resolve a tile of the tiled cache at a
+  time, and the layer makes all four deko3d's resolve.
 - **depth tested draws around a depth target's resolve and its culling data's save and restore are as without
   them**: `nvnCommandBufferResolveDepthBuffer`, `SaveZCullData` and `RestoreZCullData`, the graphics unit's own
   business with a depth target, which no picture shows; the layer records nothing for them.
