@@ -182,8 +182,8 @@ static void CountCase(QueryContext *q, const char *name, CountShape shape, uint6
 
 /// The graphics unit's timer read two ways, each twice, the system tick's TIMER_STRETCH_NS apart:
 /// nvhost-ctrl-gpu's GET_GPU_TIME (libnx's nvGpuGetTimestamp) and a timestamp report's word. Each
-/// one's rate is its count over the processor's tick, which the detail says whatever the verdict:
-/// on a console it is the hardware's answer.
+/// one's rate is its count over the processor's tick, which a note says on every run: on a console
+/// it is the hardware's answer.
 static void TimerCase(QueryContext *q, const char *name) {
     if (!ReportStart(SUITE, name)) {
         return;
@@ -223,6 +223,10 @@ static void TimerCase(QueryContext *q, const char *name) {
     const uint64_t reported = reports[1].timestamp - reports[0].timestamp;
     const double ioctl_hz = (double)counted / seconds;
     const double report_hz = (double)reported / seconds;
+    // a pass carries no detail: the rates go in a note on every run, the console's answer included
+    ReportNote("query: the graphics unit's timer over %.6f s of the processor's tick: GET_GPU_TIME %.3f MHz, "
+               "the reports' words %.3f MHz",
+               seconds, ioctl_hz / 1e6, report_hz / 1e6);
     const bool held = ioctl_hz > TIMER_HZ * (1.0 - TIMER_TOLERANCE) &&
                       ioctl_hz < TIMER_HZ * (1.0 + TIMER_TOLERANCE) &&
                       report_hz > TIMER_HZ * (1.0 - TIMER_TOLERANCE) &&
