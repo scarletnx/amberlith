@@ -19,7 +19,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, ninety nine cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and one cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -63,7 +63,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three
-  hundred and fifty two.
+  hundred and fifty five.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -456,15 +456,23 @@ how the graphics unit stores and culls and change nothing a program reads.
   `nvnProgramSetShadersExt` from the way's program's two stages, each in NVN 55's shader data of eight bytes
   more, and bound: three cells drawn with it are there.
 
+- **a texture's handle and a sampler's put together sample, and a texel fetch handle fetches**: two 4 by 4
+  textures, the first sampled nearest and held at its edge, the second, its texels turned about, repeating.
+  `nvnDeviceGetSeparateTextureHandle` of the first and `nvnDeviceGetSeparateSamplerHandle` of the second's
+  sampler go in two texture slots, and the fragment stage (`handles.frag`) puts their low words one over the other,
+  as a console's compiled shader puts a separate pair together, and samples over coordinates to 2: the cell shows
+  the first texture four times, two pixels a texel. A cell beside it fetches texels through
+  `nvnDeviceGetTexelFetchHandle` of the first texture, with no sampler: the texture once, four pixels a texel. A
+  failing pixel is the other texture's (the wrong descriptor), an edge texel drawn out (the first texture's own
+  sampler), or nothing.
+
 The Switch 2 program has **an Ounce program builder gives back what it was set, a ray tracing program's numbers
 too** (exact), in the suite's first part: the builder's device, its shader data by address and count, its sample
 shading mode, and the greatest callable and trace recursion depths and the flags of a ray tracing program. The
 builder makes no program. ScarletNX draws no ray tracing yet, so nothing else of it has a case: the acceleration
 structures, a program's shader groups and a queue's ray tracing memory are answers it makes up.
 
-Without a case: the handles of a separate texture, a separate sampler and a texel fetch, which only a shader
-that takes them shows, and the layer's shaders take the one handle of a texture with its sampler;
-`nvnDeviceApplyDeferredFinalizes`, `SetIntermediateShaderCache` and `FinalizeCommandHandle`, which change
+Without a case: `nvnDeviceApplyDeferredFinalizes`, `SetIntermediateShaderCache` and `FinalizeCommandHandle`, which change
 nothing a program reads; the Ounce's device command and message buffers, which have setters alone;
 `nvnProgramSetSampleShading`, whose modes need a multisampled target to show; subroutine linkage, which needs
 shaders with subroutines; and `nvnProgramGetSubtileSize` and `GetScratchBytesPerWarp`, the driver's own numbers.

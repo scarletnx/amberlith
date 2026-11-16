@@ -78,13 +78,16 @@ static float ClipY(uint32_t pixel) {
 }
 
 /// Brings @p kind up with everything a case draws with. False with the case reported as failed.
-static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *name) {
+static bool KitOpenFor(Kit *kit, DrawPathKind kind, bool depth, uint32_t textures,
+                       uint32_t texture_bytes, const char *name) {
     memset(kit, 0, sizeof(*kit));
     DrawPathSpec spec;
     memset(&spec, 0, sizeof(spec));
     spec.width = SCENE_SIZE;
     spec.height = SCENE_SIZE;
     spec.depth = depth;
+    spec.textures = textures;
+    spec.texture_bytes = texture_bytes;
     spec.programs = 1;
     spec.data_bytes = 0x4000u;
     spec.command_bytes = 0x10000u;
@@ -148,6 +151,10 @@ static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *nam
     memcpy(kit->paint.bytes, &flat, sizeof(flat));
     memset(kit->page.bytes, PAGE_PRESET, PAGE_BYTES);
     return true;
+}
+
+static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *name) {
+    return KitOpenFor(kit, kind, depth, 0, 0, name);
 }
 
 static bool KitOpen(Kit *kit, DrawPathKind kind, const char *name) {
@@ -1832,6 +1839,130 @@ static void LongProgramCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, set ? 1u << 9 | 1u << 10 | 1u << 11 : 0u, why);
 }
 
+// ---- the handles a device makes apart
+
+/// The side of the handle case's two textures, and where it draws them.
+#define HANDLE_SIDE 4u
+#define HANDLE_SEPARATE_CELL 5u
+#define HANDLE_FETCH_CELL 10u
+
+/// Texel (@p x, @p y) of the texture the case samples: no two alike, none the clear colour.
+static void HandleTexel(uint32_t x, uint32_t y, uint8_t out[4]) {
+    out[0] = (uint8_t)(0x10u + x * 0x30u);
+    out[1] = (uint8_t)(0x18u + y * 0x38u);
+    out[2] = (uint8_t)(0xe0u - (x + y * HANDLE_SIDE) * 9u);
+    out[3] = 0xffu;
+}
+
+/// Into the open list: a program of the way's vertex stage and the handles fragment stage; the
+/// first texture's handle in slot 1 and the second texture's sampler's in slot 2, each made
+/// apart, and the first texture's texel fetch handle in slot 3; then a cell drawn sampling
+/// through the pair, and one fetching texels.
+static bool HandlesRecorded(Kit *kit, NVNprogram *program, bool *made, const DrawBuffer paints[2],
+                            int sampled, int wrapped) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    NVNshaderData stages[2];
+    stages[0] = kit->nvn.stages[kit->program][0];
+    if (!DrawPathNvnStage(kit->path, ShaderData(SHADER_HANDLES_FRAG),
+                          ShaderSize(SHADER_HANDLES_FRAG), &stages[1])) {
+        return false;
+    }
+    *made = n->nvnProgramInitialize(program, kit->nvn.device);
+    if (!*made || !n->nvnProgramSetShaders(program, 2, stages)) {
+        return false;
+    }
+    n->nvnCommandBufferBindProgram(cmd, program,
+                                   NVN_SHADER_STAGE_VERTEX_BIT | NVN_SHADER_STAGE_FRAGMENT_BIT);
+    n->nvnCommandBufferBindTexture(
+        cmd, NVN_SHADER_STAGE_FRAGMENT, 1,
+        n->nvnDeviceGetSeparateTextureHandle(kit->nvn.device, kit->nvn.texture_base + sampled));
+    n->nvnCommandBufferBindTexture(
+        cmd, NVN_SHADER_STAGE_FRAGMENT, 2,
+        n->nvnDeviceGetSeparateSamplerHandle(kit->nvn.device, kit->nvn.sampler_base + wrapped));
+    n->nvnCommandBufferBindTexture(
+        cmd, NVN_SHADER_STAGE_FRAGMENT, 3,
+        n->nvnDeviceGetTexelFetchHandle(kit->nvn.device, kit->nvn.texture_base + sampled));
+    DrawPathUniform(kit->path, DRAW_STAGE_FRAGMENT, 0, &paints[0], sizeof(Paint));
+    KitCell(kit, HANDLE_SEPARATE_CELL);
+    DrawPathUniform(kit->path, DRAW_STAGE_FRAGMENT, 0, &paints[1], sizeof(Paint));
+    KitCell(kit, HANDLE_FETCH_CELL);
+    return true;
+}
+
+static void HandlesExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    if (k == HANDLE_SEPARATE_CELL) {
+        // The texture twice across the cell and twice down, two pixels a texel.
+        HandleTexel(x % CELL / 2u % HANDLE_SIDE, y % CELL / 2u % HANDLE_SIDE, out);
+    } else if (k == HANDLE_FETCH_CELL) {
+        // The texture once, four pixels a texel.
+        HandleTexel(x % CELL / 4u, y % CELL / 4u, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+/// The handle of a texture alone and the handle of a sampler alone, put together by the shader
+/// as a console's compiled shader puts a separate pair together, sample that texture through
+/// that sampler: the case's first texture with the second texture's sampler, which repeats
+/// where the first's own holds its edge, over coordinates to 2, so the cell shows the texture
+/// four times. And the texel fetch handle reads the first texture's texels with no sampler:
+/// the cell shows it once.
+static void HandlesCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) ||
+        !KitOpenFor(&kit, kind, false, 2, 2u * HANDLE_SIDE * HANDLE_SIDE * 4u, name)) {
+        return;
+    }
+    char why[240] = "";
+    uint8_t texels[HANDLE_SIDE * HANDLE_SIDE * 4u];
+    uint8_t other[HANDLE_SIDE * HANDLE_SIDE * 4u];
+    for (uint32_t y = 0; y < HANDLE_SIDE; ++y) {
+        for (uint32_t x = 0; x < HANDLE_SIDE; ++x) {
+            HandleTexel(x, y, texels + (y * HANDLE_SIDE + x) * 4u);
+            // The second texture's texels are the first's turned about, which a read of the
+            // wrong texture shows.
+            HandleTexel(HANDLE_SIDE - 1u - x, HANDLE_SIDE - 1u - y,
+                        other + (y * HANDLE_SIDE + x) * 4u);
+        }
+    }
+    const DrawSampler held = { false, DRAW_WRAP_CLAMP_TO_EDGE, { 0.0f, 0.0f, 0.0f, 0.0f } };
+    const DrawSampler repeated = { false, DRAW_WRAP_REPEAT, { 0.0f, 0.0f, 0.0f, 0.0f } };
+    const int sampled =
+        DrawPathTextureSampled(kit.path, HANDLE_SIDE, HANDLE_SIDE, texels, &held);
+    const int wrapped =
+        DrawPathTextureSampled(kit.path, HANDLE_SIDE, HANDLE_SIDE, other, &repeated);
+    DrawBuffer paints[2];
+    bool ok = sampled >= 0 && wrapped >= 0;
+    for (int mode = 0; ok && mode < 2; ++mode) {
+        ok = DrawPathAlloc(kit.path, (uint32_t)sizeof(Paint), &paints[mode]);
+        if (ok) {
+            const Paint paint = { { 0.0f, 0.0f, 0.0f, 0.0f }, { mode, 0, 0, 0 } };
+            memcpy(paints[mode].bytes, &paint, sizeof(paint));
+        }
+    }
+    static _Alignas(8) NVNprogram program;
+    bool made = false;
+    bool drawn = false;
+    if (ok) {
+        KitBegin(&kit, true);
+        drawn = HandlesRecorded(&kit, &program, &made, paints, sampled, wrapped);
+        ok = KitEnd(&kit, why, sizeof(why));
+    }
+    if (why[0] == '\0' && !(ok && drawn)) {
+        snprintf(why, sizeof(why), "the textures or the program of the handles' stage were not "
+                 "made: %s",
+                 DrawPathFailure(kit.path)[0] != '\0'
+                     ? DrawPathFailure(kit.path)
+                     : NvnLayerError()[0] != '\0' ? NvnLayerError() : "a call answered false");
+    }
+    if (made) {
+        kit.nvn.nvn->nvnProgramFinalize(&program);
+    }
+    KitJudgeWith(&kit, name, HandlesExpected, why);
+}
+
 // ---- the cases, by way
 
 void NvnCommandFirst(void) {
@@ -1898,6 +2029,9 @@ void NvnCommandFirst(void) {
                                 "clear values register, through the layer's own NVN functions");
     LongProgramCase(DRAW_PATH_LAYER, "a program set from the longer shader data draws, through "
                                      "the layer's own NVN functions");
+    HandlesCase(DRAW_PATH_LAYER, "a texture's handle and a sampler's put together sample, and "
+                                 "a texel fetch handle fetches, through the layer's own NVN "
+                                 "functions");
 }
 
 void NvnCommandLast(void) {
@@ -1962,4 +2096,7 @@ void NvnCommandLast(void) {
                               "values register, through the NVN the program looks up");
     LongProgramCase(DRAW_PATH_NVN, "a program set from the longer shader data draws, through "
                                    "the NVN the program looks up");
+    HandlesCase(DRAW_PATH_NVN, "a texture's handle and a sampler's put together sample, and a "
+                               "texel fetch handle fetches, through the NVN the program looks "
+                               "up");
 }

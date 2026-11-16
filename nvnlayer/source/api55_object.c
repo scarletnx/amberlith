@@ -57,6 +57,44 @@ NVNboolean Nvnl_nvnDeviceRegisterFastClearStencil(NVNdevice *device, int stencil
     return DeviceOf(device, "nvnDeviceRegisterFastClearStencil") != NULL;
 }
 
+// The handles of a texture and of a sampler apart, which a shader puts together itself, and of a
+// texture read with no sampler. Each is the descriptor's number where deko3d's one handle has
+// it, the texture's in the low twenty bits and the sampler's above them, so the two low words
+// one over the other are deko3d's handle; a texture's alone also has bit 32 set, as a console's
+// driver sets it (ScarletNX has that from two of them), which no shader reads.
+#define HANDLE_ALONE ((uint64_t)1u << 32)
+
+/// Whether @p id is a descriptor of the kind the handle is for; a complaint naming @p what when
+/// it is not.
+static bool Descriptor(int id, int count, const char *what) {
+    if (id < 0 || id >= count) {
+        LayerComplain("%s: descriptor %d, where a pool holds 0 to %d", what, id, count - 1);
+        return false;
+    }
+    return true;
+}
+
+uint64_t Nvnl_nvnDeviceGetSeparateTextureHandle(const NVNdevice *device, int id) {
+    (void)device;
+    return Descriptor(id, 1 << 20, "nvnDeviceGetSeparateTextureHandle")
+               ? (uint64_t)(uint32_t)id | HANDLE_ALONE
+               : 0u;
+}
+
+uint64_t Nvnl_nvnDeviceGetSeparateSamplerHandle(const NVNdevice *device, int id) {
+    (void)device;
+    return Descriptor(id, 1 << 12, "nvnDeviceGetSeparateSamplerHandle")
+               ? (uint64_t)(uint32_t)id << 20
+               : 0u;
+}
+
+uint64_t Nvnl_nvnDeviceGetTexelFetchHandle(const NVNdevice *device, int id) {
+    (void)device;
+    return Descriptor(id, 1 << 20, "nvnDeviceGetTexelFetchHandle")
+               ? (uint64_t)(uint32_t)id | HANDLE_ALONE
+               : 0u;
+}
+
 // ---- programs
 
 /// NVN 55's longer shader data: NVNshaderData and eight bytes more, which name nothing the
