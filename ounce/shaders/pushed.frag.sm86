@@ -1,0 +1,13 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; The Mandelbrot's fragment program with its green and blue pushed: red is the bar's count as mandel.frag.sm86 has
+; it, green and blue the floats at bytes 0x10 and 0x14 of root table 2, constant buffer 26.
+.stage fragment
+.in generic0.x
+        IPA R0, a[0x80]
+        FMUL.FTZ R0, R0, 0.05882353f
+        MOV R1, c[26][0x10]
+        MOV R2, c[26][0x14]
+        MOV R3, 1.0f
+        EXIT

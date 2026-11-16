@@ -66,7 +66,22 @@ typedef enum {
     DISPATCH_BUFFERS,          ///< nvnCommandBufferBindStorageBuffers
     DISPATCH_BUFFERS_DEFERRED, ///< nvnCommandBufferBindStorageBuffersDeferred
     DISPATCH_INDIRECT,         ///< nvnCommandBufferDispatchComputeIndirect
+    DISPATCH_PUSHED,           ///< the pushed program, its numbers by PushComputeConstants
 } DispatchKind;
+
+// What the pushed program multiplies by and adds: words 2 and 3 of root table 1.
+#define PUSHED_TABLE 1
+#define PUSHED_BYTE 8
+#define PUSHED_TIMES 5u
+#define PUSHED_PLUS 77u
+// The pushed fragment program's green and blue, floats at byte 0x10 of root table 2, and the bytes
+// a target of eight bits a channel holds for them: 153 and 51 of 255.
+#define PUSHED_COLOUR_TABLE 2
+#define PUSHED_COLOUR_BYTE 0x10
+#define PUSHED_GREEN 0.6f
+#define PUSHED_BLUE 0.2f
+#define PUSHED_GREEN_BYTE 0x99u
+#define PUSHED_BLUE_BYTE 0x33u
 
 /// Which of the mesh draws draws the Mandelbrot's rows.
 typedef enum {
@@ -78,6 +93,8 @@ typedef enum {
     MESH_MULTI_3D,
     MESH_MULTI_COUNT,
     MESH_MULTI_3D_COUNT,
+    MESH_PUSHED,   ///< the pushed fragment program, its colour by PushGraphicsConstants
+    MESH_NO_RATE,  ///< nvnCommandBufferBindShadingRateImage with no texture
 } MeshKind;
 
 typedef enum {
@@ -85,6 +102,8 @@ typedef enum {
     PROGRAM_MANDEL_COUNT,
     PROGRAM_MANDEL_DRAW,
     PROGRAM_HMMA,
+    PROGRAM_PUSHED,
+    PROGRAM_MANDEL_PUSHED,
     PROGRAM_COUNT,
 } ProgramId;
 
@@ -362,8 +381,19 @@ static const uint8_t *Dispatch(DispatchKind kind, char *why, size_t why_size) {
     }
     n2.nvn.nvnCommandBufferBeginRecording(&n2.command);
     n2.nvn.nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_INVALIDATE_SHADER_BIT);
-    n2.nvn.nvnCommandBufferBindProgram(&n2.command, &n2.programs[PROGRAM_SCALE],
-                                       NVN_SHADER_STAGE_COMPUTE_BIT);
+    n2.nvn.nvnCommandBufferBindProgram(
+        &n2.command, &n2.programs[kind == DISPATCH_PUSHED ? PROGRAM_PUSHED : PROGRAM_SCALE],
+        NVN_SHADER_STAGE_COMPUTE_BIT);
+    if (kind == DISPATCH_PUSHED) {
+        // Two words at the table's byte 8, then the second word alone over the one just pushed:
+        // a push starts at its offset and leaves the words before it.
+        const uint32_t both[2] = { PUSHED_TIMES, 1000u };
+        const uint32_t plus = PUSHED_PLUS;
+        n2.nvn.nvnCommandBufferPushComputeConstants(&n2.command, PUSHED_TABLE, PUSHED_BYTE,
+                                                    (int)sizeof(both), both);
+        n2.nvn.nvnCommandBufferPushComputeConstants(&n2.command, PUSHED_TABLE, PUSHED_BYTE + 4,
+                                                    (int)sizeof(plus), &plus);
+    }
     const NVNbufferAddress buffer = n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool);
     // A deferred bind's range is read when the list runs: it stays where it is.
     static NVNbufferRange range;
@@ -407,9 +437,10 @@ static const uint8_t *CopyOut(NVNbufferAddress source, size_t bytes, char *why, 
     return Finish("the copy", why, why_size) ? copy : NULL;
 }
 
-/// The scale program's words at @p out against the processor's arithmetic, three times the word
-/// plus its index; @p why is what kept them from being read, when @p out is NULL.
-static void ScaleJudge(const char *name, const uint8_t *out, const char *why) {
+/// The words at @p out against the processor's arithmetic: the scale program's three times the
+/// word plus its index, or with @p pushed the pushed program's five times the word plus 77;
+/// @p why is what kept them from being read, when @p out is NULL.
+static void ScaleJudgeAs(const char *name, const uint8_t *out, const char *why, bool pushed) {
     if (out == NULL) {
         ReportCase(SUITE, name, CHECK_NONE, false, why);
         return;
@@ -420,18 +451,26 @@ static void ScaleJudge(const char *name, const uint8_t *out, const char *why) {
     for (uint32_t i = 0; i < SCALE_WORDS; ++i) {
         uint32_t got;
         memcpy(&got, out + 4u * i, sizeof(got));
-        if (got != ScaleInput(i) * 3u + i && wrong++ == 0u) {
+        const uint32_t want = pushed ? ScaleInput(i) * PUSHED_TIMES + PUSHED_PLUS
+                                     : ScaleInput(i) * 3u + i;
+        if (got != want && wrong++ == 0u) {
             first = i;
             got_first = got;
         }
     }
+    const uint32_t times = pushed ? PUSHED_TIMES : 3u;
+    const uint32_t plus = pushed ? PUSHED_PLUS : first;
     CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
-               "%u of %u words differ; the first, word %u, is 0x%08x where three times 0x%08x "
+               "%u of %u words differ; the first, word %u, is 0x%08x where %u times 0x%08x "
                "plus %u is 0x%08x (0xdeadbeef is a word nothing wrote, 0xa5a5a5a5 one nothing "
                "copied)",
                (unsigned)wrong, (unsigned)SCALE_WORDS, (unsigned)first, (unsigned)got_first,
-               (unsigned)ScaleInput(first), (unsigned)first,
-               (unsigned)(ScaleInput(first) * 3u + first));
+               (unsigned)times, (unsigned)ScaleInput(first), (unsigned)plus,
+               (unsigned)(ScaleInput(first) * times + plus));
+}
+
+static void ScaleJudge(const char *name, const uint8_t *out, const char *why) {
+    ScaleJudgeAs(name, out, why, false);
 }
 
 /// The Mandelbrot's counts: the buffer preset, the program bound with it as its storage buffer
@@ -522,8 +561,19 @@ static const uint8_t *MandelDraw(MeshKind kind, char *why, size_t why_size) {
     n->nvnCommandBufferClearColor(&n2.command, 0, clear, NVN_CLEAR_COLOR_MASK_RGBA);
     n->nvnCommandBufferClearDepthStencil(&n2.command, 1.0f, 1, 0, 0);
 
-    n->nvnCommandBufferBindProgram(&n2.command, &n2.programs[PROGRAM_MANDEL_DRAW],
-                                   NVN_SHADER_STAGE_ALL_BITS_231);
+    n->nvnCommandBufferBindProgram(
+        &n2.command,
+        &n2.programs[kind == MESH_PUSHED ? PROGRAM_MANDEL_PUSHED : PROGRAM_MANDEL_DRAW],
+        NVN_SHADER_STAGE_ALL_BITS_231);
+    if (kind == MESH_PUSHED) {
+        const float colour[2] = { PUSHED_GREEN, PUSHED_BLUE };
+        n->nvnCommandBufferPushGraphicsConstants(&n2.command, PUSHED_COLOUR_TABLE,
+                                                 PUSHED_COLOUR_BYTE, (int)sizeof(colour), colour);
+    }
+    if (kind == MESH_NO_RATE) {
+        // No texture is no shading rate image: every pixel is shaded, as with none ever bound.
+        n->nvnCommandBufferBindShadingRateImage(&n2.command, NULL, NULL);
+    }
     n->nvnCommandBufferSetGeometryProcessingMode(&n2.command, GEOMETRY_PROCESSING_MESH);
     n->nvnCommandBufferBindStorageBuffer(
         &n2.command, NVN_SHADER_STAGE_MESH, 0,
@@ -738,8 +788,8 @@ static void ScaleAgain(const char *name, DispatchKind kind) {
     const uint8_t *const memory = Dispatch(kind, why, sizeof(why));
     const NVNbufferAddress out =
         n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + SCALE_OUT_BYTE;
-    ScaleJudge(name, memory != NULL ? CopyOut(out, 4u * SCALE_WORDS, why, sizeof(why)) : NULL,
-               why);
+    ScaleJudgeAs(name, memory != NULL ? CopyOut(out, 4u * SCALE_WORDS, why, sizeof(why)) : NULL,
+                 why, kind == DISPATCH_PUSHED);
 }
 
 /// The picture case: every pixel against the bars the processor works out.
@@ -766,6 +816,10 @@ static void MandelPictureCase(const char *name, MeshKind kind) {
         for (uint32_t x = 0; x < MANDEL_SIZE; ++x) {
             uint8_t want[4];
             MandelExpected(x, y, want);
+            if (kind == MESH_PUSHED && memcmp(want, MANDEL_CLEAR, 4) != 0) {
+                want[1] = PUSHED_GREEN_BYTE;
+                want[2] = PUSHED_BLUE_BYTE;
+            }
             const uint8_t *const pixel = pixels + ((size_t)y * MANDEL_SIZE + x) * 4u;
             const bool right = memcmp(pixel, want, 4) == 0;
             PictureSet(picture, x, y, want, right ? PICTURE_MATCHED : PICTURE_WRONG);
@@ -825,11 +879,18 @@ void RunNvn2(void) {
                                                    "a count in a buffer says, a half each";
     static const char *const PICTURE_MULTI_3D_COUNT = "the same picture by as many mesh draws "
                                                       "of a grid as a count in a buffer says";
+    static const char *const PUSHED = "a dispatch multiplies and adds by the two words pushed "
+                                      "into a root table, the second pushed again alone";
+    static const char *const PICTURE_PUSHED = "the same bars with the green and blue a fragment "
+                                              "program reads from a root table pushed";
+    static const char *const PICTURE_NO_RATE = "the same picture with no texture bound as the "
+                                               "shading rate image";
     const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, SCALE_BUFFERS,
                                   SCALE_DEFERRED, SCALE_INDIRECT, MANDEL_PROGRAMS,
                                   MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
                                   PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
-                                  PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA };
+                                  PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
+                                  PICTURE_PUSHED, PICTURE_NO_RATE };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -961,6 +1022,40 @@ void RunNvn2(void) {
             HmmaCase(HMMA);
         } else {
             ReportCase(SUITE, HMMA, CHECK_NONE, false, why);
+        }
+    }
+
+    // The root tables: what a program reads of them once the list pushed it, in a dispatch and
+    // in a draw.
+    if (ReportStart(SUITE, PUSHED)) {
+        NvnLayerClearError();
+        const Stage pushed = { pushed_comp_bin, pushed_comp_bin_size, pushed_comp_ctl };
+        if (BuildProgram(PROGRAM_PUSHED, &pushed, 1, why, sizeof(why))) {
+            ScaleAgain(PUSHED, DISPATCH_PUSHED);
+        } else {
+            ReportCase(SUITE, PUSHED, CHECK_NONE, false, why);
+        }
+    }
+    if (!mandel) {
+        ReportSkip(SUITE, PICTURE_PUSHED, REPORT_REASON_DEPENDS,
+                   "the Mandelbrot's programs made no programs");
+        ReportSkip(SUITE, PICTURE_NO_RATE, REPORT_REASON_DEPENDS,
+                   "the Mandelbrot's programs made no programs");
+    } else {
+        if (ReportStart(SUITE, PICTURE_PUSHED)) {
+            NvnLayerClearError();
+            const Stage draw[2] = {
+                { mandel_mesh_bin, mandel_mesh_bin_size, mandel_mesh_ctl },
+                { pushed_frag_bin, pushed_frag_bin_size, pushed_frag_ctl },
+            };
+            if (BuildProgram(PROGRAM_MANDEL_PUSHED, draw, 2, why, sizeof(why))) {
+                MandelPictureCase(PICTURE_PUSHED, MESH_PUSHED);
+            } else {
+                ReportCase(SUITE, PICTURE_PUSHED, CHECK_NONE, false, why);
+            }
+        }
+        if (ReportStart(SUITE, PICTURE_NO_RATE)) {
+            MandelPictureCase(PICTURE_NO_RATE, MESH_NO_RATE);
         }
     }
     TearDown();

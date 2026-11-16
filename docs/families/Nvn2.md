@@ -9,7 +9,7 @@
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch
 2's own shader code, a compute dispatch that writes a storage buffer, and a draw whose geometry a mesh program
 writes. Only the probe's Switch 2 build runs it ([The probe as a Switch 2 program](../Ounce.md)), in the nvn
-family, after the `nvn` suite. Eighteen cases.
+family, after the `nvn` suite. Twenty one cases.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.
@@ -29,6 +29,9 @@ What a pass says, and what it cannot, is in [The probe as a Switch 2 program](..
 | a mesh program draws the counts as bars, a fragment program colours them and the depth test keeps the nearest | `mandel.mesh.sm86` and `mandel.frag.sm86`, drawn with `nvnCommandBufferDrawMeshTasks`, a workgroup a row | every pixel, exact (`MandelExpected`) |
 | the same picture by a mesh draw of a grid of workgroups; ... that reads its numbers; ... of a grid that reads its numbers; ... by two mesh draws read from one buffer, a half of the rows each; ... by the mesh draws of a grid read from one buffer; ... by as many mesh draws as a count in a buffer says, a half each; ... by as many mesh draws of a grid as a count in a buffer says (seven cases) | the same draw through `nvnCommandBufferDrawMeshTasks3D`, `DrawMeshTasksIndirect`, `DrawMeshTasks3DIndirect`, `MultiDrawMeshTasksIndirect`, `MultiDrawMeshTasks3DIndirect`, `MultiDrawMeshTasksIndirectCount` and `MultiDrawMeshTasks3DIndirectCount`: a count and a first workgroup, or three counts for a grid, read by the graphics unit from the data pool; the draws of several take the rows in two halves, the second from workgroup 14 | the same picture, every pixel |
 | one warp's matrix instruction multiplies a 16 by 16 matrix of halves by a 16 by 8 one into floats | `hmma.comp.sm86`: `HMMA.16816.F32` over a block of 32 invocations, each lane holding its part of the matrices | the product's 128 floats, bit for bit, against the integers' sums |
+| a dispatch multiplies and adds by the two words pushed into a root table, the second pushed again alone | `ounce/shaders/pushed.comp.sm86`, the scale program with its two numbers read from root table 1 (constant buffer 25) at bytes 8 and 12: `nvnCommandBufferPushComputeConstants` pushes five and a thousand there, then seventy seven over the second word alone | every word, five times its input plus seventy seven, copied out by the graphics unit |
+| the same bars with the green and blue a fragment program reads from a root table pushed | `ounce/shaders/pushed.frag.sm86` behind the Mandelbrot's mesh program: `nvnCommandBufferPushGraphicsConstants` pushes 0.6 and 0.2 at byte 0x10 of root table 2 | every pixel, exact: a bar's red as before, its green 0x99 and its blue 0x33 |
+| the same picture with no texture bound as the shading rate image | `nvnCommandBufferBindShadingRateImage` with no texture and no view before the draw, which is no shading rate image: every pixel is shaded | every pixel, exact (`MandelExpected`) |
 
 ## The Mandelbrot, in three stages
 

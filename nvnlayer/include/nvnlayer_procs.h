@@ -908,6 +908,8 @@
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
     X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
+    X(void, nvnCommandBufferBindShadingRateImage,                                                 \
+      (NVNcommandBuffer *cmd, const NVNtexture *texture, const NVNtextureView *view))             \
     X(void, nvnCommandBufferBindStorageBuffers,                                                   \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
        const NVNbufferRange *ranges))                                                             \
