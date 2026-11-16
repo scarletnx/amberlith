@@ -71,6 +71,8 @@ static uint32_t crashed_this_run_count;
 // every case of a family that asks the machine something says it started.
 static bool starts_required;
 static bool pending;
+// The run was cancelled from its running screen (ReportCancel).
+static bool cancelled;
 static char pending_suite[JOURNAL_SUITE_MAX];
 static char pending_name[JOURNAL_NAME_MAX];
 static uint32_t bookkeeping_notes;
@@ -141,6 +143,7 @@ static size_t EscapeInto(char *out, size_t out_size, const char *text) {
 }
 
 void ReportOpen(const char *path) {
+    cancelled = false;
     passed = 0;
     failed = 0;
     skipped = 0;
@@ -444,6 +447,18 @@ void ReportRetain(bool on) {
     retaining = on;
 }
 
+void ReportCancel(void) {
+    if (!cancelled) {
+        cancelled = true;
+        ReportNote("the run was cancelled from its running screen: the cases that had not begun are "
+                   "left out");
+    }
+}
+
+bool ReportCancelled(void) {
+    return cancelled;
+}
+
 void ReportForgetRecords(void) {
     record_count = 0;
 }
@@ -680,6 +695,10 @@ bool ReportStart(const char *suite, const char *name) {
     KeyOf(key, sizeof(key), name);
     if (Unpicked(suite, name)) {
         // Reached all the same: a ban or a skip= on it holds for a case this build has.
+        Reached(suite, key);
+        return false;
+    }
+    if (cancelled) {
         Reached(suite, key);
         return false;
     }

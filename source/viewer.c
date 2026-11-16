@@ -658,6 +658,9 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
 // on. Nothing here is read by a case: the counts are the report's, the pass is the timer's.
 static bool progress_on;
 static UiProgress progress;
+// The pad the running screen reads for B, which cancels a run a person attends.
+static PadState progress_pad;
+static bool progress_pad_open;
 static UiProgressCount progress_count;
 static uint64_t progress_began;
 static uint64_t progress_drawn;
@@ -673,6 +676,16 @@ static bool pad_open;
 static void ProgressDraw(bool step_began) {
     if (!progress_on || !screen_open || listen_open || pad_open) {
         return;
+    }
+    if (progress_pad_open && !progress.quick && !progress.cancelling) {
+        // Held as well as pressed: between two cases is when this is read.
+        padUpdate(&progress_pad);
+        if (((padGetButtonsDown(&progress_pad) | padGetButtons(&progress_pad)) &
+             HidNpadButton_B) != 0u) {
+            ReportCancel();
+            progress.cancelling = true;
+            step_began = true;
+        }
     }
     const uint64_t now = armGetSystemTick();
     if (!UiProgressDue(progress_drawn_once, armTicksToNs(progress_drawn), armTicksToNs(now),
@@ -717,6 +730,10 @@ void ViewerProgressBegin(const char *heading, const char *folder, uint32_t steps
         return;
     }
     memset(&progress, 0, sizeof(progress));
+    if (!quick) {
+        ReadPad(&progress_pad);
+        progress_pad_open = true;
+    }
     progress.heading = heading;
     progress.folder = folder;
     progress.steps = steps;

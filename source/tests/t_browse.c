@@ -348,7 +348,7 @@ static void CheckWalk(void) {
     }
     const UiRect box = UiFootKey(FRAME_WIDTH, FRAME_HEIGHT, keys, count, quit_key);
     const UiTap on_key = { box.x + 4u, box.y + 4u, box.x + 6u, box.y + 6u };
-    const UiTap on_tab = { 40u, 40u, 42u, 42u };
+    const UiTap on_tab = { 24u, UI_TABS_TOP + 4u, 26u, UI_TABS_TOP + 6u };
     const UiBrowseState tab_tap = UiBrowseTap(tapped, &on_tab, FRAME_WIDTH, FRAME_HEIGHT, &info);
     const UiBrowseState key_tap = UiBrowseTap(tapped, &on_key, FRAME_WIDTH, FRAME_HEIGHT, &info);
     CHECK_TRUE(SUITE, "a tap on a tab and on a key of the foot do what the buttons do",

@@ -490,7 +490,7 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
     RunnerStepsWhere(&runner, StepPicked, timing, ViewerProgressStep);
     ReportSetPicked(NULL);
     uint32_t step_number = steps;
-    for (uint32_t i = 0; i < DEMO_COUNT; ++i) {
+    for (uint32_t i = 0; i < DEMO_COUNT && !ReportCancelled(); ++i) {
         if ((picked.demos >> i & 1u) == 0u) {
             continue;
         }
@@ -644,7 +644,8 @@ static ViewerEnd BrowserSession(const RunMode *from_file, UiTab tab, const UiSta
         browse_info.catalogue_count = catalog.count;
         state.results = ResultsOn(browse_info.results, &pick);
         state.results.repeatable = true;
-        state.tab = UI_TAB_RESULTS;
+        // A run cancelled from its running screen goes back to the start, as B asked.
+        state.tab = ReportCancelled() ? UI_TAB_START : UI_TAB_RESULTS;
         state.changed = true;
     }
     MusicTo(NULL);
@@ -817,7 +818,8 @@ int main(int argc, char **argv) {
     if (start_info.heading == NULL) {
         FillStartInfo(&mode);
     }
-    if (mode.detailed && BrowserSession(&mode, UI_TAB_RESULTS, &start, &start_info,
+    if (mode.detailed && BrowserSession(&mode, ReportCancelled() ? UI_TAB_START : UI_TAB_RESULTS,
+                                        &start, &start_info,
                                         UI_UNATTENDED_NANOSECONDS, true) == VIEWER_UNATTENDED) {
         // The one line that comes after the summary, and only on this path: a detailed run
         // nobody attended says it left by itself, on both channels, so a script that forgot the

@@ -241,6 +241,11 @@ void ReportSetPicked(ReportPicked picked);
 /// memory.
 void ReportForgetRecords(void);
 
+/// The person cancelled the run from its running screen: every case that has not begun is left
+/// out, as an unpicked one is, and the report says so once. ReportOpen clears it.
+void ReportCancel(void);
+bool ReportCancelled(void);
+
 /// Says the case @p name is about to start, before any of its work, and whether it may.
 ///
 /// False when it must not run: it ended this machine's program in this run or an earlier one,

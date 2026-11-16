@@ -25,27 +25,23 @@ extern "C" {
 /// Nothing here decides anything: it draws the cases the report recorded, and the pixels a
 /// verdict came from. A screen is never an input to a result.
 
-/// The look every screen a person chooses on wears: ScarletNX's launcher in its YoRHa theme, at the
-/// scale of two it opens in on a frame of 720 lines (src/gui/themes/yorha/theme.ini). The VGA font
-/// at twice its size, a title at four times it with its shadow in the dim colour, tabs and keys as
-/// buttons a row of letters and four pixels above and below it tall, a frieze along the top and
-/// the bottom, and the grid, thin diagonals, darker corners and a grain on the page. Tables a
-/// person reads down, the results' and a case's detail, keep the font's own size.
-#define UI_TEXT_SCALE 2u
-#define UI_CELL_WIDTH 16u
-#define UI_CELL_HEIGHT 32u
-#define UI_BUTTON_HEIGHT 40u
-#define UI_TABS_TOP 26u
-#define UI_TITLE_TOP 82u
-#define UI_BODY_TOP 158u
-/// The foot: a box over the bottom frieze, the focused thing's sentence on its first row and the
-/// keys, buttons for a tap, on its second.
-#define UI_FOOT_HEIGHT 78u
-#define UI_FOOT_TOP(frame_height) ((frame_height) - 24u - UI_FOOT_HEIGHT)
+/// The look every screen a person chooses on wears: ScarletNX's launcher in its YoRHa theme's colours, with
+/// the VGA font at its own size, tabs and keys as buttons a row of letters and four pixels above and below it
+/// tall, the grid on the page, and the keys on a band along the bottom as the launcher's foot draws them.
+#define UI_TEXT_SCALE 1u
+#define UI_CELL_WIDTH 8u
+#define UI_CELL_HEIGHT 16u
+#define UI_BUTTON_HEIGHT 24u
+#define UI_TABS_TOP 8u
+#define UI_BODY_TOP 48u
+/// The foot: the focused thing's sentence on a row of its own, and under it the band along the
+/// bottom with the keys on it, buttons for a tap.
+#define UI_FOOT_HEIGHT (UI_FOOT_BAND + UI_ROW_HEIGHT + 4u)
+#define UI_FOOT_TOP(frame_height) ((frame_height) - UI_FOOT_HEIGHT)
 #define UI_BODY_BOTTOM(frame_height) (UI_FOOT_TOP(frame_height) - 8u)
 /// A row of a list at the text's size: its box, and the step to the next.
-#define UI_ROW_BOX 36u
-#define UI_ROW_PITCH 42u
+#define UI_ROW_BOX 18u
+#define UI_ROW_PITCH 22u
 
 /// Where the pictures start down the frame, under the head, the case's name and the labels.
 /// Named here rather than buried in the layout because the cases that check the layout have to
@@ -641,6 +637,8 @@ typedef struct {
     uint64_t elapsed_ns;
     /// What comes after the run: the program leaves, or the results come up.
     bool quick;
+    /// B was pressed: the case under way ends and the rest are left out (ReportCancel).
+    bool cancelling;
 } UiProgress;
 
 /// How often, at most, the running screen is drawn between two steps' first frames.
