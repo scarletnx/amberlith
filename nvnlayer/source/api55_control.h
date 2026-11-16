@@ -26,6 +26,14 @@
 #define LAYER_SECTION_AT_PROGRAM 0x708u
 #define LAYER_SECTION_AT_STAGE 0x714u
 #define LAYER_SECTION_AT_EARLY_TESTS 0x718u
+// A tessellation evaluation stage's four declarations, each in the word GLSL names it by, as
+// ScarletNX reads them (its nvn_object.c, tess_of): the domain (triangles 4, quads 7, isolines
+// 0x8e7a), the spacing (equal 0x202, fractional odd 0x8e7b, fractional even 0x8e7c), whether it
+// makes points, and the winding (clockwise 0x900, counterclockwise 0x901).
+#define LAYER_SECTION_AT_TESS_DOMAIN 0x738u
+#define LAYER_SECTION_AT_TESS_SPACING 0x73cu
+#define LAYER_SECTION_AT_TESS_POINTS 0x740u
+#define LAYER_SECTION_AT_TESS_WINDING 0x744u
 
 // A DKSH's header and its program's, in words (deko3d's source/dksh.h): the magic, the header's
 // bytes, the control and code sections' bytes, the programs' offset and count; then, for a
