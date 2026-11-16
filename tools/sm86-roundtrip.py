@@ -25,9 +25,9 @@ asm = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(asm)
 
 # a line of the decoder's listing: the index, the guard, the name, the form and the destination
-LISTED = re.compile(r"^\s*(\d+)\s+\S+\s+([A-Z0-9_.]+)\s+f(\d)\s+d(\d+)\b")
+LISTED = re.compile(r"^\s*(\d+)\s+\S+\s+([A-Z0-9_.]+(?: \([a-z ]+\))?)\s+f(\d)\s+d(\d+)\b")
 # the decoder's name for a mnemonic whose modifier picks the table's row
-LISTED_AS = {"SULD": "SULD.P", "SUST": "SUST.P"}
+LISTED_AS = {"SULD": "SULD.P", "SUST": "SUST.P", "TEX": "TEX (uniform handle)"}
 SECONDS = 60
 
 

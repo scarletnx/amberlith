@@ -66,13 +66,20 @@ void RunNvn2(void);
 #define IMAGE_WORDS (IMAGE_SIDE * IMAGE_SIDE)
 #define IMAGE_SOURCE_BYTE 0x4000u
 #define IMAGE_PRESET_BYTE 0x4400u
-#define IMAGE_DESCRIPTOR_BYTES 32u
+#define DESCRIPTOR_BYTES 32u
 
-/// Which call binds the image program's two images.
+// The case of a texture and a sampler bound apart: 4 by 4 textures, sixteen words written, the
+// output and the textures' texels in the data pool past the images' words.
+#define APART_SIDE 4u
+#define APART_WORDS 16u
+#define APART_OUT_BYTE 0x4800u
+#define APART_TEXELS_BYTE 0x4900u
+
+/// Which calls bind the image program's two images, or the two textures and samplers bound apart.
 typedef enum {
-    IMAGES_ONE_BY_ONE, ///< nvnCommandBufferBindImage, twice
-    IMAGES_SEVERAL,    ///< nvnCommandBufferBindImages
-    IMAGES_DEFERRED,   ///< nvnCommandBufferBindImagesDeferred
+    IMAGES_ONE_BY_ONE, ///< the calls that take one, twice
+    IMAGES_SEVERAL,    ///< the calls that take several
+    IMAGES_DEFERRED,   ///< the deferred calls
 } ImagesKind;
 
 /// How the scale case's dispatch binds its storage buffer and gives its numbers.
@@ -120,6 +127,7 @@ typedef enum {
     PROGRAM_PUSHED,
     PROGRAM_MANDEL_PUSHED,
     PROGRAM_IMAGE,
+    PROGRAM_APART,
     PROGRAM_COUNT,
 } ProgramId;
 
@@ -145,8 +153,15 @@ static struct {
     Pool read_pool;
     Pool descriptor_pool;
     NVNtexturePool texture_pool;
+    NVNsamplerPool sampler_pool;
     NVNtexture images[2];
     NVNimageHandle image_handles[2];
+    NVNtexture apart_textures[2];
+    NVNsampler apart_samplers[2];
+    NVNseparateTextureHandle apart_texture_handles[2];
+    NVNseparateSamplerHandle apart_sampler_handles[2];
+    int texture_base;
+    int sampler_base;
     void *control;
     size_t code_used;
     size_t image_used;
@@ -157,7 +172,12 @@ static struct {
     bool target_up;
     bool depth_up;
     bool texture_pool_up;
+    bool sampler_pool_up;
     int images_up;   ///< how many of the two images were made
+    bool images_ready;
+    int apart_textures_up;
+    int apart_samplers_up;
+    bool apart_ready;
     bool counted;   ///< the Mandelbrot's dispatch ran, and its buffer holds the counts
 } n2;
 
@@ -200,8 +220,17 @@ static void TearDown(void) {
             n2.nvn.nvnProgramFinalize(&n2.programs[i]);
         }
     }
+    if (n2.sampler_pool_up) {
+        n2.nvn.nvnSamplerPoolFinalize(&n2.sampler_pool);
+    }
     if (n2.texture_pool_up) {
         n2.nvn.nvnTexturePoolFinalize(&n2.texture_pool);
+    }
+    for (int i = 0; i < n2.apart_samplers_up; ++i) {
+        n2.nvn.nvnSamplerFinalize(&n2.apart_samplers[i]);
+    }
+    for (int i = 0; i < n2.apart_textures_up; ++i) {
+        n2.nvn.nvnTextureFinalize(&n2.apart_textures[i]);
     }
     for (int i = 0; i < n2.images_up; ++i) {
         n2.nvn.nvnTextureFinalize(&n2.images[i]);
@@ -667,18 +696,54 @@ static uint32_t ImageInput(uint32_t x, uint32_t y) {
     return 0x10203040u + (y * IMAGE_SIDE + x) * 0x00010305u;
 }
 
-/// The image cases' own objects, made once: two textures a program may store into, a texture
-/// pool with each registered in it as an image, and each one's handle.
-static bool ImagesUp(char *why, size_t why_size) {
-    if (n2.texture_pool_up) {
+/// The texture pool and the sampler pool, made once, with room past what the device reserves
+/// for the suite's four textures and two samplers.
+static bool DescriptorsUp(char *why, size_t why_size) {
+    if (n2.texture_pool_up && n2.sampler_pool_up) {
         return true;
     }
-    int base = 0;
-    n2.nvn.nvnDeviceGetInteger(&n2.device, NVN_DEVICE_INFO_RESERVED_TEXTURE_DESCRIPTORS, &base);
-    if (base < 0 || base > 4096) {
-        snprintf(why, why_size, "the device reserves %d texture descriptors, which the suite has "
-                                "no pool for (0 to 4096)",
-                 base);
+    n2.nvn.nvnDeviceGetInteger(&n2.device, NVN_DEVICE_INFO_RESERVED_TEXTURE_DESCRIPTORS,
+                               &n2.texture_base);
+    n2.nvn.nvnDeviceGetInteger(&n2.device, NVN_DEVICE_INFO_RESERVED_SAMPLER_DESCRIPTORS,
+                               &n2.sampler_base);
+    if (n2.texture_base < 0 || n2.texture_base > 4096 || n2.sampler_base < 0 ||
+        n2.sampler_base > 4096) {
+        snprintf(why, why_size, "the device reserves %d texture and %d sampler descriptors, which "
+                                "the suite has no pool for (0 to 4096 of each)",
+                 n2.texture_base, n2.sampler_base);
+        return false;
+    }
+    const size_t textures =
+        RoundUp((size_t)(n2.texture_base + 4) * DESCRIPTOR_BYTES, 0x100u);
+    if (!n2.descriptor_pool.up &&
+        !MakePool(&n2.descriptor_pool,
+                  textures + (size_t)(n2.sampler_base + 2) * DESCRIPTOR_BYTES,
+                  NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED)) {
+        snprintf(why, why_size, "the descriptors' pool: %s", Why("no memory, or false"));
+        return false;
+    }
+    if (!n2.texture_pool_up) {
+        n2.texture_pool_up = n2.nvn.nvnTexturePoolInitialize(
+            &n2.texture_pool, &n2.descriptor_pool.pool, 0, n2.texture_base + 4);
+    }
+    if (!n2.sampler_pool_up) {
+        n2.sampler_pool_up = n2.nvn.nvnSamplerPoolInitialize(
+            &n2.sampler_pool, &n2.descriptor_pool.pool, (ptrdiff_t)textures, n2.sampler_base + 2);
+    }
+    if (!n2.texture_pool_up || !n2.sampler_pool_up) {
+        snprintf(why, why_size, "the texture and sampler pools: %s", Why("false"));
+        return false;
+    }
+    return true;
+}
+
+/// The image cases' own objects, made once: two textures a program may store into, each
+/// registered in the texture pool as an image, and each one's handle.
+static bool ImagesUp(char *why, size_t why_size) {
+    if (n2.images_ready) {
+        return true;
+    }
+    if (!DescriptorsUp(why, why_size)) {
         return false;
     }
     while (n2.images_up < 2) {
@@ -688,27 +753,185 @@ static bool ImagesUp(char *why, size_t why_size) {
         }
         ++n2.images_up;
     }
-    if (!n2.descriptor_pool.up &&
-        !MakePool(&n2.descriptor_pool, (size_t)(base + 2) * IMAGE_DESCRIPTOR_BYTES,
-                  NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED)) {
-        snprintf(why, why_size, "the descriptors' pool: %s", Why("no memory, or false"));
-        return false;
-    }
-    n2.texture_pool_up = n2.nvn.nvnTexturePoolInitialize(&n2.texture_pool,
-                                                         &n2.descriptor_pool.pool, 0, base + 2);
-    if (!n2.texture_pool_up) {
-        snprintf(why, why_size, "nvnTexturePoolInitialize: %s", Why("false"));
-        return false;
-    }
     for (int i = 0; i < 2; ++i) {
-        n2.nvn.nvnTexturePoolRegisterImage(&n2.texture_pool, base + i, &n2.images[i], NULL);
-        n2.image_handles[i] = n2.nvn.nvnDeviceGetImageHandle(&n2.device, base + i);
+        n2.nvn.nvnTexturePoolRegisterImage(&n2.texture_pool, n2.texture_base + i, &n2.images[i],
+                                           NULL);
+        n2.image_handles[i] = n2.nvn.nvnDeviceGetImageHandle(&n2.device, n2.texture_base + i);
     }
     if (NvnLayerError()[0] != '\0') {
         snprintf(why, why_size, "the images' descriptors: %s", NvnLayerError());
         return false;
     }
+    n2.images_ready = true;
     return true;
+}
+
+/// What the texture sampled apart holds at (@p x, @p y), and what the decoy beside it does: floats
+/// a quarter apart, so each is exact and no two texels of the two are alike.
+static float ApartTexel(uint32_t x, uint32_t y, bool decoy) {
+    return (decoy ? -1.0f : 1.0f) * (1.0f + 0.25f * (float)(y * APART_SIDE + x));
+}
+
+/// The cases of a texture and a sampler bound apart, their own objects made once: two 4 by 4
+/// textures of a float a texel, the decoy first, and two samplers that take the nearest texel,
+/// one that holds the edge and one that repeats; each registered and its separate handle asked.
+static bool ApartUp(char *why, size_t why_size) {
+    if (n2.apart_ready) {
+        return true;
+    }
+    if (!DescriptorsUp(why, why_size)) {
+        return false;
+    }
+    uint8_t *const memory = n2.nvn.nvnMemoryPoolMap(&n2.data_pool.pool);
+    if (memory == NULL) {
+        snprintf(why, why_size, "nvnMemoryPoolMap gave no address for the buffer's pool: %s",
+                 Why("NULL"));
+        return false;
+    }
+    while (n2.apart_textures_up < 2) {
+        if (!MakeTextureOf(&n2.apart_textures[n2.apart_textures_up], NVN_FORMAT_R32F, APART_SIDE,
+                           0, why, why_size)) {
+            return false;
+        }
+        ++n2.apart_textures_up;
+    }
+    while (n2.apart_samplers_up < 2) {
+        const NVNwrapMode wrap = n2.apart_samplers_up == 0 ? NVN_WRAP_MODE_CLAMP_TO_EDGE
+                                                           : NVN_WRAP_MODE_REPEAT;
+        _Alignas(8) NVNsamplerBuilder builder;
+        memset(&builder, 0, sizeof(builder));
+        n2.nvn.nvnSamplerBuilderSetDevice(&builder, &n2.device);
+        n2.nvn.nvnSamplerBuilderSetDefaults(&builder);
+        n2.nvn.nvnSamplerBuilderSetMinMagFilter(&builder, NVN_MIN_FILTER_NEAREST,
+                                                NVN_MAG_FILTER_NEAREST);
+        n2.nvn.nvnSamplerBuilderSetWrapMode(&builder, wrap, wrap, wrap);
+        if (!n2.nvn.nvnSamplerInitialize(&n2.apart_samplers[n2.apart_samplers_up], &builder)) {
+            snprintf(why, why_size, "nvnSamplerInitialize: %s", Why("false"));
+            return false;
+        }
+        ++n2.apart_samplers_up;
+    }
+    const NVNbufferAddress data = n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool);
+    const NVNcopyRegion region = { 0, 0, 0, (int)APART_SIDE, (int)APART_SIDE, 1 };
+    n2.nvn.nvnCommandBufferBeginRecording(&n2.command);
+    for (uint32_t t = 0; t < 2u; ++t) {
+        // Texture 0 is the decoy, texture 1 the one sampled.
+        for (uint32_t i = 0; i < APART_SIDE * APART_SIDE; ++i) {
+            const float texel = ApartTexel(i % APART_SIDE, i / APART_SIDE, t == 0u);
+            memcpy(memory + APART_TEXELS_BYTE + 0x40u * t + 4u * i, &texel, sizeof(texel));
+        }
+        n2.nvn.nvnCommandBufferCopyBufferToTexture(&n2.command,
+                                                   data + APART_TEXELS_BYTE + 0x40u * t,
+                                                   &n2.apart_textures[t], NULL, &region,
+                                                   NVN_COPY_FLAGS_NONE);
+    }
+    if (!Finish("the textures' upload", why, why_size)) {
+        return false;
+    }
+    for (int i = 0; i < 2; ++i) {
+        n2.nvn.nvnTexturePoolRegisterTexture(&n2.texture_pool, n2.texture_base + 2 + i,
+                                             &n2.apart_textures[i], NULL);
+        n2.nvn.nvnSamplerPoolRegisterSampler(&n2.sampler_pool, n2.sampler_base + i,
+                                             &n2.apart_samplers[i]);
+        n2.apart_texture_handles[i].value =
+            n2.nvn.nvnDeviceGetSeparateTextureHandle(&n2.device, n2.texture_base + 2 + i);
+        n2.apart_sampler_handles[i].value =
+            n2.nvn.nvnDeviceGetSeparateSamplerHandle(&n2.device, n2.sampler_base + i);
+    }
+    if (NvnLayerError()[0] != '\0') {
+        snprintf(why, why_size, "the textures' and samplers' descriptors: %s", NvnLayerError());
+        return false;
+    }
+    n2.apart_ready = true;
+    return true;
+}
+
+/// The case of a texture and a sampler bound apart: the decoy and the sampler that holds the
+/// edge in slot 0 of each, the texture and the sampler that repeats in slot 1, bound by
+/// @p kind's calls; sixteen invocations sample slot 1 of both past the texture's right edge, and
+/// each float they write is held to the texel a repeat lands on.
+static void ApartCase(const char *name, ImagesKind kind) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const NvnProcs *const n = &n2.nvn;
+    uint8_t *const memory = n->nvnMemoryPoolMap(&n2.data_pool.pool);
+    if (memory == NULL || !ApartUp(why, sizeof(why))) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   why[0] != '\0' ? why : Why("nvnMemoryPoolMap gave no address"));
+        return;
+    }
+    for (uint32_t i = 0; i < APART_WORDS; ++i) {
+        const uint32_t preset = 0xdeadbeefu;
+        memcpy(memory + APART_OUT_BYTE + 4u * i, &preset, sizeof(preset));
+    }
+    const NVNbufferAddress out =
+        n->nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + APART_OUT_BYTE;
+    n->nvnCommandBufferBeginRecording(&n2.command);
+    n->nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_INVALIDATE_TEXTURE_BIT |
+                                                NVN_BARRIER_INVALIDATE_SHADER_BIT);
+    n->nvnCommandBufferSetTexturePool(&n2.command, &n2.texture_pool);
+    n->nvnCommandBufferSetSamplerPool(&n2.command, &n2.sampler_pool);
+    n->nvnCommandBufferBindProgram(&n2.command, &n2.programs[PROGRAM_APART],
+                                   NVN_SHADER_STAGE_COMPUTE_BIT);
+    n->nvnCommandBufferBindStorageBuffer(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, out,
+                                         4u * APART_WORDS);
+    // A deferred bind's handles are read when the list runs: they stay where they are.
+    static NVNseparateTextureHandle textures[2];
+    static NVNseparateSamplerHandle samplers[2];
+    for (int i = 0; i < 2; ++i) {
+        textures[i] = n2.apart_texture_handles[i];
+        samplers[i] = n2.apart_sampler_handles[i];
+    }
+    if (kind == IMAGES_SEVERAL) {
+        n->nvnCommandBufferBindSeparateTextures(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, 2,
+                                                textures);
+        n->nvnCommandBufferBindSeparateSamplers(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, 2,
+                                                samplers);
+    } else if (kind == IMAGES_DEFERRED) {
+        n->nvnCommandBufferBindSeparateTexturesDeferred(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0,
+                                                        2, textures);
+        n->nvnCommandBufferBindSeparateSamplersDeferred(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0,
+                                                        2, samplers);
+    } else {
+        for (int i = 0; i < 2; ++i) {
+            n->nvnCommandBufferBindSeparateTexture(&n2.command, NVN_SHADER_STAGE_COMPUTE, i,
+                                                   textures[i]);
+            n->nvnCommandBufferBindSeparateSampler(&n2.command, NVN_SHADER_STAGE_COMPUTE, i,
+                                                   samplers[i]);
+        }
+    }
+    n->nvnCommandBufferDispatchCompute(&n2.command, 1, 1, 1);
+    const uint8_t *const copy = Finish("the dispatch that samples", why, sizeof(why))
+                                    ? CopyOut(out, 4u * APART_WORDS, why, sizeof(why))
+                                    : NULL;
+    if (copy == NULL) {
+        ReportCase(SUITE, name, CHECK_NONE, false, why);
+        return;
+    }
+    uint32_t wrong = 0;
+    uint32_t first = 0;
+    uint32_t got_first = 0;
+    for (uint32_t i = 0; i < APART_WORDS; ++i) {
+        uint32_t got;
+        uint32_t want;
+        const float texel = ApartTexel(i % APART_SIDE, 1, false);
+        memcpy(&got, copy + 4u * i, sizeof(got));
+        memcpy(&want, &texel, sizeof(want));
+        if (got != want && wrong++ == 0u) {
+            first = i;
+            got_first = got;
+        }
+    }
+    const float want_first = ApartTexel(first % APART_SIDE, 1, false);
+    float got_float;
+    memcpy(&got_float, &got_first, sizeof(got_float));
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
+               "%u of %u words differ; the first, word %u, is 0x%08x (%g) where the texture's "
+               "texel (%u,1) is %g (%g is what the sampler that holds the edge gives, a number "
+               "below nought the decoy, 0xdeadbeef a word nothing wrote)",
+               (unsigned)wrong, (unsigned)APART_WORDS, (unsigned)first, (unsigned)got_first,
+               (double)got_float, (unsigned)(first % APART_SIDE), (double)want_first,
+               (double)ApartTexel(APART_SIDE - 1u, 1, false));
 }
 
 /// The image case: image 1 filled and image 0 preset from a buffer, the program bound with both
@@ -1052,13 +1275,19 @@ void RunNvn2(void) {
     static const char *const IMAGE_SEVERAL = "the same images bound by the call that takes "
                                              "several";
     static const char *const IMAGE_DEFERRED = "the same images bound by the deferred call";
+    static const char *const APART = "a dispatch samples a texture bound apart from its "
+                                     "sampler, slot 1 of each, past the texture's edge";
+    static const char *const APART_SEVERAL = "the same texture and sampler bound by the calls "
+                                             "that take several";
+    static const char *const APART_DEFERRED = "the same texture and sampler bound by the "
+                                              "deferred calls";
     const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, SCALE_BUFFERS,
                                   SCALE_DEFERRED, SCALE_INDIRECT, MANDEL_PROGRAMS,
                                   MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
                                   PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
                                   PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
                                   PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
-                                  IMAGE_DEFERRED };
+                                  IMAGE_DEFERRED, APART, APART_SEVERAL, APART_DEFERRED };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -1250,6 +1479,32 @@ void RunNvn2(void) {
         }
         if (ReportStart(SUITE, IMAGE_DEFERRED)) {
             ImageCase(IMAGE_DEFERRED, IMAGES_DEFERRED);
+        }
+    }
+
+    // A texture and a sampler bound each by itself, which a program puts together.
+    bool apart = false;
+    if (ReportStart(SUITE, APART)) {
+        NvnLayerClearError();
+        const Stage stage = { apart_comp_bin, apart_comp_bin_size, apart_comp_ctl };
+        apart = BuildProgram(PROGRAM_APART, &stage, 1, why, sizeof(why));
+        if (apart) {
+            ApartCase(APART, IMAGES_ONE_BY_ONE);
+        } else {
+            ReportCase(SUITE, APART, CHECK_NONE, false, why);
+        }
+    }
+    if (!apart) {
+        ReportSkip(SUITE, APART_SEVERAL, REPORT_REASON_DEPENDS,
+                   "the sampling program made no program");
+        ReportSkip(SUITE, APART_DEFERRED, REPORT_REASON_DEPENDS,
+                   "the sampling program made no program");
+    } else {
+        if (ReportStart(SUITE, APART_SEVERAL)) {
+            ApartCase(APART_SEVERAL, IMAGES_SEVERAL);
+        }
+        if (ReportStart(SUITE, APART_DEFERRED)) {
+            ApartCase(APART_DEFERRED, IMAGES_DEFERRED);
         }
     }
     TearDown();

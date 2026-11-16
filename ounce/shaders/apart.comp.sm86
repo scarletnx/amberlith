@@ -1,0 +1,21 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; Sixteen invocations sample a texture bound apart from its sampler, slot 1 of each: invocation x at the column
+; x / 4 + 1.125 and the row 0.375, past the texture's right edge from the first on, and writes the float it gets as
+; word x of storage buffer 0. With a 4 by 4 texture that is row 1 and, through a sampler that repeats, column
+; x % 4; one that holds the edge gives column 3 every time (ounce/t_nvn2.c binds a decoy in slot 0 of each).
+.stage compute
+.local 16 1 1
+        S2R R0, SR_TID.X
+        ULDC UR8, c[2][0x170]           ; the texture bound apart in slot 1
+        ULDC UR9, c[2][0x570]           ; the sampler bound apart in slot 1
+        I2F.U32 R4, R0
+        FMUL R4, R4, 0.25f
+        FADD R4, R4, 1.125f             ; the column, and the first of the coordinates' two registers
+        MOV R5, 0.375f                  ; the row
+        TEX.U.2D.LZ.R R8, [R4], UR8
+        SHF.L.U32 R3, R0, 2, RZ
+        ULDC.64 UR4, c[0][0x310]        ; storage buffer 0's address, from the driver's table
+        STG.E [R3 + UR4], R8
+        EXIT
