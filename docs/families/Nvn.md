@@ -7,11 +7,12 @@
 * [The cases](#the-cases)
 * [The scene, down three ways](#the-scene-down-three-ways)
   * [A texture past its edges](#a-texture-past-its-edges)
+  * [Indexed draws](#indexed-draws)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, thirty eight cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, forty one cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -55,7 +56,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and thirty five.
+  and thirty seven.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -214,6 +215,23 @@ texture past its edges through the NVN the program looks up does the same** (exa
 is worked out in `source/tests/t_nvnscene.c`, with no reference of the host build's. A failing case says what the
 first wrong pixel shows: another texel of the texture (another wrap mode), the border colour, or the clear
 colour.
+
+### Indexed draws
+
+Three more draw a third scene the three ways (`DrawPathDrawIndexed`): a quad of one flat colour in each quarter,
+each of four vertices and six indices, the quarters' vertices one after another in one vertex buffer.
+
+- top left: indices of two bytes, `nvnCommandBufferDrawElements`;
+- top right: indices of four bytes;
+- bottom left: indices of one byte;
+- bottom right: the top left quarter's own indices with a base vertex of twelve,
+  `nvnCommandBufferDrawElementsBaseVertex`. Drawn with no base they are the top left quad again, and the quarter
+  keeps the clear colour.
+
+The cases are **four quads drawn through deko3d by indices of one, two and four bytes and a base vertex are each
+in its quarter**, **the same four indexed quads through the layer's own NVN functions are each in its quarter**
+and **the same four indexed quads through the NVN the program looks up are each in its quarter** (exact). A
+failing case says whose colour the first wrong pixel has.
 
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the
