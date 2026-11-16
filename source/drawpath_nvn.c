@@ -66,6 +66,7 @@ typedef struct {
     int texture_base;
     int sampler_base;
     _Alignas(8) NVNprogram programs[DRAW_PATH_PROGRAMS];
+    NVNshaderData stages[DRAW_PATH_PROGRAMS][2];
     void *sections[DRAW_PATH_PROGRAMS][2];
     uint32_t program_count;
     _Alignas(8) NVNtexture textures[DRAW_PATH_TEXTURES];
@@ -280,6 +281,7 @@ static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
         return -1;
     }
     nv->program_count = index + 1u;
+    memcpy(nv->stages[index], stages, sizeof(stages));
     if (!nv->nvn.nvnProgramSetShaders(&nv->programs[index], 2, stages)) {
         DrawPathFail(path, "nvnProgramSetShaders: %s", Why("false"));
         return -1;
@@ -682,6 +684,7 @@ bool DrawPathNvn(DrawPath *path, DrawPathNvnParts *parts) {
     parts->command_bytes = nv->command_pool.size;
     parts->control = nv->control;
     parts->control_bytes = CONTROL_BYTES;
+    parts->stages = nv->stages;
     return true;
 }
 

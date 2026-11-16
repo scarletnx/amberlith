@@ -30,6 +30,9 @@ typedef struct {
     size_t command_bytes;
     void *control;
     size_t control_bytes;
+    /// The shader data each program the scene made was set from, a vertex stage and a fragment
+    /// stage, in the order DrawPathProgram numbered them.
+    const NVNshaderData (*stages)[2];
 } DrawPathNvnParts;
 
 /// Fills @p parts for @p path. False for the deko3d way, which has none of them.

@@ -16,12 +16,12 @@
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
 ///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING,
-///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE and NVN_LAYER_PROCS_DEBUG, parts of it written
-///   apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE, NVN_LAYER_PROCS_DEBUG and
+///   NVN_LAYER_PROCS_OBJECT, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
-/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231 and NVN_LAYER_PROCS_DEBUG_231, parts
-///   of it written apart): the
+/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231 and
+///   NVN_LAYER_PROCS_PROGRAM_231, parts of it written apart): the
 ///   functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
 
@@ -402,6 +402,39 @@
     X(void, nvnCommandBufferPopDebugGroupCompute,                                                 \
       (NVNcommandBuffer * cmd, NVNdebugDomainId domain))
 
+// What a device and its builder answer of themselves, the clear values registered with a
+// device, and a program set from NVN 55's longer shader data.
+#define NVN_LAYER_PROCS_OBJECT(X)                                                                 \
+    X(int, nvnDeviceBuilderGetFlags, (const NVNdeviceBuilder *builder))                           \
+    X(NVNwindowOriginMode, nvnDeviceGetWindowOriginMode, (const NVNdevice *device))               \
+    X(NVNdepthMode, nvnDeviceGetDepthMode, (const NVNdevice *device))                             \
+    X(NVNboolean, nvnDeviceRegisterFastClearColor,                                                \
+      (NVNdevice * device, const float *color, NVNformat format))                                 \
+    X(NVNboolean, nvnDeviceRegisterFastClearColori,                                               \
+      (NVNdevice * device, const int *color, NVNformat format))                                   \
+    X(NVNboolean, nvnDeviceRegisterFastClearColorui,                                              \
+      (NVNdevice * device, const uint32_t *color, NVNformat format))                              \
+    X(NVNboolean, nvnDeviceRegisterFastClearDepth, (NVNdevice * device, float depth))             \
+    X(NVNboolean, nvnDeviceRegisterFastClearStencil, (NVNdevice * device, int stencil))           \
+    X(NVNboolean, nvnProgramSetShadersExt,                                                        \
+      (NVNprogram * program, int count, const void *stages))
+
+// What the Ounce's program builder (API 231) answers of itself: its device, its shader data,
+// its sample shading, and the three numbers it keeps for a ray tracing program.
+#define NVN_LAYER_PROCS_PROGRAM_231(X)                                                            \
+    X(NVNdevice *, nvnProgramBuilderGetDevice, (const NVNprogramBuilder *builder))                \
+    X(const NVNshaderData *, nvnProgramBuilderGetShaders, (const NVNprogramBuilder *builder))     \
+    X(int, nvnProgramBuilderGetShaderCount, (const NVNprogramBuilder *builder))                   \
+    X(void, nvnProgramBuilderSetSampleShading, (NVNprogramBuilder * builder, int mode))           \
+    X(int, nvnProgramBuilderGetSampleShading, (const NVNprogramBuilder *builder))                 \
+    X(void, nvnProgramBuilderSetMaxCallableRecursionDepth,                                        \
+      (NVNprogramBuilder * builder, int depth))                                                   \
+    X(int, nvnProgramBuilderGetMaxCallableRecursionDepth, (const NVNprogramBuilder *builder))     \
+    X(void, nvnProgramBuilderSetMaxTraceRecursionDepth, (NVNprogramBuilder * builder, int depth)) \
+    X(int, nvnProgramBuilderGetMaxTraceRecursionDepth, (const NVNprogramBuilder *builder))        \
+    X(void, nvnProgramBuilderSetProgramRayTracingFlags, (NVNprogramBuilder * builder, int flags)) \
+    X(int, nvnProgramBuilderGetProgramRayTracingFlags, (const NVNprogramBuilder *builder))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -495,7 +528,8 @@
     NVN_LAYER_PROCS_RECORDING(X)                                                                  \
     NVN_LAYER_PROCS_CLEAR(X)                                                                      \
     NVN_LAYER_PROCS_STATE(X)                                                                      \
-    NVN_LAYER_PROCS_DEBUG(X)
+    NVN_LAYER_PROCS_DEBUG(X)                                                                      \
+    NVN_LAYER_PROCS_OBJECT(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
@@ -608,7 +642,8 @@
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
     X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
     NVN_LAYER_PROCS_WINDOW_231(X)                                                                 \
-    NVN_LAYER_PROCS_DEBUG_231(X)
+    NVN_LAYER_PROCS_DEBUG_231(X)                                                                  \
+    NVN_LAYER_PROCS_PROGRAM_231(X)
 
 #if NVN_LAYER_API >= 231
 #define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_231(X)
