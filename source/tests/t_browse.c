@@ -289,11 +289,16 @@ static void CheckWalk(void) {
     const uint32_t marked_case = UiBrowseCaseAt(&info, state.suite, 2u);
     const bool marked = (state.case_marks[marked_case / 8u] >> (marked_case % 8u) & 1u) != 0u;
     UiPick pick;
+    // Plus asks whether the judge runs first, and only A or B after it asks for the run.
     state = Press(state, UI_BUTTON_RUN, &info);
-    const bool run_asked = state.ask == UI_ASK_RUN && UiBrowsePick(&state, &info, &pick) &&
-                           (pick.cases[marked_case / 8u] >> (marked_case % 8u) & 1u) != 0u;
+    const bool question = state.waiting == UI_ASK_RUN && state.ask == UI_ASK_NONE;
     state = Press(state, UI_BUTTON_OPEN, &info);
-    const bool alone = state.ask == UI_ASK_RUN_ONE && UiBrowsePick(&state, &info, &pick);
+    const bool run_asked = question && state.judge && state.ask == UI_ASK_RUN &&
+                           UiBrowsePick(&state, &info, &pick) &&
+                           (pick.cases[marked_case / 8u] >> (marked_case % 8u) & 1u) != 0u;
+    state = Press(Press(state, UI_BUTTON_OPEN, &info), UI_BUTTON_BACK, &info);
+    const bool alone = !state.judge && state.ask == UI_ASK_RUN_ONE &&
+                       UiBrowsePick(&state, &info, &pick);
     state = Press(Press(state, UI_BUTTON_BACK, &info), UI_BUTTON_BACK, &info);
     const bool back_up = state.level == 0u && state.tab == UI_TAB_SUITES;
     state = Press(state, UI_BUTTON_BACK, &info);
@@ -307,8 +312,11 @@ static void CheckWalk(void) {
                        !UiPickHasFamily(&pick, UI_FAMILY_AUDIO);
     state.tab = UI_TAB_DEMOS;
     state = Press(Press(state, UI_BUTTON_DOWN, &info), UI_BUTTON_OPEN, &info);
-    const bool demo = state.ask == UI_ASK_RUN_ONE && UiBrowsePick(&state, &info, &pick) &&
-                      pick.demos == 2u;
+    state = Press(state, UI_BUTTON_QUIT, &info);
+    const bool backed = state.waiting == UI_ASK_NONE && state.ask == UI_ASK_NONE;
+    state = Press(Press(state, UI_BUTTON_OPEN, &info), UI_BUTTON_OPEN, &info);
+    const bool demo = backed && state.judge && state.ask == UI_ASK_RUN_ONE &&
+                      UiBrowsePick(&state, &info, &pick) && pick.demos == 2u;
     state = Press(state, UI_BUTTON_QUIT, &info);
     const bool quit = state.ask == UI_ASK_QUIT;
     CHECK_TRUE(SUITE, "the browser walks its tabs, its levels and its marks as its keys say",
@@ -472,7 +480,8 @@ static void CheckFeet(void) {
             const UiTap tap = { box.x + 4u, box.y + 4u, box.x + 6u, box.y + 6u };
             const UiBrowseState after =
                 UiBrowseTap(results, &tap, FRAME_WIDTH, FRAME_HEIGHT, &info);
-            asked[t] = after.ask;
+            // Y asks to run again, which waits on the judge question as every run picked does.
+            asked[t] = after.waiting != UI_ASK_NONE ? after.waiting : after.ask;
             if (t == 2u) {
                 tab_after_b = after.tab;
             }

@@ -3586,7 +3586,7 @@ static UiBrowseState ResultsAsked(UiBrowseState state) {
     }
     if (state.results.again) {
         state.results.again = false;
-        state.ask = UI_ASK_AGAIN;
+        state.waiting = UI_ASK_AGAIN;
     }
     if (state.results.quit) {
         state.results.quit = false;
@@ -3599,6 +3599,20 @@ UiBrowseState UiBrowseStep(UiBrowseState state, uint32_t buttons, uint32_t frame
                            const UiBrowseInfo *info) {
     state.ask = UI_ASK_NONE;
     if (frame_index < UI_SETTLING_FRAMES || info == NULL || buttons == 0u) {
+        return state;
+    }
+    if (state.waiting != UI_ASK_NONE) {
+        // The judge question: A runs the judge first, B the pick alone, Minus asks nothing.
+        state.pressed = true;
+        if ((buttons & (UI_BUTTON_OPEN | UI_BUTTON_BACK)) != 0u) {
+            state.judge = (buttons & UI_BUTTON_OPEN) != 0u;
+            state.ask = state.waiting;
+            state.waiting = UI_ASK_NONE;
+            state.changed = true;
+        } else if ((buttons & UI_BUTTON_QUIT) != 0u) {
+            state.waiting = UI_ASK_NONE;
+            state.changed = true;
+        }
         return state;
     }
     const UiBrowseState before = state;
@@ -3680,6 +3694,12 @@ UiBrowseState UiBrowseStep(UiBrowseState state, uint32_t buttons, uint32_t frame
         (state.tab != UI_TAB_SUITES || before.level == 0u)) {
         state.tab = UI_TAB_START;
     }
+    // A run of what was picked waits on the judge question; the start tab's begins a whole run,
+    // which has the judge as every run from the mode file does.
+    if (state.ask == UI_ASK_RUN || state.ask == UI_ASK_RUN_ONE || state.ask == UI_ASK_AGAIN) {
+        state.waiting = state.ask;
+        state.ask = UI_ASK_NONE;
+    }
     state.changed = state.changed || memcmp(&before, &state, sizeof(state)) != 0;
     return state;
 }
@@ -3722,6 +3742,15 @@ UiBrowseState UiBrowseTap(UiBrowseState state, const UiTap *tap, uint32_t frame_
         return state;
     }
     state.pressed = true;
+    if (state.waiting != UI_ASK_NONE) {
+        // The judge question's keys alone answer while it is up.
+        UiKey asked[UI_FOOT_KEYS];
+        const uint32_t asked_count = UiBrowseKeys(&state, info, asked);
+        const uint32_t key = UiFootKeyAt(tap, frame_width, frame_height, asked, asked_count);
+        return key != UINT32_MAX
+                   ? UiBrowseStep(state, (uint32_t)asked[key].input, UI_SETTLING_FRAMES, info)
+                   : state;
+    }
     const UiTab tab = TabAt(tap);
     if (tab != UI_TABS) {
         state.changed = state.changed || tab != state.tab;
@@ -3797,6 +3826,15 @@ UiBrowseState UiBrowseTap(UiBrowseState state, const UiTap *tap, uint32_t frame_
 }
 
 uint32_t UiBrowseKeys(const UiBrowseState *state, const UiBrowseInfo *info, UiKey *keys) {
+    if (state->waiting != UI_ASK_NONE) {
+        const UiKey yes = { "A", "yes, the judge first", UI_BUTTON_OPEN };
+        const UiKey no = { "B", "no, the run alone", UI_BUTTON_BACK };
+        const UiKey back = { "Minus", "back", UI_BUTTON_QUIT };
+        keys[0] = yes;
+        keys[1] = no;
+        keys[2] = back;
+        return 3u;
+    }
     if (state->tab == UI_TAB_RESULTS) {
         UiState results = state->results;
         results.browser = true;
@@ -4295,6 +4333,26 @@ static void ComposeOptions(const UiFrame *frame, const UiBrowseState *state, cha
              ROWS[state->option].name);
 }
 
+/// The judge question over the tab a run was asked from, its keys on the foot.
+static void JudgeQuestion(const UiFrame *frame, const UiBrowseState *state,
+                          const UiBrowseInfo *info) {
+    const uint32_t width = 720u;
+    const uint32_t height = BH + 4u + 4u * LINE + 16u;
+    const uint32_t x = (frame->width - width) / 2u;
+    const uint32_t y = (frame->height - height) / 2u;
+    uint32_t line = Box(frame, x, y, width, height, "Run the judge first?", NULL, NULL) + 4u;
+    Say(frame, x + CW, line, TEXT, "The judge holds the probe itself to its references first:");
+    line += LINE;
+    Say(frame, x + CW, line, TEXT, "selfcheck, support and reference, some 700 cases, half a");
+    line += LINE;
+    Say(frame, x + CW, line, TEXT, "minute or more before what was picked runs.");
+    line += LINE;
+    Say(frame, x + CW, line, DIM, "A: the judge, then the run   B: the run alone   Minus: back");
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t count = UiBrowseKeys(state, info, keys);
+    Foot(frame, "Run the judge before what was picked?", TEXT, keys, count);
+}
+
 void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBrowseState *state) {
     if (frame == NULL || frame->pixels == NULL || info == NULL || state == NULL) {
         return;
@@ -4311,6 +4369,9 @@ void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBro
         const int32_t picture = UiOpenPicture(info->results, results);
         UiCompose(frame, info->results, results,
                   picture >= 0 && info->picture != NULL ? info->picture(picture) : NULL);
+        if (state->waiting != UI_ASK_NONE) {
+            JudgeQuestion(frame, state, info);
+        }
         UiComposeCountdown(frame, info->seconds_left);
         return;
     }
@@ -4345,7 +4406,11 @@ void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBro
         snprintf(tip, sizeof(tip), "Plus, in the suites or the demos, runs what is marked");
         break;
     }
-    Foot(frame, tip, tip_colour, keys, count);
+    if (state->waiting != UI_ASK_NONE) {
+        JudgeQuestion(frame, state, info);
+    } else {
+        Foot(frame, tip, tip_colour, keys, count);
+    }
     UiComposeCountdown(frame, info->seconds_left);
 }
 
