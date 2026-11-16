@@ -12,12 +12,13 @@
   * [Counters and the render enable](#counters-and-the-render-enable)
   * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
   * [Clears, strides and discards](#clears-strides-and-discards)
+  * [The debug layer's marks](#the-debug-layers-marks)
   * [The render state a list sets by itself](#the-render-state-a-list-sets-by-itself)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, eighty four cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, eighty seven cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -60,7 +61,8 @@ The reference is the graphics unit running what the layer recorded, never the of
 
 ## The cases
 
-- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three hundred.
+- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three
+  hundred and thirty six.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -156,6 +158,14 @@ The reference is the graphics unit running what the layer recorded, never the of
   that pool, the first written through `nvnBufferMap` and flushed (`nvnBufferFlushMappedRange`), a copy by the
   graphics unit between their addresses, and the second read through its mapping after
   `nvnBufferInvalidateMappedRange`. Every byte of the pool is judged, the ones around the buffers too.
+- **the debug layer's calls are answered as a release driver answers them, and a label changes no object**
+  (exact): no external debugger is attached; `nvnDeviceInstallDebugCallback` and `nvnDeviceWalkDebugDatabase`
+  never call back; each of the six checkpoint switches of the device answers that it was taken; two debug
+  domains made one after the other are numbered one apart; a buffer, a texture and a sampler have the debug
+  number 0; and with a label set on the device, the queue, a pool, a texture, the command buffer, a buffer, a
+  sampler, a program, a sync and the texture and sampler pools, each still says of itself what it said. The
+  window gets its label in the window's case. These are what ScarletNX read in an NVN 55 release driver, the
+  driver a game ships with; the layer answers the same on the console, so only a runtime's answers are news.
 - **a window builder gives back what it was set** (exact): the device, the native window, three textures that
   are only named, each by its place and how many, a present interval of two and two active textures. The builder
   makes no window.
@@ -366,6 +376,20 @@ Three of these make 16 by 16 textures of their own, in a pool of their own, and 
 `nvnCommandBufferDownsample` and its three kin wait for multisampled textures in the layer.
 `nvnCommandBufferResolveDepthBuffer`, `SaveZCullData` and `RestoreZCullData` have no case: they move the graphics
 unit's own depth culling data, which no program reads and no picture shows.
+
+### The debug layer's marks
+
+- **draws between debug markers, groups and checkpoints are as without them**: three cells drawn between
+  `nvnCommandBufferInsertDebugMarker`, `InsertDebugMarkerDynamic` and `InsertDebugMarkerStatic`,
+  `PushDebugGroup`, `PushDebugGroupDynamic` and `PushDebugGroupStatic`, `PopDebugGroup` and `PopDebugGroupId`, and
+  `InsertCheckpointDynamic` and `InsertCheckpointStatic`, which both answer that the checkpoint was taken. The
+  marks name parts of a list for the debug layer and record nothing a picture shows.
+
+The Switch 2 program has the Ounce's own, **a clear between the Ounce's graphics and compute markers and groups
+is the clear** (exact), in the suite's first part: `nvnCommandBufferPushDebugGroupGraphics`,
+`InsertDebugMarkerGraphics`, their compute kin and the two pops around the clear cases' clear.
+`nvnProgramBuilderSetDebugDataHashes` and `GetDebugDataHashes` have no case: what the getter gives back for the
+hashes set is the driver's, and ScarletNX keeps none.
 
 ### The render state a list sets by itself
 
