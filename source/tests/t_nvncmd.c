@@ -78,14 +78,22 @@ static float ClipY(uint32_t pixel) {
 }
 
 /// Brings @p kind up with everything a case draws with. False with the case reported as failed.
-static bool KitOpenFor(Kit *kit, DrawPathKind kind, bool depth, uint32_t textures,
-                       uint32_t texture_bytes, const char *name) {
+/// What a kit's depth target is: none, 32 bits of float depth, or 24 of depth with a stencil.
+typedef enum {
+    KIT_NO_DEPTH,
+    KIT_DEPTH,
+    KIT_STENCIL,
+} KitDepth;
+
+static bool KitOpenOf(Kit *kit, DrawPathKind kind, KitDepth depth, uint32_t textures,
+                      uint32_t texture_bytes, const char *name) {
     memset(kit, 0, sizeof(*kit));
     DrawPathSpec spec;
     memset(&spec, 0, sizeof(spec));
     spec.width = SCENE_SIZE;
     spec.height = SCENE_SIZE;
-    spec.depth = depth;
+    spec.depth = depth != KIT_NO_DEPTH;
+    spec.stencil = depth == KIT_STENCIL;
     spec.textures = textures;
     spec.texture_bytes = texture_bytes;
     spec.programs = 1;
@@ -151,6 +159,11 @@ static bool KitOpenFor(Kit *kit, DrawPathKind kind, bool depth, uint32_t texture
     memcpy(kit->paint.bytes, &flat, sizeof(flat));
     memset(kit->page.bytes, PAGE_PRESET, PAGE_BYTES);
     return true;
+}
+
+static bool KitOpenFor(Kit *kit, DrawPathKind kind, bool depth, uint32_t textures,
+                       uint32_t texture_bytes, const char *name) {
+    return KitOpenOf(kit, kind, depth ? KIT_DEPTH : KIT_NO_DEPTH, textures, texture_bytes, name);
 }
 
 static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *name) {
@@ -1588,6 +1601,244 @@ static void LineCase(DrawPathKind kind, const char *name) {
     line_pixels = NULL;
 }
 
+// ---- the rest of the render state a list sets by itself
+
+/// Into the open list, with the case's own quads bound: two quads of an alpha of a fifth under
+/// the alpha test "greater", the reference a half and then an eighth; then two opaque quads
+/// blended as the source times the blend colour, which is red and blue and then green.
+static void AlphaBlendRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    static const float red_blue[4] = { 1.0f, 0.0f, 1.0f, 1.0f };
+    static const float green[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
+    _Alignas(8) NVNcolorState color;
+    n->nvnColorStateSetDefaults(&color);
+    n->nvnColorStateSetAlphaTest(&color, NVN_ALPHA_FUNC_GREATER);
+    n->nvnCommandBufferBindColorState(cmd, &color);
+    n->nvnCommandBufferSetAlphaRef(cmd, 0.5f);
+    DrawPathDraw(kit->path, 0, 6);
+    n->nvnCommandBufferSetAlphaRef(cmd, 0.125f);
+    DrawPathDraw(kit->path, 6, 6);
+    n->nvnColorStateSetAlphaTest(&color, NVN_ALPHA_FUNC_ALWAYS);
+    n->nvnColorStateSetBlendEnable(&color, 0, 1);
+    n->nvnCommandBufferBindColorState(cmd, &color);
+    _Alignas(8) NVNblendState blend;
+    n->nvnBlendStateSetDefaults(&blend);
+    n->nvnBlendStateSetBlendTarget(&blend, 0);
+    n->nvnBlendStateSetBlendFunc(&blend, NVN_BLEND_FUNC_CONSTANT_COLOR, NVN_BLEND_FUNC_ZERO,
+                                 NVN_BLEND_FUNC_CONSTANT_ALPHA, NVN_BLEND_FUNC_ZERO);
+    n->nvnCommandBufferBindBlendState(cmd, &blend);
+    n->nvnCommandBufferSetBlendColor(cmd, red_blue);
+    DrawPathDraw(kit->path, 12, 6);
+    n->nvnCommandBufferSetBlendColor(cmd, green);
+    DrawPathDraw(kit->path, 18, 6);
+}
+
+/// What an alpha of a fifth is in a target of eight bits a channel.
+#define FIFTH_BYTE 0x33u
+
+static void AlphaBlendExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    memcpy(out, SCENE_CLEAR, 4);
+    if (k >= 1u && k <= 3u) {
+        CellColour(k, out);
+    }
+    if (k == 1u) {
+        out[3] = FIFTH_BYTE;
+    } else if (k == 2u) {
+        out[1] = 0;
+    } else if (k == 3u) {
+        out[0] = 0;
+        out[2] = 0;
+    }
+}
+
+/// The alpha test's reference and the blend colour, each set by the list between two draws that
+/// differ in nothing else. An alpha of a fifth is not greater than a half and is greater than an
+/// eighth, so cell 0 stays clear and cell 1 holds its colour with that alpha; a source times a
+/// blend colour of red and blue has no green left, and times one of green only its green.
+static void AlphaBlendCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    GpuVertex own[24];
+    for (uint32_t k = 0; k < 4u; ++k) {
+        InsetQuad(own + k * 6u, k, 0.0f);
+        for (uint32_t i = 0; i < 6u && k < 2u; ++i) {
+            own[k * 6u + i].a = 0.2f;
+        }
+    }
+    memcpy(kit.own.bytes, own, sizeof(own));
+    KitBegin(&kit, true);
+    OwnBound(&kit);
+    AlphaBlendRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudgeWith(&kit, name, AlphaBlendExpected, why);
+}
+
+/// Into the open list: the stencil cleared to 0x0f and tested for equality. Cell 0 with the
+/// reference 0x0f, cell 1 with 0x0e, cell 2 with 0x0e under a compare mask of 0xf0. Then cell 3
+/// always, replacing the stencil with the reference 0xff under a write mask of 0x30, and over
+/// it the case's own quad where the stencil equals 0x3f.
+static void StencilRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferClearDepthStencil(cmd, 1.0f, 1, 0x0f, 0xff);
+    _Alignas(8) NVNdepthStencilState state;
+    n->nvnDepthStencilStateSetDefaults(&state);
+    n->nvnDepthStencilStateSetDepthTestEnable(&state, 0);
+    n->nvnDepthStencilStateSetDepthWriteEnable(&state, 0);
+    n->nvnDepthStencilStateSetStencilTestEnable(&state, 1);
+    n->nvnDepthStencilStateSetStencilFunc(&state, NVN_FACE_FRONT_AND_BACK,
+                                          NVN_STENCIL_FUNC_EQUAL);
+    n->nvnDepthStencilStateSetStencilOp(&state, NVN_FACE_FRONT_AND_BACK, NVN_STENCIL_OP_KEEP,
+                                        NVN_STENCIL_OP_KEEP, NVN_STENCIL_OP_KEEP);
+    n->nvnCommandBufferBindDepthStencilState(cmd, &state);
+    n->nvnCommandBufferSetStencilValueMask(cmd, NVN_FACE_FRONT_AND_BACK, 0xff);
+    n->nvnCommandBufferSetStencilMask(cmd, NVN_FACE_FRONT_AND_BACK, 0xff);
+    n->nvnCommandBufferSetStencilRef(cmd, NVN_FACE_FRONT_AND_BACK, 0x0f);
+    KitCell(kit, 0);
+    n->nvnCommandBufferSetStencilRef(cmd, NVN_FACE_FRONT_AND_BACK, 0x0e);
+    KitCell(kit, 1);
+    n->nvnCommandBufferSetStencilValueMask(cmd, NVN_FACE_FRONT_AND_BACK, 0xf0);
+    KitCell(kit, 2);
+    n->nvnCommandBufferSetStencilValueMask(cmd, NVN_FACE_FRONT_AND_BACK, 0xff);
+
+    n->nvnDepthStencilStateSetStencilFunc(&state, NVN_FACE_FRONT_AND_BACK,
+                                          NVN_STENCIL_FUNC_ALWAYS);
+    n->nvnDepthStencilStateSetStencilOp(&state, NVN_FACE_FRONT_AND_BACK, NVN_STENCIL_OP_KEEP,
+                                        NVN_STENCIL_OP_KEEP, NVN_STENCIL_OP_REPLACE);
+    n->nvnCommandBufferBindDepthStencilState(cmd, &state);
+    n->nvnCommandBufferSetStencilRef(cmd, NVN_FACE_FRONT_AND_BACK, 0xff);
+    n->nvnCommandBufferSetStencilMask(cmd, NVN_FACE_FRONT_AND_BACK, 0x30);
+    KitCell(kit, 3);
+
+    n->nvnDepthStencilStateSetStencilFunc(&state, NVN_FACE_FRONT_AND_BACK,
+                                          NVN_STENCIL_FUNC_EQUAL);
+    n->nvnDepthStencilStateSetStencilOp(&state, NVN_FACE_FRONT_AND_BACK, NVN_STENCIL_OP_KEEP,
+                                        NVN_STENCIL_OP_KEEP, NVN_STENCIL_OP_KEEP);
+    n->nvnCommandBufferBindDepthStencilState(cmd, &state);
+    n->nvnCommandBufferSetStencilMask(cmd, NVN_FACE_FRONT_AND_BACK, 0xff);
+    n->nvnCommandBufferSetStencilRef(cmd, NVN_FACE_FRONT_AND_BACK, 0x3f);
+    OwnBound(kit);
+    DrawPathDraw(kit->path, 0, 6);
+}
+
+/// The cell whose colour the stencil case's last quad has, over cell 3.
+#define STENCIL_OVER 9u
+
+static void StencilExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t k = y / CELL * CELLS_ACROSS + x / CELL;
+    memcpy(out, SCENE_CLEAR, 4);
+    if (k == 0u || k == 2u) {
+        CellColour(k, out);
+    } else if (k == 3u) {
+        CellColour(STENCIL_OVER, out);
+    }
+}
+
+/// The stencil's reference, compare mask and write mask, each set by the list. Over a stencil
+/// of 0x0f, "equal" draws with the reference 0x0f and not with 0x0e, and draws with 0x0e once
+/// the compare mask 0xf0 leaves the low bits out. A replace with 0xff under the write mask 0x30
+/// leaves 0x3f, which the last quad is drawn over cell 3 for: a runtime that writes every bit
+/// leaves 0xff there, and cell 3 its own colour.
+static void StencilCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpenOf(&kit, kind, KIT_STENCIL, 0, 0, name)) {
+        return;
+    }
+    char why[200] = "";
+    GpuVertex own[6];
+    InsetQuad(own, 3, 0.0f);
+    const GpuVertex over = OwnVertex(0, 0, STENCIL_OVER);
+    for (uint32_t i = 0; i < 6u; ++i) {
+        own[i].r = over.r;
+        own[i].g = over.g;
+        own[i].b = over.b;
+    }
+    memcpy(kit.own.bytes, own, sizeof(own));
+    KitBegin(&kit, true);
+    StencilRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudgeWith(&kit, name, StencilExpected, why);
+}
+
+/// Into the open list: cell 0 under a sample mask without the first sample and cell 1 under
+/// one with it alone; then, with the polygon offset on for filled polygons and the depth test
+/// on, cell 2 with an offset of 2 to the 23rd units and no clamp, and cell 3 with the same
+/// offset clamped to a twentieth.
+static void MaskOffsetRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferSetSampleMask(cmd, 0xfffe);
+    KitCell(kit, 0);
+    n->nvnCommandBufferSetSampleMask(cmd, 0x1);
+    KitCell(kit, 1);
+    n->nvnCommandBufferSetSampleMask(cmd, 0xffff);
+    _Alignas(8) NVNpolygonState polygon;
+    n->nvnPolygonStateSetDefaults(&polygon);
+    n->nvnPolygonStateSetCullFace(&polygon, NVN_FACE_NONE);
+    n->nvnPolygonStateSetPolygonOffsetEnables(&polygon, NVN_POLYGON_OFFSET_ENABLE_FILL);
+    n->nvnCommandBufferBindPolygonState(cmd, &polygon);
+    n->nvnCommandBufferSetPolygonOffsetClamp(cmd, 0.0f, 8388608.0f, 0.0f);
+    KitCell(kit, 2);
+    n->nvnCommandBufferSetPolygonOffsetClamp(cmd, 0.0f, 8388608.0f, 0.05f);
+    KitCell(kit, 3);
+}
+
+/// The sample mask and the polygon offset's clamp. A target of one sample has the first sample
+/// alone, so a mask without it draws nothing and one with it draws. Over a depth of 0.6 in a
+/// target of 24 bits, where a unit of offset is 2 to the minus 24th, a quad at 0.5 offset by 2
+/// to the 23rd units is at 1 and hidden, and with the offset clamped to a twentieth it is at
+/// 0.55 and drawn.
+static void MaskOffsetCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpenOf(&kit, kind, KIT_STENCIL, 0, 0, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    DrawPathClearDepth(kit.path, 0.6f);
+    DrawPathDepth(kit.path, true, false);
+    MaskOffsetRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 1 | 1u << 3, why);
+}
+
+/// Into the open list: the five hints set, two cells drawn, and each hint set back.
+static void HintsRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferSetStencilCullCriteria(cmd, NVN_STENCIL_FUNC_ALWAYS, 0, 0xff);
+    n->nvnCommandBufferOverrideSubtileSize(cmd, 1, 8);
+    n->nvnCommandBufferSetColorReductionThresholds(cmd, 0, 0, 0);
+    n->nvnCommandBufferSetColorReductionEnable(cmd, 1);
+    n->nvnCommandBufferSetZCullZF32CompressionEnable(cmd, 1);
+    KitCell(kit, 5);
+    KitCell(kit, 6);
+    n->nvnCommandBufferSetZCullZF32CompressionEnable(cmd, 0);
+    n->nvnCommandBufferSetColorReductionEnable(cmd, 0);
+    n->nvnCommandBufferOverrideSubtileSize(cmd, 0, 0);
+}
+
+/// Five hints to the graphics unit, which speed its work and show in no picture: what its
+/// coarse culling may take of the stencil test and of float depth, the tiled cache's subtile,
+/// and the shortcut for blends the source alpha makes plain, which no draw here asks for,
+/// nothing being blended. Two cells drawn with all of them set are there as without them.
+static void HintsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    KitBegin(&kit, true);
+    HintsRecorded(&kit);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 5 | 1u << 6, why);
+}
+
 // ---- patches
 
 /// The outer levels the patches of the tessellation case are drawn with, which its evaluation
@@ -2014,6 +2265,17 @@ void NvnCommandFirst(void) {
                                  "diagonal, through the layer's own NVN functions");
     TilesCase(DRAW_PATH_LAYER, "draws around the tiled cache's actions are as without them, "
                                "through the layer's own NVN functions");
+    AlphaBlendCase(DRAW_PATH_LAYER, "the alpha test's reference and the blend colour a list "
+                                    "sets decide two draws each, through the layer's own NVN "
+                                    "functions");
+    StencilCase(DRAW_PATH_LAYER, "the stencil's reference, compare mask and write mask a list "
+                                 "sets decide what is drawn, through the layer's own NVN "
+                                 "functions");
+    MaskOffsetCase(DRAW_PATH_LAYER, "a sample mask without the first sample draws nothing, and "
+                                    "a clamp holds a polygon offset, through the layer's own "
+                                    "NVN functions");
+    HintsCase(DRAW_PATH_LAYER, "draws under five hints to the graphics unit are as without "
+                               "them, through the layer's own NVN functions");
     TouchedCase(DRAW_PATH_LAYER, "conservative rasterization draws every pixel a quad "
                                  "touches, through the layer's own NVN functions");
     DilatedCase(DRAW_PATH_LAYER, "a conservative quad dilated by half a pixel reaches the "
@@ -2081,6 +2343,16 @@ void NvnCommandLast(void) {
     SwizzleCase(DRAW_PATH_NVN, "a viewport swizzle of x and y turns a quad about the diagonal, "
                                "through the NVN the program looks up");
     TilesCase(DRAW_PATH_NVN, "draws around the tiled cache's actions are as without them, "
+                             "through the NVN the program looks up");
+    AlphaBlendCase(DRAW_PATH_NVN, "the alpha test's reference and the blend colour a list sets "
+                                  "decide two draws each, through the NVN the program looks up");
+    StencilCase(DRAW_PATH_NVN, "the stencil's reference, compare mask and write mask a list "
+                               "sets decide what is drawn, through the NVN the program looks "
+                               "up");
+    MaskOffsetCase(DRAW_PATH_NVN, "a sample mask without the first sample draws nothing, and a "
+                                  "clamp holds a polygon offset, through the NVN the program "
+                                  "looks up");
+    HintsCase(DRAW_PATH_NVN, "draws under five hints to the graphics unit are as without them, "
                              "through the NVN the program looks up");
     TouchedCase(DRAW_PATH_NVN, "conservative rasterization draws every pixel a quad touches, "
                                "through the NVN the program looks up");

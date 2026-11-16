@@ -254,6 +254,12 @@ typedef struct {
     uint8_t mode;
     uint8_t offset;
     bool polygon;
+    /// The stencil's reference, write mask and compare mask of the front face and of the back,
+    /// which deko3d takes together. The masks are kept turned over, so that the nought a new
+    /// list starts with is NVN's start, every bit.
+    uint8_t stencil_ref[2];
+    uint8_t stencil_unwritten[2];
+    uint8_t stencil_uncompared[2];
     bool discard;
     bool depth_clamp;
     bool provoking_first;

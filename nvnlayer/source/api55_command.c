@@ -778,6 +778,129 @@ void Nvnl_nvnCommandBufferSetTiledCacheTileSize(NVNcommandBuffer *cmd, int width
     dkCmdBufSetTileSize(record->cmdbuf, (uint32_t)width, (uint32_t)height);
 }
 
+// ---- the rest of the render state NVN sets by itself
+
+void Nvnl_nvnCommandBufferSetAlphaRef(NVNcommandBuffer *cmd, float ref) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetAlphaRef");
+    if (record != NULL) {
+        dkCmdBufSetAlphaRef(record->cmdbuf, ref);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetBlendColor(NVNcommandBuffer *cmd, const float *rgba) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetBlendColor");
+    if (record == NULL) {
+        return;
+    }
+    if (rgba == NULL) {
+        LayerComplain("nvnCommandBufferSetBlendColor: no colour, where it takes four floats");
+        return;
+    }
+    dkCmdBufSetBlendConst(record->cmdbuf, rgba[0], rgba[1], rgba[2], rgba[3]);
+}
+
+/// NVN sets one of a face's three stencil numbers at a time and deko3d all three: @p which
+/// (0 the reference, 1 the write mask, 2 the compare mask) of @p faces takes @p value, and each
+/// face named is recorded whole.
+static void Stencil(NVNcommandBuffer *cmd, NVNface faces, int which, int value,
+                    const char *what) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, what);
+    if (record == NULL) {
+        return;
+    }
+    if (faces != NVN_FACE_FRONT && faces != NVN_FACE_BACK && faces != NVN_FACE_FRONT_AND_BACK) {
+        LayerComplain("%s: face %d, where the stencil is the front's (%d), the back's (%d) or "
+                      "both's (%d)",
+                      what, (int)faces, (int)NVN_FACE_FRONT, (int)NVN_FACE_BACK,
+                      (int)NVN_FACE_FRONT_AND_BACK);
+        return;
+    }
+    LayerDynamic *const dynamic = &record->draw->dynamic;
+    for (int face = 0; face < 2; ++face) {
+        if (((int)faces >> face & 1) == 0) {
+            continue;
+        }
+        if (which == 0) {
+            dynamic->stencil_ref[face] = (uint8_t)value;
+        } else if (which == 1) {
+            dynamic->stencil_unwritten[face] = (uint8_t)~value;
+        } else {
+            dynamic->stencil_uncompared[face] = (uint8_t)~value;
+        }
+        dkCmdBufSetStencil(record->cmdbuf, face == 0 ? DkFace_Front : DkFace_Back,
+                           (uint8_t)~dynamic->stencil_unwritten[face], dynamic->stencil_ref[face],
+                           (uint8_t)~dynamic->stencil_uncompared[face]);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetStencilRef(NVNcommandBuffer *cmd, NVNface faces, int ref) {
+    Stencil(cmd, faces, 0, ref, "nvnCommandBufferSetStencilRef");
+}
+
+void Nvnl_nvnCommandBufferSetStencilMask(NVNcommandBuffer *cmd, NVNface faces, int mask) {
+    Stencil(cmd, faces, 1, mask, "nvnCommandBufferSetStencilMask");
+}
+
+void Nvnl_nvnCommandBufferSetStencilValueMask(NVNcommandBuffer *cmd, NVNface faces, int mask) {
+    Stencil(cmd, faces, 2, mask, "nvnCommandBufferSetStencilValueMask");
+}
+
+void Nvnl_nvnCommandBufferSetSampleMask(NVNcommandBuffer *cmd, int mask) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetSampleMask");
+    if (record != NULL) {
+        dkCmdBufSetSampleMask(record->cmdbuf, (uint32_t)mask);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetPolygonOffsetClamp(NVNcommandBuffer *cmd, float factor,
+                                                float units, float clamp) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetPolygonOffsetClamp");
+    if (record != NULL) {
+        // NVN's units are deko3d's constant factor, and its factor the one of the slope.
+        dkCmdBufSetDepthBias(record->cmdbuf, units, clamp, factor);
+    }
+}
+
+// Five hints to the graphics unit: what its coarse depth culling may take of the stencil test
+// and of 32-bit float depth, the tiled cache's subtile, and the shortcut that skips a blend the
+// source alpha makes plain. deko3d has a call for none of them and no picture shows one, so the
+// layer checks the list and records nothing.
+
+void Nvnl_nvnCommandBufferSetStencilCullCriteria(NVNcommandBuffer *cmd, NVNstencilFunc func,
+                                                 int ref, int mask) {
+    (void)func;
+    (void)ref;
+    (void)mask;
+    (void)CmdOf(cmd, "nvnCommandBufferSetStencilCullCriteria");
+}
+
+void Nvnl_nvnCommandBufferOverrideSubtileSize(NVNcommandBuffer *cmd, NVNboolean enable,
+                                              int size) {
+    (void)enable;
+    (void)size;
+    (void)CmdOf(cmd, "nvnCommandBufferOverrideSubtileSize");
+}
+
+void Nvnl_nvnCommandBufferSetColorReductionEnable(NVNcommandBuffer *cmd, NVNboolean enable) {
+    (void)enable;
+    (void)CmdOf(cmd, "nvnCommandBufferSetColorReductionEnable");
+}
+
+void Nvnl_nvnCommandBufferSetColorReductionThresholds(NVNcommandBuffer *cmd, int format_class,
+                                                      int conservative, int aggressive) {
+    (void)format_class;
+    (void)conservative;
+    (void)aggressive;
+    (void)CmdOf(cmd, "nvnCommandBufferSetColorReductionThresholds");
+}
+
+void Nvnl_nvnCommandBufferSetZCullZF32CompressionEnable(NVNcommandBuffer *cmd,
+                                                        NVNboolean enable) {
+    (void)enable;
+    (void)CmdOf(cmd, "nvnCommandBufferSetZCullZF32CompressionEnable");
+}
+
 // ---- lines and conservative rasterization, each deko3d's own command
 
 void Nvnl_nvnCommandBufferSetLineWidth(NVNcommandBuffer *cmd, float width) {

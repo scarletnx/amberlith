@@ -24,7 +24,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and eighty four cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and ninety two cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -68,7 +68,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
-  and eight.
+  and twenty.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -492,8 +492,9 @@ expects. Exact tier.
   three cells are there. The layer calls a copied list where it lies, deko3d having no copy, so it asks of a
   copy what NVN asks of a call alone, that the list's memory is still there when the queue runs it.
 
-`nvnCommandBufferSetRecordingMode`, `SetComputeOverlapMode` and `SetComputeWorkloadPriority` have no case: nothing
-a program can read or draw changes with them here, and what they change on a console is the driver's.
+`nvnCommandBufferSetRecordingMode`, `SetComputeOverlapMode` and `SetComputeWorkloadPriority` are the Switch 2
+program's to set, before a dispatch of [the nvn2 suite](Nvn2.md): nothing a program can read or draw changes with
+them here, and what they change on a console is the driver's.
 
 ### Clears, strides and discards
 
@@ -563,6 +564,23 @@ hashes set is the driver's, and ScarletNX keeps none.
 - **draws around the tiled cache's actions are as without them**: `nvnCommandBufferSetTiledCacheTileSize` and
   `SetTiledCacheAction` (flush, disable, enable, flush) around two draws. The tiled cache is how the graphics unit
   orders its work and no picture shows it, so the case holds a runtime only to drawing on.
+- **the alpha test's reference and the blend colour a list sets decide two draws each**:
+  `nvnCommandBufferSetAlphaRef` and `SetBlendColor`. A quad whose alpha is a fifth, under the test "greater", is
+  gone with a reference of a half and there, with that alpha, with one of an eighth; a quad blended as its colour
+  times the blend colour keeps its red and blue under a blend colour of red and blue, and only its green under
+  green.
+- **the stencil's reference, compare mask and write mask a list sets decide what is drawn**:
+  `nvnCommandBufferSetStencilRef`, `SetStencilValueMask` and `SetStencilMask`, over a target of 24 bits of depth
+  and 8 of stencil cleared to 0x0f. "Equal" draws with the reference 0x0f, not with 0x0e, and with 0x0e once the
+  compare mask is 0xf0; a replace by 0xff under the write mask 0x30 leaves 0x3f, which a last quad is drawn for.
+- **a sample mask without the first sample draws nothing, and a clamp holds a polygon offset**:
+  `nvnCommandBufferSetSampleMask` over a target of one sample, and `SetPolygonOffsetClamp` with the offset on for
+  filled polygons: over a depth of 0.6 in 24 bits a quad at 0.5 offset by 2 to the 23rd units is at 1 and hidden,
+  and clamped to a twentieth it is at 0.55 and drawn.
+- **draws under five hints to the graphics unit are as without them**: `nvnCommandBufferSetStencilCullCriteria`,
+  `OverrideSubtileSize`, `SetColorReductionThresholds`, `SetColorReductionEnable` and
+  `SetZCullZF32CompressionEnable`, which speed the graphics unit's work and show in no picture; the layer has no
+  deko3d call for any and records nothing.
 
 - **conservative rasterization draws every pixel a quad touches**: four quads each 0.6 of a pixel inside its
   cell. By the usual rule the cell's outer ring of pixels, touched but with centres outside, stays clear; with
@@ -585,11 +603,7 @@ hashes set is the driver's, and ScarletNX keeps none.
   shows. `source/drawpath_nvn.h` hands such a case the shader data of a stage past a scene's two
   (`DrawPathNvnStage`).
 
-Still without a case: the stencil's reference and masks, the blend colour, the alpha reference, the polygon
-offset and the sample mask, which need the state objects' tests in the layer. And for good, as far as a picture
-goes: `nvnCommandBufferOverrideSubtileSize`, `SetColorReductionEnable`, `SetColorReductionThresholds`,
-`SetZCullZF32CompressionEnable`, `SetStencilCullCriteria` and the Ounce's `SetShadingRatePaletteMode`, which tune
-how the graphics unit stores and culls and change nothing a program reads.
+The Ounce's `nvnCommandBufferSetShadingRatePaletteMode` is set by the nvn2 suite's draw with no shading rate image.
 
 ### The device and a program
 

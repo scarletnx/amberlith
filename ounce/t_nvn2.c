@@ -99,6 +99,7 @@ typedef enum {
     DISPATCH_BUFFERS_DEFERRED, ///< nvnCommandBufferBindStorageBuffersDeferred
     DISPATCH_INDIRECT,         ///< nvnCommandBufferDispatchComputeIndirect
     DISPATCH_PUSHED,           ///< the pushed program, its numbers by PushComputeConstants
+    DISPATCH_MODES,            ///< after the recording mode, the overlap mode and the priority
 } DispatchKind;
 
 // What the pushed program multiplies by and adds: words 2 and 3 of root table 1.
@@ -488,6 +489,13 @@ static const uint8_t *Dispatch(DispatchKind kind, char *why, size_t why_size) {
         n2.nvn.nvnCommandBufferBindStorageBuffer(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, buffer,
                                                  range.size);
     }
+    if (kind == DISPATCH_MODES) {
+        // How the list is recorded and how its compute work shares the graphics unit with the
+        // rest, each at the nought a list starts with: what is computed is the same.
+        n2.nvn.nvnCommandBufferSetRecordingMode(&n2.command, 0);
+        n2.nvn.nvnCommandBufferSetComputeOverlapMode(&n2.command, 0);
+        n2.nvn.nvnCommandBufferSetComputeWorkloadPriority(&n2.command, 0);
+    }
     if (kind == DISPATCH_INDIRECT) {
         // The three counts of blocks, where the graphics unit reads them.
         const uint32_t blocks[3] = { SCALE_BLOCKS, 1, 1 };
@@ -652,6 +660,7 @@ static const uint8_t *MandelDraw(MeshKind kind, char *why, size_t why_size) {
     if (kind == MESH_NO_RATE) {
         // No texture is no shading rate image: every pixel is shaded, as with none ever bound.
         n->nvnCommandBufferBindShadingRateImage(&n2.command, NULL, NULL);
+        n->nvnCommandBufferSetShadingRatePaletteMode(&n2.command, 0);
     }
     n->nvnCommandBufferSetGeometryProcessingMode(&n2.command, GEOMETRY_PROCESSING_MESH);
     n->nvnCommandBufferBindStorageBuffer(
@@ -1669,10 +1678,12 @@ void RunNvn2(void) {
                                                       "of a grid as a count in a buffer says";
     static const char *const PUSHED = "a dispatch multiplies and adds by the two words pushed "
                                       "into a root table, the second pushed again alone";
+    static const char *const SCALE_MODES = "the same dispatch after the list's recording mode, "
+                                           "compute overlap mode and workload priority are set";
     static const char *const PICTURE_PUSHED = "the same bars with the green and blue a fragment "
                                               "program reads from a root table pushed";
     static const char *const PICTURE_NO_RATE = "the same picture with no texture bound as the "
-                                               "shading rate image";
+                                               "shading rate image, and the palette's mode set";
     static const char *const IMAGE = "a dispatch loads each texel of one image and stores three "
                                      "times it plus its column into another";
     static const char *const IMAGE_SEVERAL = "the same images bound by the call that takes "
@@ -1696,7 +1707,7 @@ void RunNvn2(void) {
                                   MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
                                   PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
                                   PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
-                                  PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
+                                  SCALE_MODES, PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
                                   IMAGE_DEFERRED, APART, APART_SEVERAL, APART_DEFERRED,
                                   DLSS_BUILDER, DLSS_PARAMETERS, DLSS_SIZES, DLSS_EVALUATE };
 
@@ -1843,6 +1854,12 @@ void RunNvn2(void) {
         } else {
             ReportCase(SUITE, PUSHED, CHECK_NONE, false, why);
         }
+    }
+    if (!built) {
+        ReportSkip(SUITE, SCALE_MODES, REPORT_REASON_DEPENDS,
+                   "the compute program made no program");
+    } else if (ReportStart(SUITE, SCALE_MODES)) {
+        ScaleAgain(SCALE_MODES, DISPATCH_MODES);
     }
     if (!mandel) {
         ReportSkip(SUITE, PICTURE_PUSHED, REPORT_REASON_DEPENDS,
