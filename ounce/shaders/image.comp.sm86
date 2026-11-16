@@ -1,0 +1,14 @@
+; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-License-Identifier: GPL-3.0-or-later
+;
+; One block of 16 by 16 invocations, one a texel: each loads its texel of image 1, a word a texel, and stores three
+; times it plus its column into image 0. A compute program's image handles are in constant buffer 2, slot r's at
+; 0x120 + 8 r (ounce/t_nvn2.c binds the two images and holds image 0 to the arithmetic).
+.stage compute
+.local 16 16 1
+        S2R R4, SR_TID.X                ; the column, and the first of the coordinates' two registers
+        S2R R5, SR_TID.Y                ; the row
+        SULD.P.2D.R R8, [R4], c[2][0x128]
+        IMAD R8, R8, 3, R4
+        SUST.P.2D.R [R4], R8, c[2][0x120]
+        EXIT

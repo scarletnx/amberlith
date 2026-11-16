@@ -334,6 +334,13 @@ SIZE = {"U8": ("size", 0), "S8": ("size", 1), "U16": ("size", 2), "S16": ("size"
         "64": ("size", 5)}
 
 
+# An image instruction's shape, as ScarletNX's translator reads bits 61 to 63, and its channels, a bit each from
+# red at bit 72: the registers hold as many words as channels are named, one after the other.
+IMAGE_DIM = {"1D": 0, "1DARRAY": 2, "2D": 3, "2DARRAY": 4, "3D": 5}
+IMAGE_CHANNELS = {"".join(c for i, c in enumerate("RGBA") if bits >> i & 1): ("channels", bits)
+                  for bits in range(1, 16)}
+
+
 def float_fields(word, got):
     word.put(77, 1, got.get("sat", 0), ".SAT")
     word.put(78, 2, got.get("round", 0), "the rounding mode")
@@ -613,9 +620,38 @@ def encode(program, index, mnemonic, mods, guard, ops):
         word.put(78, 1, got.get("skew", 0), ".SKEW")
         word.put(79, 1, got.get("output", 0), ".O")
         return word
+    if mnemonic in ("SULD", "SUST"):
+        count(mnemonic, ops, 3)
+        known = {"P": ("p", 1)}
+        known.update((name, ("dim", value)) for name, value in IMAGE_DIM.items())
+        known.update(IMAGE_CHANNELS)
+        got = modifiers(mnemonic, mods, known)
+        if "p" not in got or "dim" not in got or "channels" not in got:
+            raise Refused("%s needs .P, the image's shape (%s) and its channels, .R to .RGBA"
+                          % (mnemonic, ", ".join("." + name for name in IMAGE_DIM)))
+        load = mnemonic == "SULD"
+        texel = want(ops[1 if load else 0], Mem, "the texel's coordinates", mnemonic)
+        if texel.kind != "memory" or texel.ureg is not None or texel.offset != 0:
+            raise Refused("%s takes [R], the first register of the texel's whole coordinates" % mnemonic)
+        handle = want(ops[2], Cbuf, "the image's handle", mnemonic)
+        if handle.index is not None or handle.offset & 3 or not 0 <= handle.offset < 1 << 16:
+            raise Refused("%s takes the image's handle as c[bank][offset], a whole word below 0x10000, and has "
+                          "the offset %d (0x%x)" % (mnemonic, handle.offset, handle.offset))
+        start(word, single(program, mnemonic + "_P"), guard)
+        if load:
+            word.put(16, 8, reg_of(ops[0], "the destination", mnemonic), "the destination")
+            word.put(81, 3, PT, "the predicate it sets")
+        else:
+            word.put(32, 8, reg_of(ops[1], "the value", mnemonic), "the value")
+        word.put(24, 8, texel.reg, "the coordinates' register")
+        word.put(40, 14, handle.offset >> 2, "the handle's word")
+        word.put(54, 5, handle.bank, "the constant buffer's bank")
+        word.put(61, 3, got["dim"], "the image's shape")
+        word.put(72, 4, got["channels"], "the channels")
+        return word
     raise Refused("%s is not an instruction the assembler writes yet: MOV, FADD, FMUL, FFMA, FSETP, ISETP, IADD3, "
-                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, IPA, ALD, AST, "
-                  "ISBERD, ISBEWR, BRA, EXIT, KILL and NOP" % mnemonic)
+                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, SULD, SUST, IPA, "
+                  "ALD, AST, ISBERD, ISBEWR, BRA, EXIT, KILL and NOP" % mnemonic)
 
 
 def single(program, mnemonic):

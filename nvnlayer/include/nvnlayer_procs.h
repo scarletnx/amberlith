@@ -919,6 +919,12 @@
        size_t size))                                                                              \
     X(void, nvnCommandBufferBindImage,                                                            \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int index, NVNimageHandle handle))            \
+    X(void, nvnCommandBufferBindImages,                                                           \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNimageHandle *handles))                                                            \
+    X(void, nvnCommandBufferBindImagesDeferred,                                                   \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNimageHandle *handles))                                                            \
     X(void, nvnCommandBufferDispatchCompute, (NVNcommandBuffer *cmd, int x, int y, int z))        \
     X(void, nvnCommandBufferPushGraphicsConstants,                                                \
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
