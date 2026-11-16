@@ -806,10 +806,14 @@
     X(void, nvnCommandBufferSetZCullZF32CompressionEnable,                                        \
       (NVNcommandBuffer * cmd, NVNboolean enable))
 
-// Subroutines: the linkage maps a program takes for its stages that declare some.
+// Subroutines: the linkage maps a program takes for its stages that declare some, and the
+// subroutines a list chooses for a stage.
 #define NVN_LAYER_PROCS_SUBROUTINE(X)                                                             \
     X(NVNboolean, nvnProgramSetSubroutineLinkage,                                                 \
-      (NVNprogram * program, int count, const NVNsubroutineLinkageMapPtr *maps))
+      (NVNprogram * program, int count, const NVNsubroutineLinkageMapPtr *maps))                  \
+    X(void, nvnCommandBufferSetProgramSubroutines,                                                \
+      (NVNcommandBuffer * cmd, NVNprogram *program, NVNshaderStage stage, int first, int count,   \
+       const int *values))
 
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
@@ -1124,6 +1128,8 @@
     X(void, nvnCommandBufferSetShadingRatePaletteMode, (NVNcommandBuffer *cmd, int mode))        \
     X(void, nvnCommandBufferBindShadingRateImage,                                                \
       (NVNcommandBuffer *cmd, const NVNtexture *texture, const NVNtextureView *view))             \
+    X(void, nvnCommandBufferShadingRateImagePalette,                                             \
+      (NVNcommandBuffer *cmd, int viewport, int count, const int *rates))                         \
     X(void, nvnCommandBufferBindStorageBuffers,                                                   \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
        const NVNbufferRange *ranges))                                                             \

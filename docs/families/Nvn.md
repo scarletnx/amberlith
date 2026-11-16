@@ -24,7 +24,8 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, two hundred and two cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, two hundred and
+four cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -68,7 +69,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
-  and thirty three.
+  and thirty four.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -593,6 +594,12 @@ hashes set is the driver's, and ScarletNX keeps none.
   with nought before the shaders are set, and `nvnProgramGetSubtileSize`, which is nought for every program: a
   driver's `nvnProgramSetShaders` leaves it there and nothing in NVN sets it. The layer lacks the other modes of
   sample shading, deko3d running a fragment stage as its code says.
+- **draws after subroutines chosen for a program with no linkage map are as without them**: a program of the
+  case's own, of the scene's two stages, which declare no subroutine. It answers false to the linkage map it is
+  offered for its fragment stage (`nvnProgramSetSubroutineLinkage`), and `nvnCommandBufferSetProgramSubroutines`
+  for that stage, two values before two cells and one more before a third, leaves the three as drawn. A choice
+  reaches a stage through the map its program kept, and an NVN 55 driver that finds none when the list runs does
+  nothing with it; the layer checks the choice and records nothing.
 - **a cleared target of four samples resolves into its colour by each of the four downsamples**:
   `nvnCommandBufferDownsample`, `DownsampleTextureView`, `TiledDownsample` and `TiledDownsampleTextureView`, each
   from a 16 by 16 texture of four samples cleared to a colour of its own into a texture of one sample, which is
@@ -623,7 +630,8 @@ hashes set is the driver's, and ScarletNX keeps none.
   shows. `source/drawpath_nvn.h` hands such a case the shader data of a stage past a scene's two
   (`DrawPathNvnStage`).
 
-The Ounce's `nvnCommandBufferSetShadingRatePaletteMode` is set by the nvn2 suite's draw with no shading rate image.
+The Ounce's `nvnCommandBufferSetShadingRatePaletteMode` is set by the nvn2 suite's draw with no shading rate image,
+and its `nvnCommandBufferShadingRateImagePalette` by that suite's draw under a palette of the full rate.
 
 ### The device and a program
 
