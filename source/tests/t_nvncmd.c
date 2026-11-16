@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../check.h"
@@ -70,12 +71,13 @@ static float ClipY(uint32_t pixel) {
 }
 
 /// Brings @p kind up with everything a case draws with. False with the case reported as failed.
-static bool KitOpen(Kit *kit, DrawPathKind kind, const char *name) {
+static bool KitOpenWith(Kit *kit, DrawPathKind kind, bool depth, const char *name) {
     memset(kit, 0, sizeof(*kit));
     DrawPathSpec spec;
     memset(&spec, 0, sizeof(spec));
     spec.width = SCENE_SIZE;
     spec.height = SCENE_SIZE;
+    spec.depth = depth;
     spec.programs = 1;
     spec.data_bytes = 0x4000u;
     spec.command_bytes = 0x10000u;
@@ -134,6 +136,10 @@ static bool KitOpen(Kit *kit, DrawPathKind kind, const char *name) {
     memcpy(kit->paint.bytes, &flat, sizeof(flat));
     memset(kit->page.bytes, PAGE_PRESET, PAGE_BYTES);
     return true;
+}
+
+static bool KitOpen(Kit *kit, DrawPathKind kind, const char *name) {
+    return KitOpenWith(kit, kind, false, name);
 }
 
 /// Starts a list with the program, the quads and the two uniform buffers bound; @p clear also
@@ -689,6 +695,359 @@ static void ListsCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 3 | 1u << 6 | 1u << 9, why);
 }
 
+// ---- clears, and what a copy and a target keep
+
+/// The side of a case's own textures, and the bytes of one's texels.
+#define SMALL 16
+#define SMALL_BYTES (SMALL * SMALL * 4)
+#define EXTRAS 3
+
+/// Textures of a case's own, in a pool of their own, and where their texels are read back:
+/// taken down before the way that made them.
+typedef struct {
+    _Alignas(8) NVNmemoryPool pool;
+    _Alignas(8) NVNtexture textures[EXTRAS];
+    void *storage;
+    bool pool_up;
+    int made;
+    DrawBuffer read;
+} Extras;
+
+static void ExtrasDown(Kit *kit, Extras *extras) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    for (int i = 0; i < extras->made; ++i) {
+        n->nvnTextureFinalize(&extras->textures[i]);
+    }
+    extras->made = 0;
+    if (extras->pool_up) {
+        n->nvnMemoryPoolFinalize(&extras->pool);
+        extras->pool_up = false;
+    }
+    free(extras->storage);
+    extras->storage = NULL;
+}
+
+/// @p count 16 by 16 textures of @p formats. False with the step in @p why and nothing left.
+static bool ExtrasUp(Kit *kit, Extras *extras, const NVNformat *formats, int count, char *why,
+                     size_t why_size) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    memset(extras, 0, sizeof(*extras));
+    if (!DrawPathAlloc(kit->path, (uint32_t)(count * SMALL_BYTES), &extras->read)) {
+        snprintf(why, why_size, "no room to read the case's textures back: %s",
+                 DrawPathFailure(kit->path));
+        return false;
+    }
+    memset(extras->read.bytes, PAGE_PRESET, (size_t)(count * SMALL_BYTES));
+    const size_t pool_bytes = 0x40000u;
+    extras->storage = aligned_alloc(0x1000u, pool_bytes);
+    if (extras->storage == NULL) {
+        snprintf(why, why_size, "no memory for the pool of the case's textures");
+        return false;
+    }
+    memset(extras->storage, 0, pool_bytes);
+    _Alignas(8) NVNmemoryPoolBuilder pool_builder;
+    n->nvnMemoryPoolBuilderSetDefaults(&pool_builder);
+    n->nvnMemoryPoolBuilderSetDevice(&pool_builder, kit->nvn.device);
+    n->nvnMemoryPoolBuilderSetStorage(&pool_builder, extras->storage, pool_bytes);
+    n->nvnMemoryPoolBuilderSetFlags(&pool_builder, NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS |
+                                                       NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+    extras->pool_up = n->nvnMemoryPoolInitialize(&extras->pool, &pool_builder);
+    if (!extras->pool_up) {
+        snprintf(why, why_size, "the pool of the case's textures: %s",
+                 NvnLayerError()[0] != '\0' ? NvnLayerError() : "false");
+        ExtrasDown(kit, extras);
+        return false;
+    }
+    size_t at = 0;
+    for (; extras->made < count; ++extras->made) {
+        _Alignas(8) NVNtextureBuilder builder;
+        memset(&builder, 0, sizeof(builder));
+        n->nvnTextureBuilderSetDevice(&builder, kit->nvn.device);
+        n->nvnTextureBuilderSetDefaults(&builder);
+        n->nvnTextureBuilderSetTarget(&builder, NVN_TEXTURE_TARGET_2D);
+        n->nvnTextureBuilderSetFormat(&builder, formats[extras->made]);
+        n->nvnTextureBuilderSetSize2D(&builder, SMALL, SMALL);
+        const size_t size = n->nvnTextureBuilderGetStorageSize(&builder);
+        const size_t alignment = n->nvnTextureBuilderGetStorageAlignment(&builder);
+        if (size != 0u && alignment != 0u) {
+            at = (at + alignment - 1u) / alignment * alignment;
+        }
+        if (size == 0u || alignment == 0u || at + size > pool_bytes) {
+            snprintf(why, why_size, "a 16x16 texture of NVN format 0x%x asks for 0x%zx bytes at "
+                     "an alignment of 0x%zx: %s",
+                     (unsigned)formats[extras->made], size, alignment,
+                     NvnLayerError()[0] != '\0' ? NvnLayerError() : "no pool here holds that");
+            ExtrasDown(kit, extras);
+            return false;
+        }
+        n->nvnTextureBuilderSetStorage(&builder, &extras->pool, (ptrdiff_t)at);
+        if (!n->nvnTextureInitialize(&extras->textures[extras->made], &builder)) {
+            snprintf(why, why_size, "a 16x16 texture of NVN format 0x%x: %s",
+                     (unsigned)formats[extras->made],
+                     NvnLayerError()[0] != '\0' ? NvnLayerError() : "false");
+            ExtrasDown(kit, extras);
+            return false;
+        }
+        at += size;
+    }
+    return true;
+}
+
+/// Into the open list: every texture of @p extras copied to where the processor reads it,
+/// behind a barrier.
+static void ExtrasReadRecorded(Kit *kit, Extras *extras) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferBarrier(kit->nvn.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT);
+    const NVNcopyRegion whole = { 0, 0, 0, SMALL, SMALL, 1 };
+    for (int i = 0; i < extras->made; ++i) {
+        n->nvnCommandBufferCopyTextureToBuffer(
+            kit->nvn.command, &extras->textures[i], NULL, &whole,
+            extras->read.address + (uint64_t)(i * SMALL_BYTES), 0);
+    }
+}
+
+/// Keeps in @p why the first texel of texture @p which that is not @p inside within the square
+/// from (4,4) to (12,12) or @p outside around it.
+static void ExtrasJudge(const Extras *extras, int which, const char *whose,
+                        const uint8_t inside[4], const uint8_t outside[4], char *why,
+                        size_t why_size) {
+    if (why[0] != '\0') {
+        return;
+    }
+    const uint8_t *const texels = (const uint8_t *)extras->read.bytes + which * SMALL_BYTES;
+    for (int y = 0; y < SMALL; ++y) {
+        for (int x = 0; x < SMALL; ++x) {
+            const bool in = x >= 4 && x < 12 && y >= 4 && y < 12;
+            const uint8_t *const want = in ? inside : outside;
+            const uint8_t *const got = texels + (y * SMALL + x) * 4;
+            if (memcmp(got, want, 4) != 0) {
+                snprintf(why, why_size, "%s: texel (%d,%d), %s the square, holds %02x %02x %02x "
+                         "%02x, expected %02x %02x %02x %02x (0x%02x is a byte no copy wrote)",
+                         whose, x, y, in ? "inside" : "outside", got[0], got[1], got[2], got[3],
+                         want[0], want[1], want[2], want[3], PAGE_PRESET);
+                return;
+            }
+        }
+    }
+}
+
+/// Into the open list: an unsigned and a signed integer texture, each bound as the target and
+/// cleared whole, then cleared again through a mask of two channels; then the way's own target
+/// bound again, with its scissor.
+static void IntegerClearsRecorded(Kit *kit, Extras *extras) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    static const uint32_t first_unsigned[4] = { 1u, 200u, 255u, 7u };
+    static const uint32_t then_unsigned[4] = { 9u, 9u, 9u, 9u };
+    static const int first_signed[4] = { -1, 127, -128, 5 };
+    static const int then_signed[4] = { 3, 3, 3, 3 };
+    const NVNtexture *target[1] = { &extras->textures[0] };
+    n->nvnCommandBufferSetRenderTargets(cmd, 1, target, NULL, NULL, NULL);
+    n->nvnCommandBufferSetScissor(cmd, 0, 0, SMALL, SMALL);
+    n->nvnCommandBufferClearColorui(cmd, 0, first_unsigned, NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferClearColorui(cmd, 0, then_unsigned,
+                                    NVN_CLEAR_COLOR_MASK_R_BIT | NVN_CLEAR_COLOR_MASK_B_BIT);
+    target[0] = &extras->textures[1];
+    n->nvnCommandBufferSetRenderTargets(cmd, 1, target, NULL, NULL, NULL);
+    n->nvnCommandBufferClearColori(cmd, 0, first_signed, NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferClearColori(cmd, 0, then_signed,
+                                   NVN_CLEAR_COLOR_MASK_G_BIT | NVN_CLEAR_COLOR_MASK_A_BIT);
+    target[0] = kit->nvn.target;
+    n->nvnCommandBufferSetRenderTargets(cmd, 1, target, NULL, NULL, NULL);
+    n->nvnCommandBufferSetScissor(cmd, 0, 0, (int)SCENE_SIZE, (int)SCENE_SIZE);
+}
+
+/// A clear of an integer target holds the integers given, unsigned and signed, and a second
+/// clear through a mask changes the channels the mask names and no other.
+static void IntegerClearsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[320] = "";
+    Extras extras;
+    static const NVNformat formats[2] = { NVN_FORMAT_RGBA8UI, NVN_FORMAT_RGBA8I };
+    if (ExtrasUp(&kit, &extras, formats, 2, why, sizeof(why))) {
+        KitBegin(&kit, true);
+        IntegerClearsRecorded(&kit, &extras);
+        KitCell(&kit, 10);
+        ExtrasReadRecorded(&kit, &extras);
+        if (KitEnd(&kit, why, sizeof(why))) {
+            static const uint8_t want_unsigned[4] = { 9, 200, 9, 7 };
+            static const uint8_t want_signed[4] = { 0xff, 3, 0x80, 3 };
+            ExtrasJudge(&extras, 0, "the unsigned target", want_unsigned, want_unsigned, why,
+                        sizeof(why));
+            ExtrasJudge(&extras, 1, "the signed target", want_signed, want_signed, why,
+                        sizeof(why));
+        }
+        ExtrasDown(&kit, &extras);
+    }
+    KitJudge(&kit, name, 1u << 10, why);
+}
+
+/// Into the open list: three textures that are no target, each cleared whole and then in the
+/// square from (4,4) to (12,12) through a mask: a float clear of an RGBA8 texture, and the
+/// unsigned and the signed clears of the two integer ones.
+static void TextureClearsRecorded(Kit *kit, Extras *extras) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    const NVNcopyRegion whole = { 0, 0, 0, SMALL, SMALL, 1 };
+    const NVNcopyRegion square = { 4, 4, 0, 8, 8, 1 };
+    static const float red[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+    static const float cyan[4] = { 0.0f, 1.0f, 1.0f, 0.0f };
+    n->nvnCommandBufferClearTexture(cmd, &extras->textures[0], NULL, &whole, red,
+                                    NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferClearTexture(cmd, &extras->textures[0], NULL, &square, cyan,
+                                    NVN_CLEAR_COLOR_MASK_G_BIT | NVN_CLEAR_COLOR_MASK_B_BIT);
+    static const uint32_t first_unsigned[4] = { 10u, 20u, 30u, 40u };
+    static const uint32_t then_unsigned[4] = { 50u, 60u, 70u, 80u };
+    n->nvnCommandBufferClearTextureui(cmd, &extras->textures[1], NULL, &whole, first_unsigned,
+                                      NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferClearTextureui(cmd, &extras->textures[1], NULL, &square, then_unsigned,
+                                      NVN_CLEAR_COLOR_MASK_R_BIT | NVN_CLEAR_COLOR_MASK_A_BIT);
+    static const int first_signed[4] = { -10, -20, -30, -40 };
+    static const int then_signed[4] = { 1, 2, 3, 4 };
+    n->nvnCommandBufferClearTexturei(cmd, &extras->textures[2], NULL, &whole, first_signed,
+                                     NVN_CLEAR_COLOR_MASK_RGBA);
+    n->nvnCommandBufferClearTexturei(cmd, &extras->textures[2], NULL, &square, then_signed,
+                                     NVN_CLEAR_COLOR_MASK_G_BIT);
+}
+
+/// A clear of a texture that is no target reaches the region given and the channels its mask
+/// names, in the words of the texture's kind, and leaves the list's own target and scissor as
+/// they were: the cell drawn after the clears is in the way's target.
+static void TextureClearsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[320] = "";
+    Extras extras;
+    static const NVNformat formats[EXTRAS] = { NVN_FORMAT_RGBA8, NVN_FORMAT_RGBA8UI,
+                                               NVN_FORMAT_RGBA8I };
+    if (ExtrasUp(&kit, &extras, formats, EXTRAS, why, sizeof(why))) {
+        KitBegin(&kit, true);
+        TextureClearsRecorded(&kit, &extras);
+        KitCell(&kit, 10);
+        ExtrasReadRecorded(&kit, &extras);
+        if (KitEnd(&kit, why, sizeof(why))) {
+            static const uint8_t float_in[4] = { 0xff, 0xff, 0xff, 0xff };
+            static const uint8_t float_out[4] = { 0xff, 0x00, 0x00, 0xff };
+            static const uint8_t unsigned_in[4] = { 50, 20, 30, 80 };
+            static const uint8_t unsigned_out[4] = { 10, 20, 30, 40 };
+            static const uint8_t signed_in[4] = { 0xf6, 2, 0xe2, 0xd8 };
+            static const uint8_t signed_out[4] = { 0xf6, 0xec, 0xe2, 0xd8 };
+            ExtrasJudge(&extras, 0, "the RGBA8 texture", float_in, float_out, why, sizeof(why));
+            ExtrasJudge(&extras, 1, "the unsigned texture", unsigned_in, unsigned_out, why,
+                        sizeof(why));
+            ExtrasJudge(&extras, 2, "the signed texture", signed_in, signed_out, why,
+                        sizeof(why));
+        }
+        ExtrasDown(&kit, &extras);
+    }
+    KitJudge(&kit, name, 1u << 10, why);
+}
+
+#define FILL_AT 0x10u
+#define FILL_BYTES 0x60u
+#define FILL_WORD 0xc0ffee11u
+
+static void FillRecorded(Kit *kit) {
+    kit->nvn.nvn->nvnCommandBufferClearBuffer(kit->nvn.command, kit->page.address + FILL_AT,
+                                              FILL_BYTES, FILL_WORD);
+}
+
+/// A range of a buffer cleared to a word holds that word in each of its words, and the bytes
+/// before it and after it are untouched.
+static void FillCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    KitBegin(&kit, true);
+    FillRecorded(&kit);
+    if (KitEnd(&kit, why, sizeof(why))) {
+        for (uint32_t at = 0; at < PAGE_BYTES && why[0] == '\0'; at += 4u) {
+            uint32_t word;
+            memcpy(&word, (const uint8_t *)kit.page.bytes + at, sizeof(word));
+            const bool in = at >= FILL_AT && at < FILL_AT + FILL_BYTES;
+            const uint32_t want = in ? FILL_WORD : 0x01010101u * PAGE_PRESET;
+            if (word != want) {
+                snprintf(why, sizeof(why), "the word at 0x%x of the page, %s the range of 0x%x "
+                         "bytes at 0x%x that was cleared to 0x%08x, is 0x%08x, expected 0x%08x",
+                         (unsigned)at, in ? "inside" : "outside", (unsigned)FILL_BYTES,
+                         (unsigned)FILL_AT, (unsigned)FILL_WORD, (unsigned)word, (unsigned)want);
+            }
+        }
+    }
+    KitJudge(&kit, name, 0u, why);
+}
+
+/// The strides a command buffer was set for its copies, and what it then says they are.
+static void StridesRecorded(Kit *kit, ptrdiff_t row, ptrdiff_t image, ptrdiff_t got[2]) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferSetCopyRowStride(kit->nvn.command, row);
+    n->nvnCommandBufferSetCopyImageStride(kit->nvn.command, image);
+    got[0] = n->nvnCommandBufferGetCopyRowStride(kit->nvn.command);
+    got[1] = n->nvnCommandBufferGetCopyImageStride(kit->nvn.command);
+}
+
+/// A command buffer gives back the row stride and the image stride it was set for its copies,
+/// and none once they are set back to rows and images packed tight. What an image stride does
+/// to a copy of several layers is not asked: the layer has textures of one.
+static void StridesCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    ptrdiff_t set[2] = { -1, -1 };
+    ptrdiff_t back[2] = { -1, -1 };
+    KitBegin(&kit, true);
+    StridesRecorded(&kit, 288, 0x4800, set);
+    StridesRecorded(&kit, 0, 0, back);
+    KitCell(&kit, 15);
+    if (KitEnd(&kit, why, sizeof(why)) &&
+        (set[0] != 288 || set[1] != 0x4800 || back[0] != 0 || back[1] != 0)) {
+        snprintf(why, sizeof(why), "set to a row stride of 288 and an image stride of 0x4800, "
+                 "the command buffer says %lld and 0x%llx; set back to 0 and 0, it says %lld "
+                 "and %lld",
+                 (long long)set[0], (unsigned long long)set[1], (long long)back[0],
+                 (long long)back[1]);
+    }
+    KitJudge(&kit, name, 1u << 15, why);
+}
+
+static void DiscardsRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferDiscardColor(kit->nvn.command, 0);
+    n->nvnCommandBufferDiscardDepthStencil(kit->nvn.command);
+}
+
+/// A list gives up what its colour and depth targets hold, which leaves them undefined, then
+/// clears both and draws: the cell drawn before the discards is gone with the clear, and the
+/// one after is there under the depth test, as in a list with no discard.
+static void DiscardsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpenWith(&kit, kind, true, name)) {
+        return;
+    }
+    char why[200] = "";
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    KitBegin(&kit, true);
+    DrawPathClearDepth(kit.path, 1.0f);
+    KitCell(&kit, 1);
+    DiscardsRecorded(&kit);
+    DrawPathClear(kit.path, clear);
+    DrawPathClearDepth(kit.path, 1.0f);
+    DrawPathDepth(kit.path, true, true);
+    KitCell(&kit, 2);
+    KitEnd(&kit, why, sizeof(why));
+    KitJudge(&kit, name, 1u << 2, why);
+}
+
 // ---- the cases, by way
 
 void NvnCommandFirst(void) {
@@ -712,6 +1071,18 @@ void NvnCommandFirst(void) {
                                   "and draws on, through the layer's own NVN functions");
     ListsCase(DRAW_PATH_LAYER, "a list called from another and a list copied into it draw "
                                "their cells, through the layer's own NVN functions");
+    IntegerClearsCase(DRAW_PATH_LAYER, "clears of an unsigned and a signed integer target "
+                                       "hold the integers given, through the layer's own NVN "
+                                       "functions");
+    TextureClearsCase(DRAW_PATH_LAYER, "a clear of a texture that is no target reaches its "
+                                       "region and its mask's channels, through the layer's "
+                                       "own NVN functions");
+    FillCase(DRAW_PATH_LAYER, "a range of a buffer cleared to a word holds it, and nothing "
+                              "beside the range, through the layer's own NVN functions");
+    StridesCase(DRAW_PATH_LAYER, "a command buffer gives back the copy strides it was set, "
+                                 "through the layer's own NVN functions");
+    DiscardsCase(DRAW_PATH_LAYER, "targets discarded, then cleared and drawn, hold the clear "
+                                  "and the draw, through the layer's own NVN functions");
 }
 
 void NvnCommandLast(void) {
@@ -735,4 +1106,16 @@ void NvnCommandLast(void) {
                                 "draws on, through the NVN the program looks up");
     ListsCase(DRAW_PATH_NVN, "a list called from another and a list copied into it draw their "
                              "cells, through the NVN the program looks up");
+    IntegerClearsCase(DRAW_PATH_NVN, "clears of an unsigned and a signed integer target hold "
+                                     "the integers given, through the NVN the program looks "
+                                     "up");
+    TextureClearsCase(DRAW_PATH_NVN, "a clear of a texture that is no target reaches its "
+                                     "region and its mask's channels, through the NVN the "
+                                     "program looks up");
+    FillCase(DRAW_PATH_NVN, "a range of a buffer cleared to a word holds it, and nothing "
+                            "beside the range, through the NVN the program looks up");
+    StridesCase(DRAW_PATH_NVN, "a command buffer gives back the copy strides it was set, "
+                               "through the NVN the program looks up");
+    DiscardsCase(DRAW_PATH_NVN, "targets discarded, then cleared and drawn, hold the clear and "
+                                "the draw, through the NVN the program looks up");
 }

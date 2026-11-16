@@ -15,8 +15,8 @@
 /// Three lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
-///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER and NVN_LAYER_PROCS_RECORDING, parts of it
-///   written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING and
+///   NVN_LAYER_PROCS_CLEAR, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, a part of it written apart): the
@@ -283,6 +283,30 @@
     X(void, nvnCommandBufferCopyCommands,                                                         \
       (NVNcommandBuffer * cmd, int count, const NVNcommandHandle *handles))
 
+// Clears past the float clear of a target (integer targets, a region of any texture, a range of
+// a buffer), what a copy keeps of its strides, and targets whose contents are given up.
+#define NVN_LAYER_PROCS_CLEAR(X)                                                                  \
+    X(void, nvnCommandBufferClearColori,                                                          \
+      (NVNcommandBuffer * cmd, int index, const int *rgba, int mask))                             \
+    X(void, nvnCommandBufferClearColorui,                                                         \
+      (NVNcommandBuffer * cmd, int index, const uint32_t *rgba, int mask))                        \
+    X(void, nvnCommandBufferClearTexture,                                                         \
+      (NVNcommandBuffer * cmd, const NVNtexture *texture, const NVNtextureView *view,             \
+       const NVNcopyRegion *region, const float *rgba, int mask))                                 \
+    X(void, nvnCommandBufferClearTexturei,                                                        \
+      (NVNcommandBuffer * cmd, const NVNtexture *texture, const NVNtextureView *view,             \
+       const NVNcopyRegion *region, const int *rgba, int mask))                                   \
+    X(void, nvnCommandBufferClearTextureui,                                                       \
+      (NVNcommandBuffer * cmd, const NVNtexture *texture, const NVNtextureView *view,             \
+       const NVNcopyRegion *region, const uint32_t *rgba, int mask))                              \
+    X(void, nvnCommandBufferClearBuffer,                                                          \
+      (NVNcommandBuffer * cmd, NVNbufferAddress address, size_t size, uint32_t value))            \
+    X(void, nvnCommandBufferSetCopyImageStride, (NVNcommandBuffer * cmd, ptrdiff_t stride))       \
+    X(ptrdiff_t, nvnCommandBufferGetCopyImageStride, (const NVNcommandBuffer *cmd))               \
+    X(ptrdiff_t, nvnCommandBufferGetCopyRowStride, (const NVNcommandBuffer *cmd))                 \
+    X(void, nvnCommandBufferDiscardColor, (NVNcommandBuffer * cmd, int index))                    \
+    X(void, nvnCommandBufferDiscardDepthStencil, (NVNcommandBuffer * cmd))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -373,7 +397,8 @@
     NVN_LAYER_PROCS_BUFFER(X)                                                                     \
     NVN_LAYER_PROCS_WINDOW(X)                                                                     \
     NVN_LAYER_PROCS_COUNTER(X)                                                                    \
-    NVN_LAYER_PROCS_RECORDING(X)
+    NVN_LAYER_PROCS_RECORDING(X)                                                                  \
+    NVN_LAYER_PROCS_CLEAR(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

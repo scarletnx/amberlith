@@ -1217,6 +1217,10 @@ static DkImageFormat FormatOf(NVNformat format) {
         return DkImageFormat_RGBA8_Unorm;
     case NVN_FORMAT_BGRA8:
         return DkImageFormat_BGRA8_Unorm;
+    case NVN_FORMAT_RGBA8UI:
+        return DkImageFormat_RGBA8_Uint;
+    case NVN_FORMAT_RGBA8I:
+        return DkImageFormat_RGBA8_Sint;
     case NVN_FORMAT_DEPTH32F:
         return DkImageFormat_ZF32;
     case NVN_FORMAT_DEPTH24_STENCIL8:
@@ -1283,7 +1287,7 @@ static bool LayoutOf(const LayerTextureBuilder *builder, DkImageLayout *layout, 
     // Any NVN texture can be drawn into, and one of a colour format copied by either engine,
     // so every one here says so: the 2D engine is where a mirrored copy goes.
     maker.flags = DkImageFlags_UsageRender;
-    if (format != DkImageFormat_ZF32 && format != DkImageFormat_Z24S8) {
+    if (format == DkImageFormat_RGBA8_Unorm || format == DkImageFormat_BGRA8_Unorm) {
         maker.flags |= DkImageFlags_Usage2DEngine;
     }
     if ((builder->flags & NVN_TEXTURE_FLAGS_DISPLAY) != 0) {
@@ -1635,6 +1639,12 @@ void Nvnl_nvnCommandBufferSetRenderTargets(NVNcommandBuffer *cmd, int count,
     }
     dkCmdBufBindRenderTargets(record->cmdbuf, bound, (uint32_t)count,
                               depth != NULL ? &depth_target : NULL);
+    LayerTargets *const kept = &record->draw->targets;
+    kept->count = count;
+    for (int i = 0; i < count; ++i) {
+        kept->colors[i] = colors[i];
+    }
+    kept->depth = depth;
 }
 
 void Nvnl_nvnCommandBufferSetViewport(NVNcommandBuffer *cmd, int x, int y, int width,
@@ -1657,6 +1667,8 @@ void Nvnl_nvnCommandBufferSetScissor(NVNcommandBuffer *cmd, int x, int y, int wi
     }
     const DkScissor scissor = { (uint32_t)x, (uint32_t)y, (uint32_t)width, (uint32_t)height };
     dkCmdBufSetScissors(record->cmdbuf, 0, &scissor, 1);
+    record->draw->targets.scissor = scissor;
+    record->draw->targets.scissor_set = true;
 }
 
 void Nvnl_nvnCommandBufferClearColor(NVNcommandBuffer *cmd, int index, const float *rgba,

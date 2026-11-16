@@ -130,12 +130,12 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and seventy six functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and eighty seven functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
   mode, until the first object is made from the device. A mode set after that is refused, saying so.
-- **queues**, **memory pools** (shader code pools among them), **2D textures** of RGBA8, BGRA8, 32-bit float
+- **queues**, **memory pools** (shader code pools among them), **2D textures** of RGBA8, BGRA8, RGBA8UI, RGBA8I, 32-bit float
   depth and 24-bit depth with stencil, of one level or more, **command buffers** and **windows**;
 - **buffers**: a range of a memory pool, with the range's own address and mapping, what the buffer and its
   builder say of it, and the two cache calls, each deko3d's one call over the buffer's part of the pool;
@@ -157,6 +157,12 @@ Two hundred and seventy six functions, each recording the deko3d commands that d
   memory used, since deko3d keeps a list's control words itself; whether it is recording; **the memory
   callback**, which deko3d's own call for more command memory reaches while the program left it on, with its
   getters; and **lists in a list**, called or copied, both deko3d's call of a list where it lies;
+- **the other clears**: of an integer target, signed and unsigned; of a region of a colour texture that is no
+  target, for which the layer binds the texture alone, puts the scissor over the region, clears, and binds back
+  the targets and the scissor the program last set (no view, one layer); and of a range of a buffer, whole words,
+  which the graphics unit copies from a unit of the layer's memory filled with the word;
+- **the copy strides' getters**, the image stride kept for its getter alone, and **the discards** of a colour
+  target and of the depth target, deko3d's own;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing
