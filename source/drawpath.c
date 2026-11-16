@@ -111,6 +111,11 @@ void DrawPathDraw(DrawPath *path, uint32_t first, uint32_t count) {
     path->way->draw(path, first, count);
 }
 
+void DrawPathUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
+                    uint32_t offset, const void *data, uint32_t bytes) {
+    path->way->update(path, buffer, buffer_bytes, offset, data, bytes);
+}
+
 void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
                          uint32_t count, int32_t base_vertex) {
     path->way->draw_indexed(path, type, indices, count, base_vertex);
@@ -348,6 +353,16 @@ static void DkDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indi
     }
 }
 
+static void DkUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
+                     uint32_t offset, const void *data, uint32_t bytes) {
+    if (offset > buffer_bytes || bytes > buffer_bytes - offset) {
+        DrawPathFail(path, "an update of %u bytes at %u of a buffer of %u", (unsigned)bytes,
+                     (unsigned)offset, (unsigned)buffer_bytes);
+        return;
+    }
+    dkCmdBufPushData(Dk(path)->gpu.cmdbuf, buffer->address + offset, data, bytes);
+}
+
 static bool DkEnd(DrawPath *path) {
     Deko3dPath *const dk = Dk(path);
     GpuSubmit(&dk->gpu);
@@ -367,7 +382,7 @@ static const uint8_t *DkRead(DrawPath *path) {
 static const DrawPathWay DEKO3D_WAY = {
     DkClose, DkProgram, DkTexture, DkAlloc,       DkBegin, DkClear, DkClearDepth, DkDepth,
     DkUseProgram, DkVertices, DkUniform, DkBindTexture, DkDraw,  DkEnd,   DkRead,
-    DkDrawIndexed,
+    DkDrawIndexed, DkUpdate,
 };
 
 DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_size) {

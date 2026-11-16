@@ -50,6 +50,16 @@ typedef enum {
     DRAW_STAGE_FRAGMENT = 1,
 } DrawStage;
 
+/// How the NVN ways bind vertex buffers, uniform buffers and textures: one at a time, as the
+/// first scene does; through the calls that take several, with the two hints a game records at
+/// the start of a list (a coverage modulation table and shader scratch memory); or through the
+/// deferred calls, which read their ranges and handles when the list runs.
+typedef enum {
+    DRAW_BINDS_SINGLE = 0,
+    DRAW_BINDS_PLURAL = 1,
+    DRAW_BINDS_DEFERRED = 2,
+} DrawBinds;
+
 /// What a scene asks a way to bring up. Nothing it did not ask for is made.
 typedef struct {
     uint32_t width;
@@ -67,6 +77,8 @@ typedef struct {
     uint32_t texture_bytes;
     /// Bytes of command memory for the longest list the scene records.
     uint32_t command_bytes;
+    /// The calls the NVN ways bind with; the deko3d way has the one kind.
+    DrawBinds binds;
 } DrawPathSpec;
 
 #define DRAW_PATH_PROGRAMS 4u
@@ -141,6 +153,11 @@ void DrawPathUniform(DrawPath *path, DrawStage stage, uint32_t slot, const DrawB
                      uint32_t bytes);
 /// Texture @p slot of @p stage: the handle the shader reads at 0x20 + 8 * slot of its binding 0.
 void DrawPathBindTexture(DrawPath *path, DrawStage stage, uint32_t slot, int texture);
+/// Writes @p bytes of @p data at @p offset of @p buffer, a uniform buffer of @p buffer_bytes,
+/// when the list reaches this point: the draws before it read what was there, the ones after
+/// it read @p data.
+void DrawPathUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
+                    uint32_t offset, const void *data, uint32_t bytes);
 /// A triangle list of @p count vertices from @p first.
 void DrawPathDraw(DrawPath *path, uint32_t first, uint32_t count);
 /// The width of an index: its bytes are 1 << type.

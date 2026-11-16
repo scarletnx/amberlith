@@ -398,6 +398,63 @@ static bool IndexedDraw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
+// ---- a uniform buffer updated inside the list
+
+// The fourth scene: a quad in each quarter, all four coloured by one uniform buffer of the
+// fragment stage, which the list updates before each draw (DrawPathUpdate). The processor
+// leaves the clear colour in the buffer: a list whose updates do not land draws nothing a
+// quarter expects, and one whose updates all land first draws the last colour four times.
+
+static bool UpdatedDraw(DrawPath *path, char *why, size_t why_size) {
+    const int program = DrawPathProgram(path, ShaderData(SHADER_SCENE_VERT),
+                                        ShaderSize(SHADER_SCENE_VERT),
+                                        ShaderData(SHADER_SCENE_FRAG),
+                                        ShaderSize(SHADER_SCENE_FRAG));
+    DrawBuffer vertices, move, paint;
+    const bool ok = program >= 0 &&
+                    DrawPathAlloc(path, INDEXED_QUADS * 6u * (uint32_t)sizeof(GpuVertex),
+                                  &vertices) &&
+                    DrawPathAlloc(path, (uint32_t)sizeof(Move), &move) &&
+                    DrawPathAlloc(path, (uint32_t)sizeof(Paint), &paint);
+    if (!ok) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    GpuVertex quads[INDEXED_QUADS * 6u];
+    static const uint8_t white[4] = { 0xff, 0xff, 0xff, 0xff };
+    for (uint32_t i = 0; i < INDEXED_QUADS; ++i) {
+        const uint32_t x0 = (i % 2u) * SCENE_QUARTER, y0 = (i / 2u) * SCENE_QUARTER;
+        Quad(quads + i * 6u, x0, y0, x0 + SCENE_QUARTER, y0 + SCENE_QUARTER, 0.5f, white);
+    }
+    memcpy(vertices.bytes, quads, sizeof(quads));
+    const Move still = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+    memcpy(move.bytes, &still, sizeof(still));
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    const Paint before = { { clear[0], clear[1], clear[2], clear[3] }, { PAINT_BUFFER, 0, 0, 0 } };
+    memcpy(paint.bytes, &before, sizeof(before));
+
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathUseProgram(path, program);
+    DrawPathVertices(path, &vertices, sizeof(quads));
+    DrawPathUniform(path, DRAW_STAGE_VERTEX, 0, &move, sizeof(Move));
+    DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
+    for (uint32_t i = 0; i < INDEXED_QUADS; ++i) {
+        const uint8_t *const colour = INDEXED_COLOURS[i];
+        const Paint now = { { (float)colour[0] / 255.0f, (float)colour[1] / 255.0f,
+                              (float)colour[2] / 255.0f, (float)colour[3] / 255.0f },
+                            { PAINT_BUFFER, 0, 0, 0 } };
+        DrawPathUpdate(path, &paint, sizeof(Paint), 0, &now, sizeof(now));
+        DrawPathDraw(path, i * 6u, 6);
+    }
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
 /// A scene the suite draws down each way: what it asks of a way, how it draws, and what each of
 /// its pixels has to hold.
 typedef struct {
@@ -407,14 +464,23 @@ typedef struct {
     bool (*draw)(DrawPath *path, char *why, size_t why_size);
     void (*expected)(uint32_t x, uint32_t y, uint8_t out[4]);
     const char *(*looks_like)(const uint8_t pixel[4]);
+    DrawBinds binds;
 } Scene;
 
 static const Scene FIVE_DRAWS = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
-                                  Draw, SceneExpected, SceneLooksLike };
+                                  Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_SINGLE };
 static const Scene WRAPPED = { false, WRAP_QUADS,
                                WRAP_QUADS * WRAP_TEXTURE_SIZE * WRAP_TEXTURE_SIZE * 4u, WrapDraw,
-                               WrapExpected, WrapLooksLike };
-static const Scene INDEXED = { false, 0, 0, IndexedDraw, IndexedExpected, IndexedLooksLike };
+                               WrapExpected, WrapLooksLike, DRAW_BINDS_SINGLE };
+static const Scene INDEXED = { false, 0, 0, IndexedDraw, IndexedExpected, IndexedLooksLike,
+                               DRAW_BINDS_SINGLE };
+// The first scene again, the NVN ways binding its buffers and textures through other calls.
+static const Scene FIVE_PLURAL = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
+                                   Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_PLURAL };
+static const Scene FIVE_DEFERRED = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
+                                     Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_DEFERRED };
+static const Scene UPDATED = { false, 0, 0, UpdatedDraw, IndexedExpected, IndexedLooksLike,
+                               DRAW_BINDS_SINGLE };
 
 /// One way's case: @p scene drawn down @p kind and every pixel judged.
 static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
@@ -428,8 +494,10 @@ static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
     spec.depth = scene->depth;
     spec.programs = 1;
     spec.textures = scene->textures;
-    spec.data_bytes = 0x4000u;
+    // A page more where the way lends one as shader scratch memory.
+    spec.data_bytes = scene->binds == DRAW_BINDS_PLURAL ? 0x6000u : 0x4000u;
     spec.texture_bytes = scene->texture_bytes;
+    spec.binds = scene->binds;
     spec.command_bytes = 0x10000u;
     char why[320] = "";
     DrawPath *const path = DrawPathOpen(kind, &spec, why, sizeof(why));
@@ -503,6 +571,18 @@ void NvnSceneFirst(void) {
     SceneCase(DRAW_PATH_LAYER, &INDEXED,
               "the same four indexed quads through the layer's own NVN functions are each in "
               "its quarter");
+    SceneCase(DRAW_PATH_LAYER, &FIVE_PLURAL,
+              "the scene of five draws bound through the layer's own calls that take several "
+              "holds what the processor works out");
+    SceneCase(DRAW_PATH_LAYER, &FIVE_DEFERRED,
+              "the scene of five draws bound through the layer's own deferred calls holds "
+              "what the processor works out");
+    SceneCase(DRAW_PATH_DEKO3D, &UPDATED,
+              "four quads drawn through deko3d from one uniform buffer updated before each "
+              "are each its own colour");
+    SceneCase(DRAW_PATH_LAYER, &UPDATED,
+              "the same four quads of an updated uniform buffer through the layer's own NVN "
+              "functions are each its own colour");
 }
 
 void NvnSceneLast(void) {
@@ -515,4 +595,13 @@ void NvnSceneLast(void) {
     SceneCase(DRAW_PATH_NVN, &INDEXED,
               "the same four indexed quads through the NVN the program looks up are each in "
               "its quarter");
+    SceneCase(DRAW_PATH_NVN, &FIVE_PLURAL,
+              "the scene of five draws bound through the looked up calls that take several "
+              "holds what the processor works out");
+    SceneCase(DRAW_PATH_NVN, &FIVE_DEFERRED,
+              "the scene of five draws bound through the looked up deferred calls holds what "
+              "the processor works out");
+    SceneCase(DRAW_PATH_NVN, &UPDATED,
+              "the same four quads of an updated uniform buffer through the NVN the program "
+              "looks up are each its own colour");
 }

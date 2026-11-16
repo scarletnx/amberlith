@@ -1793,6 +1793,92 @@ void Nvnl_nvnCommandBufferBindTexture(NVNcommandBuffer *cmd, NVNshaderStage stag
     draw->dirty |= (uint8_t)(1u << stage);
 }
 
+// The binds of several at once are the single binds, one after another. A deferred bind reads
+// its ranges or handles when the list runs, on a driver; the layer reads them as it records,
+// which is the same to a program that leaves them alone until the list has run.
+
+void Nvnl_nvnCommandBufferBindVertexBuffers(NVNcommandBuffer *cmd, int first, int count,
+                                            const NVNbufferRange *ranges) {
+    for (int i = 0; i < count; ++i) {
+        Nvnl_nvnCommandBufferBindVertexBuffer(cmd, first + i, ranges[i].address, ranges[i].size);
+    }
+}
+
+void Nvnl_nvnCommandBufferBindUniformBuffers(NVNcommandBuffer *cmd, NVNshaderStage stage,
+                                             int first, int count,
+                                             const NVNbufferRange *ranges) {
+    for (int i = 0; i < count; ++i) {
+        Nvnl_nvnCommandBufferBindUniformBuffer(cmd, stage, first + i, ranges[i].address,
+                                               ranges[i].size);
+    }
+}
+
+void Nvnl_nvnCommandBufferBindUniformBuffersDeferred(NVNcommandBuffer *cmd, NVNshaderStage stage,
+                                                     int first, int count,
+                                                     const NVNbufferRange *ranges) {
+    Nvnl_nvnCommandBufferBindUniformBuffers(cmd, stage, first, count, ranges);
+}
+
+void Nvnl_nvnCommandBufferBindTextures(NVNcommandBuffer *cmd, NVNshaderStage stage, int first,
+                                       int count, const NVNtextureHandle *handles) {
+    for (int i = 0; i < count; ++i) {
+        Nvnl_nvnCommandBufferBindTexture(cmd, stage, first + i, handles[i]);
+    }
+}
+
+void Nvnl_nvnCommandBufferBindTexturesDeferred(NVNcommandBuffer *cmd, NVNshaderStage stage,
+                                               int first, int count,
+                                               const NVNtextureHandle *handles) {
+    Nvnl_nvnCommandBufferBindTextures(cmd, stage, first, count, handles);
+}
+
+void Nvnl_nvnCommandBufferUpdateUniformBuffer(NVNcommandBuffer *cmd, NVNbufferAddress buffer,
+                                              size_t buffer_size, ptrdiff_t offset, size_t size,
+                                              const void *data) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferUpdateUniformBuffer");
+    if (record == NULL) {
+        return;
+    }
+    if (offset < 0 || (size_t)offset > buffer_size || size > buffer_size - (size_t)offset ||
+        size > DK_UNIFORM_BUF_MAX_SIZE || data == NULL) {
+        LayerComplain("nvnCommandBufferUpdateUniformBuffer: 0x%zx bytes at offset %lld of a "
+                      "buffer of 0x%zx",
+                      size, (long long)offset, buffer_size);
+        return;
+    }
+    // The bytes go into the list, and the graphics unit writes them when it reaches them.
+    dkCmdBufPushData(record->cmdbuf, buffer + (uint64_t)offset, data, (uint32_t)size);
+}
+
+void Nvnl_nvnCommandBufferBindCoverageModulationTable(NVNcommandBuffer *cmd,
+                                                      const float *entries) {
+    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindCoverageModulationTable");
+    if (record == NULL) {
+        return;
+    }
+    if (entries == NULL) {
+        LayerComplain("nvnCommandBufferBindCoverageModulationTable: no table, which takes the "
+                      "program's table away in NVN, and deko3d has a call to set one only");
+        return;
+    }
+    dkCmdBufSetCoverageModulationTable(record->cmdbuf, entries);
+}
+
+void Nvnl_nvnCommandBufferSetShaderScratchMemory(NVNcommandBuffer *cmd, const NVNmemoryPool *pool,
+                                                 ptrdiff_t offset, size_t size) {
+    // Memory a driver lends its shaders: deko3d asks for none, so a range that is in its pool is
+    // taken and nothing recorded.
+    const LayerPool *const from = PoolOf(pool, "nvnCommandBufferSetShaderScratchMemory");
+    if (CmdOf(cmd, "nvnCommandBufferSetShaderScratchMemory") == NULL || from == NULL) {
+        return;
+    }
+    if (offset < 0 || (size_t)offset > from->size || size > from->size - (size_t)offset) {
+        LayerComplain("nvnCommandBufferSetShaderScratchMemory: 0x%zx bytes at offset %lld, of a "
+                      "pool of 0x%zx",
+                      size, (long long)offset, from->size);
+    }
+}
+
 // ---- the clears and the draws
 
 void Nvnl_nvnCommandBufferClearDepthStencil(NVNcommandBuffer *cmd, float depth,

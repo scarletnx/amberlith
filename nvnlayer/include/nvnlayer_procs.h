@@ -736,6 +736,27 @@
     X(void, nvnCommandBufferDrawElementsBaseVertex,                                               \
       (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type, int count,           \
        NVNbufferAddress indices, int base_vertex))                                                \
+    X(void, nvnCommandBufferBindVertexBuffers,                                                    \
+      (NVNcommandBuffer *cmd, int first, int count, const NVNbufferRange *ranges))                \
+    X(void, nvnCommandBufferBindUniformBuffers,                                                   \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNbufferRange *ranges))                                                             \
+    X(void, nvnCommandBufferBindUniformBuffersDeferred,                                           \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNbufferRange *ranges))                                                             \
+    X(void, nvnCommandBufferBindTextures,                                                         \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNtextureHandle *handles))                                                          \
+    X(void, nvnCommandBufferBindTexturesDeferred,                                                 \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNtextureHandle *handles))                                                          \
+    X(void, nvnCommandBufferUpdateUniformBuffer,                                                  \
+      (NVNcommandBuffer *cmd, NVNbufferAddress buffer, size_t buffer_size, ptrdiff_t offset,      \
+       size_t size, const void *data))                                                            \
+    X(void, nvnCommandBufferBindCoverageModulationTable,                                          \
+      (NVNcommandBuffer *cmd, const float *entries))                                              \
+    X(void, nvnCommandBufferSetShaderScratchMemory,                                               \
+      (NVNcommandBuffer *cmd, const NVNmemoryPool *pool, ptrdiff_t offset, size_t size))          \
     X(void, nvnCommandBufferClearDepthStencil,                                                    \
       (NVNcommandBuffer *cmd, float depth, NVNboolean depth_mask, int stencil, int stencil_mask))
 

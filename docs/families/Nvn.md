@@ -8,6 +8,8 @@
 * [The scene, down three ways](#the-scene-down-three-ways)
   * [A texture past its edges](#a-texture-past-its-edges)
   * [Indexed draws](#indexed-draws)
+  * [The binds that take several, and the deferred ones](#the-binds-that-take-several-and-the-deferred-ones)
+  * [A uniform buffer updated inside the list](#a-uniform-buffer-updated-inside-the-list)
 * [The command buffer, down two ways](#the-command-buffer-down-two-ways)
   * [Counters and the render enable](#counters-and-the-render-enable)
   * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
@@ -19,7 +21,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and six cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and thirteen cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -63,7 +65,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
-  and twenty one.
+  and twenty nine.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -288,6 +290,32 @@ The cases are **four quads drawn through deko3d by indices of one, two and four 
 in its quarter**, **the same four indexed quads through the layer's own NVN functions are each in its quarter**
 and **the same four indexed quads through the NVN the program looks up are each in its quarter** (exact). A
 failing case says whose colour the first wrong pixel has.
+
+### The binds that take several, and the deferred ones
+
+The first scene again, twice, down the two NVN ways, with every vertex buffer, uniform buffer and texture bound
+through other calls (`DrawPathSpec.binds`); the pixels are the first scene's.
+
+- **the scene of five draws bound through the layer's own calls that take several holds what the processor works
+  out**, and **... through the looked up calls that take several ...** (exact): `nvnCommandBufferBindVertexBuffers`,
+  `BindUniformBuffers` and `BindTextures`, and at the start of the list the two hints a game records there,
+  `nvnCommandBufferBindCoverageModulationTable` (a table nothing reads, no draw modulating coverage) and
+  `nvnCommandBufferSetShaderScratchMemory` (a page of the data pool nothing else is in).
+- **the scene of five draws bound through the layer's own deferred calls holds what the processor works out**, and
+  **... through the looked up deferred calls ...** (exact): `nvnCommandBufferBindUniformBuffersDeferred` and
+  `BindTexturesDeferred`, which read their ranges and handles when the list runs. Each bind points at a range of
+  its own that stays as it is until the list has run, so a runtime that reads late and one that reads at once
+  draw the same; a runtime that read every bind from one place would draw the last range for all.
+
+### A uniform buffer updated inside the list
+
+A fourth scene the three ways: a quad in each quarter, all coloured by one uniform buffer of the fragment stage,
+which the list updates before each draw (`DrawPathUpdate`, `nvnCommandBufferUpdateUniformBuffer`). The processor
+leaves the clear colour in the buffer. The cases are **four quads drawn through deko3d from one uniform buffer
+updated before each are each its own colour**, **the same four quads of an updated uniform buffer through the
+layer's own NVN functions are each its own colour** and **... through the NVN the program looks up ...** (exact):
+updates that do not land leave the clear colour, and updates that all land before the first draw make the four
+quads the last colour.
 
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the
