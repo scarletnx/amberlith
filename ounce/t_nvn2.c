@@ -56,6 +56,30 @@ void RunNvn2(void);
 #define HMMA_OUT_BYTE 0x400u
 #define HMMA_BYTES (HMMA_OUT_BYTE + HMMA_LANES * 32u)
 
+// The numbers the graphics unit reads for the indirect dispatch and the indirect mesh draws, in
+// the data pool past the matrix case's buffer.
+#define INDIRECT_BYTE 0x3000u
+
+/// How the scale case's dispatch binds its storage buffer and gives its numbers.
+typedef enum {
+    DISPATCH_PLAIN,
+    DISPATCH_BUFFERS,          ///< nvnCommandBufferBindStorageBuffers
+    DISPATCH_BUFFERS_DEFERRED, ///< nvnCommandBufferBindStorageBuffersDeferred
+    DISPATCH_INDIRECT,         ///< nvnCommandBufferDispatchComputeIndirect
+} DispatchKind;
+
+/// Which of the mesh draws draws the Mandelbrot's rows.
+typedef enum {
+    MESH_TASKS,
+    MESH_TASKS_3D,
+    MESH_INDIRECT,
+    MESH_3D_INDIRECT,
+    MESH_MULTI,
+    MESH_MULTI_3D,
+    MESH_MULTI_COUNT,
+    MESH_MULTI_3D_COUNT,
+} MeshKind;
+
 typedef enum {
     PROGRAM_SCALE,
     PROGRAM_MANDEL_COUNT,
@@ -321,7 +345,7 @@ static uint32_t ScaleInput(uint32_t index) {
 
 /// The dispatch: the buffer filled, the program bound with the buffer as its storage buffer 0,
 /// two blocks dispatched, the queue finished. The buffer's memory, for the case to read.
-static const uint8_t *Dispatch(char *why, size_t why_size) {
+static const uint8_t *Dispatch(DispatchKind kind, char *why, size_t why_size) {
     uint8_t *const memory = n2.nvn.nvnMemoryPoolMap(&n2.data_pool.pool);
     if (memory == NULL) {
         snprintf(why, why_size, "nvnMemoryPoolMap gave no address for the buffer's pool: %s",
@@ -341,9 +365,28 @@ static const uint8_t *Dispatch(char *why, size_t why_size) {
     n2.nvn.nvnCommandBufferBindProgram(&n2.command, &n2.programs[PROGRAM_SCALE],
                                        NVN_SHADER_STAGE_COMPUTE_BIT);
     const NVNbufferAddress buffer = n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool);
-    n2.nvn.nvnCommandBufferBindStorageBuffer(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, buffer,
-                                             SCALE_OUT_BYTE + 4u * SCALE_WORDS);
-    n2.nvn.nvnCommandBufferDispatchCompute(&n2.command, (int)SCALE_BLOCKS, 1, 1);
+    // A deferred bind's range is read when the list runs: it stays where it is.
+    static NVNbufferRange range;
+    range.address = buffer;
+    range.size = SCALE_OUT_BYTE + 4u * SCALE_WORDS;
+    if (kind == DISPATCH_BUFFERS) {
+        n2.nvn.nvnCommandBufferBindStorageBuffers(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, 1,
+                                                  &range);
+    } else if (kind == DISPATCH_BUFFERS_DEFERRED) {
+        n2.nvn.nvnCommandBufferBindStorageBuffersDeferred(&n2.command, NVN_SHADER_STAGE_COMPUTE,
+                                                          0, 1, &range);
+    } else {
+        n2.nvn.nvnCommandBufferBindStorageBuffer(&n2.command, NVN_SHADER_STAGE_COMPUTE, 0, buffer,
+                                                 range.size);
+    }
+    if (kind == DISPATCH_INDIRECT) {
+        // The three counts of blocks, where the graphics unit reads them.
+        const uint32_t blocks[3] = { SCALE_BLOCKS, 1, 1 };
+        memcpy(memory + INDIRECT_BYTE, blocks, sizeof(blocks));
+        n2.nvn.nvnCommandBufferDispatchComputeIndirect(&n2.command, buffer + INDIRECT_BYTE);
+    } else {
+        n2.nvn.nvnCommandBufferDispatchCompute(&n2.command, (int)SCALE_BLOCKS, 1, 1);
+    }
     return Finish("the dispatch", why, why_size) ? memory : NULL;
 }
 
@@ -421,8 +464,30 @@ static const uint8_t *MandelDispatch(char *why, size_t why_size) {
 /// The Mandelbrot's picture: the target and its depth cleared, the mesh and fragment program
 /// bound with the counts as the mesh stage's storage buffer 0, a workgroup a row drawn with
 /// the depth test on, and the target copied to memory the processor reads.
-static const uint8_t *MandelDraw(char *why, size_t why_size) {
+static const uint8_t *MandelDraw(MeshKind kind, char *why, size_t why_size) {
     const NvnProcs *const n = &n2.nvn;
+    // The numbers of the indirect draws, written before the list is recorded: a row's workgroups
+    // as a count and a first workgroup, or as three counts for the draws of a grid; the rows
+    // whole, and in two halves for the draws of several; and how many of those the graphics
+    // unit is to draw.
+    uint8_t *const numbers = n->nvnMemoryPoolMap(&n2.data_pool.pool);
+    if (numbers == NULL) {
+        snprintf(why, why_size, "nvnMemoryPoolMap gave no address for the buffer's pool: %s",
+                 Why("NULL"));
+        return NULL;
+    }
+    const NVNbufferAddress indirect =
+        n->nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + INDIRECT_BYTE;
+    const uint32_t whole[2] = { MANDEL_ROWS, 0 };
+    const uint32_t grid[3] = { MANDEL_ROWS, 1, 1 };
+    const uint32_t halves[4] = { MANDEL_ROWS / 2u, 0, MANDEL_ROWS - MANDEL_ROWS / 2u,
+                                 MANDEL_ROWS / 2u };
+    const uint32_t two = 2, one = 1;
+    memcpy(numbers + INDIRECT_BYTE + 0x100, whole, sizeof(whole));
+    memcpy(numbers + INDIRECT_BYTE + 0x110, grid, sizeof(grid));
+    memcpy(numbers + INDIRECT_BYTE + 0x120, halves, sizeof(halves));
+    memcpy(numbers + INDIRECT_BYTE + 0x140, &two, sizeof(two));
+    memcpy(numbers + INDIRECT_BYTE + 0x144, &one, sizeof(one));
     static const float clear[4] = { 0.0f, 0.0f, 1.0f, 1.0f };   // MANDEL_CLEAR
     n->nvnCommandBufferBeginRecording(&n2.command);
     n->nvnCommandBufferBarrier(&n2.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
@@ -463,7 +528,34 @@ static const uint8_t *MandelDraw(char *why, size_t why_size) {
     n->nvnCommandBufferBindStorageBuffer(
         &n2.command, NVN_SHADER_STAGE_MESH, 0,
         n->nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + MANDEL_BYTE, 4u * MANDEL_WORDS);
-    n->nvnCommandBufferDrawMeshTasks(&n2.command, 0, (int)MANDEL_ROWS);
+    switch (kind) {
+    case MESH_TASKS_3D:
+        n->nvnCommandBufferDrawMeshTasks3D(&n2.command, (int)MANDEL_ROWS, 1, 1);
+        break;
+    case MESH_INDIRECT:
+        n->nvnCommandBufferDrawMeshTasksIndirect(&n2.command, indirect + 0x100);
+        break;
+    case MESH_3D_INDIRECT:
+        n->nvnCommandBufferDrawMeshTasks3DIndirect(&n2.command, indirect + 0x110);
+        break;
+    case MESH_MULTI:
+        n->nvnCommandBufferMultiDrawMeshTasksIndirect(&n2.command, indirect + 0x120, 2, 8);
+        break;
+    case MESH_MULTI_3D:
+        n->nvnCommandBufferMultiDrawMeshTasks3DIndirect(&n2.command, indirect + 0x110, 1, 12);
+        break;
+    case MESH_MULTI_COUNT:
+        n->nvnCommandBufferMultiDrawMeshTasksIndirectCount(&n2.command, indirect + 0x120,
+                                                           indirect + 0x140, 2, 8);
+        break;
+    case MESH_MULTI_3D_COUNT:
+        n->nvnCommandBufferMultiDrawMeshTasks3DIndirectCount(&n2.command, indirect + 0x110,
+                                                             indirect + 0x144, 1, 12);
+        break;
+    default:
+        n->nvnCommandBufferDrawMeshTasks(&n2.command, 0, (int)MANDEL_ROWS);
+        break;
+    }
     if (!Finish("the draw", why, why_size)) {
         return NULL;
     }
@@ -638,15 +730,27 @@ static void MandelCountCase(const char *name) {
                (unsigned)MandelCount(first % MANDEL_COLUMNS, first / MANDEL_COLUMNS));
 }
 
+/// The scale case again with its dispatch made another way, its words read as the graphics
+/// unit copies them out.
+static void ScaleAgain(const char *name, DispatchKind kind) {
+    char why[256] = "";
+    NvnLayerClearError();
+    const uint8_t *const memory = Dispatch(kind, why, sizeof(why));
+    const NVNbufferAddress out =
+        n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + SCALE_OUT_BYTE;
+    ScaleJudge(name, memory != NULL ? CopyOut(out, 4u * SCALE_WORDS, why, sizeof(why)) : NULL,
+               why);
+}
+
 /// The picture case: every pixel against the bars the processor works out.
-static void MandelPictureCase(const char *name) {
+static void MandelPictureCase(const char *name, MeshKind kind) {
     char why[256] = "";
     NvnLayerClearError();
     // A launch that goes on after the count case dispatches for this one.
     if (!n2.counted) {
         (void)MandelDispatch(why, sizeof(why));
     }
-    const uint8_t *const pixels = n2.counted ? MandelDraw(why, sizeof(why)) : NULL;
+    const uint8_t *const pixels = n2.counted ? MandelDraw(kind, why, sizeof(why)) : NULL;
     if (pixels == NULL) {
         ReportCase(SUITE, name, CHECK_NONE, false, why);
         return;
@@ -701,8 +805,31 @@ void RunNvn2(void) {
                                               "test keeps the nearest";
     static const char *const HMMA = "one warp's matrix instruction multiplies a 16 by 16 matrix "
                                     "of halves by a 16 by 8 one into floats";
-    const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, MANDEL_PROGRAMS,
-                                  MANDEL_COUNT, MANDEL_PICTURE, HMMA };
+    static const char *const SCALE_BUFFERS = "the same dispatch, its storage buffer bound by "
+                                             "the call that takes several";
+    static const char *const SCALE_DEFERRED = "the same dispatch, its storage buffer bound by "
+                                              "the deferred call";
+    static const char *const SCALE_INDIRECT = "the same dispatch, its counts of blocks read "
+                                              "by the graphics unit from a buffer";
+    static const char *const PICTURE_3D = "the same picture by a mesh draw of a grid of "
+                                          "workgroups";
+    static const char *const PICTURE_INDIRECT = "the same picture by a mesh draw that reads "
+                                                "its numbers";
+    static const char *const PICTURE_3D_INDIRECT = "the same picture by a mesh draw of a grid "
+                                                   "that reads its numbers";
+    static const char *const PICTURE_MULTI = "the same picture by two mesh draws read from "
+                                             "one buffer, a half of the rows each";
+    static const char *const PICTURE_MULTI_3D = "the same picture by the mesh draws of a grid "
+                                                "read from one buffer";
+    static const char *const PICTURE_MULTI_COUNT = "the same picture by as many mesh draws as "
+                                                   "a count in a buffer says, a half each";
+    static const char *const PICTURE_MULTI_3D_COUNT = "the same picture by as many mesh draws "
+                                                      "of a grid as a count in a buffer says";
+    const char *const AFTER[] = { PROGRAM,      SCALE,          SCALE_COPIED, SCALE_BUFFERS,
+                                  SCALE_DEFERRED, SCALE_INDIRECT, MANDEL_PROGRAMS,
+                                  MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
+                                  PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
+                                  PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA };
 
     memset(&n2, 0, sizeof(n2));
     NvnLayerClearError();
@@ -733,24 +860,40 @@ void RunNvn2(void) {
         ReportSkip(SUITE, SCALE, REPORT_REASON_DEPENDS, "the compute program made no program");
         ReportSkip(SUITE, SCALE_COPIED, REPORT_REASON_DEPENDS,
                    "the compute program made no program");
+        ReportSkip(SUITE, SCALE_BUFFERS, REPORT_REASON_DEPENDS,
+                   "the compute program made no program");
+        ReportSkip(SUITE, SCALE_DEFERRED, REPORT_REASON_DEPENDS,
+                   "the compute program made no program");
+        ReportSkip(SUITE, SCALE_INDIRECT, REPORT_REASON_DEPENDS,
+                   "the compute program made no program");
     } else {
         const uint8_t *memory = NULL;
         if (ReportStart(SUITE, SCALE)) {
             NvnLayerClearError();
-            memory = Dispatch(why, sizeof(why));
+            memory = Dispatch(DISPATCH_PLAIN, why, sizeof(why));
             ScaleJudge(SCALE, memory != NULL ? memory + SCALE_OUT_BYTE : NULL, why);
         }
         if (ReportStart(SUITE, SCALE_COPIED)) {
             NvnLayerClearError();
             // A launch that goes on after the case above dispatches for this one.
             if (memory == NULL) {
-                memory = Dispatch(why, sizeof(why));
+                memory = Dispatch(DISPATCH_PLAIN, why, sizeof(why));
             }
             const NVNbufferAddress out =
                 n2.nvn.nvnMemoryPoolGetBufferAddress(&n2.data_pool.pool) + SCALE_OUT_BYTE;
             ScaleJudge(SCALE_COPIED,
                        memory != NULL ? CopyOut(out, 4u * SCALE_WORDS, why, sizeof(why)) : NULL,
                        why);
+        }
+        // The other ways to the same dispatch, each read as the graphics unit copies it.
+        if (ReportStart(SUITE, SCALE_BUFFERS)) {
+            ScaleAgain(SCALE_BUFFERS, DISPATCH_BUFFERS);
+        }
+        if (ReportStart(SUITE, SCALE_DEFERRED)) {
+            ScaleAgain(SCALE_DEFERRED, DISPATCH_BUFFERS_DEFERRED);
+        }
+        if (ReportStart(SUITE, SCALE_INDIRECT)) {
+            ScaleAgain(SCALE_INDIRECT, DISPATCH_INDIRECT);
         }
     }
 
@@ -771,6 +914,14 @@ void RunNvn2(void) {
                    "the Mandelbrot's programs made no programs");
         ReportSkip(SUITE, MANDEL_PICTURE, REPORT_REASON_DEPENDS,
                    "the Mandelbrot's programs made no programs");
+        const char *const pictures[] = { PICTURE_3D,          PICTURE_INDIRECT,
+                                         PICTURE_3D_INDIRECT, PICTURE_MULTI,
+                                         PICTURE_MULTI_3D,    PICTURE_MULTI_COUNT,
+                                         PICTURE_MULTI_3D_COUNT };
+        for (size_t i = 0; i < sizeof(pictures) / sizeof(pictures[0]); ++i) {
+            ReportSkip(SUITE, pictures[i], REPORT_REASON_DEPENDS,
+                       "the Mandelbrot's programs made no programs");
+        }
     } else {
         // The picture is drawn from the counts the dispatch left, whatever the processor read
         // of them: the two cases fail apart.
@@ -778,7 +929,28 @@ void RunNvn2(void) {
             MandelCountCase(MANDEL_COUNT);
         }
         if (ReportStart(SUITE, MANDEL_PICTURE)) {
-            MandelPictureCase(MANDEL_PICTURE);
+            MandelPictureCase(MANDEL_PICTURE, MESH_TASKS);
+        }
+        if (ReportStart(SUITE, PICTURE_3D)) {
+            MandelPictureCase(PICTURE_3D, MESH_TASKS_3D);
+        }
+        if (ReportStart(SUITE, PICTURE_INDIRECT)) {
+            MandelPictureCase(PICTURE_INDIRECT, MESH_INDIRECT);
+        }
+        if (ReportStart(SUITE, PICTURE_3D_INDIRECT)) {
+            MandelPictureCase(PICTURE_3D_INDIRECT, MESH_3D_INDIRECT);
+        }
+        if (ReportStart(SUITE, PICTURE_MULTI)) {
+            MandelPictureCase(PICTURE_MULTI, MESH_MULTI);
+        }
+        if (ReportStart(SUITE, PICTURE_MULTI_3D)) {
+            MandelPictureCase(PICTURE_MULTI_3D, MESH_MULTI_3D);
+        }
+        if (ReportStart(SUITE, PICTURE_MULTI_COUNT)) {
+            MandelPictureCase(PICTURE_MULTI_COUNT, MESH_MULTI_COUNT);
+        }
+        if (ReportStart(SUITE, PICTURE_MULTI_3D_COUNT)) {
+            MandelPictureCase(PICTURE_MULTI_3D_COUNT, MESH_MULTI_3D_COUNT);
         }
     }
 

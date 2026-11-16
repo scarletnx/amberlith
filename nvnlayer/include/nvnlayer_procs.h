@@ -891,6 +891,29 @@
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
     X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
+    X(void, nvnCommandBufferBindStorageBuffers,                                                   \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNbufferRange *ranges))                                                             \
+    X(void, nvnCommandBufferBindStorageBuffersDeferred,                                           \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNbufferRange *ranges))                                                             \
+    X(void, nvnCommandBufferDispatchComputeIndirect,                                              \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect))                                         \
+    X(void, nvnCommandBufferDrawMeshTasks3D, (NVNcommandBuffer *cmd, int x, int y, int z))        \
+    X(void, nvnCommandBufferDrawMeshTasksIndirect,                                                \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect))                                         \
+    X(void, nvnCommandBufferDrawMeshTasks3DIndirect,                                              \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect))                                         \
+    X(void, nvnCommandBufferMultiDrawMeshTasksIndirect,                                           \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect, int count, ptrdiff_t stride))            \
+    X(void, nvnCommandBufferMultiDrawMeshTasks3DIndirect,                                         \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect, int count, ptrdiff_t stride))            \
+    X(void, nvnCommandBufferMultiDrawMeshTasksIndirectCount,                                      \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect, NVNbufferAddress count, int most,        \
+       ptrdiff_t stride))                                                                         \
+    X(void, nvnCommandBufferMultiDrawMeshTasks3DIndirectCount,                                    \
+      (NVNcommandBuffer *cmd, NVNbufferAddress indirect, NVNbufferAddress count, int most,        \
+       ptrdiff_t stride))                                                                         \
     NVN_LAYER_PROCS_WINDOW_231(X)                                                                 \
     NVN_LAYER_PROCS_DEBUG_231(X)                                                                  \
     NVN_LAYER_PROCS_PROGRAM_231(X)
