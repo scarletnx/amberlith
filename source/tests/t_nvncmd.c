@@ -753,13 +753,15 @@ static void ListsCase(DrawPathKind kind, const char *name) {
 /// The side of a case's own textures, and the bytes of one's texels.
 #define SMALL 16
 #define SMALL_BYTES (SMALL * SMALL * 4)
-#define EXTRAS 5
+#define EXTRAS 3
+/// The most textures a case's extras hold: the resolves' five.
+#define EXTRAS_MOST 5
 
 /// Textures of a case's own, in a pool of their own, and where their texels are read back:
 /// taken down before the way that made them.
 typedef struct {
     _Alignas(8) NVNmemoryPool pool;
-    _Alignas(8) NVNtexture textures[EXTRAS];
+    _Alignas(8) NVNtexture textures[EXTRAS_MOST];
     void *storage;
     bool pool_up;
     int made;
