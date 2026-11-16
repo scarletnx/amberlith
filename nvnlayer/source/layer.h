@@ -27,6 +27,10 @@ void NvnLayerDeviceInfo(const NVNdevice *device, int item, int *value);
 /// usually its consequence, and the first one is the one worth a line in the report.
 void LayerComplain(const char *format, ...) __attribute__((format(printf, 1, 2)));
 
+/// LayerComplain for a call the build has no way to do at all, whatever its arguments: the
+/// program can tell that from a call it got wrong (NvnLayerLacks).
+void LayerLack(const char *format, ...) __attribute__((format(printf, 1, 2)));
+
 /// Runs @p call under the program's guard (NvnLayerSetGuard), bare without one. On an abort,
 /// false, with a complaint that names @p what and the result.
 bool LayerGuarded(void (*call)(void), const char *what);

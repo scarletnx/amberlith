@@ -777,7 +777,15 @@ NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
     if (device == NULL) {
         return 0;
     }
-    const int known = NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS | NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED |
+    if ((from->flags & NVN_MEMORY_POOL_FLAGS_VIRTUAL) != 0) {
+        LayerLack("nvnMemoryPoolInitialize: a virtual pool (flags 0x%x), whose pages are other "
+                  "pools': deko3d has no such memory",
+                  (unsigned)from->flags);
+        return 0;
+    }
+    // A physical pool is one a virtual pool can map; with no virtual pool it is a pool.
+    const int known = NVN_MEMORY_POOL_FLAGS_PHYSICAL | NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS |
+                      NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED |
                       NVN_MEMORY_POOL_FLAGS_CPU_CACHED | NVN_MEMORY_POOL_FLAGS_GPU_NO_ACCESS |
                       NVN_MEMORY_POOL_FLAGS_GPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED |
                       NVN_MEMORY_POOL_FLAGS_SHADER_CODE | NVN_MEMORY_POOL_FLAGS_COMPRESSIBLE;
@@ -910,6 +918,16 @@ size_t Nvnl_nvnMemoryPoolGetSize(const NVNmemoryPool *pool) {
 NVNmemoryPoolFlags Nvnl_nvnMemoryPoolGetFlags(const NVNmemoryPool *pool) {
     const LayerPool *const record = PoolOf(pool, "nvnMemoryPoolGetFlags");
     return record != NULL ? (NVNmemoryPoolFlags)record->flags : 0;
+}
+
+NVNboolean Nvnl_nvnMemoryPoolMapVirtual(NVNmemoryPool *pool, int count,
+                                        const NVNmappingRequest *requests) {
+    (void)pool;
+    (void)requests;
+    LayerLack("nvnMemoryPoolMapVirtual: %d requests, and deko3d has no pool whose pages are "
+              "another's",
+              count);
+    return 0;
 }
 
 // ---- buffers
@@ -1172,6 +1190,45 @@ void Nvnl_nvnEventSignal(NVNevent *event, NVNeventSignalMode mode, uint32_t valu
         const LayerEvent *const record = (const LayerEvent *)(const void *)event;
         dkMemBlockFlushCpuCache(pool->block, (uint32_t)record->offset, sizeof(uint32_t));
     }
+}
+
+void Nvnl_nvnCommandBufferSignalEvent(NVNcommandBuffer *cmd, const NVNevent *event,
+                                      NVNeventSignalMode mode, NVNeventSignalLocation location,
+                                      int flags, uint32_t value) {
+    static const char *const WHAT = "nvnCommandBufferSignalEvent";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    const LayerEvent *const of = Record(event, WHAT);
+    if (record == NULL || of == NULL) {
+        return;
+    }
+    const LayerPool *const pool = of->magic == MAGIC_EVENT ? PoolOf(of->pool, WHAT) : NULL;
+    if (pool == NULL || flags != 0 || location < NVN_EVENT_SIGNAL_LOCATION_TOP ||
+        location > NVN_EVENT_SIGNAL_LOCATION_BOTTOM) {
+        LayerComplain("%s: an event that is not initialized, flags 0x%x or location %d, where "
+                      "the layer takes no flag and NVN's locations %d to %d",
+                      WHAT, (unsigned)flags, (int)location, (int)NVN_EVENT_SIGNAL_LOCATION_TOP,
+                      (int)NVN_EVENT_SIGNAL_LOCATION_BOTTOM);
+        return;
+    }
+    if (mode != NVN_EVENT_SIGNAL_MODE_WRITE) {
+        LayerLack("%s: signal mode %d, and deko3d has a write of a word by the graphics unit "
+                  "(mode %d) and no sum",
+                  WHAT, (int)mode, (int)NVN_EVENT_SIGNAL_MODE_WRITE);
+        return;
+    }
+    // The word written when the list reaches this point, wherever in the pipeline NVN would
+    // have it: deko3d's lists run their commands in order.
+    dkCmdBufPushData(record->cmdbuf, dkMemBlockGetGpuAddr(pool->block) + (uint64_t)of->offset,
+                     &value, sizeof(value));
+}
+
+void Nvnl_nvnCommandBufferWaitEvent(NVNcommandBuffer *cmd, const NVNevent *event,
+                                    NVNeventWaitMode mode, uint32_t value) {
+    (void)cmd;
+    (void)event;
+    LayerLack("nvnCommandBufferWaitEvent: a wait for %u in mode %d, and deko3d has no list that "
+              "waits on a word of memory",
+              (unsigned)value, (int)mode);
 }
 
 const NVNmemoryPool *Nvnl_nvnEventGetMemoryPool(const NVNevent *event) {

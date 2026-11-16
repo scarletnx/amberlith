@@ -2259,6 +2259,214 @@ static void QueueRestCase(const char *name) {
                why[0] != '\0' ? why : NvnLayerError(), needed);
 }
 
+// ---- an event in a list, and a virtual pool
+
+// What the layer cannot do under deko3d at all (NvnLayerLacks) is a skip there, with the
+// layer's reason: a runtime that runs NVN itself is asked it.
+
+/// Ends the case as a skip when the layer said it has no way to do what was asked; false when
+/// it did not, and the case goes on.
+static bool Lacking(const char *name) {
+    if (!NvnLayerLacks()) {
+        return false;
+    }
+    ReportSkip(SUITE, name, REPORT_REASON_UNAVAILABLE, NvnLayerError());
+    return true;
+}
+
+/// An event in the last word of the readback pool's first page; false with the layer's reason.
+static bool ListEvent(NVNevent *event) {
+    _Alignas(8) NVNeventBuilder builder;
+    nvn.nvn.nvnEventBuilderSetDefaults(&builder);
+    nvn.nvn.nvnEventBuilderSetStorage(&builder, &nvn.read_pool, (ptrdiff_t)(POOL_PAGE - 4u));
+    return nvn.nvn.nvnEventInitialize(event, &builder);
+}
+
+/// A list that signals an event: the value the processor reads once the queue has finished. A
+/// write (@p add false) of one number over another the processor signalled, or a sum with it.
+static void EventListCase(const char *name, bool add) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static _Alignas(8) NVNevent event;
+    if (!ListEvent(&event)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnEventInitialize answered false"));
+        return;
+    }
+    nvn.nvn.nvnEventSignal(&event, NVN_EVENT_SIGNAL_MODE_WRITE, 0x00a50000u);
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    nvn.nvn.nvnCommandBufferSignalEvent(&nvn.command, &event,
+                                        add ? NVN_EVENT_SIGNAL_MODE_ADD
+                                            : NVN_EVENT_SIGNAL_MODE_WRITE,
+                                        NVN_EVENT_SIGNAL_LOCATION_BOTTOM, 0, 0x1234u);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    if (Lacking(name)) {
+        nvn.nvn.nvnEventFinalize(&event);
+        return;
+    }
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    const uint32_t value = nvn.nvn.nvnEventGetValue(&event);
+    const uint32_t want = add ? 0x00a51234u : 0x1234u;
+    nvn.nvn.nvnEventFinalize(&event);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, value == want && NvnLayerError()[0] == '\0',
+               "the event's value is 0x%x after a list that %s 0x1234, where 0x%x was there and "
+               "0x%x is right: %s",
+               (unsigned)value, add ? "adds" : "writes", 0x00a50000u, (unsigned)want,
+               NvnLayerError());
+}
+
+/// A list that waits for an event to be 9, then clears the target and copies it out, with a
+/// sync fenced behind it. Flushed while the event is 7, the sync must not signal within a
+/// twentieth of a second; once the processor signals 9, it must, and the clear is there.
+static void EventWaitCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    static _Alignas(8) NVNevent event;
+    static _Alignas(8) NVNsync sync;
+    static const float cyan[4] = { 0.0f, 1.0f, 1.0f, 1.0f };
+    static const uint8_t cyan_bytes[4] = { 0x00, 0xff, 0xff, 0xff };
+    uint8_t *const pixels = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    if (pixels == NULL || !ListEvent(&event)) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("nvnMemoryPoolMap gave no address, or nvnEventInitialize answered false"));
+        return;
+    }
+    if (!nvn.nvn.nvnSyncInitialize(&sync, &nvn.device)) {
+        nvn.nvn.nvnEventFinalize(&event);
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnSyncInitialize answered false"));
+        return;
+    }
+    // The readback's first page but its last word, which is the event's.
+    memset(pixels, READ_PRESET, POOL_PAGE - 4u);
+    nvn.nvn.nvnEventSignal(&event, NVN_EVENT_SIGNAL_MODE_WRITE, 7);
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    nvn.nvn.nvnCommandBufferWaitEvent(&nvn.command, &event, NVN_EVENT_WAIT_MODE_EQUAL, 9);
+    RecordClear(&nvn.target, TARGET_SIZE, TARGET_SIZE, cyan);
+    nvn.nvn.nvnCommandBufferBarrier(&nvn.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
+                                                      NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+    // A corner of the target, which fits before the event's word.
+    const NVNcopyRegion region = { 0, 0, 0, 16, 16, 1 };
+    nvn.nvn.nvnCommandBufferCopyTextureToBuffer(
+        &nvn.command, &nvn.target, NULL, &region,
+        nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.read_pool), NVN_COPY_FLAGS_NONE);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    if (Lacking(name)) {
+        nvn.nvn.nvnSyncFinalize(&sync);
+        nvn.nvn.nvnEventFinalize(&event);
+        return;
+    }
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFenceSync(&nvn.queue, &sync, NVN_SYNC_CONDITION_ALL_GPU_COMMANDS_COMPLETE, 0);
+    nvn.nvn.nvnQueueFlush(&nvn.queue);
+    const NVNsyncWaitResult held = nvn.nvn.nvnSyncWait(&sync, 50000000ull);
+    nvn.nvn.nvnEventSignal(&event, NVN_EVENT_SIGNAL_MODE_WRITE, 9);
+    const NVNsyncWaitResult let_go = nvn.nvn.nvnSyncWait(&sync, SYNC_WAIT_NS);
+    uint32_t wrong = 0;
+    for (uint32_t at = 0; at < 16u * 16u; ++at) {
+        wrong += memcmp(pixels + (size_t)at * 4u, cyan_bytes, 4) != 0;
+    }
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnSyncFinalize(&sync);
+    nvn.nvn.nvnEventFinalize(&event);
+    const bool signalled = let_go == NVN_SYNC_WAIT_RESULT_ALREADY_SIGNALED ||
+                           let_go == NVN_SYNC_WAIT_RESULT_CONDITION_SATISFIED;
+    CHECK_TRUE(SUITE, name, CHECK_EXACT,
+               held == NVN_SYNC_WAIT_RESULT_TIMEOUT_EXPIRED && signalled && wrong == 0u,
+               "the sync behind the list answered %d while the event was 7 (%d is a wait that "
+               "ran out, which a list still waiting gives) and %d once it was 9 (0 or 1 is "
+               "signalled); %u of 256 pixels of the clear were then wrong: %s",
+               (int)held, (int)NVN_SYNC_WAIT_RESULT_TIMEOUT_EXPIRED, (int)let_go, (unsigned)wrong,
+               NvnLayerError());
+}
+
+/// A page of a physical pool mapped into a virtual one: bytes the processor wrote through the
+/// physical pool, copied by the graphics unit from the virtual pool's address.
+static void VirtualPoolCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    enum { PAGE = 0x10000, BYTES = 0x400 };
+    // A mapping request as a driver reads it: the physical pool, where in it, where in the
+    // virtual pool, how much, and the storage class of what will be kept there.
+    struct {
+        NVNmemoryPool *physical;
+        int64_t physical_offset;
+        int64_t virtual_offset;
+        uint64_t size;
+        int32_t storage_class;
+        int32_t pad;
+    } request;
+    static _Alignas(8) NVNmemoryPool physical, virtual_pool;
+    void *storage = NULL;
+    bool physical_up = MakePool(&physical, &storage, 2u * PAGE,
+                                NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED |
+                                    NVN_MEMORY_POOL_FLAGS_GPU_NO_ACCESS |
+                                    NVN_MEMORY_POOL_FLAGS_PHYSICAL);
+    _Alignas(8) NVNmemoryPoolBuilder builder;
+    nvn.nvn.nvnMemoryPoolBuilderSetDefaults(&builder);
+    nvn.nvn.nvnMemoryPoolBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnMemoryPoolBuilderSetStorage(&builder, NULL, 2u * PAGE);
+    nvn.nvn.nvnMemoryPoolBuilderSetFlags(&builder, NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS |
+                                                       NVN_MEMORY_POOL_FLAGS_GPU_CACHED |
+                                                       NVN_MEMORY_POOL_FLAGS_VIRTUAL);
+    const bool virtual_up =
+        physical_up && nvn.nvn.nvnMemoryPoolInitialize(&virtual_pool, &builder);
+    if (Lacking(name)) {
+        DropPool(&physical, &storage, &physical_up);
+        return;
+    }
+    uint8_t *const bytes = physical_up ? nvn.nvn.nvnMemoryPoolMap(&physical) : NULL;
+    uint8_t *const read = nvn.nvn.nvnMemoryPoolMap(&nvn.read_pool);
+    if (!virtual_up || bytes == NULL || read == NULL) {
+        if (virtual_up) {
+            nvn.nvn.nvnMemoryPoolFinalize(&virtual_pool);
+        }
+        DropPool(&physical, &storage, &physical_up);
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("a physical pool, a virtual pool or a mapping did not come up"));
+        return;
+    }
+    for (uint32_t at = 0; at < BYTES; ++at) {
+        bytes[PAGE + 0x100 + at] = CachedByte(at);
+    }
+    memset(read, READ_PRESET, BYTES);
+    // The physical pool's second page as the virtual pool's first.
+    memset(&request, 0, sizeof(request));
+    request.physical = &physical;
+    request.physical_offset = PAGE;
+    request.virtual_offset = 0;
+    request.size = PAGE;
+    const bool mapped =
+        nvn.nvn.nvnMemoryPoolMapVirtual(&virtual_pool, 1, (const NVNmappingRequest *)&request);
+    nvn.nvn.nvnCommandBufferBeginRecording(&nvn.command);
+    nvn.nvn.nvnCommandBufferCopyBufferToBuffer(
+        &nvn.command, nvn.nvn.nvnMemoryPoolGetBufferAddress(&virtual_pool) + 0x100,
+        nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.read_pool), BYTES, NVN_COPY_FLAGS_NONE);
+    const NVNcommandHandle list = nvn.nvn.nvnCommandBufferEndRecording(&nvn.command);
+    nvn.nvn.nvnQueueSubmitCommands(&nvn.queue, 1, &list);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    uint32_t wrong = 0, first = 0;
+    for (uint32_t at = 0; at < BYTES; ++at) {
+        if (read[at] != CachedByte(at) && wrong++ == 0u) {
+            first = at;
+        }
+    }
+    const uint8_t got = read[first];
+    nvn.nvn.nvnMemoryPoolFinalize(&virtual_pool);
+    DropPool(&physical, &storage, &physical_up);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, mapped && wrong == 0u,
+               "nvnMemoryPoolMapVirtual answered %d; %u of %u bytes read through the virtual "
+               "pool differ from the physical pool's, the first, byte %u, 0x%02x where 0x%02x "
+               "was written (0x%02x is a byte nothing copied)",
+               (int)mapped, (unsigned)wrong, (unsigned)BYTES, (unsigned)first, got,
+               CachedByte(first), READ_PRESET);
+}
+
 // ---- the debug layer's calls
 
 /// How often the debug callback and the database walk were called.
@@ -2893,6 +3101,13 @@ static void LayerCases(void) {
                                              "which of its sizes were set";
     static const char *const EVENT = "an event keeps what the processor signals: a write, an "
                                      "add and an add that wraps";
+    static const char *const EVENT_WRITTEN = "a list writes an event's value over the one the "
+                                             "processor signalled";
+    static const char *const EVENT_ADDED = "a list adds to an event's value";
+    static const char *const EVENT_WAITED = "a list that waits for an event's value runs when "
+                                            "the processor signals it, and not before";
+    static const char *const VIRTUAL_POOL = "a virtual pool's page is the physical pool's page "
+                                            "mapped into it";
     static const char *const TARGETS = "a 1D texture, each layer of an array and each slice "
                                        "of a 3D texture keep a picture of their own";
     static const char *const QUEUE_REST = "a queue builder gives back its memory and priority, "
@@ -2957,6 +3172,8 @@ static void LayerCases(void) {
                                          MULTISAMPLE_STATE, POLYGON_VERTEX_STATE,
                                          TEXTURE_MORE, TEXTURE_SELF, TEXELS, TEXELS_STRIDED,
                                          TARGETS, QUEUE_REST,
+                                         EVENT_WRITTEN, EVENT_ADDED, EVENT_WAITED,
+                                         VIRTUAL_POOL,
                                          WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
@@ -3137,6 +3354,10 @@ static void LayerCases(void) {
         TargetsCase(TARGETS);
     }
     QueueRestCase(QUEUE_REST);
+    EventListCase(EVENT_WRITTEN, false);
+    EventListCase(EVENT_ADDED, true);
+    EventWaitCase(EVENT_WAITED);
+    VirtualPoolCase(VIRTUAL_POOL);
 
     DebugCase(DEBUG);
     WindowBuilderCase(WINDOW_BUILDER);

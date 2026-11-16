@@ -101,6 +101,11 @@ const char *NvnLayerError(void);
 /// Clears NvnLayerError, before a step whose failure should name only its own reason.
 void NvnLayerClearError(void);
 
+/// Whether a call since the last clear was one the layer has no way to do at all under deko3d,
+/// whatever its arguments (NvnLayerError says which and why): a program that can do without
+/// tells that from a call it got wrong. Never under ScarletNX, as NvnLayerError is never set.
+bool NvnLayerLacks(void);
+
 /// What runs one of deko3d's constructors, which end the program on a failure: @p call, with
 /// false and the abort's result in @p result when it aborted. A program that can turn deko3d's
 /// abort into a return (a linker wrap of diagAbortWithResult and a longjmp, as edenprobe's

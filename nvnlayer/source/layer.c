@@ -15,6 +15,7 @@
 // ---- the failure a program reports
 
 static char layer_error[256];
+static bool layer_lacks;
 
 const char *NvnLayerError(void) {
     return layer_error;
@@ -22,6 +23,22 @@ const char *NvnLayerError(void) {
 
 void NvnLayerClearError(void) {
     layer_error[0] = '\0';
+    layer_lacks = false;
+}
+
+bool NvnLayerLacks(void) {
+    return layer_lacks;
+}
+
+void LayerLack(const char *format, ...) {
+    layer_lacks = true;
+    if (layer_error[0] != '\0') {
+        return;
+    }
+    va_list args;
+    va_start(args, format);
+    vsnprintf(layer_error, sizeof(layer_error), format, args);
+    va_end(args);
 }
 
 void LayerComplain(const char *format, ...) {
