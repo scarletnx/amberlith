@@ -1129,7 +1129,10 @@ void Nvnl_nvnDepthStencilStateGetStencilOp(const NVNdepthStencilState *state, NV
 void Nvnl_nvnMultisampleStateSetDefaults(NVNmultisampleState *state) {
     LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateSetDefaults");
     if (record != NULL) {
-        memset(state, 0, sizeof(*state)); // one sample, nothing of the rest on
+        // Multisampling on, as ScarletNX has a driver's new state, with no samples set: one
+        // sample, and nothing of the rest on.
+        memset(state, 0, sizeof(*state));
+        record->flags = MULTISAMPLE_ENABLE;
     }
 }
 

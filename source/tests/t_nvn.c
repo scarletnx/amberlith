@@ -1714,7 +1714,8 @@ static void MultisampleStateCase(const char *name) {
     char why[256] = "";
     _Alignas(8) NVNmultisampleState state;
     nvn.nvn.nvnMultisampleStateSetDefaults(&state);
-    Gives(why, sizeof(why), "whether a new state multisamples",
+    nvn.nvn.nvnMultisampleStateSetMultisampleEnable(&state, 0);
+    Gives(why, sizeof(why), "whether a state set not to multisample does",
           nvn.nvn.nvnMultisampleStateGetMultisampleEnable(&state), 0);
     nvn.nvn.nvnMultisampleStateSetMultisampleEnable(&state, 1);
     nvn.nvn.nvnMultisampleStateSetSamples(&state, 4);
