@@ -23,8 +23,10 @@ two that launcher opens in on a frame of 720 lines.
 - On the start screen, L or R, or a tap on one of its tabs: the start screen is the browser's first tab.
 - The mode file's word `browse`: the browser instead of the start screen, on its suites tab. Only in a detailed run:
   beside `quick` the mode line says `browse refused: the run is quick, a script's, and the browser opens only in a
-  detailed one` and the run is a quick one. Nothing pressed on its first screen for ten seconds, the program leaves
-  and the launch's report says so.
+  detailed one` and the run is a quick one. Nothing pressed on its first screen for a minute, counted down on its
+  foot, the program leaves and the launch's report says so: `browser: nothing pressed for 60 seconds on its first
+  screen, left by itself`. A press or a touch keeps it open for good; the browser the start screen opens never leaves
+  by itself.
 - After a detailed run, its results are the browser's results tab, and the other tabs are a press away.
 
 The launch's report, open since the program started, says where the browser's runs go and closes; each run begun in

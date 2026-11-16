@@ -40,7 +40,8 @@ extern "C" {
 ///   browse    the browser (docs/UI.md) instead of the start screen, on its suites tab: a person
 ///             chooses, runs and reads one thing at a time. Only in a detailed run: beside quick it
 ///             is refused in the mode line, quick being a script's. Nothing pressed on its first
-///             screen for UI_START_NANOSECONDS, the program leaves and says so.
+///             screen for UI_BROWSE_NANOSECONDS, a minute counted down on its foot, the program
+///             leaves and says so.
 ///   noprogress no running screen while the suites run: the window keeps the screen before it,
 ///             as before there was one. For a machine whose window misbehaves while it draws.
 ///   hooks     the console's services that a machine may answer in a game's own code (nn::fs,

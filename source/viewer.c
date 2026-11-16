@@ -399,12 +399,11 @@ ViewerEnd ViewerBrowse(UiBrowseInfo *info, UiBrowseState *state, uint64_t unatte
         }
         info->seconds_left = 0u;
         if (unattended_ns > 0u && !state->pressed) {
-            const uint64_t elapsed = armTicksToNs(armGetSystemTick() - opened);
-            if (elapsed >= unattended_ns) {
+            info->seconds_left =
+                UiBrowseSecondsLeft(unattended_ns, armTicksToNs(armGetSystemTick() - opened));
+            if (info->seconds_left == 0u) {
                 return VIEWER_UNATTENDED;
             }
-            info->seconds_left =
-                (uint32_t)((unattended_ns - elapsed + 999999999ull) / 1000000000ull);
         }
         if (state->ask == UI_ASK_QUIT) {
             return VIEWER_CLOSED;

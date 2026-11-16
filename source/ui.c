@@ -3524,6 +3524,17 @@ UiOptions UiOptionsFrom(const RunMode *mode) {
     return options;
 }
 
+uint64_t UiBrowseUnattendedNanoseconds(bool by_word) {
+    return by_word ? UI_BROWSE_NANOSECONDS : 0u;
+}
+
+uint32_t UiBrowseSecondsLeft(uint64_t limit_ns, uint64_t elapsed_ns) {
+    if (limit_ns == 0u || elapsed_ns >= limit_ns) {
+        return 0u;
+    }
+    return (uint32_t)((limit_ns - elapsed_ns + 999999999ull) / 1000000000ull);
+}
+
 UiBrowseState UiBrowseOpen(UiTab tab, const UiStartState *start, UiOptions options,
                            const UiBrowseInfo *info) {
     UiBrowseState state;

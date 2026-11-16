@@ -689,6 +689,71 @@ static void CheckHud(uint8_t *pixels) {
                (unsigned)UiMotionRows(2u, 720u), (unsigned)UiMotionRows(UI_MOTION_STEPS, 720u));
 }
 
+/// The browser the mode file's word opens waits a minute for a person, counting it down on the
+/// foot, and the start screen's waits for ever; the countdown is drawn on the foot and nowhere
+/// else.
+static void CheckWait(uint8_t *pixels) {
+    static const char NAME[] = "the browser the word opens counts a minute down on its foot, and "
+                               "the start screen's never leaves";
+    const uint64_t second = 1000000000ull;
+    const uint64_t by_word = UiBrowseUnattendedNanoseconds(true);
+    const uint64_t by_screen = UiBrowseUnattendedNanoseconds(false);
+    const uint32_t left[5] = {
+        UiBrowseSecondsLeft(by_word, 0u),
+        UiBrowseSecondsLeft(by_word, 59u * second + 1u),
+        UiBrowseSecondsLeft(by_word, 60u * second - 1u),
+        UiBrowseSecondsLeft(by_word, 60u * second),
+        UiBrowseSecondsLeft(by_screen, 1000u * second),
+    };
+    const bool counts = UI_BROWSE_NANOSECONDS == 60u * second && by_word == 60u * second &&
+                        by_screen == 0u && left[0] == 60u && left[1] == 1u && left[2] == 1u &&
+                        left[3] == 0u && left[4] == 0u;
+    UiStartInfo start;
+    memset(&start, 0, sizeof(start));
+    start.heading = "edenprobe 0.17.0 (test)";
+    start.families_present = MODE_FAMILIES_PRESENT;
+    UiBrowseInfo info;
+    memset(&info, 0, sizeof(info));
+    info.heading = "0.17.0 on scarletnx";
+    info.machine = info.heading;
+    info.start = &start;
+    const RunMode mode = ModeFromText("");
+    const UiStartState opened = UiStartOpen(&mode, MODE_FAMILIES_PRESENT);
+    const UiBrowseState state =
+        UiBrowseOpen(UI_TAB_SUITES, &opened, UiOptionsFrom(&mode), &info);
+    const size_t bytes = (size_t)FRAME_WIDTH * FRAME_HEIGHT * 4u;
+    uint8_t *const without = (uint8_t *)malloc(bytes);
+    if (pixels == NULL || without == NULL) {
+        free(without);
+        ReportCase(SUITE, NAME, CHECK_NONE, false, "no memory for two frames");
+        return;
+    }
+    const UiFrame frame = { pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
+    UiComposeBrowse(&frame, &info, &state);
+    memcpy(without, pixels, bytes);
+    info.seconds_left = left[0];
+    UiComposeBrowse(&frame, &info, &state);
+    uint32_t on_foot = 0;
+    uint32_t above = 0;
+    for (uint32_t y = 0; y < FRAME_HEIGHT; ++y) {
+        for (uint32_t x = 0; x < FRAME_WIDTH; ++x) {
+            const size_t at = ((size_t)y * FRAME_WIDTH + x) * 4u;
+            if (memcmp(pixels + at, without + at, 4u) != 0) {
+                on_foot += y >= UI_FOOT_TOP(FRAME_HEIGHT) ? 1u : 0u;
+                above += y < UI_FOOT_TOP(FRAME_HEIGHT) ? 1u : 0u;
+            }
+        }
+    }
+    free(without);
+    CHECK_TRUE(SUITE, NAME, CHECK_NONE, counts && on_foot > 0u && above == 0u,
+               "waits %llu s by the word and %llu s from the start screen; seconds left at "
+               "nought %u, a breath past 59 s %u, a breath before 60 s %u, at 60 s %u, with no "
+               "limit %u; the countdown changed %u pixels on the foot and %u above it",
+               (unsigned long long)(by_word / second), (unsigned long long)(by_screen / second),
+               (unsigned)left[0], (unsigned)left[1], (unsigned)left[2], (unsigned)left[3],
+               (unsigned)left[4], (unsigned)on_foot, (unsigned)above);
+}
+
 /// The browser's screens written where a person can look at them, when EDENPROBE_FRAMES names a
 /// directory: host only, and never a case, as the screens' own frames are.
 static void DumpBrowser(uint8_t *pixels) {
@@ -738,8 +803,13 @@ static void DumpBrowser(uint8_t *pixels) {
         { "30-browse-start", UI_TAB_START, 0u },   { "31-browse-families", UI_TAB_SUITES, 0u },
         { "32-browse-suites", UI_TAB_SUITES, 1u }, { "33-browse-cases", UI_TAB_SUITES, 2u },
         { "34-browse-demos", UI_TAB_DEMOS, 0u },   { "35-browse-options", UI_TAB_OPTIONS, 0u },
+        { "36-browse-countdown", UI_TAB_SUITES, 0u },
     };
     for (size_t i = 0; i < sizeof(SHOTS) / sizeof(SHOTS[0]); ++i) {
+        // The last as the word opens it, nothing pressed yet.
+        info.seconds_left = i + 1u == sizeof(SHOTS) / sizeof(SHOTS[0])
+                                ? (uint32_t)(UI_BROWSE_NANOSECONDS / 1000000000ull)
+                                : 0u;
         state.tab = SHOTS[i].tab;
         state.level = SHOTS[i].level;
         state.suite = UiBrowseSuiteIndex("coverage");
@@ -779,6 +849,7 @@ void RunSupportBrowse(void) {
     CheckFeet();
     CheckMusic();
     CheckScriptRuns();
+    CheckWait(pixels);
     if (pixels == NULL) {
         static const char *const NAMES[3] = {
             "the HUD and the pause menu draw over a demo's frame with nothing blended",

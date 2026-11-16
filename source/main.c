@@ -688,8 +688,8 @@ static void ReadCatalogue(void) {
 
 /// The browser instead of a run, asked for by the mode file's `browse` or from the start
 /// screen: the launch's report says so and closes, and every run begun in the browser writes a
-/// report of its own. Nothing pressed on its first screen for UI_START_NANOSECONDS when the word
-/// opened it, the program leaves and the launch's report says why.
+/// report of its own. Nothing pressed on its first screen for UI_BROWSE_NANOSECONDS when the
+/// word opened it, the program leaves and the launch's report says why.
 static int Browse(const RunMode *mode, UiTab tab, const UiStartState *start, bool by_word) {
     static char launch_report[RUNNER_PATH_MAX + 16u];
     snprintf(launch_report, sizeof(launch_report), "%s", runner.report_path);
@@ -698,12 +698,12 @@ static int Browse(const RunMode *mode, UiTab tab, const UiStartState *start, boo
                runner.run_directory);
     ReportSummary();
     ReportClose();
-    const ViewerEnd end = BrowserSession(mode, tab, start, &start_info,
-                                         by_word ? UI_START_NANOSECONDS : 0u, false);
+    const uint64_t wait = UiBrowseUnattendedNanoseconds(by_word);
+    const ViewerEnd end = BrowserSession(mode, tab, start, &start_info, wait, false);
     if (end == VIEWER_UNATTENDED) {
         ReportAppend(launch_report);
         ReportNote("browser: nothing pressed for %u seconds on its first screen, left by itself",
-                   (unsigned)(UI_START_NANOSECONDS / 1000000000ull));
+                   (unsigned)(wait / 1000000000ull));
         ReportClose();
     }
     ViewerEndScreen();
