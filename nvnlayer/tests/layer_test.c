@@ -384,6 +384,28 @@ static void TestControl(void) {
     EXPECT(NvnLayerShaderControl(module, sizeof(module), section, &code) && section[0x718] == 0u,
            "a fragment module without the early tests says %u", section[0x718]);
 
+    // A tessellation evaluation program of quads, fractional even spacing and the second
+    // winding, then one of triangles that makes points: its declarations as GLSL's words.
+    Module(module, 4, 0);
+    Write(module, 0x18 + 24, 2u | 2u << 4 | 3u << 8);
+    EXPECT(NvnLayerShaderControl(module, sizeof(module), section, &code),
+           "a tessellation evaluation module: %s", NvnLayerError());
+    EXPECT(Read(section, 0x714) == 4u && Read(section, 0x738) == 7u &&
+               Read(section, 0x73c) == 0x8e7cu && Read(section, 0x740) == 0u &&
+               Read(section, 0x744) == 0x900u,
+           "stage %u declares domain 0x%x, spacing 0x%x, points %u and winding 0x%x",
+           (unsigned)Read(section, 0x714), (unsigned)Read(section, 0x738),
+           (unsigned)Read(section, 0x73c), (unsigned)Read(section, 0x740),
+           (unsigned)Read(section, 0x744));
+    Write(module, 0x18 + 24, 1u);
+    EXPECT(NvnLayerShaderControl(module, sizeof(module), section, &code) &&
+               Read(section, 0x738) == 4u && Read(section, 0x73c) == 0x202u &&
+               Read(section, 0x740) == 1u && Read(section, 0x744) == 0x901u,
+           "a module of triangles that makes points declares domain 0x%x, spacing 0x%x, points "
+           "%u and winding 0x%x",
+           (unsigned)Read(section, 0x738), (unsigned)Read(section, 0x73c),
+           (unsigned)Read(section, 0x740), (unsigned)Read(section, 0x744));
+
     // What is refused, each with the value given in its sentence.
     static const struct {
         const char *what;

@@ -112,6 +112,21 @@ bool NvnLayerShaderControl(const void *dksh, size_t dksh_bytes, void *control,
         section[LAYER_SECTION_AT_EARLY_TESTS] = program[25] != 0u ? 1u : 0u;
     }
 
+    if (type == (uint32_t)NVN_SHADER_STAGE_TESS_EVALUATION) {
+        // The DKSH keeps the declarations as the 3D engine's tessellation mode word, the first
+        // of the program's own: the domain in bits 0 and 1 (isolines, triangles, quads), the
+        // spacing in bits 4 and 5, and what comes out in bits 8 and 9 (points, lines, triangles
+        // of one winding, triangles of the other).
+        static const uint32_t DOMAINS[4] = { 0x8e7au, 4u, 7u, 0x8e7au };
+        static const uint32_t SPACINGS[4] = { 0x202u, 0x8e7bu, 0x8e7cu, 0x202u };
+        const uint32_t mode = Word(program + 24);
+        const uint32_t output = mode >> 8 & 3u;
+        Put(section, LAYER_SECTION_AT_TESS_DOMAIN, DOMAINS[mode & 3u]);
+        Put(section, LAYER_SECTION_AT_TESS_SPACING, SPACINGS[mode >> 4 & 3u]);
+        Put(section, LAYER_SECTION_AT_TESS_POINTS, output == 0u ? 1u : 0u);
+        Put(section, LAYER_SECTION_AT_TESS_WINDING, output == 3u ? 0x900u : 0x901u);
+    }
+
     LayerControlTail *const tail = (LayerControlTail *)(void *)(section + LAYER_CONTROL_TAIL);
     tail->tag = LAYER_CONTROL_TAG;
     for (uint32_t i = 0; i < LAYER_DKSH_HEADER_WORDS; ++i) {

@@ -233,7 +233,9 @@ memory. `NvnLayerShaderControl` makes both from a DKSH:
   are what ScarletNX's `nvnProgramSetShaders` reads of a game's section, written from the DKSH's header: the magic
   `0x98761234` and a one, format 8, at 0x700 the constants' offset in the code area, at 0x704 the code area's
   bytes, at 0x708 the program's offset (0x30), at 0x714 the stage, and for a fragment stage at 0x718 whether it
-  asked for the early tests. Every other byte is nought. The last 0x100 are the layer's own: the DKSH's header
+  asked for the early tests, and for a tessellation evaluation stage its four declarations (the domain, the
+  spacing, points or not, the winding), each in GLSL's own word for it, from the DKSH's tessellation mode word.
+  Every other byte is nought. The last 0x100 are the layer's own: the DKSH's header
   with its one program's, which deko3d takes as a control section apart from the code, and the `DkShader` the API
   55 build's `nvnProgramSetShaders` makes there, an NVN program object being too small for five of them.
 
