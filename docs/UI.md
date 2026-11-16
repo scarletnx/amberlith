@@ -15,8 +15,8 @@
 The browser is where a person runs one thing at a time: a family, a suite, a single case or a demo, then reads its
 results and comes back for the next. It is the console's (`source/viewer.c` draws it, `source/ui.c` decides what it
 draws and what each press does, `source/browse.c` reads the cases it lists); the APK has a screen of its own. Its look
-is the one every screen has ([On the console](Console.md)): ScarletNX's launcher in its YoRHa theme, at the scale of
-two that launcher opens in on a frame of 720 lines.
+is the one every screen has ([On the console](Console.md)): ScarletNX's launcher in its YoRHa theme's colours, the VGA
+font at its own size, and the band of keys along the bottom.
 
 ## Opening it
 
@@ -52,21 +52,31 @@ run whenever a case of the suite does. The judge's suites have no mark: they run
 
 ## A run begun in the browser
 
+Plus, A on a case or a demo, and Y on the results first ask whether the judge runs before what was picked, in a box over the tab
+with the answers on the foot: A the judge, then the run; B the run alone; Minus back to the browser, nothing run. The
+judge holds the probe itself to its references, some 700 cases and half a minute or more, so a person checking one
+case again can leave it out. The start tab's run is a whole run and has the judge as every run from the mode file
+does, with no question.
+
 Each is a run of its own, in a folder of its own: `runs/<build>[_<label>]/browse/<n>/`, `n` the first number with no
 folder yet. Its report, journal and pictures go there, and `last-run` names it. The run is:
 
-1. the judge (selfcheck, support, reference), as before every run;
+1. the judge (selfcheck, support, reference), unless the answer was B;
 2. the steps that hold what was picked, in the order every run has them; cpu only when picked;
 3. the demos picked, in the browser's order.
 
 Inside a step, a case that was not picked does not run and leaves no line, count, picture or record; the run's mode line
-says what was picked, `browser: run 2, picked in the browser: the judge, then clear whole; coverage: 1 case`. A case of
+says what was picked, `browser: run 2, picked in the browser: the judge, then clear whole; coverage: 1 case`, or
+`without the judge, clear whole` when the answer was B. A case of
 a picked case's suite with no tier in the last run (its bring-up), and one the catalogue does not hold, run with it. In
 a step that holds several suites (net, service) the ones not picked are left out the same way, and a case that needed
 one of them skips as `depends`, saying which.
 
 The mode file's other words hold as it says them: `hooks`, `machine=`, `skip=`, `label=`, `unban`, `hang`. The program
 ending inside a case of a browser's run puts that case on the crash list at the next launch, with a note, as in any run.
+
+While it runs, the running screen is up ([On the console](Console.md#the-running-screen)), and B there cancels it: the
+case under way ends, the rest are left out, and the browser comes back on its start tab.
 
 The results open on what was run: one case on its own page, else the overview on the first failure.
 

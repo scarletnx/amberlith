@@ -40,25 +40,38 @@ looked at; nothing is read back from the card, and `images` changes only what go
 cases; a run past that, or one that ran out of memory, says on the overview how many the screens hold. A quick run
 keeps nothing.
 
-The look is ScarletNX's launcher in its YoRHa theme, at the scale of two it opens in on a frame of 720 lines: its 8 by
-16 VGA font at twice its size, the title (`EDENPROBE  /  RESULTS`) at four times it with its shadow in the dim colour,
-the tabs as buttons, a frieze along the top and the bottom, and the theme's paper page with its grid, thin diagonals,
-corners a little darker and a grain. A row is a box, the one under the cursor inverted with a rule over and under it
-and the cursor in the margin. Lists read down a column, the results' and a case's detail, keep the font's own size.
-The screens drawn while the run goes (running, listening) are on the run screen's dark page with its scan lines. The
-foot is a box: the sentence of what is under the cursor on its first row, which the countdown takes while it runs,
-and on its second the keys, each inverted and what it does after it, each a button for a tap. The resume, pad and
-touch screens keep the font's own size and their band of keys. See [Credits](Credits.md).
+The look is ScarletNX's launcher in its YoRHa theme's colours, on a frame of 720 lines: its 8 by 16 VGA font at its own
+size, the tabs as buttons along the top (a screen with no tabs has its title there, `EDENPROBE  /  RESULTS`, at the same
+size), and the theme's paper page with its grid, corners a little darker and a grain. A row is a box, the one under the
+cursor inverted with a rule over and under it and the cursor in the margin. The screens drawn while the run goes
+(running, listening) are on the run screen's dark page with its scan lines. The foot is the sentence of what is under
+the cursor on a row of its own, which the countdown takes while it runs, and under it the band of keys along the bottom
+that ScarletNX's run screens have: each key inverted and what it does after it, each a button for a tap. The resume,
+pad and touch screens have the same band. See [Credits](Credits.md).
 
 ## The running screen
 
 A run with a screen (every detailed run, and a quick one the start screen chose) shows how far it is: the step and its
 number (`step 17 of 34: net`, with a bar), the pass of a timed suite (`pass 3 of 10: a rehearsal, timed`), the case and
 its number in the pass (`case 12 of 40`, the total from the second pass on), the net suite a case belongs to, the
-counts so far, the time the run has taken and its folder. It is drawn when a case starts or ends, at most twice a
-second, and when a step begins; never inside a timed interval, nor while the listening sequence has its own screen. A
-case that waits out a timeout holds it still. A quick run from the mode file draws nothing; `noprogress` turns it off
-in any run.
+counts so far, the time the run has taken and its folder. The run draws it when a case starts or ends, at most twice
+a second, and when a step begins; never inside a timed interval, nor while the listening sequence or the pad's screen
+is up. Inside a case that lasts, a thread beside the run draws it again four times a second once the run has drawn
+nothing for a second, with the counts the last case left and the time moving, so a case of minutes (a Wimsy level's
+reference worked out on the processor, a timeout waited out) does not leave the window still. That thread draws only
+while the running screen is the last thing drawn: a step's frames, the pad's screen and the listening screen keep it
+off until the run draws again. It runs on a core the run's thread is not on, at the lowest priority a program's thread
+takes, so it never takes a core from a case; in a timed suite it draws nothing. A machine that gives it no thread says so in a note
+(`running screen: the thread that draws it inside a long case did not start on core 1 at priority 59, result 0x...`)
+and the screen is drawn between cases only. A quick run from the mode file draws nothing and has no such thread;
+`noprogress` turns the screen off in any run.
+
+B cancels a run a person attends (not a quick one, which says it has nothing to press): the case under way ends, the
+cases that had not begun are left out, the report notes `the run was cancelled from its running screen: the cases that
+had not begun are left out`, and the start screen comes up. B is looked at every 50 ms, inside a long case too, and
+the screen says `Cancelling` at once; in a timed suite it says so when the case ends. A B still held from the screen
+before (the one that answered the browser's judge question, or stopped a demo) is no cancel: B counts once it was seen
+up with the running screen in the window.
 
 ## The start screen
 
