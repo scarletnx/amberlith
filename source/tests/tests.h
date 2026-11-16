@@ -301,6 +301,10 @@ void RunNvn(void);
 /// down.
 void NvnSceneFirst(void);
 void NvnSceneLast(void);
+/// The suite's command buffer cases (t_nvncmd.c), each down the two NVN ways: the layer's own
+/// functions before anything looks the program's NVN up, the looked-up ones after.
+void NvnCommandFirst(void);
+void NvnCommandLast(void);
 
 /// Reads from the memory card through FsFile, in the patterns a game reads its files: sequential
 /// in five block sizes, random, backwards, the same place again, many small files, and the edges.

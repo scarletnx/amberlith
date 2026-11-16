@@ -8,6 +8,7 @@
 #include <nvnlayer.h>
 
 #include "drawpath_internal.h"
+#include "drawpath_nvn.h"
 
 // The NVN ways: the calls of drawpath.h made through NVN's functions. DRAW_PATH_NVN has every
 // function looked up by name as a game looks its driver's up (NvnLoadProcs), and none of the
@@ -663,6 +664,20 @@ static bool BringUp(NvnPath *nv, const DrawPathSpec *spec, bool own, char *why,
         snprintf(why, why_size, "the command buffer's memory: %s", NvnLayerError());
         return false;
     }
+    return true;
+}
+
+bool DrawPathNvn(DrawPath *path, DrawPathNvnParts *parts) {
+    if (path == NULL || path->way != &NVN_WAY) {
+        return false;
+    }
+    NvnPath *const nv = Nv(path);
+    parts->nvn = &nv->nvn;
+    parts->device = &nv->device;
+    parts->queue = &nv->queue;
+    parts->command = &nv->command;
+    parts->target = &nv->target;
+    parts->depth = nv->depth_up ? &nv->depth : NULL;
     return true;
 }
 

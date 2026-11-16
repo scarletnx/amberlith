@@ -42,6 +42,7 @@ LISTS = {"NVN_LAYER_PROCS_BASE": (55, 231), "NVN_LAYER_PROCS_TEXTURE": (55, 231)
          "NVN_LAYER_PROCS_POOL": (55, 231), "NVN_LAYER_PROCS_SYNC": (55, 231),
          "NVN_LAYER_PROCS_SAMPLER": (55, 231), "NVN_LAYER_PROCS_BUFFER": (55, 231),
          "NVN_LAYER_PROCS_WINDOW": (55, 231), "NVN_LAYER_PROCS_WINDOW_231": (231,),
+         "NVN_LAYER_PROCS_COUNTER": (55, 231),
          "NVN_LAYER_PROCS_DRAW": (55, 231), "NVN_LAYER_PROCS_231": (231,)}
 # What the layer carries outside its lists (nvnlayer_procs.h says why), in every build.
 BY_HAND = ("nvnBootstrapLoader", "nvnDeviceGetInteger", "nvnDeviceGetProcAddress")
@@ -50,7 +51,7 @@ BY_HAND = ("nvnBootstrapLoader", "nvnDeviceGetInteger", "nvnDeviceGetProcAddress
 BUILDS = (
     {"name": "the NRO", "api": 55, "roots": ("RunNvn",),
      "files": ("source/tests/t_nvn.c", "source/tests/t_nvnscene.c", "source/drawpath.c",
-               "source/drawpath_nvn.c")},
+               "source/drawpath_nvn.c", "source/tests/t_nvncmd.c")},
     {"name": "the Switch 2 program", "api": 231, "roots": ("RunNvn", "RunNvn2"),
      "files": ("source/tests/t_nvn.c", "ounce/t_nvn2.c")},
 )
@@ -61,6 +62,9 @@ SCANNED = ("source", "ounce")
 # and one of them is the NVN the program looks up; the other two (deko3d's calls, the layer's own bodies) are no
 # runtime's NVN.
 GUARDS = {"DrawPathOpenNvn": "DRAW_PATH_NVN"}
+# The same for a function that records NVN calls of its own on a way's command buffer (drawpath_nvn.h), which is
+# told by its name's end: such a scene goes down the layer's own way too.
+GUARDED_END = ("Recorded", "DRAW_PATH_NVN")
 
 # What the layer's own loader calls for a program: a case that calls the loader has called these.
 LOADERS = {"NvnLoadProcs": ("nvnBootstrapLoader", "nvnDeviceGetProcAddress")}
@@ -645,7 +649,7 @@ class Walk:
                 constants.add(piece[0].text)
                 if takes:
                     passed[takes] = Constant(piece[0].text)
-        guard = GUARDS.get(callee.name)
+        guard = GUARDS.get(callee.name, GUARDED_END[1] if callee.name.endswith(GUARDED_END[0]) else None)
         if guard is not None and guard not in constants:
             return
         self.function(callee, case, passed, frozenset(constants))
