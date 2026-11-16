@@ -19,7 +19,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, ninety one cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, ninety seven cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -63,7 +63,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three
-  hundred and forty five.
+  hundred and forty nine.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -417,9 +417,21 @@ hashes set is the driver's, and ScarletNX keeps none.
   `SetTiledCacheAction` (flush, disable, enable, flush) around two draws. The tiled cache is how the graphics unit
   orders its work and no picture shows it, so the case holds a runtime only to drawing on.
 
+- **conservative rasterization draws every pixel a quad touches**: four quads each 0.6 of a pixel inside its
+  cell. By the usual rule the cell's outer ring of pixels, touched but with centres outside, stays clear; with
+  `nvnCommandBufferSetConservativeRasterEnable` the cell is full, and still with four more bits of subpixel
+  precision each way (`SetSubpixelPrecisionBias`); with it off the ring is clear again.
+- **a conservative quad dilated by half a pixel reaches the pixels a third of one away**: two quads 1.3 pixels
+  inside their cells, conservative: with no dilation the ring is clear, and with
+  `nvnCommandBufferSetConservativeRasterDilate` of 0.5 the cell is full.
+- **a line of width four is four rows of pixels**: `nvnCommandBufferSetLineWidth` and one level line along the
+  boundary between two rows, from 8 pixels in to 8 from the far side. Half way along it is four rows thick, from
+  one to three rows above the boundary, and every pixel between its ends is judged against those rows. Which of
+  the three it is, and the two pixels at each end, are the rasterizer's rounding and are not asked.
+
 Still without a case: the stencil's reference and masks, the blend colour, the alpha reference, the polygon
-offset and the sample mask, which need the state objects' tests in the layer; the line width, conservative
-rasterization, the subpixel bias, the patch size and the tessellation levels. And for good, as far as a picture
+offset and the sample mask, which need the state objects' tests in the layer; the patch size and the tessellation
+levels, which need a program of three stages. And for good, as far as a picture
 goes: `nvnCommandBufferOverrideSubtileSize`, `SetColorReductionEnable`, `SetColorReductionThresholds`,
 `SetZCullZF32CompressionEnable`, `SetStencilCullCriteria` and the Ounce's `SetShadingRatePaletteMode`, which tune
 how the graphics unit stores and culls and change nothing a program reads.

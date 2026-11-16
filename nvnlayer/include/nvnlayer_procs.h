@@ -310,7 +310,8 @@
     X(void, nvnCommandBufferDiscardDepthStencil, (NVNcommandBuffer * cmd))
 
 // The render state a list sets by itself: viewports and scissors by number, depth ranges and
-// bounds, the rasterizer's switches, the point size, the restart index, and the tiled cache.
+// bounds, the rasterizer's switches, the point size, the restart index, the tiled cache, the
+// line width and conservative rasterization.
 #define NVN_LAYER_PROCS_STATE(X)                                                                  \
     X(void, nvnCommandBufferSetViewports,                                                         \
       (NVNcommandBuffer * cmd, int first, int count, const float *rectangles))                    \
@@ -332,7 +333,12 @@
     X(void, nvnCommandBufferSetTiledCacheAction,                                                  \
       (NVNcommandBuffer * cmd, NVNtiledCacheAction action))                                       \
     X(void, nvnCommandBufferSetTiledCacheTileSize,                                                \
-      (NVNcommandBuffer * cmd, int width, int height))
+      (NVNcommandBuffer * cmd, int width, int height))                                            \
+    X(void, nvnCommandBufferSetLineWidth, (NVNcommandBuffer * cmd, float width))                  \
+    X(void, nvnCommandBufferSetConservativeRasterEnable,                                          \
+      (NVNcommandBuffer * cmd, NVNboolean enable))                                                \
+    X(void, nvnCommandBufferSetConservativeRasterDilate, (NVNcommandBuffer * cmd, float dilate))  \
+    X(void, nvnCommandBufferSetSubpixelPrecisionBias, (NVNcommandBuffer * cmd, int x, int y))
 
 // The debug layer's calls, as a release driver answers them: labels, markers and groups, object
 // numbers, the callback, the object database and the checkpoints.
