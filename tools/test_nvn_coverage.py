@@ -276,6 +276,15 @@ class Cases(unittest.TestCase):
         self.assertEqual(cases(walked(guards={"Guarded": "WAY_OTHER"}), "nvnSyncWait"), ["outside"])
         self.assertEqual(cases(walked(guards={"Guarded": "WAY_NVN"}), "nvnSyncWait"), [])
 
+    def test_a_function_named_as_recording_needs_the_looked_up_way(self):
+        text = ('static const char *const SUITE = "toy";\n'
+                'static void ListRecorded(void) { nvn.nvnQueueFlush(0); }\n'
+                'static void Case(int kind, const char *name) {\n'
+                '    if (!ReportStart(SUITE, name)) { return; }\n    ListRecorded();\n'
+                '    CHECK_TRUE(SUITE, name, 0, true, "");\n}\n'
+                'void RunToy(void) {\n    Case(DRAW_PATH_LAYER, "own");\n    Case(DRAW_PATH_NVN, "looked up");\n}\n')
+        self.assertEqual(cases(walked(text), "nvnQueueFlush"), ["looked up"])
+
     def test_a_case_name_that_is_no_string_is_refused_with_its_place(self):
         with self.assertRaisesRegex(tool.Refused, r"toy.c:4: ReportStart\(SUITE, names\[i\]|toy.c:4: ReportStart"):
             walked('static const char *const SUITE = "toy";\nvoid RunToy(void) {\n'

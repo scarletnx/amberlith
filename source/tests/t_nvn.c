@@ -2183,10 +2183,12 @@ void RunNvn(void) {
     // Before the first lookup: a runtime that runs a game's NVN itself takes each function at
     // the address its name resolves to, the layer's own from then on with it.
     NvnSceneFirst();
+    NvnCommandFirst();
     LayerCases();
     // With the suite's own device down, whatever the cases above came to: the scene's way
     // makes its own.
     NvnSceneLast();
+    NvnCommandLast();
 #else
     // The scene is a Switch program's: its shaders are the Switch's code and two of its three
     // ways are deko3d's.

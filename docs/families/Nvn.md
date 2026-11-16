@@ -8,11 +8,13 @@
 * [The scene, down three ways](#the-scene-down-three-ways)
   * [A texture past its edges](#a-texture-past-its-edges)
   * [Indexed draws](#indexed-draws)
+* [The command buffer, down two ways](#the-command-buffer-down-two-ways)
+  * [Counters and the render enable](#counters-and-the-render-enable)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, forty four cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, fifty four cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -56,7 +58,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and fifty four.
+  and sixty one.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -268,6 +270,43 @@ failing case says whose colour the first wrong pixel has.
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the
 block at `binding = 0`.
+
+## The command buffer, down two ways
+
+What a list does past the binds and the draws of the scenes is asked with NVN's own calls, which deko3d's way has
+no word for, on the command buffer of an NVN way (`source/drawpath_nvn.h`), so each case of
+`source/tests/t_nvncmd.c` runs twice: **through the layer's own NVN functions**, before the suite's lookup, where
+the graphics unit answers the layer's deko3d commands on every machine, and **through the NVN the program looks
+up**, after the scenes. A case draws flat quads with the scene's shaders into the cells of a 64 by 64 target,
+sixteen pixels a side and each in a colour of its own, and judges every pixel: a cell holds its colour or the clear
+colour. What a list writes to memory lands in a page the processor reads, filled first with a byte no case
+expects. Exact tier.
+
+### Counters and the render enable
+
+- **the samples counter reports a quad's 256 pixels and none after a reset**: `nvnCommandBufferResetCounter`, one
+  cell drawn, `nvnCommandBufferReportCounter` of the samples passed, then a reset and a report with nothing drawn
+  between. The counts are 256 and 0.
+- **two values a list reports are in memory once it has run**: `nvnCommandBufferReportValue` twice, a report's
+  16 bytes apart: each value is the four bytes at its address, and nothing lands past the second report. The
+  twelve bytes after a value are not judged: deko3d writes a value as a whole report, with a time, and ScarletNX's
+  NVN as the word alone, and no console has been asked here which the driver does.
+- **two timestamp reports hold no count and times between the device's clock before and after**: a timestamp
+  report, a cell drawn, another. Each holds a count of 0; `nvnDeviceGetTimestampInNanoseconds` of the first is no
+  earlier than `nvnDeviceGetCurrentTimestampInNanoseconds` read before the list, the second no earlier than the
+  first, and the clock read after the list no earlier than the second.
+- **a timestamp report's word is the graphics unit's ticks, 384 every 625 nanoseconds**: the nanoseconds the
+  device gives for a report are its word times 625 over 384. The graphics unit's timer runs at 614.4 MHz, which is
+  what the console's reports hold and what deko3d converts by; a runtime that writes the reports itself has to
+  write that unit, since a program may read the word.
+- **the render enable draws under on and under a condition that holds and skips the rest**: nine cells, each
+  drawn after one word of the render enable: `nvnCommandBufferSetRenderEnable` off and on, then
+  `nvnCommandBufferSetRenderEnableConditional` if equal and if not equal over two counts the processor wrote equal
+  (their times differ), over two it wrote apart, and over the 256 and the 0 a list that finished before reported,
+  then on again. The five under a word that holds are drawn, and the four others are left clear. NVN compares the
+  count at the address with the one 16 bytes on, as two reports lie; the layer sends the 3D engine's render enable
+  itself, which deko3d never writes. A clear under the render enable is not asked: no console has said here
+  whether it obeys.
 
 ## Where nvn/nvn.h comes from
 

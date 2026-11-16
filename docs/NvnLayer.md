@@ -47,7 +47,7 @@ set behind the version.
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |
 | the types and the object sizes | `include/nvn/nvn.h` | both; the API 231 build adds the Ounce's objects and its larger window builder |
-| NVN on deko3d: every function's body | `source/api55_deko3d.c`, `api55_draw.c` | API 55 |
+| NVN on deko3d: every function's body | `source/api55_deko3d.c`, `api55_draw.c`, `api55_command.c` | API 55 |
 | a DKSH as an NVN program's code and control section | `source/api55_shader.c` | API 55 |
 | bodies that stop the program, naming the function | `source/api231_surface.c` | API 231 |
 
@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and fifty four functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and sixty one functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -145,6 +145,12 @@ Two hundred and fifty four functions, each recording the deko3d commands that do
   keeps, refusing an acquire while it is fewer than the window has, since deko3d takes whichever texture the
   display hands back; and `nvnWindowAcquireTexture`, deko3d's acquire that hands the display's fence, which becomes
   the sync's;
+- **what a list reports**: a counter with its time (`nvnCommandBufferReportCounter`, each of NVN's seventeen
+  counters as deko3d's), a value, the counter's reset, and the device's two readings of the graphics unit's clock,
+  a report's ticks turned into nanoseconds as deko3d turns them (625 over 384);
+- **the render enable**, which deko3d has no command for: the 3D engine's method itself (0x554: an address and a
+  mode), its words and the control list that names them written into the part of the command memory the layer
+  keeps, a unit of 0x200 bytes each, so they live as long as the list;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

@@ -14,8 +14,8 @@
 ///
 /// Three lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
-///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER and
-///   NVN_LAYER_PROCS_WINDOW, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
+///   NVN_LAYER_PROCS_WINDOW and NVN_LAYER_PROCS_COUNTER, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, a part of it written apart): the
@@ -242,6 +242,21 @@
     X(void, nvnWindowGetHdrContentMetadata,                                                       \
       (const NVNwindow *window, float *most, float *frame_average))
 
+// What a list reports to memory (a counter with its time, a value), the counter's reset, the
+// render enable, and the device's two readings of the graphics unit's clock.
+#define NVN_LAYER_PROCS_COUNTER(X)                                                                \
+    X(void, nvnCommandBufferReportCounter,                                                        \
+      (NVNcommandBuffer * cmd, NVNcounterType type, NVNbufferAddress address))                    \
+    X(void, nvnCommandBufferReportValue,                                                          \
+      (NVNcommandBuffer * cmd, uint32_t value, NVNbufferAddress address))                         \
+    X(void, nvnCommandBufferResetCounter, (NVNcommandBuffer * cmd, NVNcounterType type))          \
+    X(void, nvnCommandBufferSetRenderEnable, (NVNcommandBuffer * cmd, NVNboolean enable))         \
+    X(void, nvnCommandBufferSetRenderEnableConditional,                                           \
+      (NVNcommandBuffer * cmd, NVNconditionalRenderMode mode, NVNbufferAddress address))          \
+    X(uint64_t, nvnDeviceGetTimestampInNanoseconds,                                               \
+      (const NVNdevice *device, const NVNcounterData *counter))                                   \
+    X(uint64_t, nvnDeviceGetCurrentTimestampInNanoseconds, (const NVNdevice *device))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -330,7 +345,8 @@
     NVN_LAYER_PROCS_SYNC(X)                                                                       \
     NVN_LAYER_PROCS_SAMPLER(X)                                                                    \
     NVN_LAYER_PROCS_BUFFER(X)                                                                     \
-    NVN_LAYER_PROCS_WINDOW(X)
+    NVN_LAYER_PROCS_WINDOW(X)                                                                     \
+    NVN_LAYER_PROCS_COUNTER(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

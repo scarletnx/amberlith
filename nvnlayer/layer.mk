@@ -16,7 +16,8 @@ NVNLAYER_API ?= 55
 
 ifeq ($(NVNLAYER_API),55)
 NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/api55_deko3d.c \
-                    $(NVNLAYER_DIR)/source/api55_draw.c $(NVNLAYER_DIR)/source/api55_shader.c
+                    $(NVNLAYER_DIR)/source/api55_draw.c $(NVNLAYER_DIR)/source/api55_shader.c \
+                    $(NVNLAYER_DIR)/source/api55_command.c
 else ifeq ($(NVNLAYER_API),231)
 NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/api231_surface.c
 else
