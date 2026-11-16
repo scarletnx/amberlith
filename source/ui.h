@@ -1086,6 +1086,14 @@ typedef struct {
 /// its begin. False when it holds nothing.
 bool UiBrowsePick(const UiBrowseState *state, const UiBrowseInfo *info, UiPick *pick);
 
+/// The box of the judge question (UiBrowseState.waiting) on a frame of @p frame_width by
+/// @p frame_height. Around it the page is cleared for UI_JUDGE_MARGIN_Y above and below and
+/// UI_JUDGE_MARGIN_X at its sides, a row of text and a letter, so a line of the tab under it is
+/// whole or gone, never cut at the box's edge.
+UiRect UiJudgeQuestionRect(uint32_t frame_width, uint32_t frame_height);
+#define UI_JUDGE_MARGIN_X UI_CELL_WIDTH
+#define UI_JUDGE_MARGIN_Y UI_CELL_HEIGHT
+
 /// Whether a case of @p suite named @p name runs in a run of @p pick: the judge's always, every
 /// case of a suite picked whole, a case picked, and with any case of its suite picked, the
 /// suite's cases the catalogue holds no verdict tier for (its bring-up) and those it does not

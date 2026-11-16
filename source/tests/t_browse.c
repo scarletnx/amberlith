@@ -754,6 +754,63 @@ static void CheckWait(uint8_t *pixels) {
                (unsigned)left[4], (unsigned)on_foot, (unsigned)above);
 }
 
+/// The judge question over a tab full of rows and panels: in the margin it clears around its box
+/// no line of the tab shows, cut at the box's edge or whole, and the box itself is drawn.
+static void CheckJudgeMargin(uint8_t *pixels) {
+    static const char NAME[] = "the judge question clears a margin round its box, so no line under "
+                               "it shows cut";
+    if (pixels == NULL) {
+        ReportCase(SUITE, NAME, CHECK_NONE, false, "no memory for a frame");
+        return;
+    }
+    BrowseCatalog catalog;
+    memset(&catalog, 0, sizeof(catalog));
+    Catalogue(&catalog);
+    UiStartInfo start;
+    memset(&start, 0, sizeof(start));
+    start.heading = "edenprobe 0.17.0 (test)";
+    start.families_present = MODE_FAMILIES_PRESENT;
+    UiBrowseInfo info;
+    memset(&info, 0, sizeof(info));
+    info.heading = "0.17.0 on scarletnx";
+    info.machine = info.heading;
+    info.catalogue = catalog.records;
+    info.catalogue_count = catalog.count;
+    info.catalogue_from = "sdmc:/edenprobe/runs/test";
+    info.start = &start;
+    const RunMode mode = ModeFromText("");
+    const UiStartState opened = UiStartOpen(&mode, MODE_FAMILIES_PRESENT);
+    UiBrowseState state = UiBrowseOpen(UI_TAB_SUITES, &opened, UiOptionsFrom(&mode), &info);
+    state.level = 1u;
+    state.suite = UiBrowseSuiteIndex("coverage");
+    state.item = 2u;
+    state.waiting = UI_ASK_RUN;
+    const UiFrame frame = { pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
+    UiComposeBrowse(&frame, &info, &state);
+    BrowseCatalogFree(&catalog);
+    const UiRect box = UiJudgeQuestionRect(FRAME_WIDTH, FRAME_HEIGHT);
+    // Drawn is darker than the page and its grid can be, grain and corners included: the rows'
+    // boxes, the rules, every colour words take.
+    uint32_t drawn = 0;
+    uint32_t inside = 0;
+    for (uint32_t y = box.y - UI_JUDGE_MARGIN_Y; y < box.y + box.height + UI_JUDGE_MARGIN_Y; ++y) {
+        for (uint32_t x = box.x - UI_JUDGE_MARGIN_X; x < box.x + box.width + UI_JUDGE_MARGIN_X;
+             ++x) {
+            const bool dark = pixels[((size_t)y * FRAME_WIDTH + x) * 4u] < 0xC0u;
+            const bool in_box = x >= box.x && x < box.x + box.width && y >= box.y &&
+                                y < box.y + box.height;
+            inside += in_box && dark ? 1u : 0u;
+            drawn += !in_box && dark ? 1u : 0u;
+        }
+    }
+    CHECK_TRUE(SUITE, NAME, CHECK_NONE, drawn == 0u && inside > 0u,
+               "%u drawn pixels in the margin of %u by %u round the box at %u,%u of %u by %u; "
+               "%u in the box",
+               (unsigned)drawn, (unsigned)UI_JUDGE_MARGIN_X, (unsigned)UI_JUDGE_MARGIN_Y,
+               (unsigned)box.x, (unsigned)box.y, (unsigned)box.width, (unsigned)box.height,
+               (unsigned)inside);
+}
+
 /// The browser's screens written where a person can look at them, when EDENPROBE_FRAMES names a
 /// directory: host only, and never a case, as the screens' own frames are.
 static void DumpBrowser(uint8_t *pixels) {
@@ -857,6 +914,7 @@ void RunSupportBrowse(void) {
     CheckMusic();
     CheckScriptRuns();
     CheckWait(pixels);
+    CheckJudgeMargin(pixels);
     if (pixels == NULL) {
         static const char *const NAMES[3] = {
             "the HUD and the pause menu draw over a demo's frame with nothing blended",

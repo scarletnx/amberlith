@@ -4380,12 +4380,26 @@ static void ComposeOptions(const UiFrame *frame, const UiBrowseState *state, cha
 }
 
 /// The judge question over the tab a run was asked from, its keys on the foot.
-static void JudgeQuestion(const UiFrame *frame, const UiBrowseState *state,
-                          const UiBrowseInfo *info) {
+UiRect UiJudgeQuestionRect(uint32_t frame_width, uint32_t frame_height) {
     const uint32_t width = 720u;
     const uint32_t height = BH + 4u + 4u * LINE + 16u;
-    const uint32_t x = (frame->width - width) / 2u;
-    const uint32_t y = (frame->height - height) / 2u;
+    const UiRect rect = { frame_width > width ? (frame_width - width) / 2u : 0u,
+                          frame_height > height ? (frame_height - height) / 2u : 0u, width,
+                          height };
+    return rect;
+}
+
+static void JudgeQuestion(const UiFrame *frame, const UiBrowseState *state,
+                          const UiBrowseInfo *info) {
+    const UiRect box = UiJudgeQuestionRect(frame->width, frame->height);
+    const uint32_t x = box.x;
+    const uint32_t y = box.y;
+    const uint32_t width = box.width;
+    const uint32_t height = box.height;
+    const uint32_t left = x > UI_JUDGE_MARGIN_X ? x - UI_JUDGE_MARGIN_X : 0u;
+    const uint32_t top = y > UI_JUDGE_MARGIN_Y ? y - UI_JUDGE_MARGIN_Y : 0u;
+    Backdrop(frame, left, top, x + width + UI_JUDGE_MARGIN_X - left,
+             y + height + UI_JUDGE_MARGIN_Y - top);
     uint32_t line = Box(frame, x, y, width, height, "Run the judge first?", NULL, NULL) + 4u;
     Say(frame, x + CW, line, TEXT, "The judge holds the probe itself to its references first:");
     line += LINE;
