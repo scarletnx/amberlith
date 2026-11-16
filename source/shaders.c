@@ -111,6 +111,7 @@ static const ShaderBlob BLOBS[SHADER_COUNT] = {
     [SHADER_FLUID_ALIAS_COMP] = { fluid_alias_comp_dksh, (uint32_t)fluid_alias_comp_dksh_size },
     [SHADER_SCENE_VERT] = { scene_vert_dksh, (uint32_t)scene_vert_dksh_size },
     [SHADER_SCENE_FRAG] = { scene_frag_dksh, (uint32_t)scene_frag_dksh_size },
+    [SHADER_HANDLES_FRAG] = { handles_frag_dksh, (uint32_t)handles_frag_dksh_size },
 };
 
 const void *ShaderData(ShaderId id) {

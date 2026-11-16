@@ -414,7 +414,8 @@
       (NVNcommandBuffer * cmd, NVNdebugDomainId domain))
 
 // What a device and its builder answer of themselves, the clear values registered with a
-// device, and a program set from NVN 55's longer shader data.
+// device, a program set from NVN 55's longer shader data, and the handles of a texture and of
+// a sampler apart and of a texel fetch.
 #define NVN_LAYER_PROCS_OBJECT(X)                                                                 \
     X(int, nvnDeviceBuilderGetFlags, (const NVNdeviceBuilder *builder))                           \
     X(NVNwindowOriginMode, nvnDeviceGetWindowOriginMode, (const NVNdevice *device))               \
@@ -428,7 +429,10 @@
     X(NVNboolean, nvnDeviceRegisterFastClearDepth, (NVNdevice * device, float depth))             \
     X(NVNboolean, nvnDeviceRegisterFastClearStencil, (NVNdevice * device, int stencil))           \
     X(NVNboolean, nvnProgramSetShadersExt,                                                        \
-      (NVNprogram * program, int count, const void *stages))
+      (NVNprogram * program, int count, const void *stages))                                      \
+    X(uint64_t, nvnDeviceGetSeparateTextureHandle, (const NVNdevice *device, int id))             \
+    X(uint64_t, nvnDeviceGetSeparateSamplerHandle, (const NVNdevice *device, int id))             \
+    X(uint64_t, nvnDeviceGetTexelFetchHandle, (const NVNdevice *device, int id))
 
 // What the Ounce's program builder (API 231) answers of itself: its device, its shader data,
 // its sample shading, and the three numbers it keeps for a ray tracing program.

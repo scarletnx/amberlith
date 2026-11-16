@@ -720,6 +720,8 @@ bool DrawPathNvn(DrawPath *path, DrawPathNvnParts *parts) {
     parts->control = nv->control;
     parts->control_bytes = CONTROL_BYTES;
     parts->stages = nv->stages;
+    parts->texture_base = nv->texture_base;
+    parts->sampler_base = nv->sampler_base;
     return true;
 }
 

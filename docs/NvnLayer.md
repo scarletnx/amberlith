@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Three hundred and fifty two functions, each recording the deko3d commands that do what NVN says it does:
+Three hundred and fifty five functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -175,8 +175,10 @@ Three hundred and fifty two functions, each recording the deko3d commands that d
   every checkpoint switch and checkpoint answers that it was taken and records nothing, a debug domain is the next
   number from 0, and a label, a marker or a group goes nowhere;
 - **what a device and its builder answer of themselves** (the flags, the two modes), **the clear values a
-  program registers**, taken and kept nowhere, deko3d having no such hint, and **a program set from NVN 55's longer
-  shader data**, whose first sixteen bytes a stage are the shader data the layer draws with;
+  program registers**, taken and kept nowhere, deko3d having no such hint, **a program set from NVN 55's longer
+  shader data**, whose first sixteen bytes a stage are the shader data the layer draws with, and **the handles of a
+  texture alone, of a sampler alone and of a texel fetch**: the descriptor's number where deko3d's one handle has
+  it, so a shader that puts the low words of a texture's and a sampler's one over the other has deko3d's handle;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

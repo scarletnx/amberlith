@@ -33,6 +33,10 @@ typedef struct {
     /// The shader data each program the scene made was set from, a vertex stage and a fragment
     /// stage, in the order DrawPathProgram numbered them.
     const NVNshaderData (*stages)[2];
+    /// The descriptors of the scene's first texture and of its sampler in the way's pools: the
+    /// texture DrawPathTextureSampled numbered n has the ones n further.
+    int texture_base;
+    int sampler_base;
 } DrawPathNvnParts;
 
 /// Fills @p parts for @p path. False for the deko3d way, which has none of them.
