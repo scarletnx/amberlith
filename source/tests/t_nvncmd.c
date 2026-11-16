@@ -753,7 +753,7 @@ static void ListsCase(DrawPathKind kind, const char *name) {
 /// The side of a case's own textures, and the bytes of one's texels.
 #define SMALL 16
 #define SMALL_BYTES (SMALL * SMALL * 4)
-#define EXTRAS 3
+#define EXTRAS 5
 
 /// Textures of a case's own, in a pool of their own, and where their texels are read back:
 /// taken down before the way that made them.
@@ -763,6 +763,8 @@ typedef struct {
     void *storage;
     bool pool_up;
     int made;
+    /// The samples of the first texture, when it is a multisampled one: it is not read back.
+    int first_samples;
     DrawBuffer read;
 } Extras;
 
@@ -781,10 +783,11 @@ static void ExtrasDown(Kit *kit, Extras *extras) {
 }
 
 /// @p count 16 by 16 textures of @p formats. False with the step in @p why and nothing left.
-static bool ExtrasUp(Kit *kit, Extras *extras, const NVNformat *formats, int count, char *why,
-                     size_t why_size) {
+static bool ExtrasUpOf(Kit *kit, Extras *extras, const NVNformat *formats, int count,
+                       int first_samples, char *why, size_t why_size) {
     const NvnProcs *const n = kit->nvn.nvn;
     memset(extras, 0, sizeof(*extras));
+    extras->first_samples = first_samples;
     if (!DrawPathAlloc(kit->path, (uint32_t)(count * SMALL_BYTES), &extras->read)) {
         snprintf(why, why_size, "no room to read the case's textures back: %s",
                  DrawPathFailure(kit->path));
@@ -817,7 +820,12 @@ static bool ExtrasUp(Kit *kit, Extras *extras, const NVNformat *formats, int cou
         memset(&builder, 0, sizeof(builder));
         n->nvnTextureBuilderSetDevice(&builder, kit->nvn.device);
         n->nvnTextureBuilderSetDefaults(&builder);
-        n->nvnTextureBuilderSetTarget(&builder, NVN_TEXTURE_TARGET_2D);
+        if (extras->made == 0 && first_samples > 1) {
+            n->nvnTextureBuilderSetTarget(&builder, NVN_TEXTURE_TARGET_2D_MULTISAMPLE);
+            n->nvnTextureBuilderSetSamples(&builder, first_samples);
+        } else {
+            n->nvnTextureBuilderSetTarget(&builder, NVN_TEXTURE_TARGET_2D);
+        }
         n->nvnTextureBuilderSetFormat(&builder, formats[extras->made]);
         n->nvnTextureBuilderSetSize2D(&builder, SMALL, SMALL);
         const size_t size = n->nvnTextureBuilderGetStorageSize(&builder);
@@ -846,13 +854,18 @@ static bool ExtrasUp(Kit *kit, Extras *extras, const NVNformat *formats, int cou
     return true;
 }
 
+static bool ExtrasUp(Kit *kit, Extras *extras, const NVNformat *formats, int count, char *why,
+                     size_t why_size) {
+    return ExtrasUpOf(kit, extras, formats, count, 0, why, why_size);
+}
+
 /// Into the open list: every texture of @p extras copied to where the processor reads it,
 /// behind a barrier.
 static void ExtrasReadRecorded(Kit *kit, Extras *extras) {
     const NvnProcs *const n = kit->nvn.nvn;
     n->nvnCommandBufferBarrier(kit->nvn.command, NVN_BARRIER_ORDER_FRAGMENTS_BIT);
     const NVNcopyRegion whole = { 0, 0, 0, SMALL, SMALL, 1 };
-    for (int i = 0; i < extras->made; ++i) {
+    for (int i = extras->first_samples > 1 ? 1 : 0; i < extras->made; ++i) {
         n->nvnCommandBufferCopyTextureToBuffer(
             kit->nvn.command, &extras->textures[i], NULL, &whole,
             extras->read.address + (uint64_t)(i * SMALL_BYTES), 0);
@@ -1924,6 +1937,90 @@ static void DepthKeptCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 0xfu, why);
 }
 
+// ---- a multisampled target resolved
+
+/// The colours the multisampled target is cleared to before each of the four resolves, each a
+/// byte a channel that no other has.
+static const uint8_t RESOLVED[4][4] = { { 0x33, 0x66, 0x99, 0xff },
+                                        { 0x99, 0x33, 0x66, 0xff },
+                                        { 0x66, 0x99, 0x33, 0xff },
+                                        { 0xcc, 0x33, 0x99, 0xff } };
+
+/// Into the open list: the multisampled texture, the first of @p extras, cleared to a colour
+/// and resolved into one of the four others, by each of NVN's four resolves in turn.
+static void ResolvesRecorded(Kit *kit, Extras *extras) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    const NVNtexture *const many = &extras->textures[0];
+    const NVNtexture *target[1] = { many };
+    _Alignas(8) NVNmultisampleState samples;
+    n->nvnMultisampleStateSetDefaults(&samples);
+    n->nvnMultisampleStateSetMultisampleEnable(&samples, 1);
+    n->nvnMultisampleStateSetSamples(&samples, extras->first_samples);
+    _Alignas(8) NVNtextureView view;
+    n->nvnTextureViewSetDefaults(&view);
+    for (int i = 0; i < 4; ++i) {
+        const float colour[4] = { (float)RESOLVED[i][0] / 255.0f, (float)RESOLVED[i][1] / 255.0f,
+                                  (float)RESOLVED[i][2] / 255.0f,
+                                  (float)RESOLVED[i][3] / 255.0f };
+        const NVNtexture *const one = &extras->textures[1 + i];
+        n->nvnCommandBufferSetRenderTargets(cmd, 1, target, NULL, NULL, NULL);
+        n->nvnCommandBufferBindMultisampleState(cmd, &samples);
+        n->nvnCommandBufferSetScissor(cmd, 0, 0, SMALL, SMALL);
+        n->nvnCommandBufferClearColor(cmd, 0, colour, NVN_CLEAR_COLOR_MASK_RGBA);
+        n->nvnCommandBufferBarrier(cmd, NVN_BARRIER_ORDER_FRAGMENTS_BIT |
+                                            NVN_BARRIER_INVALIDATE_TEXTURE_BIT);
+        if (i == 0) {
+            n->nvnCommandBufferDownsample(cmd, many, one);
+        } else if (i == 1) {
+            n->nvnCommandBufferDownsampleTextureView(cmd, many, &view, one, &view);
+        } else if (i == 2) {
+            n->nvnCommandBufferTiledDownsample(cmd, many, one);
+        } else {
+            n->nvnCommandBufferTiledDownsampleTextureView(cmd, many, &view, one, &view);
+        }
+    }
+    n->nvnMultisampleStateSetDefaults(&samples);
+    n->nvnCommandBufferBindMultisampleState(cmd, &samples);
+    target[0] = kit->nvn.target;
+    n->nvnCommandBufferSetRenderTargets(cmd, 1, target, NULL, NULL, NULL);
+    n->nvnCommandBufferSetScissor(cmd, 0, 0, (int)SCENE_SIZE, (int)SCENE_SIZE);
+}
+
+/// A target of four samples a pixel, cleared, is resolved into a texture of one: every texel is
+/// the clear's colour, all four samples of it being that. Four clears and four resolves, by
+/// nvnCommandBufferDownsample, its form that takes views, and the two tiled ones, each into a
+/// texture of its own; a cell drawn afterwards into the way's own target is there too.
+static void ResolvesCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[320] = "";
+    Extras extras;
+    static const NVNformat formats[5] = { NVN_FORMAT_RGBA8, NVN_FORMAT_RGBA8, NVN_FORMAT_RGBA8,
+                                          NVN_FORMAT_RGBA8, NVN_FORMAT_RGBA8 };
+    if (ExtrasUpOf(&kit, &extras, formats, 5, 4, why, sizeof(why))) {
+        KitBegin(&kit, true);
+        ResolvesRecorded(&kit, &extras);
+        KitCell(&kit, 10);
+        ExtrasReadRecorded(&kit, &extras);
+        if (KitEnd(&kit, why, sizeof(why))) {
+            static const char *const WHOSE[4] = {
+                "the texture nvnCommandBufferDownsample resolved into",
+                "the texture nvnCommandBufferDownsampleTextureView resolved into",
+                "the texture nvnCommandBufferTiledDownsample resolved into",
+                "the texture nvnCommandBufferTiledDownsampleTextureView resolved into",
+            };
+            for (int i = 0; i < 4; ++i) {
+                ExtrasJudge(&extras, 1 + i, WHOSE[i], RESOLVED[i], RESOLVED[i], why, sizeof(why));
+            }
+        }
+        ExtrasDown(&kit, &extras);
+    }
+    KitJudge(&kit, name, 1u << 10, why);
+}
+
 // ---- patches
 
 /// The outer levels the patches of the tessellation case are drawn with, which its evaluation
@@ -2363,6 +2460,9 @@ void NvnCommandFirst(void) {
                                "them, through the layer's own NVN functions");
     ShadedCase(DRAW_PATH_LAYER, "a program whose sample shading is its code's draws and asks "
                                 "for no subtile, through the layer's own NVN functions");
+    ResolvesCase(DRAW_PATH_LAYER, "a cleared target of four samples resolves into its colour by "
+                                  "each of the four downsamples, through the layer's own NVN "
+                                  "functions");
     DepthKeptCase(DRAW_PATH_LAYER, "depth tested draws around a depth target's resolve and its "
                                    "culling data's save and restore are as without them, "
                                    "through the layer's own NVN functions");
@@ -2446,6 +2546,9 @@ void NvnCommandLast(void) {
                              "through the NVN the program looks up");
     ShadedCase(DRAW_PATH_NVN, "a program whose sample shading is its code's draws and asks for "
                               "no subtile, through the NVN the program looks up");
+    ResolvesCase(DRAW_PATH_NVN, "a cleared target of four samples resolves into its colour by "
+                                "each of the four downsamples, through the NVN the program looks "
+                                "up");
     DepthKeptCase(DRAW_PATH_NVN, "depth tested draws around a depth target's resolve and its "
                                  "culling data's save and restore are as without them, through "
                                  "the NVN the program looks up");

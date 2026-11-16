@@ -766,6 +766,16 @@
     X(void, nvnProgramSetSampleShading, (NVNprogram * program, int mode))                         \
     X(int, nvnProgramGetSubtileSize, (const NVNprogram *program))                                 \
     X(void, nvnCommandBufferResolveDepthBuffer, (NVNcommandBuffer * cmd))                         \
+    X(void, nvnCommandBufferDownsample,                                                           \
+      (NVNcommandBuffer * cmd, const NVNtexture *source, const NVNtexture *destination))          \
+    X(void, nvnCommandBufferDownsampleTextureView,                                                \
+      (NVNcommandBuffer * cmd, const NVNtexture *source, const NVNtextureView *source_view,       \
+       const NVNtexture *destination, const NVNtextureView *destination_view))                    \
+    X(void, nvnCommandBufferTiledDownsample,                                                      \
+      (NVNcommandBuffer * cmd, const NVNtexture *source, const NVNtexture *destination))          \
+    X(void, nvnCommandBufferTiledDownsampleTextureView,                                           \
+      (NVNcommandBuffer * cmd, const NVNtexture *source, const NVNtextureView *source_view,       \
+       const NVNtexture *destination, const NVNtextureView *destination_view))                    \
     X(void, nvnCommandBufferSaveZCullData,                                                        \
       (NVNcommandBuffer * cmd, NVNbufferAddress address, size_t size))                            \
     X(void, nvnCommandBufferRestoreZCullData,                                                     \
