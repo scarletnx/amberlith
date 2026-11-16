@@ -29,8 +29,8 @@
 <!-- Written by tools/nvn-coverage.py: change the cases, the layer or the tool, and run it. -->
 
 Which of the NVN functions ScarletNX answers a case of the probe calls. ScarletNX's `nvn.hook` at 3f7d34fadf3f
-names 677; the layer has 528 of them in its API 55 build and 669 in its API 231 build; a case calls 669. The
-other 8 have no call at all: a runtime could answer any of them wrongly and every case would still pass.
+names 677; the layer has 528 of them in its API 55 build and 671 in its API 231 build; a case calls 671. The
+other 6 have no call at all: a runtime could answer any of them wrongly and every case would still pass.
 
 ## How to read it
 
@@ -91,8 +91,8 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | [Commands: render state](#commands-render-state) | 36 | 35 | 36 | 36 | 0 |
 | [DLSS](#dlss) | 58 | 0 | 58 | 58 | 0 |
 | [Ray tracing](#ray-tracing) | 15 | 0 | 11 | 11 | 4 |
-| [Debug](#debug) | 44 | 36 | 42 | 42 | 2 |
-| **All** | **677** | **528** | **669** | **669** | **8** |
+| [Debug](#debug) | 44 | 36 | 44 | 44 | 0 |
+| **All** | **677** | **528** | **671** | **671** | **6** |
 
 ## The cases
 
@@ -302,13 +302,14 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | nvn-202 | nvn | a clear between the Ounce's graphics and compute markers and groups is the clear | the Switch 2 program |
 | nvn-203 | nvn | an Ounce program builder gives back what it was set, a ray tracing program's numbers too | the Switch 2 program |
 | nvn-204 | nvn | an Ounce program builder gives back the subroutine linkage it was set, and none before | the Switch 2 program |
-| nvn-205 | nvn | an Ounce program with no ray tracing asks for no scratch memory per warp | the Switch 2 program |
-| nvn-206 | nvn | an Ounce program with no ray tracing leaves a shader group's handle as it was | the Switch 2 program |
-| nvn-207 | nvn | ray tracing modules given to an Ounce program builder leave what it answers as set | the Switch 2 program |
-| nvn-208 | nvn | an Ounce queue builder says whether its ray tracing memory size was set, and gives it back | the Switch 2 program |
-| nvn-209 | nvn | an Ounce queue's ray tracing memory count is nought once its counts are reset | the Switch 2 program |
-| nvn-210 | nvn | an Ounce window builder starts with the driver's colour space and HDR metadata, and gives back what it is set | the Switch 2 program |
-| nvn-211 | nvn | an Ounce window has its builder's HDR metadata, and gives back what it is set | the Switch 2 program |
+| nvn-205 | nvn | an Ounce program builder gives back the debug data hashes it was set, and none before | the Switch 2 program |
+| nvn-206 | nvn | an Ounce program with no ray tracing asks for no scratch memory per warp | the Switch 2 program |
+| nvn-207 | nvn | an Ounce program with no ray tracing leaves a shader group's handle as it was | the Switch 2 program |
+| nvn-208 | nvn | ray tracing modules given to an Ounce program builder leave what it answers as set | the Switch 2 program |
+| nvn-209 | nvn | an Ounce queue builder says whether its ray tracing memory size was set, and gives it back | the Switch 2 program |
+| nvn-210 | nvn | an Ounce queue's ray tracing memory count is nought once its counts are reset | the Switch 2 program |
+| nvn-211 | nvn | an Ounce window builder starts with the driver's colour space and HDR metadata, and gives back what it is set | the Switch 2 program |
+| nvn-212 | nvn | an Ounce window has its builder's HDR metadata, and gives back what it is set | the Switch 2 program |
 | nvn2-1 | nvn2 | a device, a queue, a command buffer, their pools and a 256x256 target with its depth come up | the Switch 2 program |
 | nvn2-2 | nvn2 | a compute program assembled by hand makes a program through the builder | the Switch 2 program |
 | nvn2-3 | nvn2 | a dispatch's writes to a storage buffer, as the processor reads them once the queue finishes | the Switch 2 program |
@@ -596,21 +597,21 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | Function | Layer | Cases |
 | --- | --- | --- |
 | `nvnProgramGetSubtileSize` | 55, 231 | nvn-190 |
-| `nvnProgramGetScratchBytesPerWarp` | 231 | nvn-205 |
+| `nvnProgramGetScratchBytesPerWarp` | 231 | nvn-206 |
 | `nvnProgramSetSampleShading` | 55, 231 | nvn-190 |
 | `nvnProgramSetSubroutineLinkage` | 55, 231 | nvn-151, nvn-191 |
-| `nvnProgramFinalize` | 55, 231 | nvn-37, nvn-38, nvn-44, nvn-47, nvn-48, nvn-150, nvn-151, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-190, nvn-191, nvn-197, nvn-200, nvn-201, nvn-205, nvn-206 |
-| `nvnProgramInitialize` | 55, 231 | nvn-150, nvn-151, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-190, nvn-191, nvn-197, nvn-200, nvn-201, nvn-205, nvn-206 |
+| `nvnProgramFinalize` | 55, 231 | nvn-37, nvn-38, nvn-44, nvn-47, nvn-48, nvn-150, nvn-151, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-190, nvn-191, nvn-197, nvn-200, nvn-201, nvn-206, nvn-207 |
+| `nvnProgramInitialize` | 55, 231 | nvn-150, nvn-151, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-190, nvn-191, nvn-197, nvn-200, nvn-201, nvn-206, nvn-207 |
 | `nvnProgramSetShaders` | 55, 231 | nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-190, nvn-191, nvn-197, nvn-201 |
 | `nvnProgramSetShadersExt` | 55, 231 | nvn-200 |
-| `nvnProgramBuilderSetDefaults` | 231 | nvn-203, nvn-204, nvn-207, nvn2-2, nvn2-8, nvn2-18, nvn2-19, nvn2-21, nvn2-24, nvn2-27 |
-| `nvnProgramBuilderSetDevice` | 231 | nvn-203, nvn-207, nvn2-2, nvn2-8, nvn2-18, nvn2-19, nvn2-21, nvn2-24, nvn2-27 |
-| `nvnProgramBuilderGetDevice` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderSetSampleShading` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderGetSampleShading` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderSetShaders` | 231 | nvn-203, nvn-207, nvn2-2, nvn2-8, nvn2-18, nvn2-19, nvn2-21, nvn2-24, nvn2-27 |
-| `nvnProgramBuilderGetShaders` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderGetShaderCount` | 231 | nvn-203, nvn-207 |
+| `nvnProgramBuilderSetDefaults` | 231 | nvn-203, nvn-204, nvn-205, nvn-208, nvn2-2, nvn2-8, nvn2-18, nvn2-19, nvn2-21, nvn2-24, nvn2-27 |
+| `nvnProgramBuilderSetDevice` | 231 | nvn-203, nvn-208, nvn2-2, nvn2-8, nvn2-18, nvn2-19, nvn2-21, nvn2-24, nvn2-27 |
+| `nvnProgramBuilderGetDevice` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderSetSampleShading` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderGetSampleShading` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderSetShaders` | 231 | nvn-203, nvn-208, nvn2-2, nvn2-8, nvn2-18, nvn2-19, nvn2-21, nvn2-24, nvn2-27 |
+| `nvnProgramBuilderGetShaders` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderGetShaderCount` | 231 | nvn-203, nvn-208 |
 | `nvnProgramBuilderSetSubroutineLinkage` | 231 | nvn-204 |
 | `nvnProgramBuilderGetSubroutineLinkage` | 231 | nvn-204 |
 | `nvnProgramBuilderGetSubroutineLinkageCount` | 231 | nvn-204 |
@@ -722,20 +723,20 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnQueueGetTotalCommandMemoryUsed` | 55, 231 | nvn-145 |
 | `nvnQueueGetTotalComputeMemoryUsed` | 55, 231 | nvn-145 |
 | `nvnQueueGetTotalControlMemoryUsed` | 55, 231 | nvn-145 |
-| `nvnQueueResetMemoryUsageCounts` | 55, 231 | nvn-145, nvn-209 |
+| `nvnQueueResetMemoryUsageCounts` | 55, 231 | nvn-145, nvn-210 |
 | `nvnQueueBuilderGetQueueMemorySize` | 55, 231 | nvn-145 |
 | `nvnQueueBuilderSetCommandFlushThreshold` | 55, 231 | nvn-128 |
 | `nvnQueueBuilderSetCommandMemorySize` | 55, 231 | nvn-128 |
 | `nvnQueueBuilderSetComputeMemorySize` | 55, 231 | nvn-128 |
 | `nvnQueueBuilderSetControlMemorySize` | 55, 231 | nvn-128 |
-| `nvnQueueBuilderSetDefaults` | 55, 231 | nvn-104, nvn-128, nvn-145, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-208, nvn2-1 |
-| `nvnQueueBuilderSetDevice` | 55, 231 | nvn-104, nvn-128, nvn-145, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-208, nvn2-1 |
+| `nvnQueueBuilderSetDefaults` | 55, 231 | nvn-104, nvn-128, nvn-145, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-209, nvn2-1 |
+| `nvnQueueBuilderSetDevice` | 55, 231 | nvn-104, nvn-128, nvn-145, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-209, nvn2-1 |
 | `nvnQueueBuilderSetFlags` | 55, 231 | nvn-128 |
 | `nvnQueueBuilderGetQueuePriority` | 55, 231 | nvn-145 |
 | `nvnQueueBuilderSetQueuePriority` | 55, 231 | nvn-145 |
 | `nvnQueueBuilderSetQueueMemory` | 55, 231 | nvn-145 |
 | `nvnQueueFinalize` | 55, 231 | nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-197, nvn-201 |
-| `nvnQueueFinish` | 55, 231 | nvn-105, nvn-106, nvn-107, nvn-109, nvn-110, nvn-111, nvn-112, nvn-113, nvn-114, nvn-118, nvn-120, nvn-121, nvn-122, nvn-123, nvn-127, nvn-134, nvn-142, nvn-143, nvn-144, nvn-145, nvn-146, nvn-147, nvn-148, nvn-149, nvn-153, nvn-154, nvn-155, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-197, nvn-201, nvn-202, nvn-209, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18, nvn2-19, nvn2-20, nvn2-21, nvn2-22, nvn2-23, nvn2-24, nvn2-25, nvn2-26, nvn2-27, nvn2-28, nvn2-29, nvn2-34 |
+| `nvnQueueFinish` | 55, 231 | nvn-105, nvn-106, nvn-107, nvn-109, nvn-110, nvn-111, nvn-112, nvn-113, nvn-114, nvn-118, nvn-120, nvn-121, nvn-122, nvn-123, nvn-127, nvn-134, nvn-142, nvn-143, nvn-144, nvn-145, nvn-146, nvn-147, nvn-148, nvn-149, nvn-153, nvn-154, nvn-155, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn-197, nvn-201, nvn-202, nvn-210, nvn2-3, nvn2-4, nvn2-5, nvn2-6, nvn2-7, nvn2-9, nvn2-10, nvn2-11, nvn2-12, nvn2-13, nvn2-14, nvn2-15, nvn2-16, nvn2-17, nvn2-18, nvn2-19, nvn2-20, nvn2-21, nvn2-22, nvn2-23, nvn2-24, nvn2-25, nvn2-26, nvn2-27, nvn2-28, nvn2-29, nvn2-34 |
 | `nvnQueueFlush` | 55, 231 | nvn-121, nvn-122, nvn-123, nvn-148 |
 | `nvnQueueGetError` | 55, 231 | nvn-127, nvn-150 |
 | `nvnQueueInitialize` | 55, 231 | nvn-104, nvn-156, nvn-157, nvn-158, nvn-159, nvn-160, nvn-161, nvn-162, nvn-163, nvn-164, nvn-165, nvn2-1 |
@@ -794,22 +795,22 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnWindowGetCrop` | 55, 231 | nvn-154 |
 | `nvnWindowGetPresentInterval` | 55, 231 | nvn-154 |
 | `nvnWindowAcquireTexture` | 55, 231 | nvn-155 |
-| `nvnWindowBuilderSetDefaults` | 55, 231 | nvn-152, nvn-153, nvn-210 |
+| `nvnWindowBuilderSetDefaults` | 55, 231 | nvn-152, nvn-153, nvn-211 |
 | `nvnWindowBuilderSetDevice` | 55, 231 | nvn-152, nvn-153 |
 | `nvnWindowBuilderSetNativeWindow` | 55, 231 | nvn-152, nvn-153 |
 | `nvnWindowBuilderSetNumActiveTextures` | 55, 231 | nvn-152 |
 | `nvnWindowBuilderSetPresentInterval` | 55, 231 | nvn-152 |
 | `nvnWindowBuilderSetTextures` | 55, 231 | nvn-152, nvn-153 |
-| `nvnWindowBuilderSetColorSpace` | 231 | nvn-210 |
-| `nvnWindowBuilderGetColorSpace` | 231 | nvn-210 |
-| `nvnWindowBuilderSetHdrDisplayMetadata` | 231 | nvn-210 |
-| `nvnWindowBuilderGetHdrDisplayMetadata` | 231 | nvn-210 |
-| `nvnWindowBuilderSetHdrContentMetadata` | 231 | nvn-210 |
-| `nvnWindowBuilderGetHdrContentMetadata` | 231 | nvn-210 |
-| `nvnWindowSetHdrDisplayMetadata` | 231 | nvn-211 |
-| `nvnWindowGetHdrDisplayMetadata` | 231 | nvn-211 |
-| `nvnWindowSetHdrContentMetadata` | 231 | nvn-211 |
-| `nvnWindowGetHdrContentMetadata` | 231 | nvn-211 |
+| `nvnWindowBuilderSetColorSpace` | 231 | nvn-211 |
+| `nvnWindowBuilderGetColorSpace` | 231 | nvn-211 |
+| `nvnWindowBuilderSetHdrDisplayMetadata` | 231 | nvn-211 |
+| `nvnWindowBuilderGetHdrDisplayMetadata` | 231 | nvn-211 |
+| `nvnWindowBuilderSetHdrContentMetadata` | 231 | nvn-211 |
+| `nvnWindowBuilderGetHdrContentMetadata` | 231 | nvn-211 |
+| `nvnWindowSetHdrDisplayMetadata` | 231 | nvn-212 |
+| `nvnWindowGetHdrDisplayMetadata` | 231 | nvn-212 |
+| `nvnWindowSetHdrContentMetadata` | 231 | nvn-212 |
+| `nvnWindowGetHdrContentMetadata` | 231 | nvn-212 |
 | `nvnWindowFinalize` | 55, 231 | nvn-153 |
 | `nvnWindowInitialize` | 55, 231 | nvn-153 |
 | `nvnWindowSetCrop` | 55, 231 | nvn-154 |
@@ -1088,24 +1089,24 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | Function | Layer | Cases |
 | --- | --- | --- |
 | `nvnDeviceCalculateAccelerationStructureMemoryRequirements` |  |  |
-| `nvnProgramGetShaderGroupHandle` | 231 | nvn-206 |
-| `nvnProgramBuilderSetRayTracingModules` | 231 | nvn-207 |
-| `nvnProgramBuilderSetMaxCallableRecursionDepth` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderGetMaxCallableRecursionDepth` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderSetMaxTraceRecursionDepth` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderGetMaxTraceRecursionDepth` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderSetProgramRayTracingFlags` | 231 | nvn-203, nvn-207 |
-| `nvnProgramBuilderGetProgramRayTracingFlags` | 231 | nvn-203, nvn-207 |
-| `nvnQueueBuilderGetRayTracingMemorySize` | 231 | nvn-208 |
-| `nvnQueueBuilderSetRayTracingMemorySize` | 231 | nvn-208 |
-| `nvnQueueGetTotalRayTracingMemoryUsed` | 231 | nvn-209 |
+| `nvnProgramGetShaderGroupHandle` | 231 | nvn-207 |
+| `nvnProgramBuilderSetRayTracingModules` | 231 | nvn-208 |
+| `nvnProgramBuilderSetMaxCallableRecursionDepth` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderGetMaxCallableRecursionDepth` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderSetMaxTraceRecursionDepth` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderGetMaxTraceRecursionDepth` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderSetProgramRayTracingFlags` | 231 | nvn-203, nvn-208 |
+| `nvnProgramBuilderGetProgramRayTracingFlags` | 231 | nvn-203, nvn-208 |
+| `nvnQueueBuilderGetRayTracingMemorySize` | 231 | nvn-209 |
+| `nvnQueueBuilderSetRayTracingMemorySize` | 231 | nvn-209 |
+| `nvnQueueGetTotalRayTracingMemoryUsed` | 231 | nvn-210 |
 | `nvnCommandBufferBindAccelerationStructure` |  |  |
 | `nvnCommandBufferBuildAccelerationStructures` |  |  |
 | `nvnCommandBufferCompactAccelerationStructure` |  |  |
 
 ## Debug
 
-44 functions, 2 with no case.
+44 functions, 0 with no case.
 
 | Function | Layer | Cases |
 | --- | --- | --- |
@@ -1127,8 +1128,8 @@ tests run it; `--gaps GROUP` lists a group's functions with no case.
 | `nvnTextureSetDebugLabel` | 55, 231 | nvn-150 |
 | `nvnSamplerGetDebugID` | 55, 231 | nvn-150 |
 | `nvnSamplerSetDebugLabel` | 55, 231 | nvn-150 |
-| `nvnProgramBuilderSetDebugDataHashes` |  |  |
-| `nvnProgramBuilderGetDebugDataHashes` |  |  |
+| `nvnProgramBuilderSetDebugDataHashes` | 231 | nvn-205 |
+| `nvnProgramBuilderGetDebugDataHashes` | 231 | nvn-205 |
 | `nvnCommandBufferInsertCheckpointDynamic` | 55, 231 | nvn-198 |
 | `nvnCommandBufferInsertCheckpointStatic` | 55, 231 | nvn-198 |
 | `nvnCommandBufferInsertDebugMarkerGraphics` | 231 | nvn-202 |
