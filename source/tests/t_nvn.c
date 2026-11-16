@@ -3121,110 +3121,141 @@ static void WindowHdrCase(const char *name) {
 }
 #endif
 
-/// The cases on the suite's own device, from the lookup to the window.
-static void LayerCases(void) {
-    static const char *const RESOLVE = "the program's NVN functions resolve";
-    static const char *const DEVICE = "the device initializes";
-    static const char *const VERSION = "the device answers the layer's API version";
-    static const char *const TARGET = "a queue, its pools and a 64x64 target come up";
-    static const char *const RED = "clear to opaque red";
-    static const char *const MID = "clear to a mid channel value";
-    static const char *const WINDOW = "a window acquires and presents both its textures";
-    static const char *const COPIES = "two copy textures and a staging pool come up";
-    static const char *const ROUND_TRIP = "a picture copied into a texture and back keeps every texel";
-    static const char *const TEXTURE = "a texture copied into another keeps every texel";
-    static const char *const BUFFER = "a buffer copied into another keeps every byte";
-    static const char *const MIRROR_Y = "a texture copied to a buffer with MIRROR_Y lands upside down";
-    static const char *const MIRROR_X = "a texture copied into another with MIRROR_X lands mirrored";
-    static const char *const STRIDED = "a copy to a buffer with a row stride of 288 keeps the bytes "
-                                       "between rows";
-    static const char *const BUILDER = "a texture builder gives back each number it was set";
-    static const char *const VIEW = "a texture view says which of its parts were set, and with "
-                                    "what";
-    static const char *const LEVELS_UP = "a texture of three levels comes up and says what its "
-                                         "builder had";
-    static const char *const LEVELS_COPY = "a picture copied into each level of a texture "
-                                           "through a view comes back from that level";
-    static const char *const POOL = "a memory pool and its builder give back what they were "
-                                    "set, and the pool maps its storage";
-    static const char *const POOL_CACHE = "a page flushed from a cached pool is what a copy "
-                                          "reads, and the copy is there after an invalidate";
-    static const char *const FENCED = "a sync fenced on the queue behind a clear signals, and "
-                                      "the clear is there with no finish";
-    static const char *const FENCED_LIST = "a sync fenced inside the list behind a clear "
-                                           "signals, and the clear is there with no finish";
-    static const char *const WAITED = "a queue and a list told to wait for a sync that "
-                                      "signalled run their clear";
-    static const char *const UNFENCED = "a wait on a sync nothing fenced fails, with a timeout "
-                                        "or without";
-    static const char *const NO_OPENGL = "with no OpenGL, a sync from an OpenGL sync and an "
-                                         "OpenGL sync from a sync both fail";
-    static const char *const NATIVE_HANDLE = "a pool builder given a native handle forgets its "
-                                             "storage, and takes storage again";
-    static const char *const QUEUE_ERROR = "the queue has no error after work that was valid";
-    static const char *const QUEUE_BUILDER = "a queue builder gives back its flags and says "
-                                             "which of its sizes were set";
-    static const char *const EVENT = "an event keeps what the processor signals: a write, an "
-                                     "add and an add that wraps";
-    static const char *const EVENT_WRITTEN = "a list writes an event's value over the one the "
-                                             "processor signalled";
-    static const char *const EVENT_ADDED = "a list adds to an event's value";
-    static const char *const EVENT_WAITED = "a list that waits for an event's value runs when "
-                                            "the processor signals it, and not before";
-    static const char *const VIRTUAL_POOL = "a virtual pool's page is the physical pool's page "
-                                            "mapped into it";
-    static const char *const TARGETS = "a 1D texture, each layer of an array and each slice "
-                                       "of a 3D texture keep a picture of their own";
-    static const char *const QUEUE_REST = "a queue builder gives back its memory and priority, "
-                                          "and a queue's memory counts are nought once reset";
-    static const char *const TEXTURE_MORE = "a texture builder and a view give back their "
-                                            "swizzle, depth and stencil mode and the rest";
-    static const char *const TEXTURE_SELF = "a texture says its swizzle, storage and address, "
-                                            "and is the same as its twin alone";
-    static const char *const TEXELS = "texels the processor writes into a texture are what it "
-                                      "and the graphics unit read back";
-    static const char *const TEXELS_STRIDED = "a part of a texture written and read with row "
-                                              "strides keeps the bytes between rows";
-    static const char *const BLEND_STATE = "a blend state gives back its target, functions, "
-                                           "equations and advanced mode";
-    static const char *const COLOR_STATE = "a channel mask and a colour state give back a "
-                                           "target's channels, blending, the logic operation "
-                                           "and the alpha test";
-    static const char *const DEPTH_STENCIL_STATE = "a depth and stencil state gives back its "
-                                                   "depth test and each face's stencil";
-    static const char *const MULTISAMPLE_STATE = "a multisample state gives back its samples, "
-                                                 "its switches and its sample locations' grid";
-    static const char *const POLYGON_VERTEX_STATE = "a polygon state, a vertex attribute and a "
-                                                    "vertex stream give back what they were set";
-    static const char *const BUFFER_RANGE = "a buffer is a range of its pool: its address, its "
-                                            "mapping, and what it and its builder say";
-    static const char *const BUFFER_COPY = "bytes flushed from one buffer and copied to "
-                                           "another are there after an invalidate";
-    static const char *const SAMPLER_BUILDER = "a sampler builder gives back each number it "
-                                               "was set";
-    static const char *const SAMPLER = "a sampler says what its builder had, and is the same "
-                                       "as another of that state alone";
-    static const char *const DESCRIPTOR_POOLS = "the texture and sampler pools say where they "
-                                                "are, and a builder registers as its sampler";
-    static const char *const DEBUG = "the debug layer's calls are answered as a release "
-                                     "driver answers them, and a label changes no object";
+/// Which NVN the suite's cases ask: the layer's own functions, which are what a console runs of
+/// the layer and what no runtime that runs NVN itself reaches once a function is looked up; or
+/// the ones the program looks up, which such a runtime answers.
+typedef enum {
+    LAYER_OWN,
+    LAYER_LOOKED_UP,
+} LayerWay;
+
+// A case of the layer's own way goes by its name after these words, so the two ways' cases are
+// two lines of a report; the names are kept here for as long as the run lasts.
+#define WAY_OWN "the layer's own: "
+#define WAY_NAMES 128u
+#define WAY_NAME_MOST 127u   // what a report's line keeps of a name
+static LayerWay way_now;
+static char way_names[WAY_NAMES][WAY_NAME_MOST + 1u];
+static uint32_t way_count;
+
+/// @p name as the way under way has it.
+static const char *Way(const char *name) {
+    if (way_now != LAYER_OWN) {
+        return name;
+    }
+    if (way_count >= WAY_NAMES) {
+        return WAY_OWN "a case past the 128 names the suite keeps for this way";
+    }
+    snprintf(way_names[way_count], sizeof(way_names[0]), WAY_OWN "%s", name);
+    return way_names[way_count++];
+}
+
+/// The cases on the suite's own device, from the functions' coming to the window, down @p way.
+static void LayerCases(LayerWay way) {
+    way_now = way;
+    way_count = 0;
+    const char *const RESOLVE = Way("the program's NVN functions resolve");
+    const char *const DEVICE = Way("the device initializes");
+    const char *const VERSION = Way("the device answers the layer's API version");
+    const char *const TARGET = Way("a queue, its pools and a 64x64 target come up");
+    const char *const RED = Way("clear to opaque red");
+    const char *const MID = Way("clear to a mid channel value");
+    const char *const WINDOW = Way("a window acquires and presents both its textures");
+    const char *const COPIES = Way("two copy textures and a staging pool come up");
+    const char *const ROUND_TRIP = Way("a picture copied into a texture and back keeps every texel");
+    const char *const TEXTURE = Way("a texture copied into another keeps every texel");
+    const char *const BUFFER = Way("a buffer copied into another keeps every byte");
+    const char *const MIRROR_Y = Way("a texture copied to a buffer with MIRROR_Y lands upside down");
+    const char *const MIRROR_X = Way("a texture copied into another with MIRROR_X lands mirrored");
+    const char *const STRIDED = Way("a copy to a buffer with a row stride of 288 keeps the bytes "
+                                       "between rows");
+    const char *const BUILDER = Way("a texture builder gives back each number it was set");
+    const char *const VIEW = Way("a texture view says which of its parts were set, and with "
+                                    "what");
+    const char *const LEVELS_UP = Way("a texture of three levels comes up and says what its "
+                                         "builder had");
+    const char *const LEVELS_COPY = Way("a picture copied into each level of a texture "
+                                           "through a view comes back from that level");
+    const char *const POOL = Way("a memory pool and its builder give back what they were "
+                                    "set, and the pool maps its storage");
+    const char *const POOL_CACHE = Way("a page flushed from a cached pool is what a copy "
+                                          "reads, and the copy is there after an invalidate");
+    const char *const FENCED = Way("a sync fenced on the queue behind a clear signals, and "
+                                      "the clear is there with no finish");
+    const char *const FENCED_LIST = Way("a sync fenced inside the list behind a clear "
+                                           "signals, and the clear is there with no finish");
+    const char *const WAITED = Way("a queue and a list told to wait for a sync that "
+                                      "signalled run their clear");
+    const char *const UNFENCED = Way("a wait on a sync nothing fenced fails, with a timeout "
+                                        "or without");
+    const char *const NO_OPENGL = Way("with no OpenGL, a sync from an OpenGL sync and an "
+                                         "OpenGL sync from a sync both fail");
+    const char *const NATIVE_HANDLE = Way("a pool builder given a native handle forgets its "
+                                             "storage, and takes storage again");
+    const char *const QUEUE_ERROR = Way("the queue has no error after work that was valid");
+    const char *const QUEUE_BUILDER = Way("a queue builder gives back its flags and says "
+                                             "which of its sizes were set");
+    const char *const EVENT = Way("an event keeps what the processor signals: a write, an "
+                                     "add and an add that wraps");
+    const char *const EVENT_WRITTEN = Way("a list writes an event's value over the one the "
+                                             "processor signalled");
+    const char *const EVENT_ADDED = Way("a list adds to an event's value");
+    const char *const EVENT_WAITED = Way("a list that waits for an event's value runs when "
+                                            "the processor signals it, and not before");
+    const char *const VIRTUAL_POOL = Way("a virtual pool's page is the physical pool's page "
+                                            "mapped into it");
+    const char *const TARGETS = Way("a 1D texture, each layer of an array and each slice "
+                                       "of a 3D texture keep a picture of their own");
+    const char *const QUEUE_REST = Way("a queue builder gives back its memory and priority, "
+                                          "and a queue's memory counts are nought once reset");
+    const char *const TEXTURE_MORE = Way("a texture builder and a view give back their "
+                                            "swizzle, depth and stencil mode and the rest");
+    const char *const TEXTURE_SELF = Way("a texture says its swizzle, storage and address, "
+                                            "and is the same as its twin alone");
+    const char *const TEXELS = Way("texels the processor writes into a texture are what it "
+                                      "and the graphics unit read back");
+    const char *const TEXELS_STRIDED = Way("a part of a texture written and read with row "
+                                              "strides keeps the bytes between rows");
+    const char *const BLEND_STATE = Way("a blend state gives back its target, functions, "
+                                           "equations and advanced mode");
+    const char *const COLOR_STATE = Way("a channel mask and a colour state give back "
+                                        "channels, blending, the logic operation and the "
+                                        "alpha test");
+    const char *const DEPTH_STENCIL_STATE = Way("a depth and stencil state gives back its "
+                                                   "depth test and each face's stencil");
+    const char *const MULTISAMPLE_STATE = Way("a multisample state gives back its samples, "
+                                                 "its switches and its sample locations' grid");
+    const char *const POLYGON_VERTEX_STATE = Way("a polygon state, a vertex attribute and a "
+                                                    "vertex stream give back what they were set");
+    const char *const BUFFER_RANGE = Way("a buffer is a range of its pool: its address, its "
+                                            "mapping, and what it and its builder say");
+    const char *const BUFFER_COPY = Way("bytes flushed from one buffer and copied to "
+                                           "another are there after an invalidate");
+    const char *const SAMPLER_BUILDER = Way("a sampler builder gives back each number it "
+                                               "was set");
+    const char *const SAMPLER = Way("a sampler says what its builder had, and is the same "
+                                       "as another of that state alone");
+    const char *const DESCRIPTOR_POOLS = Way("the texture and sampler pools say where they "
+                                                "are, and a builder registers as its sampler");
+    const char *const DEBUG = Way("the debug layer's calls are answered as a release "
+                                     "driver answers them, and a label changes no object");
 #if NVN_LAYER_API >= 231
-    static const char *const OUNCE_MARKERS = "a clear between the Ounce's graphics and compute "
-                                             "markers and groups is the clear";
-    static const char *const PROGRAM_BUILDER = "an Ounce program builder gives back what it "
-                                               "was set, a ray tracing program's numbers too";
+    const char *const OUNCE_MARKERS = Way("a clear between the Ounce's graphics and compute "
+                                             "markers and groups is the clear");
+    const char *const PROGRAM_BUILDER = Way("an Ounce program builder gives back what it "
+                                               "was set, a ray tracing program's numbers too");
 #endif
-    static const char *const WINDOW_BUILDER = "a window builder gives back what it was set";
-    static const char *const WINDOW_SAYS = "a window says what it is of, and keeps the active "
-                                           "textures, the interval and the crop it is set";
-    static const char *const WINDOW_SYNC = "a texture the window hands with a sync is free "
-                                           "once the sync signals, and presents";
+    const char *const WINDOW_BUILDER = Way("a window builder gives back what it was set");
+    const char *const WINDOW_SAYS = Way("a window says what it is of, and keeps the active "
+                                           "textures, the interval and the crop it is set");
+    const char *const WINDOW_SYNC = Way("a texture the window hands with a sync is free "
+                                           "once the sync signals, and presents");
 #if NVN_LAYER_API >= 231
-    static const char *const WINDOW_HDR_BUILDER = "an Ounce window builder starts with the "
+    const char *const WINDOW_HDR_BUILDER = Way("an Ounce window builder starts with the "
                                                   "driver's colour space and HDR metadata, "
-                                                  "and gives back what it is set";
-    static const char *const WINDOW_HDR = "an Ounce window has its builder's HDR metadata, and "
-                                          "gives back what it is set";
+                                                  "and gives back what it is set");
+    const char *const WINDOW_HDR = Way("an Ounce window has its builder's HDR metadata, and "
+                                          "gives back what it is set");
 #endif
     const char *const AFTER_DEVICE[] = { VERSION,  TARGET,   RED,      MID,     COPIES,
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
@@ -3259,8 +3290,12 @@ static void LayerCases(void) {
         return;
     }
     char missing[64] = "";
-    const bool resolved = NvnLoadProcs(&nvn.nvn, missing, sizeof(missing));
-    CHECK_TRUE(SUITE, RESOLVE, CHECK_NONE, resolved, "the lookup gave no %s", missing);
+    // The layer's own functions come without a lookup, and only before the first one.
+    const bool resolved = way == LAYER_OWN ? NvnLayerOwnProcs(&nvn.nvn)
+                                           : NvnLoadProcs(&nvn.nvn, missing, sizeof(missing));
+    CHECK_TRUE(SUITE, RESOLVE, CHECK_NONE, resolved, "%s%s",
+               way == LAYER_OWN ? "the layer gave none of its own functions: " : "the lookup gave no ",
+               way == LAYER_OWN ? NvnLayerError() : missing);
     if (!resolved) {
         ReportSkip(SUITE, DEVICE, REPORT_REASON_DEPENDS,
                    "the program's NVN functions did not resolve");
@@ -3450,7 +3485,17 @@ static void LayerCases(void) {
 #else
     const bool screen_up = false;    // the Switch 2's frontend has no screen of its own
 #endif
-    if (screen_up) {
+    if (way == LAYER_OWN) {
+        // The layer's own window is a deko3d swapchain on the default window, and the looked up
+        // way's case makes a second there afterwards, which is what Eden never came back from.
+        static const char *const SECOND =
+            "the layer's own window would be a first swapchain on the default window, and the "
+            "case of the looked up way makes the one this run has";
+        ReportSkip(SUITE, WINDOW, REPORT_REASON_UNAVAILABLE, SECOND);
+        for (size_t i = 0; i < on_window; ++i) {
+            ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, SECOND);
+        }
+    } else if (screen_up) {
         // The program's own screen holds the default window, and a swapchain made on it after
         // the screen is what Eden never came back from (the game suite says the same). The start
         // screen leaves it up to the run's end, noprogress or not; a quick run from the mode file
@@ -3490,7 +3535,8 @@ void RunNvn(void) {
     // the address its name resolves to, the layer's own from then on with it.
     NvnSceneFirst();
     NvnCommandFirst();
-    LayerCases();
+    LayerCases(LAYER_OWN);
+    LayerCases(LAYER_LOOKED_UP);
     // With the suite's own device down, whatever the cases above came to: the scene's way
     // makes its own.
     NvnSceneLast();
@@ -3498,6 +3544,6 @@ void RunNvn(void) {
 #else
     // The scene is a Switch program's: its shaders are the Switch's code and two of its three
     // ways are deko3d's.
-    LayerCases();
+    LayerCases(LAYER_LOOKED_UP);
 #endif
 }

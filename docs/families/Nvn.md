@@ -24,7 +24,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and thirty four cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and eighty four cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -184,7 +184,7 @@ The reference is the graphics unit running what the layer recorded, never the of
   are only named, each by its place and how many, a present interval of two and two active textures. The builder
   makes no window.
 - **a blend state gives back its target, functions, equations and advanced mode**, **a channel mask and a colour
-  state give back a target's channels, blending, the logic operation and the alpha test**, **a depth and stencil
+  state give back channels, blending, the logic operation and the alpha test**, **a depth and stencil
   state gives back its depth test and each face's stencil**, **a multisample state gives back its samples, its
   switches and its sample locations' grid**, **a polygon state, a vertex attribute and a vertex stream give back
   what they were set** (exact): every setter of each state object with a number that is no default, and its
