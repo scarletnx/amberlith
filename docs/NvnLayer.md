@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and eighty seven functions, each recording the deko3d commands that do what NVN says it does:
+Three hundred functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -163,6 +163,11 @@ Two hundred and eighty seven functions, each recording the deko3d commands that 
   which the graphics unit copies from a unit of the layer's memory filled with the word;
 - **the copy strides' getters**, the image stride kept for its getter alone, and **the discards** of a colour
   target and of the depth target, deko3d's own;
+- **the render state a list sets by itself**: viewports, scissors and viewport swizzles by number, sixteen of
+  each; the depth range, which deko3d takes with a viewport's rectangle, so the layer keeps both and records the
+  viewport whole on either call; the rasterizer's discard, depth clamp and provoking vertex, which deko3d keeps in
+  the state it takes for NVN's polygon state, kept and recorded together the same way; the depth bounds, the
+  point size, the primitive restart, and the tiled cache's tile size and actions, each deko3d's own;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

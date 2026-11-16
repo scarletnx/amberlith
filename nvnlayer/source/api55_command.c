@@ -555,3 +555,219 @@ void Nvnl_nvnCommandBufferDiscardDepthStencil(NVNcommandBuffer *cmd) {
         dkCmdBufDiscardDepthStencil(record->cmdbuf);
     }
 }
+
+// ---- the render state NVN sets by itself
+
+void LayerBindRasterizer(const LayerCommandBuffer *record) {
+    const LayerDynamic *const dynamic = &record->draw->dynamic;
+    DkRasterizerState raster;
+    dkRasterizerStateDefaults(&raster);
+    // NVN's faces are deko3d's numbers, none 0 to both 3, and its front faces too.
+    raster.cullMode = (DkFace)dynamic->cull;
+    raster.frontFace = (DkFrontFace)dynamic->front;
+    raster.rasterizerEnable = !dynamic->discard;
+    raster.depthClampEnable = dynamic->depth_clamp;
+    raster.provokingVertex =
+        dynamic->provoking_first ? DkProvokingVertex_First : DkProvokingVertex_Last;
+    dkCmdBufBindRasterizerState(record->cmdbuf, &raster);
+}
+
+void LayerBindViewport(const LayerCommandBuffer *record, int index) {
+    const LayerDynamic *const dynamic = &record->draw->dynamic;
+    DkViewport viewport = dynamic->viewports[index];
+    if ((dynamic->ranged >> index & 1u) == 0u) {
+        viewport.near = 0.0f;
+        viewport.far = 1.0f;
+    }
+    dkCmdBufSetViewports(record->cmdbuf, (uint32_t)index, &viewport, 1);
+}
+
+/// Whether @p count from @p first are viewports; a complaint naming @p what when they are not.
+static bool Viewports(int first, int count, const void *values, const char *what) {
+    if (first < 0 || count <= 0 || count > LAYER_VIEWPORTS - first || values == NULL) {
+        LayerComplain("%s: %d from %d%s, where there are %d viewports", what, count, first,
+                      values == NULL ? " and no values" : "", LAYER_VIEWPORTS);
+        return false;
+    }
+    return true;
+}
+
+void Nvnl_nvnCommandBufferSetViewports(NVNcommandBuffer *cmd, int first, int count,
+                                       const float *rectangles) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetViewports");
+    if (record == NULL ||
+        !Viewports(first, count, rectangles, "nvnCommandBufferSetViewports")) {
+        return;
+    }
+    for (int i = 0; i < count; ++i) {
+        DkViewport *const viewport = &record->draw->dynamic.viewports[first + i];
+        viewport->x = rectangles[4 * i];
+        viewport->y = rectangles[4 * i + 1];
+        viewport->width = rectangles[4 * i + 2];
+        viewport->height = rectangles[4 * i + 3];
+        LayerBindViewport(record, first + i);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetScissors(NVNcommandBuffer *cmd, int first, int count,
+                                      const int *rectangles) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetScissors");
+    if (record == NULL || !Viewports(first, count, rectangles, "nvnCommandBufferSetScissors")) {
+        return;
+    }
+    DkScissor scissors[LAYER_VIEWPORTS];
+    for (int i = 0; i < count; ++i) {
+        scissors[i] = (DkScissor){ (uint32_t)rectangles[4 * i], (uint32_t)rectangles[4 * i + 1],
+                                   (uint32_t)rectangles[4 * i + 2],
+                                   (uint32_t)rectangles[4 * i + 3] };
+    }
+    dkCmdBufSetScissors(record->cmdbuf, (uint32_t)first, scissors, (uint32_t)count);
+    if (first == 0) {
+        record->draw->targets.scissor = scissors[0];
+        record->draw->targets.scissor_set = true;
+    }
+}
+
+/// The depth range of every viewport, as NVN's call with no viewport sets it.
+void Nvnl_nvnCommandBufferSetDepthRange(NVNcommandBuffer *cmd, float near, float far) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetDepthRange");
+    if (record == NULL) {
+        return;
+    }
+    LayerDynamic *const dynamic = &record->draw->dynamic;
+    for (int i = 0; i < LAYER_VIEWPORTS; ++i) {
+        dynamic->viewports[i].near = near;
+        dynamic->viewports[i].far = far;
+    }
+    dynamic->ranged = 0xffffu;
+    // The first viewport is the one a list of the layer's draws through; the others take their
+    // range when their rectangle is set.
+    LayerBindViewport(record, 0);
+}
+
+void Nvnl_nvnCommandBufferSetDepthRanges(NVNcommandBuffer *cmd, int first, int count,
+                                         const float *ranges) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetDepthRanges");
+    if (record == NULL || !Viewports(first, count, ranges, "nvnCommandBufferSetDepthRanges")) {
+        return;
+    }
+    LayerDynamic *const dynamic = &record->draw->dynamic;
+    for (int i = 0; i < count; ++i) {
+        dynamic->viewports[first + i].near = ranges[2 * i];
+        dynamic->viewports[first + i].far = ranges[2 * i + 1];
+        dynamic->ranged |= (uint16_t)(1u << (first + i));
+        LayerBindViewport(record, first + i);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetViewportSwizzles(NVNcommandBuffer *cmd, int first, int count,
+                                              const NVNviewportSwizzle *swizzles) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetViewportSwizzles");
+    if (record == NULL ||
+        !Viewports(first, count, swizzles, "nvnCommandBufferSetViewportSwizzles")) {
+        return;
+    }
+    // NVN's swizzles are deko3d's numbers, plus x 0 to minus w 7, four a viewport.
+    DkViewportSwizzle to[LAYER_VIEWPORTS];
+    for (int i = 0; i < count; ++i) {
+        to[i] = (DkViewportSwizzle){ (DkSwizzle)swizzles[4 * i], (DkSwizzle)swizzles[4 * i + 1],
+                                     (DkSwizzle)swizzles[4 * i + 2],
+                                     (DkSwizzle)swizzles[4 * i + 3] };
+    }
+    dkCmdBufSetViewportSwizzles(record->cmdbuf, (uint32_t)first, to, (uint32_t)count);
+}
+
+void Nvnl_nvnCommandBufferSetDepthBounds(NVNcommandBuffer *cmd, NVNboolean enable, float least,
+                                         float most) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetDepthBounds");
+    if (record != NULL) {
+        dkCmdBufSetDepthBounds(record->cmdbuf, enable != 0, least, most);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetRasterizerDiscard(NVNcommandBuffer *cmd, NVNboolean discard) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetRasterizerDiscard");
+    if (record != NULL) {
+        record->draw->dynamic.discard = discard != 0;
+        LayerBindRasterizer(record);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetDepthClamp(NVNcommandBuffer *cmd, NVNboolean clamp) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetDepthClamp");
+    if (record != NULL) {
+        record->draw->dynamic.depth_clamp = clamp != 0;
+        LayerBindRasterizer(record);
+    }
+}
+
+/// NVN's mode is the graphics unit's word: 0 the first vertex, 1 the last.
+void Nvnl_nvnCommandBufferSetProvokingVertexMode(NVNcommandBuffer *cmd, int mode) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetProvokingVertexMode");
+    if (record == NULL) {
+        return;
+    }
+    if (mode != 0 && mode != 1) {
+        LayerComplain("nvnCommandBufferSetProvokingVertexMode: mode %d is neither the first "
+                      "vertex (0) nor the last (1)",
+                      mode);
+        return;
+    }
+    record->draw->dynamic.provoking_first = mode == 0;
+    LayerBindRasterizer(record);
+}
+
+void Nvnl_nvnCommandBufferSetPointSize(NVNcommandBuffer *cmd, float size) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetPointSize");
+    if (record != NULL) {
+        dkCmdBufSetPointSize(record->cmdbuf, size);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetPrimitiveRestart(NVNcommandBuffer *cmd, NVNboolean enable,
+                                              int index) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetPrimitiveRestart");
+    if (record != NULL) {
+        dkCmdBufSetPrimitiveRestart(record->cmdbuf, enable != 0, (uint32_t)index);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetTiledCacheAction(NVNcommandBuffer *cmd,
+                                              NVNtiledCacheAction action) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetTiledCacheAction");
+    if (record == NULL) {
+        return;
+    }
+    static const DkTiledCacheOp OPS[] = { [NVN_TILED_CACHE_ACTION_ENABLE] = DkTiledCacheOp_Enable,
+                                          [NVN_TILED_CACHE_ACTION_DISABLE] =
+                                              DkTiledCacheOp_Disable,
+                                          [NVN_TILED_CACHE_ACTION_FLUSH] = DkTiledCacheOp_Flush,
+                                          [NVN_TILED_CACHE_ACTION_FLUSH_NO_TILING] =
+                                              DkTiledCacheOp_FlushAlt,
+                                          [NVN_TILED_CACHE_ACTION_ENABLE_RENDER_TARGET_BINNING] =
+                                              DkTiledCacheOp_UnkEnable,
+                                          [NVN_TILED_CACHE_ACTION_DISABLE_RENDER_TARGET_BINNING] =
+                                              DkTiledCacheOp_UnkDisable };
+    if (action < NVN_TILED_CACHE_ACTION_ENABLE ||
+        action > NVN_TILED_CACHE_ACTION_DISABLE_RENDER_TARGET_BINNING) {
+        LayerComplain("nvnCommandBufferSetTiledCacheAction: action %d is none of NVN's 1 to 6",
+                      (int)action);
+        return;
+    }
+    dkCmdBufTiledCacheOp(record->cmdbuf, OPS[action]);
+}
+
+void Nvnl_nvnCommandBufferSetTiledCacheTileSize(NVNcommandBuffer *cmd, int width, int height) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetTiledCacheTileSize");
+    if (record == NULL) {
+        return;
+    }
+    if (width < 16 || width > 16384 || (width & (width - 1)) != 0 || height < 16 ||
+        height > 16384 || (height & (height - 1)) != 0) {
+        LayerComplain("nvnCommandBufferSetTiledCacheTileSize: %dx%d, where a tile's sides are "
+                      "powers of two from 16 to 16384",
+                      width, height);
+        return;
+    }
+    dkCmdBufSetTileSize(record->cmdbuf, (uint32_t)width, (uint32_t)height);
+}

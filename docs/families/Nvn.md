@@ -12,11 +12,12 @@
   * [Counters and the render enable](#counters-and-the-render-enable)
   * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
   * [Clears, strides and discards](#clears-strides-and-discards)
+  * [The render state a list sets by itself](#the-render-state-a-list-sets-by-itself)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, seventy cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, eighty four cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -59,8 +60,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 
 ## The cases
 
-- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and eighty seven.
+- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three hundred.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -366,6 +366,38 @@ Three of these make 16 by 16 textures of their own, in a pool of their own, and 
 `nvnCommandBufferDownsample` and its three kin wait for multisampled textures in the layer.
 `nvnCommandBufferResolveDepthBuffer`, `SaveZCullData` and `RestoreZCullData` have no case: they move the graphics
 unit's own depth culling data, which no program reads and no picture shows.
+
+### The render state a list sets by itself
+
+- **a scissor and a viewport set by number bound and place a quad**: `nvnCommandBufferSetScissors` and
+  `SetViewports`, one of each from number 0. Cell 0's quad under a scissor of the eight pixels in its middle is
+  that square alone; through a viewport of the target's lower right quarter it is the quarter's own top left
+  sixteenth, eight pixels a side at (32,32); with both back over the target a cell is where it always is.
+- **depth ranges move a quad across the depth test and depth bounds test the target's depth**: a depth target
+  holding 0.6 and a test that passes what is nearer; the quads lie half way down the range. With the range 0 to 1
+  or 0 to 0.4 a quad is drawn and with 0.8 to 1 or 0.9 to 1 it is hidden, set by `nvnCommandBufferSetDepthRange`
+  or by `SetDepthRanges` for viewport 0. `SetDepthBounds` tests what the target holds: on at 0.7 to 1 the quad is
+  hidden, on at 0.5 to 0.7 or off it is drawn.
+- **the rasterizer discards, clamps depth and takes a flat colour from the provoking vertex**:
+  `nvnCommandBufferSetRasterizerDiscard` on, nothing drawn, and off, drawn; a quad a whole depth range past the
+  far plane is clipped away, and drawn under `SetDepthClamp`; and of two quads whose triangles have one vertex of
+  the cell's colour, the first or the last, each is that colour under `SetProvokingVertexMode` 0 or 1, the scene's
+  fragment stage taking the colour flat.
+- **a point of sixteen pixels fills its cell**: `nvnCommandBufferSetPointSize` and one point at a cell's middle.
+- **a strip with a restart index is two quads**: `nvnCommandBufferSetPrimitiveRestart` with 0xffff, and a
+  triangle strip of nine two byte indices, the fifth 0xffff: the quads of cells 8 and 10 and nothing across cell 9.
+- **a viewport swizzle of x and y turns a quad about the diagonal**: `nvnCommandBufferSetViewportSwizzles` giving
+  x the position's y and y its x: cell 1's quad lands on cell 11.
+- **draws around the tiled cache's actions are as without them**: `nvnCommandBufferSetTiledCacheTileSize` and
+  `SetTiledCacheAction` (flush, disable, enable, flush) around two draws. The tiled cache is how the graphics unit
+  orders its work and no picture shows it, so the case holds a runtime only to drawing on.
+
+Still without a case: the stencil's reference and masks, the blend colour, the alpha reference, the polygon
+offset and the sample mask, which need the state objects' tests in the layer; the line width, conservative
+rasterization, the subpixel bias, the patch size and the tessellation levels. And for good, as far as a picture
+goes: `nvnCommandBufferOverrideSubtileSize`, `SetColorReductionEnable`, `SetColorReductionThresholds`,
+`SetZCullZF32CompressionEnable`, `SetStencilCullCriteria` and the Ounce's `SetShadingRatePaletteMode`, which tune
+how the graphics unit stores and culls and change nothing a program reads.
 
 ## Where nvn/nvn.h comes from
 

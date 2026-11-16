@@ -1655,8 +1655,12 @@ void Nvnl_nvnCommandBufferSetViewport(NVNcommandBuffer *cmd, int x, int y, int w
     }
     // NVN sets the depth range apart (nvnCommandBufferSetDepthRange), 0 to 1 by default; deko3d
     // takes it with the rectangle.
-    const DkViewport viewport = { (float)x, (float)y, (float)width, (float)height, 0.0f, 1.0f };
-    dkCmdBufSetViewports(record->cmdbuf, 0, &viewport, 1);
+    DkViewport *const viewport = &record->draw->dynamic.viewports[0];
+    viewport->x = (float)x;
+    viewport->y = (float)y;
+    viewport->width = (float)width;
+    viewport->height = (float)height;
+    LayerBindViewport(record, 0);
 }
 
 void Nvnl_nvnCommandBufferSetScissor(NVNcommandBuffer *cmd, int x, int y, int width,
