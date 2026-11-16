@@ -1455,6 +1455,24 @@ static void NameTimes(void) {
 static void Times(void) {
     static GameTimes times;
     GameTimesOf(&times, frames, frame_us, main_us, render_us, sorted_us);
+    // Present to present again without the judged frames: the copies the judge keeps come after
+    // a judged frame's present, so they are in its time to the next present and no machine's
+    // doing. The frames left keep their own numbers.
+    static uint32_t apart_us[MODE_FRAMES_MAX], apart_frame[MODE_FRAMES_MAX];
+    uint32_t apart = 0;
+    for (uint32_t k = GAME_WARMUP_FRAMES; k < frames; ++k) {
+        if (JudgedAt(k) >= WIMSY_JUDGED) {
+            apart_us[apart] = frame_us[k];
+            apart_frame[apart++] = k;
+        }
+    }
+    GameFrameStatsOf(apart_us, 0u, apart, sorted_us, &times.present);
+    if (apart != 0u) {
+        times.present.longest_at = apart_frame[times.present.longest_at];
+        for (uint32_t i = 0; i < times.present.hitches && i < GAME_HITCHES_LISTED; ++i) {
+            times.present.hitch_at[i] = apart_frame[times.present.hitch_at[i]];
+        }
+    }
     const uint32_t timed = GameTimeCases(&times, frames, time_cases);
     char detail[160];
     snprintf(detail, sizeof(detail), "%u frames past the warm-up; %u of %u presented",
@@ -1475,7 +1493,7 @@ static void Times(void) {
     ReportNote("%s", note);
     GameDescribePartsOf(note, sizeof(note), scene, &times);
     ReportNote("%s; the %u copies the judge keeps, each after its frame's present, took %u us at "
-               "most",
+               "most, and those frames' present to present is left out",
                note, (unsigned)render.copied, (unsigned)render.copy_longest);
 }
 
