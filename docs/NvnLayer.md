@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Two hundred and thirty five functions, each recording the deko3d commands that do what NVN says it does:
+Two hundred and thirty seven functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -176,7 +176,7 @@ Two hundred and thirty five functions, each recording the deko3d commands that d
 
 A choice NVN has and the layer has not made yet (a format, a target, a flag, a view, a setter) is refused with its
 value in `NvnLayerError`, or is a name the lookup does not have; none is filled in with a guess. Compute, storage
-buffers, images, indexed and instanced draws, stencil and blending are not there yet.
+buffers, images, instanced and indirect draws, stencil and blending are not there yet.
 
 `nvnDeviceGetInteger` answers the items deko3d fixes (alignments, counts, the code pool's padding) and NVN's own
 count of reserved descriptors, 256 in each pool, so a program numbers its textures and samplers from the same

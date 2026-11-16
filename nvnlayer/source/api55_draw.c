@@ -1112,3 +1112,39 @@ void Nvnl_nvnCommandBufferDrawArrays(NVNcommandBuffer *cmd, NVNdrawPrimitive pri
     // NVN's primitives are the graphics unit's numbers, as deko3d's are: points 0 to patches 14.
     dkCmdBufDraw(record->cmdbuf, (DkPrimitive)primitive, (uint32_t)count, 1, (uint32_t)first, 0);
 }
+
+/// An indexed draw of @p count indices of @p type at @p indices, @p base_vertex added to each.
+static void DrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,
+                         int count, NVNbufferAddress indices, int base_vertex, const char *what) {
+    LayerCommandBuffer *const record = CmdOf(cmd, what);
+    if (record == NULL) {
+        return;
+    }
+    if (primitive < NVN_DRAW_PRIMITIVE_POINTS || primitive > NVN_DRAW_PRIMITIVE_PATCHES ||
+        type < NVN_INDEX_TYPE_UNSIGNED_BYTE || type > NVN_INDEX_TYPE_UNSIGNED_INT || count < 0 ||
+        indices == 0u) {
+        LayerComplain("%s: primitive %d, %d indices of type %d at 0x%llx", what, (int)primitive,
+                      count, (int)type, (unsigned long long)indices);
+        return;
+    }
+    if (!FlushHandles(record, what)) {
+        return;
+    }
+    // NVN's index types are deko3d's numbers: a byte 0, two 1, four 2.
+    dkCmdBufBindIdxBuffer(record->cmdbuf, (DkIdxFormat)type, indices);
+    dkCmdBufDrawIndexed(record->cmdbuf, (DkPrimitive)primitive, (uint32_t)count, 1, 0,
+                        base_vertex, 0);
+}
+
+void Nvnl_nvnCommandBufferDrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive,
+                                       NVNindexType type, int count, NVNbufferAddress indices) {
+    DrawElements(cmd, primitive, type, count, indices, 0, "nvnCommandBufferDrawElements");
+}
+
+void Nvnl_nvnCommandBufferDrawElementsBaseVertex(NVNcommandBuffer *cmd,
+                                                 NVNdrawPrimitive primitive, NVNindexType type,
+                                                 int count, NVNbufferAddress indices,
+                                                 int base_vertex) {
+    DrawElements(cmd, primitive, type, count, indices, base_vertex,
+                 "nvnCommandBufferDrawElementsBaseVertex");
+}

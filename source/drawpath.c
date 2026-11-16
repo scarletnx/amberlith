@@ -111,6 +111,11 @@ void DrawPathDraw(DrawPath *path, uint32_t first, uint32_t count) {
     path->way->draw(path, first, count);
 }
 
+void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
+                         uint32_t count, int32_t base_vertex) {
+    path->way->draw_indexed(path, type, indices, count, base_vertex);
+}
+
 bool DrawPathEnd(DrawPath *path) {
     return path->way->end(path);
 }
@@ -305,24 +310,42 @@ static void DkBindTexture(DrawPath *path, DrawStage stage, uint32_t slot, int te
     dk->dirty |= (uint8_t)(1u << stage);
 }
 
-static void DkDraw(DrawPath *path, uint32_t first, uint32_t count) {
+/// A copy of each changed stage's handles for the draw about to be recorded: the list runs
+/// later, and each draw has to find the handles it was recorded with. False when the data
+/// memory has no room for one.
+static bool DkHandles(DrawPath *path) {
     Deko3dPath *const dk = Dk(path);
-    // A copy of each changed stage's handles per draw: the list runs later, and each draw has to
-    // find the handles it was recorded with.
     for (uint32_t stage = 0; stage < 2u; ++stage) {
         if ((dk->dirty >> stage & 1u) == 0u) {
             continue;
         }
         DrawBuffer copy;
         if (!DkAlloc(path, DRAW_PATH_HANDLE_BYTES, &copy)) {
-            return;
+            return false;
         }
         memcpy(copy.bytes, dk->handles[stage], DRAW_PATH_HANDLE_BYTES);
         dkCmdBufBindUniformBuffer(dk->gpu.cmdbuf, DkStageOf((DrawStage)stage), 0, copy.address,
                                   DRAW_PATH_HANDLE_BYTES);
         dk->dirty &= (uint8_t)~(1u << stage);
     }
-    dkCmdBufDraw(dk->gpu.cmdbuf, DkPrimitive_Triangles, count, 1, first, 0);
+    return true;
+}
+
+static void DkDraw(DrawPath *path, uint32_t first, uint32_t count) {
+    if (DkHandles(path)) {
+        dkCmdBufDraw(Dk(path)->gpu.cmdbuf, DkPrimitive_Triangles, count, 1, first, 0);
+    }
+}
+
+static void DkDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
+                          uint32_t count, int32_t base_vertex) {
+    static const DkIdxFormat FORMATS[] = { DkIdxFormat_Uint8, DkIdxFormat_Uint16,
+                                           DkIdxFormat_Uint32 };
+    if (DkHandles(path)) {
+        dkCmdBufBindIdxBuffer(Dk(path)->gpu.cmdbuf, FORMATS[type], indices->address);
+        dkCmdBufDrawIndexed(Dk(path)->gpu.cmdbuf, DkPrimitive_Triangles, count, 1, 0, base_vertex,
+                            0);
+    }
 }
 
 static bool DkEnd(DrawPath *path) {
@@ -344,6 +367,7 @@ static const uint8_t *DkRead(DrawPath *path) {
 static const DrawPathWay DEKO3D_WAY = {
     DkClose, DkProgram, DkTexture, DkAlloc,       DkBegin, DkClear, DkClearDepth, DkDepth,
     DkUseProgram, DkVertices, DkUniform, DkBindTexture, DkDraw,  DkEnd,   DkRead,
+    DkDrawIndexed,
 };
 
 DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_size) {

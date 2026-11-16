@@ -497,6 +497,23 @@ static void NvDraw(DrawPath *path, uint32_t first, uint32_t count) {
                                       (int)count);
 }
 
+static void NvDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
+                          uint32_t count, int32_t base_vertex) {
+    static const NVNindexType TYPES[] = { NVN_INDEX_TYPE_UNSIGNED_BYTE,
+                                          NVN_INDEX_TYPE_UNSIGNED_SHORT,
+                                          NVN_INDEX_TYPE_UNSIGNED_INT };
+    NvnPath *const nv = Nv(path);
+    // A game draws with no base through the call that has none.
+    if (base_vertex == 0) {
+        nv->nvn.nvnCommandBufferDrawElements(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                            TYPES[type], (int)count, indices->address);
+    } else {
+        nv->nvn.nvnCommandBufferDrawElementsBaseVertex(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                                      TYPES[type], (int)count, indices->address,
+                                                      base_vertex);
+    }
+}
+
 static bool NvEnd(DrawPath *path) {
     NvnPath *const nv = Nv(path);
     if (!nv->recording) {
@@ -532,6 +549,7 @@ static const uint8_t *NvRead(DrawPath *path) {
 static const DrawPathWay NVN_WAY = {
     NvClose, NvProgram, NvTexture, NvAlloc,       NvBegin, NvClear, NvClearDepth, NvDepth,
     NvUseProgram, NvVertices, NvUniform, NvBindTexture, NvDraw,  NvEnd,   NvRead,
+    NvDrawIndexed,
 };
 
 /// The steps of the bring-up, in order; false with the step in @p why.

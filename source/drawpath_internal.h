@@ -25,6 +25,8 @@ typedef struct {
     void (*draw)(DrawPath *path, uint32_t first, uint32_t count);
     bool (*end)(DrawPath *path);
     const uint8_t *(*read)(DrawPath *path);
+    void (*draw_indexed)(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
+                         uint32_t count, int32_t base_vertex);
 } DrawPathWay;
 
 /// What every way starts with: its functions, what it was asked for and its failure.

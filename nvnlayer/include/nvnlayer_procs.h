@@ -357,6 +357,12 @@
       (NVNcommandBuffer *cmd, const NVNpolygonState *state))                                      \
     X(void, nvnCommandBufferDrawArrays,                                                           \
       (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, int first, int count))                  \
+    X(void, nvnCommandBufferDrawElements,                                                         \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type, int count,           \
+       NVNbufferAddress indices))                                                                 \
+    X(void, nvnCommandBufferDrawElementsBaseVertex,                                               \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type, int count,           \
+       NVNbufferAddress indices, int base_vertex))                                                \
     X(void, nvnCommandBufferClearDepthStencil,                                                    \
       (NVNcommandBuffer *cmd, float depth, NVNboolean depth_mask, int stencil, int stencil_mask))
 

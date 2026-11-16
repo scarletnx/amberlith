@@ -143,6 +143,16 @@ void DrawPathUniform(DrawPath *path, DrawStage stage, uint32_t slot, const DrawB
 void DrawPathBindTexture(DrawPath *path, DrawStage stage, uint32_t slot, int texture);
 /// A triangle list of @p count vertices from @p first.
 void DrawPathDraw(DrawPath *path, uint32_t first, uint32_t count);
+/// The width of an index: its bytes are 1 << type.
+typedef enum {
+    DRAW_INDEX_U8 = 0,
+    DRAW_INDEX_U16 = 1,
+    DRAW_INDEX_U32 = 2,
+} DrawIndex;
+/// A triangle list of the vertices the @p count indices of @p type at @p indices name, each
+/// with @p base_vertex added.
+void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
+                         uint32_t count, int32_t base_vertex);
 /// Ends the list, submits it and waits for the graphics unit. False when anything since
 /// DrawPathBegin failed, with DrawPathFailure saying what.
 bool DrawPathEnd(DrawPath *path);
