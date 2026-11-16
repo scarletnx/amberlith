@@ -81,6 +81,9 @@
 #define NVN_LAYER_PROCS_SYNC(X)                                                                   \
     X(NVNboolean, nvnSyncInitialize, (NVNsync * sync, NVNdevice *device))                         \
     X(void, nvnSyncFinalize, (NVNsync * sync))                                                    \
+    X(NVNboolean, nvnSyncInitializeFromFencedGLSync,                                              \
+      (NVNsync * sync, NVNdevice *device, uint32_t gl_sync, int *status))                         \
+    X(int, nvnSyncCreateGLSync, (const NVNsync *sync, uint64_t *gl_sync))                         \
     X(NVNsyncWaitResult, nvnSyncWait, (const NVNsync *sync, uint64_t timeout))                    \
     X(void, nvnQueueFenceSync,                                                                    \
       (NVNqueue * queue, NVNsync *sync, NVNsyncCondition condition, int flags))                   \
@@ -678,6 +681,7 @@
     X(void, nvnMemoryPoolBuilderSetDevice, (NVNmemoryPoolBuilder * builder, NVNdevice *device))   \
     X(void, nvnMemoryPoolBuilderSetStorage,                                                       \
       (NVNmemoryPoolBuilder * builder, void *memory, size_t size))                                \
+    X(void, nvnMemoryPoolBuilderSetNativeHandleNVX, (NVNmemoryPoolBuilder * builder, int handle)) \
     X(void, nvnMemoryPoolBuilderSetFlags, (NVNmemoryPoolBuilder * builder, int flags))            \
     X(NVNboolean, nvnMemoryPoolInitialize,                                                        \
       (NVNmemoryPool * pool, const NVNmemoryPoolBuilder *builder))                                \

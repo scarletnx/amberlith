@@ -1067,6 +1067,67 @@ static void UnfencedCase(const char *name) {
                (int)NVN_SYNC_WAIT_RESULT_TIMEOUT_EXPIRED);
 }
 
+/// NVN's two calls between its syncs and OpenGL's, in a program that has no OpenGL: both fail,
+/// and neither writes what it would have made.
+static void NoOpenGlCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNsync from_opengl;
+    int status = -1;
+    const NVNboolean made =
+        nvn.nvn.nvnSyncInitializeFromFencedGLSync(&from_opengl, &nvn.device, 1u, &status);
+    Gives(why, sizeof(why), "whether a sync was made from OpenGL sync 1", made, 0);
+    Gives(why, sizeof(why), "the status of making it", status, 1);
+    static _Alignas(8) NVNsync sync;
+    if (!nvn.nvn.nvnSyncInitialize(&sync, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnSyncInitialize answered false"));
+        return;
+    }
+    uint64_t opengl = 0x5a5a5a5a5a5a5a5aull;
+    const int created = nvn.nvn.nvnSyncCreateGLSync(&sync, &opengl);
+    nvn.nvn.nvnSyncFinalize(&sync);
+    Gives(why, sizeof(why), "the result of making an OpenGL sync from a sync", created, 4);
+    Gives(why, sizeof(why), "whether the OpenGL sync's place kept what it held",
+          opengl == 0x5a5a5a5a5a5a5a5aull, 1);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// A pool is of storage or of a native handle, the one its builder was given last: a handle
+/// takes the storage away, and storage is taken again after it. No pool is made of the handle,
+/// which only the system's memory manager gives.
+static void NativeHandleCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static uint8_t memory[16];
+    _Alignas(8) NVNmemoryPoolBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnMemoryPoolBuilderSetDefaults(&builder);
+    nvn.nvn.nvnMemoryPoolBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnMemoryPoolBuilderSetStorage(&builder, memory, 0x3000);
+    Gives(why, sizeof(why), "the builder's size with storage",
+          (long long)nvn.nvn.nvnMemoryPoolBuilderGetSize(&builder), 0x3000);
+    nvn.nvn.nvnMemoryPoolBuilderSetNativeHandleNVX(&builder, 7);
+    Gives(why, sizeof(why), "the builder's memory once it has a native handle",
+          (long long)(uintptr_t)nvn.nvn.nvnMemoryPoolBuilderGetMemory(&builder), 0);
+    Gives(why, sizeof(why), "the builder's size once it has a native handle",
+          (long long)nvn.nvn.nvnMemoryPoolBuilderGetSize(&builder), 0);
+    nvn.nvn.nvnMemoryPoolBuilderSetStorage(&builder, memory, 0x5000);
+    Gives(why, sizeof(why), "the builder's memory given storage again",
+          (long long)(uintptr_t)nvn.nvn.nvnMemoryPoolBuilderGetMemory(&builder),
+          (long long)(uintptr_t)memory);
+    Gives(why, sizeof(why), "the builder's size given storage again",
+          (long long)nvn.nvn.nvnMemoryPoolBuilderGetSize(&builder), 0x5000);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 /// The queue's own word on the work the cases above gave it, all of which was valid.
 static void QueueErrorCase(const char *name) {
     if (!ReportStart(SUITE, name)) {
@@ -3096,6 +3157,10 @@ static void LayerCases(void) {
                                       "signalled run their clear";
     static const char *const UNFENCED = "a wait on a sync nothing fenced fails, with a timeout "
                                         "or without";
+    static const char *const NO_OPENGL = "with no OpenGL, a sync from an OpenGL sync and an "
+                                         "OpenGL sync from a sync both fail";
+    static const char *const NATIVE_HANDLE = "a pool builder given a native handle forgets its "
+                                             "storage, and takes storage again";
     static const char *const QUEUE_ERROR = "the queue has no error after work that was valid";
     static const char *const QUEUE_BUILDER = "a queue builder gives back its flags and says "
                                              "which of its sizes were set";
@@ -3165,7 +3230,8 @@ static void LayerCases(void) {
                                          ROUND_TRIP, TEXTURE, BUFFER, MIRROR_Y, MIRROR_X,
                                          STRIDED,  BUILDER, VIEW, LEVELS_UP, LEVELS_COPY,
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
-                                         UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT,
+                                         UNFENCED, NO_OPENGL, NATIVE_HANDLE,
+                                         QUEUE_ERROR, QUEUE_BUILDER, EVENT,
                                          SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
                                          BUFFER_RANGE, BUFFER_COPY, DEBUG,
                                          BLEND_STATE, COLOR_STATE, DEPTH_STENCIL_STATE,
@@ -3313,6 +3379,8 @@ static void LayerCases(void) {
     FenceCase(FENCED_LIST, FENCE_LIST, blue, blue_bytes);
     FenceCase(WAITED, FENCE_WAITED, yellow, yellow_bytes);
     UnfencedCase(UNFENCED);
+    NoOpenGlCase(NO_OPENGL);
+    NativeHandleCase(NATIVE_HANDLE);
     QueueErrorCase(QUEUE_ERROR);
     QueueBuilderCase(QUEUE_BUILDER);
     EventCase(EVENT);

@@ -24,7 +24,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and thirty two cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and thirty four cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -68,7 +68,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
-  and five.
+  and eight.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -138,6 +138,14 @@ The reference is the graphics unit running what the layer recorded, never the of
 - **a wait on a sync nothing fenced fails, with a timeout or without** (exact): `nvnSyncWait` answers failed, not
   timed out, for a sync no queue and no list was told to signal. ScarletNX says so of the driver it measured; the
   layer answers the same on the console.
+- **with no OpenGL, a sync from an OpenGL sync and an OpenGL sync from a sync both fail** (exact):
+  `nvnSyncInitializeFromFencedGLSync` answers false with a status of one, and `nvnSyncCreateGLSync` answers four
+  and leaves the place for the OpenGL sync as it was. The probe makes no OpenGL context; ScarletNX says both of
+  the driver it read, and the layer answers the same.
+- **a pool builder given a native handle forgets its storage, and takes storage again** (exact):
+  `nvnMemoryPoolBuilderSetNativeHandleNVX` leaves the builder with no memory and no size, and storage set after it
+  is given back. A native handle is the system's memory manager's, for an image another service made, so no pool
+  is made of this one: what a pool of one holds is a game's to ask.
 - **the queue has no error after work that was valid** (exact): `nvnQueueGetError`.
 - **a queue builder gives back its flags and says which of its sizes were set** (exact): the command, compute and
   control memory sizes and the flush threshold, each unset on a new builder and then given back with what was set;

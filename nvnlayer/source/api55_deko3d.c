@@ -520,6 +520,31 @@ NVNboolean Nvnl_nvnSyncInitialize(NVNsync *sync, NVNdevice *device) {
     return 0;
 }
 
+// OpenGL has no part in a program of deko3d's, as it has none in a console's program that made
+// no OpenGL context: NVN's two calls between its syncs and OpenGL's fail there, one with a
+// status of one and false, the other with four and nothing written.
+#define SYNC_NO_OPENGL_STATUS 1
+#define SYNC_NO_OPENGL_RESULT 4
+
+NVNboolean Nvnl_nvnSyncInitializeFromFencedGLSync(NVNsync *sync, NVNdevice *device,
+                                                  uint32_t gl_sync, int *status) {
+    (void)gl_sync;
+    if (sync == NULL || DeviceOf(device, "nvnSyncInitializeFromFencedGLSync") == NULL) {
+        return 0;
+    }
+    memset(sync, 0, sizeof(*sync));
+    if (status != NULL) {
+        *status = SYNC_NO_OPENGL_STATUS;
+    }
+    return 0;
+}
+
+int Nvnl_nvnSyncCreateGLSync(const NVNsync *sync, uint64_t *gl_sync) {
+    (void)sync;
+    (void)gl_sync;
+    return SYNC_NO_OPENGL_RESULT;
+}
+
 void Nvnl_nvnSyncFinalize(NVNsync *sync) {
     const int slot = SyncOf(sync, "nvnSyncFinalize");
     if (slot >= 0) {
@@ -740,6 +765,17 @@ void Nvnl_nvnMemoryPoolBuilderSetStorage(NVNmemoryPoolBuilder *builder, void *me
     if (record != NULL) {
         record->storage = memory;
         record->size = size;
+        record->native = 0;
+    }
+}
+
+void Nvnl_nvnMemoryPoolBuilderSetNativeHandleNVX(NVNmemoryPoolBuilder *builder, int handle) {
+    LayerPoolBuilder *const record = Record(builder, "nvnMemoryPoolBuilderSetNativeHandleNVX");
+    if (record != NULL) {
+        // A pool is of storage or of a native handle, never both: the one given last.
+        record->storage = NULL;
+        record->size = 0;
+        record->native = handle;
     }
 }
 
@@ -775,6 +811,12 @@ NVNboolean Nvnl_nvnMemoryPoolInitialize(NVNmemoryPool *pool,
     }
     LayerDevice *const device = DeviceOf(from->device, "nvnMemoryPoolInitialize");
     if (device == NULL) {
+        return 0;
+    }
+    if (from->native != 0) {
+        LayerLack("nvnMemoryPoolInitialize: a pool of native handle %d, a handle of the system's "
+                  "memory manager for an image another service made: deko3d has no such memory",
+                  from->native);
         return 0;
     }
     if ((from->flags & NVN_MEMORY_POOL_FLAGS_VIRTUAL) != 0) {
