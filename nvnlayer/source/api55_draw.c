@@ -1936,6 +1936,25 @@ void Nvnl_nvnCommandBufferSetShaderScratchMemory(NVNcommandBuffer *cmd, const NV
     }
 }
 
+void Nvnl_nvnCommandBufferSetProgramSubroutines(NVNcommandBuffer *cmd, NVNprogram *program,
+                                                NVNshaderStage stage, int first, int count,
+                                                const int *values) {
+    // A choice of subroutines goes through the linkage map the program kept for the stage, and
+    // a driver that finds none there does nothing with the choice. No program here keeps one
+    // (nvnProgramSetSubroutineLinkage), so a choice a driver could record is taken and nothing
+    // is recorded: a stage of NVN's six, and a first and a count of sixteen bits each.
+    static const char *const WHAT = "nvnCommandBufferSetProgramSubroutines";
+    if (CmdOf(cmd, WHAT) == NULL || ProgramOf(program, WHAT) == NULL) {
+        return;
+    }
+    if ((unsigned)stage > (unsigned)NVN_SHADER_STAGE_COMPUTE || first < 0 || first > 0xffff ||
+        count < 0 || count > 0xffff || (count > 0 && values == NULL)) {
+        LayerComplain("%s: %d subroutines from %d of stage %d, with%s values: a stage is 0 to 5, "
+                      "and a first and a count 0 to 65535 each",
+                      WHAT, count, first, (int)stage, values == NULL ? " no" : "");
+    }
+}
+
 // ---- the clears and the draws
 
 void Nvnl_nvnCommandBufferClearDepthStencil(NVNcommandBuffer *cmd, float depth,

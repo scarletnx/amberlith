@@ -128,7 +128,14 @@ typedef enum {
     MESH_MULTI_3D_COUNT,
     MESH_PUSHED,   ///< the pushed fragment program, its colour by PushGraphicsConstants
     MESH_NO_RATE,  ///< nvnCommandBufferBindShadingRateImage with no texture
+    MESH_PALETTE,  ///< under nvnCommandBufferShadingRateImagePalette's full rates
 } MeshKind;
+
+// A viewport's shading rate palette: sixteen entries, and the entry of one fragment a pixel, 5,
+// which is what an Ounce game's driver gives the entries a program leaves out and NVIDIA's own
+// number for it (Vulkan's VK_SHADING_RATE_PALETTE_ENTRY_1_INVOCATION_PER_PIXEL_NV).
+#define SHADING_RATES 16
+#define SHADING_RATE_FULL 5
 
 typedef enum {
     PROGRAM_SCALE,
@@ -661,6 +668,16 @@ static const uint8_t *MandelDraw(MeshKind kind, char *why, size_t why_size) {
         // No texture is no shading rate image: every pixel is shaded, as with none ever bound.
         n->nvnCommandBufferBindShadingRateImage(&n2.command, NULL, NULL);
         n->nvnCommandBufferSetShadingRatePaletteMode(&n2.command, 0);
+    }
+    if (kind == MESH_PALETTE) {
+        // The full rate in every entry of the target's viewport, whichever of them a shading
+        // rate image would pick, and no palette for the next viewport, which nothing draws in.
+        int rates[SHADING_RATES];
+        for (int i = 0; i < SHADING_RATES; ++i) {
+            rates[i] = SHADING_RATE_FULL;
+        }
+        n->nvnCommandBufferShadingRateImagePalette(&n2.command, 0, SHADING_RATES, rates);
+        n->nvnCommandBufferShadingRateImagePalette(&n2.command, 1, 0, NULL);
     }
     n->nvnCommandBufferSetGeometryProcessingMode(&n2.command, GEOMETRY_PROCESSING_MESH);
     n->nvnCommandBufferBindStorageBuffer(
@@ -1728,6 +1745,9 @@ void RunNvn2(void) {
                                               "program reads from a root table pushed";
     static const char *const PICTURE_NO_RATE = "the same picture with no texture bound as the "
                                                "shading rate image, and the palette's mode set";
+    static const char *const PICTURE_PALETTE = "the same picture under a shading rate palette "
+                                               "of the full rate in every entry, and no palette "
+                                               "for another viewport";
     static const char *const IMAGE = "a dispatch loads each texel of one image and stores three "
                                      "times it plus its column into another";
     static const char *const IMAGE_SEVERAL = "the same images bound by the call that takes "
@@ -1753,7 +1773,8 @@ void RunNvn2(void) {
                                   MANDEL_COUNT, MANDEL_PICTURE, PICTURE_3D, PICTURE_INDIRECT,
                                   PICTURE_3D_INDIRECT, PICTURE_MULTI, PICTURE_MULTI_3D,
                                   PICTURE_MULTI_COUNT, PICTURE_MULTI_3D_COUNT, HMMA, PUSHED,
-                                  SCALE_MODES, PICTURE_PUSHED, PICTURE_NO_RATE, IMAGE, IMAGE_SEVERAL,
+                                  SCALE_MODES, PICTURE_PUSHED, PICTURE_NO_RATE, PICTURE_PALETTE, IMAGE,
+                                  IMAGE_SEVERAL,
                                   IMAGE_DEFERRED, APART, APART_SEVERAL, APART_DEFERRED,
                                   DEVICE_BUFFERS, DLSS_BUILDER, DLSS_PARAMETERS, DLSS_SIZES, DLSS_EVALUATE };
 
@@ -1912,6 +1933,8 @@ void RunNvn2(void) {
                    "the Mandelbrot's programs made no programs");
         ReportSkip(SUITE, PICTURE_NO_RATE, REPORT_REASON_DEPENDS,
                    "the Mandelbrot's programs made no programs");
+        ReportSkip(SUITE, PICTURE_PALETTE, REPORT_REASON_DEPENDS,
+                   "the Mandelbrot's programs made no programs");
     } else {
         if (ReportStart(SUITE, PICTURE_PUSHED)) {
             NvnLayerClearError();
@@ -1927,6 +1950,9 @@ void RunNvn2(void) {
         }
         if (ReportStart(SUITE, PICTURE_NO_RATE)) {
             MandelPictureCase(PICTURE_NO_RATE, MESH_NO_RATE);
+        }
+        if (ReportStart(SUITE, PICTURE_PALETTE)) {
+            MandelPictureCase(PICTURE_PALETTE, MESH_PALETTE);
         }
     }
 

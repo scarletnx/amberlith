@@ -1907,6 +1907,79 @@ static void ShadedCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, set ? 1u << 12 | 1u << 13 | 1u << 14 : 0u, why);
 }
 
+// ---- subroutines
+
+/// The first word of a linkage map and the bytes of its header, as in t_nvn.c.
+#define LINKAGE_MAGIC 0xfabffabcu
+#define LINKAGE_HEADER_BYTES 80u
+
+/// Into the open list: a program of the case's own of the scene's two stages, which declare no
+/// subroutine, offered a linkage map for its fragment stage and bound for the draws after it,
+/// and a choice of two subroutines for that stage. False when the program was not made or took
+/// no shaders; @p took is what it said of the map.
+static bool ChosenRecorded(Kit *kit, NVNprogram *program, bool *made, int *took) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    *made = n->nvnProgramInitialize(program, kit->nvn.device);
+    if (!*made) {
+        return false;
+    }
+    if (!n->nvnProgramSetShaders(program, 2, kit->nvn.stages[kit->program])) {
+        return false;
+    }
+    static _Alignas(8) uint32_t header[LINKAGE_HEADER_BYTES / 4u];
+    memset(header, 0, sizeof(header));
+    header[0] = LINKAGE_MAGIC;
+    header[1] = NVN_SHADER_STAGE_FRAGMENT;
+    header[5] = LINKAGE_HEADER_BYTES;
+    const NVNsubroutineLinkageMapPtr maps[1] = { header };
+    *took = n->nvnProgramSetSubroutineLinkage(program, 1, maps);
+    n->nvnCommandBufferBindProgram(kit->nvn.command, program,
+                                   NVN_SHADER_STAGE_VERTEX_BIT | NVN_SHADER_STAGE_FRAGMENT_BIT);
+    static const int chosen[2] = { 1, 0 };
+    n->nvnCommandBufferSetProgramSubroutines(kit->nvn.command, program,
+                                             NVN_SHADER_STAGE_FRAGMENT, 0, 2, chosen);
+    return true;
+}
+
+/// A list's choice of subroutines reaches a stage through the linkage map its program kept, and
+/// a driver that finds no map there when the list runs does nothing with the choice: so says the
+/// code of an NVN 55 driver. The scene's stages declare no subroutine, so their program refuses
+/// the map it is offered, and three cells drawn under a choice for it, the last after a second
+/// choice, are there as without one.
+static void ChosenCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    static _Alignas(8) NVNprogram program;
+    bool made = false;
+    int took = -1;
+    KitBegin(&kit, true);
+    const bool set = ChosenRecorded(&kit, &program, &made, &took);
+    if (set) {
+        KitCell(&kit, 8);
+        KitCell(&kit, 9);
+        static const int again[1] = { 3 };
+        kit.nvn.nvn->nvnCommandBufferSetProgramSubroutines(kit.nvn.command, &program,
+                                                           NVN_SHADER_STAGE_FRAGMENT, 1, 1, again);
+        KitCell(&kit, 10);
+    }
+    if (KitEnd(&kit, why, sizeof(why)) && !set) {
+        snprintf(why, sizeof(why), "%s answered false: %s",
+                 made ? "nvnProgramSetShaders" : "nvnProgramInitialize",
+                 NvnLayerError()[0] != '\0' ? NvnLayerError() : "no reason given");
+    } else if (why[0] == '\0' && took != 0) {
+        snprintf(why, sizeof(why), "the program answered %d to a linkage map, where one whose "
+                                   "stages declare no subroutine takes none, 0",
+                 took);
+    }
+    if (made) {
+        kit.nvn.nvn->nvnProgramFinalize(&program);
+    }
+    KitJudge(&kit, name, set ? 1u << 8 | 1u << 9 | 1u << 10 : 0u, why);
+}
+
 /// Into the open list, between depth tested draws: the depth target written out as values, and
 /// the coarse culling's data saved to the page's memory and restored from it.
 static void DepthKeptRecorded(Kit *kit) {
@@ -2462,6 +2535,8 @@ void NvnCommandFirst(void) {
                                "them, through the layer's own NVN functions");
     ShadedCase(DRAW_PATH_LAYER, "a program whose sample shading is its code's draws and asks "
                                 "for no subtile, through the layer's own NVN functions");
+    ChosenCase(DRAW_PATH_LAYER, "draws after subroutines chosen for a program with no linkage "
+                                "map are as without them, through the layer's own NVN functions");
     ResolvesCase(DRAW_PATH_LAYER, "a cleared target of four samples resolves into its colour by "
                                   "each of the four downsamples, through the layer's own NVN "
                                   "functions");
@@ -2548,6 +2623,8 @@ void NvnCommandLast(void) {
                              "through the NVN the program looks up");
     ShadedCase(DRAW_PATH_NVN, "a program whose sample shading is its code's draws and asks for "
                               "no subtile, through the NVN the program looks up");
+    ChosenCase(DRAW_PATH_NVN, "draws after subroutines chosen for a program with no linkage map "
+                              "are as without them, through the NVN the program looks up");
     ResolvesCase(DRAW_PATH_NVN, "a cleared target of four samples resolves into its colour by "
                                 "each of the four downsamples, through the NVN the program looks "
                                 "up");
