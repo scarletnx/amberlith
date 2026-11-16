@@ -42,7 +42,7 @@ set behind the version.
 
 | Part | Files | In which build |
 | --- | --- | --- |
-| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has fifty nine names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
+| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has a hundred and seventeen names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
 | the lookup: `nvnBootstrapLoader`, `nvnDeviceGetProcAddress`, `NvnLoadProcs` | `source/layer.c` | both |
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |

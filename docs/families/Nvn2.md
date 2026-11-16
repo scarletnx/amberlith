@@ -9,7 +9,7 @@
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch
 2's own shader code, a compute dispatch that writes a storage buffer, and a draw whose geometry a mesh program
 writes. Only the probe's Switch 2 build runs it ([The probe as a Switch 2 program](../Ounce.md)), in the nvn
-family, after the `nvn` suite. Twenty seven cases.
+family, after the `nvn` suite. Thirty one cases.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.
@@ -36,6 +36,10 @@ What a pass says, and what it cannot, is in [The probe as a Switch 2 program](..
 | the same images bound by the call that takes several; ... by the deferred call (two cases) | `nvnCommandBufferBindImages` and `BindImagesDeferred` (its handles left where they are until the list has run) | the same texels |
 | a dispatch samples a texture bound apart from its sampler, slot 1 of each, past the texture's edge | `ounce/shaders/apart.comp.sm86`: sixteen invocations sample a 4 by 4 texture of a float a texel with `TEX.U`, its handle the words `nvnCommandBufferBindSeparateTexture` and `BindSeparateSampler` gave slot 1 (`nvnDeviceGetSeparateTextureHandle`, `GetSeparateSamplerHandle`), at columns past the right edge. Slot 1's sampler repeats; slot 0 holds a decoy texture and a sampler that holds the edge | every float, bit for bit: the texel a repeat lands on, copied out by the graphics unit |
 | the same texture and sampler bound by the calls that take several; ... by the deferred calls (two cases) | `nvnCommandBufferBindSeparateTextures` and `BindSeparateSamplers`, then their deferred forms | the same floats |
+| a DLSS network builder gives back what it was set | every setter of `NVNdlssNetworkBuilder` and its getter: the device, which the defaults keep, the flags, the method, the preset, the output's size, the evaluation entries (one by default), the storage, and the texture pool with its 128 bytes of texture IDs | each number, exact |
+| the parameters of a DLSS evaluation give back what they were set | `NVNdlssParameters`: the defaults (a motion vector scale and a pre-exposure of one, the rest nought), then the jitter, the motion vector scale, the pre-exposure, the history reset, the evaluation index, the input rectangle's size and the five rectangles' corners. The six textures and the four overlays have no getter: they are set here and nothing is read of them | each number, exact |
+| a DLSS builder's render sizes are in order within its output, and a network is resized within it alone | `nvnDlssNetworkBuilderGetOptimalSettings` and `GetStorageSize`, then `nvnDlssNetworkInitialize` with that storage, `nvnDlssNetworkResize` to half the builder's output and to twice it, and `nvnDlssNetworkFinalize` | the least, the best and the most render size in order from 1 to the output; the resize within the output taken and the one past it refused. Which size a method gives is the network's own |
+| a DLSS evaluation of a smooth picture into four times its side is within a tenth of a plain filter | `nvnCommandBufferEvaluateDlss` of a 64 by 64 picture whose neighbours differ by four of 255 at most, with a depth at the far plane and motion vectors of nought, the history reset, into the 256 by 256 target | every pixel within 26 of 255 a channel of the picture filtered on the processor (bound tier): what a network adds to a smooth picture stays within a tenth, and a target nothing wrote does not |
 
 ## The Mandelbrot, in three stages
 
