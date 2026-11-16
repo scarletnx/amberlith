@@ -25,9 +25,27 @@ typedef struct {
 _Static_assert(sizeof(RawList) == 32, "a raw control list is four 64-bit words");
 #define RAW_WORDS_MAX ((LAYER_HANDLE_BYTES - (uint32_t)sizeof(RawList)) / 4u)
 
+/// A unit of the part of the command memory the layer keeps, LAYER_HANDLE_BYTES of it: its
+/// offset in that part, or -1 with a complaint naming @p what when the part is used up. What
+/// goes there lives exactly as long as the list.
+static long Unit(LayerCommandBuffer *record, const char *what) {
+    LayerDraw *const draw = record->draw;
+    if (draw->handle_used + LAYER_HANDLE_BYTES > draw->handle_size) {
+        LayerComplain("%s: the quarter of the command memory the layer keeps, 0x%x bytes, is "
+                      "full after %u units of 0x%x: the list needs more command memory",
+                      what, (unsigned)draw->handle_size,
+                      (unsigned)(draw->handle_used / LAYER_HANDLE_BYTES),
+                      (unsigned)LAYER_HANDLE_BYTES);
+        return -1;
+    }
+    const long at = (long)draw->handle_used;
+    draw->handle_used += LAYER_HANDLE_BYTES;
+    return at;
+}
+
 /// Records @p count engine words into @p record's list. The words and the control list that
-/// names them go in the part of the command memory the layer keeps (a unit of it each), so they
-/// live exactly as long as the list, which the queue reads them from when it is submitted.
+/// names them go in a unit of the layer's memory, which the queue reads them from when the
+/// list is submitted.
 static bool RawMethods(LayerCommandBuffer *record, const uint32_t *words, uint32_t count,
                        const char *what) {
     LayerDraw *const draw = record->draw;
@@ -36,22 +54,17 @@ static bool RawMethods(LayerCommandBuffer *record, const uint32_t *words, uint32
                       what, (unsigned)count, (unsigned)RAW_WORDS_MAX);
         return false;
     }
-    if (draw->handle_used + LAYER_HANDLE_BYTES > draw->handle_size) {
-        LayerComplain("%s: the quarter of the command memory the layer keeps, 0x%x bytes, is "
-                      "full after %u units of 0x%x: the list needs more command memory",
-                      what, (unsigned)draw->handle_size,
-                      (unsigned)(draw->handle_used / LAYER_HANDLE_BYTES),
-                      (unsigned)LAYER_HANDLE_BYTES);
+    const long unit = Unit(record, what);
+    if (unit < 0) {
         return false;
     }
-    uint8_t *const at = draw->handle_cpu + draw->handle_used;
+    uint8_t *const at = draw->handle_cpu + unit;
     const RawList list = { 3u | (uint64_t)1u << 32,
-                           draw->handle_memory + draw->handle_used + sizeof(RawList), count, 0u,
+                           draw->handle_memory + (uint64_t)unit + sizeof(RawList), count, 0u,
                            0u };
     memcpy(at, &list, sizeof(list));
     memcpy(at + sizeof(list), words, (size_t)count * 4u);
     dkCmdBufCallList(record->cmdbuf, (DkCmdList)(uintptr_t)at);
-    draw->handle_used += LAYER_HANDLE_BYTES;
     return true;
 }
 
@@ -190,4 +203,168 @@ void Nvnl_nvnCommandBufferSetRenderEnableConditional(NVNcommandBuffer *cmd,
                  mode == NVN_CONDITIONAL_RENDER_MODE_RENDER_IF_EQUAL ? RENDER_IF_EQUAL
                                                                       : RENDER_IF_NOT_EQUAL,
                  "nvnCommandBufferSetRenderEnableConditional");
+}
+
+// ---- the command buffer's memory and its recording
+
+/// The bytes of the command memory a list has taken since it was added: the layer's own part,
+/// kept from the start, and deko3d's part up to where the fill byte starts again. -1 with a
+/// complaint for memory the processor cannot read.
+static long long CommandUsed(const LayerCommandBuffer *record, const char *what) {
+    const LayerCommandMemory *const memory = &record->draw->memory;
+    if (memory->added == 0u) {
+        return 0;
+    }
+    if (memory->given == NULL) {
+        LayerComplain("%s: the command memory is in a pool the processor has no access to, and "
+                      "the layer reads how far a list got through the processor's mapping",
+                      what);
+        return -1;
+    }
+    uint32_t end = memory->given_size;
+    while (end > 0u && memory->given[end - 1u] == LAYER_UNUSED_BYTE) {
+        --end;
+    }
+    // Whole words: a command's last byte may be the fill byte itself.
+    end = (end + 3u) & ~3u;
+    return (long long)(memory->added - memory->given_size) + end;
+}
+
+size_t Nvnl_nvnCommandBufferGetCommandMemorySize(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetCommandMemorySize");
+    return record != NULL ? record->draw->memory.added : 0u;
+}
+
+size_t Nvnl_nvnCommandBufferGetCommandMemoryUsed(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetCommandMemoryUsed");
+    const long long used =
+        record != NULL ? CommandUsed(record, "nvnCommandBufferGetCommandMemoryUsed") : -1;
+    return used < 0 ? 0u : (size_t)used;
+}
+
+size_t Nvnl_nvnCommandBufferGetCommandMemoryFree(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetCommandMemoryFree");
+    const long long used =
+        record != NULL ? CommandUsed(record, "nvnCommandBufferGetCommandMemoryFree") : -1;
+    return used < 0 ? 0u : record->draw->memory.added - (size_t)used;
+}
+
+// deko3d keeps a list's control words in memory of its own, so none of what the program gave
+// is ever used.
+size_t Nvnl_nvnCommandBufferGetControlMemorySize(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetControlMemorySize");
+    return record != NULL ? record->draw->memory.control : 0u;
+}
+
+size_t Nvnl_nvnCommandBufferGetControlMemoryUsed(const NVNcommandBuffer *cmd) {
+    (void)CmdOf(cmd, "nvnCommandBufferGetControlMemoryUsed");
+    return 0u;
+}
+
+size_t Nvnl_nvnCommandBufferGetControlMemoryFree(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetControlMemoryFree");
+    return record != NULL ? record->draw->memory.control : 0u;
+}
+
+NVNboolean Nvnl_nvnCommandBufferIsRecording(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferIsRecording");
+    return record != NULL && record->draw->memory.recording;
+}
+
+void Nvnl_nvnCommandBufferSetMemoryCallback(NVNcommandBuffer *cmd,
+                                            PFNNVNCOMMANDBUFFERMEMORYCALLBACKPROC callback) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetMemoryCallback");
+    if (record != NULL) {
+        record->draw->memory.callback = callback;
+    }
+}
+
+void Nvnl_nvnCommandBufferSetMemoryCallbackData(NVNcommandBuffer *cmd, void *data) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetMemoryCallbackData");
+    if (record != NULL) {
+        record->draw->memory.callback_data = data;
+    }
+}
+
+PFNNVNCOMMANDBUFFERMEMORYCALLBACKPROC
+Nvnl_nvnCommandBufferGetMemoryCallback(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetMemoryCallback");
+    return record != NULL ? record->draw->memory.callback : NULL;
+}
+
+void *Nvnl_nvnCommandBufferGetMemoryCallbackData(const NVNcommandBuffer *cmd) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferGetMemoryCallbackData");
+    return record != NULL ? record->draw->memory.callback_data : NULL;
+}
+
+void Nvnl_nvnCommandBufferSetCommandMemoryCallbackEnabled(NVNcommandBuffer *cmd,
+                                                          NVNboolean enabled) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetCommandMemoryCallbackEnabled");
+    if (record != NULL) {
+        record->draw->memory.command_callback = enabled != 0;
+    }
+}
+
+/// Kept for nothing: the layer never runs out of control memory, having none of the program's
+/// in use.
+void Nvnl_nvnCommandBufferSetControlMemoryCallbackEnabled(NVNcommandBuffer *cmd,
+                                                          NVNboolean enabled) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetControlMemoryCallbackEnabled");
+    if (record != NULL) {
+        record->draw->memory.control_callback = enabled != 0;
+    }
+}
+
+void LayerCommandGrow(void *user, DkCmdBuf cmdbuf, size_t least) {
+    (void)cmdbuf;
+    NVNcommandBuffer *const cmd = user;
+    const LayerCommandBuffer *const record = CmdOf(cmd, "a list out of command memory");
+    if (record == NULL) {
+        return;
+    }
+    const LayerCommandMemory *const memory = &record->draw->memory;
+    if (memory->callback == NULL || !memory->command_callback) {
+        LayerComplain("a list ran out of the 0x%x bytes of command memory it was given and "
+                      "needs 0x%zx more, with %s to add them",
+                      (unsigned)memory->added, least,
+                      memory->callback == NULL ? "no memory callback set"
+                                               : "the command memory callback turned off");
+        return;
+    }
+    memory->callback(cmd, NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY, least,
+                     memory->callback_data);
+}
+
+// A list inside another. deko3d calls a list where it lies, and has no copy of one: a copied
+// list is called too, so the layer asks of nvnCommandBufferCopyCommands what NVN asks only of
+// nvnCommandBufferCallCommands, that the list's memory outlives the one that names it.
+static void CallLists(NVNcommandBuffer *cmd, int count, const NVNcommandHandle *handles,
+                      const char *what) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, what);
+    if (record == NULL) {
+        return;
+    }
+    if (count < 0 || (count > 0 && handles == NULL)) {
+        LayerComplain("%s: %d lists%s", what, count, handles == NULL ? " and no handles" : "");
+        return;
+    }
+    for (int i = 0; i < count; ++i) {
+        if (handles[i] == 0u) {
+            LayerComplain("%s: list %d of %d is no list (0)", what, i, count);
+            return;
+        }
+        dkCmdBufCallList(record->cmdbuf, (DkCmdList)handles[i]);
+    }
+}
+
+void Nvnl_nvnCommandBufferCallCommands(NVNcommandBuffer *cmd, int count,
+                                       const NVNcommandHandle *handles) {
+    CallLists(cmd, count, handles, "nvnCommandBufferCallCommands");
+}
+
+void Nvnl_nvnCommandBufferCopyCommands(NVNcommandBuffer *cmd, int count,
+                                       const NVNcommandHandle *handles) {
+    CallLists(cmd, count, handles, "nvnCommandBufferCopyCommands");
 }

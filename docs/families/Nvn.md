@@ -10,11 +10,12 @@
   * [Indexed draws](#indexed-draws)
 * [The command buffer, down two ways](#the-command-buffer-down-two-ways)
   * [Counters and the render enable](#counters-and-the-render-enable)
+  * [The command buffer's memory and lists in lists](#the-command-buffers-memory-and-lists-in-lists)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, fifty four cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, sixty cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -58,7 +59,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, two hundred
-  and sixty one.
+  and seventy six.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -307,6 +308,33 @@ expects. Exact tier.
   count at the address with the one 16 bytes on, as two reports lie; the layer sends the 3D engine's render enable
   itself, which deko3d never writes. A clear under the render enable is not asked: no console has said here
   whether it obeys.
+
+### The command buffer's memory and lists in lists
+
+- **a command buffer's memory used and free come to what it was given, and draws take some**: the command
+  buffer is given its command and control memory again, whole, and asked before a list, after four draws in it
+  and after it: `nvnCommandBufferGetCommandMemorySize` and `GetControlMemorySize` are the bytes given; the used
+  and the free of each (`GetCommandMemoryUsed`, `GetCommandMemoryFree`, `GetControlMemoryUsed`,
+  `GetControlMemoryFree`) come to its size each time; more command memory is used after the draws than before
+  the list; and `nvnCommandBufferIsRecording` holds in the list and at no other time. How many bytes a command
+  takes is the driver's and is not asked: the layer answers with what deko3d wrote, which it finds by the fill
+  byte it left in the memory, and with no control memory used, since deko3d keeps its own.
+- **a list out of command memory asks the program's callback and draws on**: the command buffer is given
+  0x2000 bytes, a callback (`nvnCommandBufferSetMemoryCallback`) and a pointer for it
+  (`SetMemoryCallbackData`), both read back, and the two switches of the callback turned off and on
+  (`SetCommandMemoryCallbackEnabled`, `SetControlMemoryCallbackEnabled`); then the sixteen cells are drawn again
+  and again until the callback is called, 6400 draws at most. Its first call has the command buffer, the event
+  for command memory, a number of bytes above none and the program's pointer; it adds the rest of the memory,
+  and every cell is there. A call for control memory is given control memory and is not judged: the layer
+  never makes one.
+- **a list called from another and a list copied into it draw their cells**: two lists recorded and kept, a cell
+  each, the first with the clear; the list that is submitted names the first with
+  `nvnCommandBufferCallCommands`, the second with `nvnCommandBufferCopyCommands`, and draws a cell itself. The
+  three cells are there. The layer calls a copied list where it lies, deko3d having no copy, so it asks of a
+  copy what NVN asks of a call alone, that the list's memory is still there when the queue runs it.
+
+`nvnCommandBufferSetRecordingMode`, `SetComputeOverlapMode` and `SetComputeWorkloadPriority` have no case: nothing
+a program can read or draw changes with them here, and what they change on a console is the driver's.
 
 ## Where nvn/nvn.h comes from
 

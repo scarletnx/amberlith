@@ -24,6 +24,12 @@ typedef struct {
     NVNtexture *target;
     /// NULL when the scene asked for no depth target.
     NVNtexture *depth;
+    /// The memory the command buffer was given as the way came up: all of this pool, and this
+    /// control memory.
+    NVNmemoryPool *command_pool;
+    size_t command_bytes;
+    void *control;
+    size_t control_bytes;
 } DrawPathNvnParts;
 
 /// Fills @p parts for @p path. False for the deko3d way, which has none of them.

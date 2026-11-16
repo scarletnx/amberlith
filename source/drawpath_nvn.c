@@ -678,6 +678,10 @@ bool DrawPathNvn(DrawPath *path, DrawPathNvnParts *parts) {
     parts->command = &nv->command;
     parts->target = &nv->target;
     parts->depth = nv->depth_up ? &nv->depth : NULL;
+    parts->command_pool = &nv->command_pool.pool;
+    parts->command_bytes = nv->command_pool.size;
+    parts->control = nv->control;
+    parts->control_bytes = CONTROL_BYTES;
     return true;
 }
 

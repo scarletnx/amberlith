@@ -459,6 +459,236 @@ static void EnablesCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 1 | 1u << 2 | 1u << 4 | 1u << 6 | 1u << 8 | 1u << 12, why);
 }
 
+// ---- the command buffer's memory and its recording
+
+/// Keeps in @p why the first answer that is not the number expected.
+static void Holds(char *why, size_t why_size, const char *what, unsigned long long got,
+                  unsigned long long want) {
+    if (got != want && why[0] == '\0') {
+        snprintf(why, why_size, "%s is 0x%llx, where 0x%llx is expected", what, got, want);
+    }
+}
+
+/// What the command buffer says of its memory, at one moment.
+typedef struct {
+    size_t command_size, command_used, command_free;
+    size_t control_size, control_used, control_free;
+    bool recording;
+} MemoryAnswers;
+
+/// The command buffer given its memory again, whole, and asked what it holds of it.
+static void MemoryGivenRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    n->nvnCommandBufferAddCommandMemory(kit->nvn.command, kit->nvn.command_pool, 0,
+                                        kit->nvn.command_bytes);
+    n->nvnCommandBufferAddControlMemory(kit->nvn.command, kit->nvn.control,
+                                        kit->nvn.control_bytes);
+}
+
+static void MemoryAskedRecorded(Kit *kit, MemoryAnswers *out) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    const NVNcommandBuffer *const cmd = kit->nvn.command;
+    out->command_size = n->nvnCommandBufferGetCommandMemorySize(cmd);
+    out->command_used = n->nvnCommandBufferGetCommandMemoryUsed(cmd);
+    out->command_free = n->nvnCommandBufferGetCommandMemoryFree(cmd);
+    out->control_size = n->nvnCommandBufferGetControlMemorySize(cmd);
+    out->control_used = n->nvnCommandBufferGetControlMemoryUsed(cmd);
+    out->control_free = n->nvnCommandBufferGetControlMemoryFree(cmd);
+    out->recording = n->nvnCommandBufferIsRecording(cmd);
+}
+
+/// A command buffer's memory as it answers for it: the sizes are the ones it was given; what
+/// is used and what is free come to the size, before a list, in the middle of one and after
+/// it; four draws take command memory; and it is recording between the list's begin and end
+/// and at no other time. How many bytes a command takes is the driver's, and is not asked.
+static void MemoryCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    MemoryAnswers before, during, after;
+    memset(&during, 0, sizeof(during));
+    memset(&after, 0, sizeof(after));
+    MemoryGivenRecorded(&kit);
+    MemoryAskedRecorded(&kit, &before);
+    KitBegin(&kit, true);
+    for (uint32_t k = 0; k < 4u; ++k) {
+        KitCell(&kit, k);
+    }
+    MemoryAskedRecorded(&kit, &during);
+    char ended[160] = "";
+    if (KitEnd(&kit, ended, sizeof(ended))) {
+        MemoryAskedRecorded(&kit, &after);
+        const MemoryAnswers *const at[3] = { &before, &during, &after };
+        static const char *const when[3] = { "before the list", "in the list", "after the list" };
+        for (int i = 0; i < 3; ++i) {
+            char what[96];
+            snprintf(what, sizeof(what), "%s, the command memory's size", when[i]);
+            Holds(why, sizeof(why), what, at[i]->command_size, kit.nvn.command_bytes);
+            snprintf(what, sizeof(what), "%s, the command memory used and free together",
+                     when[i]);
+            Holds(why, sizeof(why), what, at[i]->command_used + at[i]->command_free,
+                  kit.nvn.command_bytes);
+            snprintf(what, sizeof(what), "%s, the control memory's size", when[i]);
+            Holds(why, sizeof(why), what, at[i]->control_size, kit.nvn.control_bytes);
+            snprintf(what, sizeof(what), "%s, the control memory used and free together",
+                     when[i]);
+            Holds(why, sizeof(why), what, at[i]->control_used + at[i]->control_free,
+                  kit.nvn.control_bytes);
+            snprintf(what, sizeof(what), "%s, whether the command buffer is recording",
+                     when[i]);
+            Holds(why, sizeof(why), what, at[i]->recording, i == 1);
+        }
+        if (why[0] == '\0' && during.command_used <= before.command_used) {
+            snprintf(why, sizeof(why), "0x%zx bytes of command memory were used before the list "
+                     "and 0x%zx after four draws in it, where draws take some",
+                     before.command_used, during.command_used);
+        }
+    } else {
+        snprintf(why, sizeof(why), "%s", ended);
+    }
+    KitJudge(&kit, name, 0xfu, why);
+}
+
+/// The first part of the command memory the callback case gives, which no list of sixteen
+/// cells a round fits in for long, and how many rounds it draws at most.
+#define SMALL_COMMAND_BYTES 0x2000u
+#define GROW_ROUNDS 400u
+
+/// What the memory callback was called with the first time, and how often.
+static struct {
+    Kit *kit;
+    uint32_t calls;
+    NVNcommandBuffer *cmd;
+    NVNcommandBufferMemoryEvent event;
+    size_t least;
+    void *data;
+    bool added;
+    uint32_t controls;
+} grow;
+
+/// The program's memory callback: the rest of the command memory the first time a list runs
+/// out of it, and control memory of its own each time a list runs out of that.
+static void Grow(NVNcommandBuffer *cmd, NVNcommandBufferMemoryEvent event, size_t least,
+                 void *data) {
+    static _Alignas(8) uint8_t more_control[4][0x4000];
+    if (grow.calls++ == 0u) {
+        grow.cmd = cmd;
+        grow.event = event;
+        grow.least = least;
+        grow.data = data;
+    }
+    const NvnProcs *const n = grow.kit->nvn.nvn;
+    if (event == NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY && !grow.added) {
+        grow.added = true;
+        n->nvnCommandBufferAddCommandMemory(cmd, grow.kit->nvn.command_pool,
+                                            SMALL_COMMAND_BYTES,
+                                            grow.kit->nvn.command_bytes - SMALL_COMMAND_BYTES);
+    } else if (event == NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_CONTROL_MEMORY) {
+        n->nvnCommandBufferAddControlMemory(cmd, more_control[grow.controls++ % 4u],
+                                            sizeof(more_control[0]));
+    }
+}
+
+/// The command buffer given a small part of its memory and told whom to ask for more.
+static void CallbackSetRecorded(Kit *kit, void **callback, void **data) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandBuffer *const cmd = kit->nvn.command;
+    n->nvnCommandBufferAddCommandMemory(cmd, kit->nvn.command_pool, 0, SMALL_COMMAND_BYTES);
+    n->nvnCommandBufferSetMemoryCallback(cmd, Grow);
+    n->nvnCommandBufferSetMemoryCallbackData(cmd, &grow);
+    // Off and on again: the callback is asked while it is on.
+    n->nvnCommandBufferSetCommandMemoryCallbackEnabled(cmd, 0);
+    n->nvnCommandBufferSetCommandMemoryCallbackEnabled(cmd, 1);
+    n->nvnCommandBufferSetControlMemoryCallbackEnabled(cmd, 0);
+    n->nvnCommandBufferSetControlMemoryCallbackEnabled(cmd, 1);
+    *callback = (void *)(uintptr_t)n->nvnCommandBufferGetMemoryCallback(cmd);
+    *data = n->nvnCommandBufferGetMemoryCallbackData(cmd);
+}
+
+/// A list that runs out of command memory asks the program's callback, with the command
+/// buffer, the event, a number of bytes above none and the program's own pointer, and with
+/// the memory the callback adds it draws on: every cell is there. The command buffer gives
+/// back the callback and the pointer it was set.
+static void CallbackCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[320] = "";
+    memset(&grow, 0, sizeof(grow));
+    grow.kit = &kit;
+    void *callback = NULL;
+    void *data = NULL;
+    CallbackSetRecorded(&kit, &callback, &data);
+    KitBegin(&kit, true);
+    uint32_t rounds = 0;
+    for (; rounds < GROW_ROUNDS && grow.calls == 0u; ++rounds) {
+        for (uint32_t k = 0; k < CELLS; ++k) {
+            KitCell(&kit, k);
+        }
+    }
+    if (KitEnd(&kit, why, sizeof(why))) {
+        if (callback != (void *)(uintptr_t)Grow || data != (void *)&grow) {
+            snprintf(why, sizeof(why), "the command buffer gave back the callback %p and the "
+                     "pointer %p, where %p and %p were set",
+                     callback, data, (void *)(uintptr_t)Grow, (void *)&grow);
+        } else if (grow.calls == 0u) {
+            snprintf(why, sizeof(why), "%u draws into 0x%x bytes of command memory never asked "
+                     "the callback for more",
+                     (unsigned)(rounds * CELLS), (unsigned)SMALL_COMMAND_BYTES);
+        } else if (grow.cmd != kit.nvn.command ||
+                   grow.event != NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY ||
+                   grow.least == 0u || grow.data != (void *)&grow) {
+            snprintf(why, sizeof(why), "the callback was first called with the command buffer "
+                     "%p, event %d, 0x%zx bytes and the pointer %p, where the command buffer is "
+                     "%p, a list out of command memory is event %d and asks for bytes, and the "
+                     "pointer set is %p",
+                     (void *)grow.cmd, (int)grow.event, grow.least, grow.data,
+                     (void *)kit.nvn.command,
+                     (int)NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY, (void *)&grow);
+        }
+    }
+    grow.kit = NULL;
+    KitJudge(&kit, name, 0xffffu, why);
+}
+
+/// Two lists recorded and kept, a cell each, then into the list that is submitted: the first
+/// called, the second copied, and a cell of its own.
+static bool ListsRecorded(Kit *kit) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    NVNcommandHandle kept[2] = { 0, 0 };
+    static const uint32_t cells[2] = { 3, 6 };
+    for (int i = 0; i < 2; ++i) {
+        KitBegin(kit, i == 0);
+        KitCell(kit, cells[i]);
+        kept[i] = n->nvnCommandBufferEndRecording(kit->nvn.command);
+    }
+    KitBegin(kit, false);
+    n->nvnCommandBufferCallCommands(kit->nvn.command, 1, &kept[0]);
+    n->nvnCommandBufferCopyCommands(kit->nvn.command, 1, &kept[1]);
+    KitCell(kit, 9);
+    return kept[0] != 0u && kept[1] != 0u;
+}
+
+/// A list called from another and a list copied into it run where they are named: the cell
+/// each draws is there with the cell the outer list draws itself, and the first list's clear
+/// under all three.
+static void ListsCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[200] = "";
+    const bool kept = ListsRecorded(&kit);
+    if (KitEnd(&kit, why, sizeof(why)) && !kept) {
+        snprintf(why, sizeof(why), "nvnCommandBufferEndRecording gave no list for one of the "
+                 "two that were kept");
+    }
+    KitJudge(&kit, name, 1u << 3 | 1u << 6 | 1u << 9, why);
+}
+
 // ---- the cases, by way
 
 void NvnCommandFirst(void) {
@@ -475,6 +705,13 @@ void NvnCommandFirst(void) {
     EnablesCase(DRAW_PATH_LAYER, "the render enable draws under on and under a condition "
                                  "that holds and skips the rest, through the layer's own NVN "
                                  "functions");
+    MemoryCase(DRAW_PATH_LAYER, "a command buffer's memory used and free come to what it "
+                                "was given, and draws take some, through the layer's own NVN "
+                                "functions");
+    CallbackCase(DRAW_PATH_LAYER, "a list out of command memory asks the program's callback "
+                                  "and draws on, through the layer's own NVN functions");
+    ListsCase(DRAW_PATH_LAYER, "a list called from another and a list copied into it draw "
+                               "their cells, through the layer's own NVN functions");
 }
 
 void NvnCommandLast(void) {
@@ -491,4 +728,11 @@ void NvnCommandLast(void) {
     EnablesCase(DRAW_PATH_NVN, "the render enable draws under on and under a condition that "
                                "holds and skips the rest, through the NVN the program looks "
                                "up");
+    MemoryCase(DRAW_PATH_NVN, "a command buffer's memory used and free come to what it was "
+                              "given, and draws take some, through the NVN the program looks "
+                              "up");
+    CallbackCase(DRAW_PATH_NVN, "a list out of command memory asks the program's callback and "
+                                "draws on, through the NVN the program looks up");
+    ListsCase(DRAW_PATH_NVN, "a list called from another and a list copied into it draw their "
+                             "cells, through the NVN the program looks up");
 }

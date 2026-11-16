@@ -1485,8 +1485,10 @@ NVNboolean Nvnl_nvnCommandBufferInitialize(NVNcommandBuffer *cmd, NVNdevice *dev
     }
     DkCmdBufMaker maker;
     dkCmdBufMakerDefaults(&maker, DeviceUse(owner));
-    // No memory callback: a case gives a command buffer the memory it needs up front, and
-    // deko3d ends the program when a list runs out, which the case's journal then names.
+    // Out of command memory, deko3d asks here, and the program's callback adds more; with none
+    // set, deko3d ends the program, which the case's journal then names.
+    maker.userData = cmd;
+    maker.cbAddMem = LayerCommandGrow;
     const DkCmdBuf made = dkCmdBufCreate(&maker);
     if (made == NULL) {
         LayerComplain("nvnCommandBufferInitialize: dkCmdBufCreate gave no command buffer");
@@ -1510,6 +1512,9 @@ NVNboolean Nvnl_nvnCommandBufferInitialize(NVNcommandBuffer *cmd, NVNdevice *dev
     record->magic = MAGIC_CMDBUF;
     record->cmdbuf = made;
     record->draw = draw;
+    // NVN starts a command buffer with both of its memory callbacks on.
+    draw->memory.command_callback = true;
+    draw->memory.control_callback = true;
     return 1;
 }
 
@@ -1547,8 +1552,16 @@ void Nvnl_nvnCommandBufferAddCommandMemory(NVNcommandBuffer *cmd,
     draw->handle_used = 0;
     draw->handle_memory = dkMemBlockGetGpuAddr(from->block) + start;
     draw->handle_cpu = (uint8_t *)dkMemBlockGetCpuAddr(from->block) + start;
-    dkCmdBufAddMemory(record->cmdbuf, from->block, (uint32_t)offset,
-                      kept != 0 ? start - (uint32_t)offset : (uint32_t)size);
+    const uint32_t given = kept != 0 ? start - (uint32_t)offset : (uint32_t)size;
+    draw->memory.added = (uint32_t)size;
+    draw->memory.given_size = given;
+    draw->memory.given = NULL;
+    if ((from->flags & NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS) == 0) {
+        uint8_t *const bytes = (uint8_t *)dkMemBlockGetCpuAddr(from->block) + (uint32_t)offset;
+        memset(bytes, LAYER_UNUSED_BYTE, given);
+        draw->memory.given = bytes;
+    }
+    dkCmdBufAddMemory(record->cmdbuf, from->block, (uint32_t)offset, given);
 }
 
 void Nvnl_nvnCommandBufferAddControlMemory(NVNcommandBuffer *cmd, void *memory,
@@ -1556,19 +1569,28 @@ void Nvnl_nvnCommandBufferAddControlMemory(NVNcommandBuffer *cmd, void *memory,
     // deko3d keeps a list's control words in its command memory, so the processor-side memory
     // NVN asks for has no use here; taken and left alone.
     (void)memory;
-    (void)size;
-    (void)CmdOf(cmd, "nvnCommandBufferAddControlMemory");
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferAddControlMemory");
+    if (record != NULL) {
+        record->draw->memory.control = size;
+    }
 }
 
 void Nvnl_nvnCommandBufferBeginRecording(NVNcommandBuffer *cmd) {
     // A deko3d list is whatever was recorded since the last one finished, so a recording starts
     // by itself.
-    (void)CmdOf(cmd, "nvnCommandBufferBeginRecording");
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBeginRecording");
+    if (record != NULL) {
+        record->draw->memory.recording = true;
+    }
 }
 
 NVNcommandHandle Nvnl_nvnCommandBufferEndRecording(NVNcommandBuffer *cmd) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferEndRecording");
-    return record != NULL ? (NVNcommandHandle)dkCmdBufFinishList(record->cmdbuf) : 0;
+    if (record == NULL) {
+        return 0;
+    }
+    record->draw->memory.recording = false;
+    return (NVNcommandHandle)dkCmdBufFinishList(record->cmdbuf);
 }
 
 void Nvnl_nvnCommandBufferSetRenderTargets(NVNcommandBuffer *cmd, int count,
