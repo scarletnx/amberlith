@@ -778,6 +778,49 @@ void Nvnl_nvnCommandBufferSetTiledCacheTileSize(NVNcommandBuffer *cmd, int width
     dkCmdBufSetTileSize(record->cmdbuf, (uint32_t)width, (uint32_t)height);
 }
 
+// ---- what a device and a list take and show nothing of
+
+// A release driver returns from each of these at once: objects whose finalize was deferred are
+// deko3d's to free, the shader cache is a compiler's, and a list's handle is tracked by the
+// debug layer alone. The layer checks its object and does nothing more.
+
+void Nvnl_nvnDeviceApplyDeferredFinalizes(NVNdevice *device, int age) {
+    (void)age;
+    (void)DeviceOf(device, "nvnDeviceApplyDeferredFinalizes");
+}
+
+void Nvnl_nvnDeviceSetIntermediateShaderCache(NVNdevice *device, int count) {
+    (void)count;
+    (void)DeviceOf(device, "nvnDeviceSetIntermediateShaderCache");
+}
+
+void Nvnl_nvnDeviceFinalizeCommandHandle(NVNdevice *device, NVNcommandHandle handle) {
+    (void)handle;
+    (void)DeviceOf(device, "nvnDeviceFinalizeCommandHandle");
+}
+
+// Three more of the graphics unit's own business with a depth target: writing a compressed one
+// out as values, and saving and restoring its coarse culling's data. deko3d keeps a depth target
+// as values and has no call for the culling's data, so nothing is recorded.
+
+void Nvnl_nvnCommandBufferResolveDepthBuffer(NVNcommandBuffer *cmd) {
+    (void)CmdOf(cmd, "nvnCommandBufferResolveDepthBuffer");
+}
+
+void Nvnl_nvnCommandBufferSaveZCullData(NVNcommandBuffer *cmd, NVNbufferAddress address,
+                                        size_t size) {
+    (void)address;
+    (void)size;
+    (void)CmdOf(cmd, "nvnCommandBufferSaveZCullData");
+}
+
+void Nvnl_nvnCommandBufferRestoreZCullData(NVNcommandBuffer *cmd, NVNbufferAddress address,
+                                           size_t size) {
+    (void)address;
+    (void)size;
+    (void)CmdOf(cmd, "nvnCommandBufferRestoreZCullData");
+}
+
 // ---- the rest of the render state NVN sets by itself
 
 void Nvnl_nvnCommandBufferSetAlphaRef(NVNcommandBuffer *cmd, float ref) {

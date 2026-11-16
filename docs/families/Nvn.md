@@ -24,7 +24,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and ninety two cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and ninety eight cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -68,7 +68,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
-  and twenty.
+  and twenty eight.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -78,6 +78,10 @@ The reference is the graphics unit running what the layer recorded, never the of
   `nvnCommandBufferClearColor`, ordered before `nvnCommandBufferCopyTextureToBuffer` by a barrier, copied to the
   readback pool and compared pixel by pixel, after the pool is filled with a byte no clear here makes. The clear
   suite's colours.
+- **clears before and after deferred finalizes, the shader cache switch and a list's handle given up are there**
+  (exact): `nvnDeviceFinalizeCommandHandle` for the list that just ran, `nvnDeviceApplyDeferredFinalizes` and
+  `nvnDeviceSetIntermediateShaderCache` on and off, between two clears. A release driver returns from each at
+  once and nothing of them can be read, so the case holds a runtime to going on.
 - **two copy textures and a staging pool come up** (none tier): two 64x64 RGBA8 textures in a pool of their own,
   and a processor-visible pool holding a picture of 64x64 texels, every texel four bytes of its own.
 - **a picture copied into a texture and back keeps every texel**, **a texture copied into another keeps every
@@ -523,8 +527,6 @@ Three of these make 16 by 16 textures of their own, in a pool of their own, and 
   What a discarded target holds before it is cleared is not asked.
 
 `nvnCommandBufferDownsample` and its three kin wait for multisampled textures in the layer.
-`nvnCommandBufferResolveDepthBuffer`, `SaveZCullData` and `RestoreZCullData` have no case: they move the graphics
-unit's own depth culling data, which no program reads and no picture shows.
 
 ### The debug layer's marks
 
@@ -581,6 +583,13 @@ hashes set is the driver's, and ScarletNX keeps none.
   `OverrideSubtileSize`, `SetColorReductionThresholds`, `SetColorReductionEnable` and
   `SetZCullZF32CompressionEnable`, which speed the graphics unit's work and show in no picture; the layer has no
   deko3d call for any and records nothing.
+- **a program whose sample shading is its code's draws and asks for no subtile**: `nvnProgramSetSampleShading`
+  with nought before the shaders are set, and `nvnProgramGetSubtileSize`, which is nought for every program: a
+  driver's `nvnProgramSetShaders` leaves it there and nothing in NVN sets it. The layer lacks the other modes of
+  sample shading, deko3d running a fragment stage as its code says.
+- **depth tested draws around a depth target's resolve and its culling data's save and restore are as without
+  them**: `nvnCommandBufferResolveDepthBuffer`, `SaveZCullData` and `RestoreZCullData`, the graphics unit's own
+  business with a depth target, which no picture shows; the layer records nothing for them.
 
 - **conservative rasterization draws every pixel a quad touches**: four quads each 0.6 of a pixel inside its
   cell. By the usual rule the cell's outer ring of pixels, touched but with centres outside, stays clear; with
@@ -633,10 +642,9 @@ shading mode, and the greatest callable and trace recursion depths and the flags
 builder makes no program. ScarletNX draws no ray tracing yet, so nothing else of it has a case: the acceleration
 structures, a program's shader groups and a queue's ray tracing memory are answers it makes up.
 
-Without a case: `nvnDeviceApplyDeferredFinalizes`, `SetIntermediateShaderCache` and `FinalizeCommandHandle`, which change
-nothing a program reads; the Ounce's device command and message buffers, which have setters alone;
-`nvnProgramSetSampleShading`, whose modes need a multisampled target to show; subroutine linkage, which needs
-shaders with subroutines; and `nvnProgramGetSubtileSize` and `GetScratchBytesPerWarp`, the driver's own numbers.
+Without a case: subroutine linkage, which needs shaders with subroutines and the map a console's compiler writes
+of them; `nvnProgramSetSampleShading`'s modes past the first, which need a multisampled target to show; and
+`nvnProgramGetScratchBytesPerWarp`, a number of ray tracing's that ScarletNX makes up.
 
 ## Where nvn/nvn.h comes from
 
