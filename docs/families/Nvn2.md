@@ -9,7 +9,7 @@
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch
 2's own shader code, a compute dispatch that writes a storage buffer, and a draw whose geometry a mesh program
 writes. Only the probe's Switch 2 build runs it ([The probe as a Switch 2 program](../Ounce.md)), in the nvn
-family, after the `nvn` suite. Eight cases.
+family, after the `nvn` suite. Eighteen cases.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.
@@ -23,9 +23,11 @@ What a pass says, and what it cannot, is in [The probe as a Switch 2 program](..
 | a compute program assembled by hand makes a program through the builder | `nvnProgramBuilderSetShaders` and `nvnProgramInitializeFromBuilder` with one stage, its code in a code pool and its control section as the assembler wrote it | the call's answer |
 | a dispatch's writes to a storage buffer, as the processor reads them once the queue finishes | `ounce/shaders/scale.comp.sm86`: 128 invocations in two blocks of 64, each reading its word of storage buffer 0, bound with `nvnCommandBufferBindStorageBuffer`, and writing three times it plus its index 0x200 bytes on; the program reads the buffer's memory once `nvnQueueFinish` returns | every word, exact; the output starts as 0xdeadbeef, so a dispatch that wrote nothing is told from one that wrote wrong |
 | a dispatch's writes to a storage buffer, as the graphics unit copies them to another buffer | the same output, copied with `nvnCommandBufferCopyBufferToBuffer` and read there: what the buffer holds on the graphics unit's side, whatever the processor saw | every word, exact |
+| the same dispatch, its storage buffer bound by the call that takes several; ... by the deferred call; ... its counts of blocks read by the graphics unit from a buffer (three cases) | `nvnCommandBufferBindStorageBuffers`, `BindStorageBuffersDeferred` (its range left where it is until the list has run) and `nvnCommandBufferDispatchComputeIndirect` | the same words, copied out by the graphics unit |
 | the Mandelbrot's compute, mesh and fragment programs make two programs | one program of the compute stage, one of the mesh and fragment stages | the calls' answers |
 | a compute program counts the Mandelbrot set's steps for every cell of a grid | `mandel.comp.sm86`, a block a row; the counts copied out by the graphics unit | every cell's count, exact (`source/mandelref.c`, `MandelCount`) |
 | a mesh program draws the counts as bars, a fragment program colours them and the depth test keeps the nearest | `mandel.mesh.sm86` and `mandel.frag.sm86`, drawn with `nvnCommandBufferDrawMeshTasks`, a workgroup a row | every pixel, exact (`MandelExpected`) |
+| the same picture by a mesh draw of a grid of workgroups; ... that reads its numbers; ... of a grid that reads its numbers; ... by two mesh draws read from one buffer, a half of the rows each; ... by the mesh draws of a grid read from one buffer; ... by as many mesh draws as a count in a buffer says, a half each; ... by as many mesh draws of a grid as a count in a buffer says (seven cases) | the same draw through `nvnCommandBufferDrawMeshTasks3D`, `DrawMeshTasksIndirect`, `DrawMeshTasks3DIndirect`, `MultiDrawMeshTasksIndirect`, `MultiDrawMeshTasks3DIndirect`, `MultiDrawMeshTasksIndirectCount` and `MultiDrawMeshTasks3DIndirectCount`: a count and a first workgroup, or three counts for a grid, read by the graphics unit from the data pool; the draws of several take the rows in two halves, the second from workgroup 14 | the same picture, every pixel |
 | one warp's matrix instruction multiplies a 16 by 16 matrix of halves by a 16 by 8 one into floats | `hmma.comp.sm86`: `HMMA.16816.F32` over a block of 32 invocations, each lane holding its part of the matrices | the product's 128 floats, bit for bit, against the integers' sums |
 
 ## The Mandelbrot, in three stages

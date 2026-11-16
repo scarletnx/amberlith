@@ -42,7 +42,7 @@ set behind the version.
 
 | Part | Files | In which build |
 | --- | --- | --- |
-| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has forty names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
+| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has fifty names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
 | the lookup: `nvnBootstrapLoader`, `nvnDeviceGetProcAddress`, `NvnLoadProcs` | `source/layer.c` | both |
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |
@@ -344,7 +344,8 @@ The objects keep the sizes of `nvn/nvn.h`, with the Ounce's own (the program bui
 command and message buffers) at the sizes ScarletNX's implementation keeps of each.
 
 The list is the Switch's functions and the ones a program of this API needs first: compute dispatches, storage
-buffers and images, the program builder, push constants and `nvnCommandBufferDrawMeshTasks`. A name is one line
+buffers (one at a time, several, deferred) and images, the program builder, push constants, the indirect
+dispatch, and `nvnCommandBufferDrawMeshTasks` with its seven other forms. A name is one line
 of `NVN_LAYER_PROCS_231`.
 
 ## What a pass proves
