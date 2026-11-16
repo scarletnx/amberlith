@@ -14,11 +14,12 @@
   * [Clears, strides and discards](#clears-strides-and-discards)
   * [The debug layer's marks](#the-debug-layers-marks)
   * [The render state a list sets by itself](#the-render-state-a-list-sets-by-itself)
+  * [The device and a program](#the-device-and-a-program)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, eighty seven cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, ninety one cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -62,7 +63,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three
-  hundred and thirty six.
+  hundred and forty five.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -422,6 +423,31 @@ rasterization, the subpixel bias, the patch size and the tessellation levels. An
 goes: `nvnCommandBufferOverrideSubtileSize`, `SetColorReductionEnable`, `SetColorReductionThresholds`,
 `SetZCullZF32CompressionEnable`, `SetStencilCullCriteria` and the Ounce's `SetShadingRatePaletteMode`, which tune
 how the graphics unit stores and culls and change nothing a program reads.
+
+### The device and a program
+
+- **the device says its modes and its builder its flags, and clear values register**: a device builder gives
+  back the flags it was set (`nvnDeviceBuilderGetFlags`); the way's device says the top left origin and the near
+  plane at zero every way of a scene sets (`nvnDeviceGetWindowOriginMode`, `nvnDeviceGetDepthMode`); and each of
+  `nvnDeviceRegisterFastClearColor`, `Colori`, `Colorui`, `Depth` and `Stencil` answers that the value was
+  taken. A registered value is a hint to the graphics unit's compression, so the clear and the cell after it are
+  as in every case.
+- **a program set from the longer shader data draws**: a program of the case's own, set with
+  `nvnProgramSetShadersExt` from the way's program's two stages, each in NVN 55's shader data of eight bytes
+  more, and bound: three cells drawn with it are there.
+
+The Switch 2 program has **an Ounce program builder gives back what it was set, a ray tracing program's numbers
+too** (exact), in the suite's first part: the builder's device, its shader data by address and count, its sample
+shading mode, and the greatest callable and trace recursion depths and the flags of a ray tracing program. The
+builder makes no program. ScarletNX draws no ray tracing yet, so nothing else of it has a case: the acceleration
+structures, a program's shader groups and a queue's ray tracing memory are answers it makes up.
+
+Without a case: the handles of a separate texture, a separate sampler and a texel fetch, which only a shader
+that takes them shows, and the layer's shaders take the one handle of a texture with its sampler;
+`nvnDeviceApplyDeferredFinalizes`, `SetIntermediateShaderCache` and `FinalizeCommandHandle`, which change
+nothing a program reads; the Ounce's device command and message buffers, which have setters alone;
+`nvnProgramSetSampleShading`, whose modes need a multisampled target to show; subroutine linkage, which needs
+shaders with subroutines; and `nvnProgramGetSubtileSize` and `GetScratchBytesPerWarp`, the driver's own numbers.
 
 ## Where nvn/nvn.h comes from
 

@@ -1712,6 +1712,44 @@ static void RecordOunceMarkers(NVNdebugDomainId domain) {
     nvn.nvn.nvnCommandBufferPopDebugGroupCompute(&nvn.command, domain);
 }
 
+/// What the Ounce's program builder keeps comes back from it: the device, the shader data by its
+/// address and its count, the sample shading mode, and the three numbers of a ray tracing
+/// program, the two recursion depths and the flags. The builder makes no program, so the shader
+/// data is only named and the numbers need not be a program any machine has.
+static void ProgramBuilderCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    char why[256] = "";
+    static const NVNshaderData named[2];
+    _Alignas(8) NVNprogramBuilder builder;
+    memset(&builder, 0, sizeof(builder));
+    nvn.nvn.nvnProgramBuilderSetDefaults(&builder);
+    nvn.nvn.nvnProgramBuilderSetDevice(&builder, &nvn.device);
+    nvn.nvn.nvnProgramBuilderSetShaders(&builder, 2, named);
+    nvn.nvn.nvnProgramBuilderSetSampleShading(&builder, 1);
+    nvn.nvn.nvnProgramBuilderSetMaxCallableRecursionDepth(&builder, 3);
+    nvn.nvn.nvnProgramBuilderSetMaxTraceRecursionDepth(&builder, 5);
+    nvn.nvn.nvnProgramBuilderSetProgramRayTracingFlags(&builder, 6);
+    Gives(why, sizeof(why), "the builder's device",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetDevice(&builder),
+          (long long)(uintptr_t)&nvn.device);
+    Gives(why, sizeof(why), "the builder's shader data",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetShaders(&builder),
+          (long long)(uintptr_t)named);
+    Gives(why, sizeof(why), "the builder's number of shaders",
+          nvn.nvn.nvnProgramBuilderGetShaderCount(&builder), 2);
+    Gives(why, sizeof(why), "the builder's sample shading",
+          nvn.nvn.nvnProgramBuilderGetSampleShading(&builder), 1);
+    Gives(why, sizeof(why), "the builder's greatest callable recursion depth",
+          nvn.nvn.nvnProgramBuilderGetMaxCallableRecursionDepth(&builder), 3);
+    Gives(why, sizeof(why), "the builder's greatest trace recursion depth",
+          nvn.nvn.nvnProgramBuilderGetMaxTraceRecursionDepth(&builder), 5);
+    Gives(why, sizeof(why), "the builder's ray tracing flags",
+          nvn.nvn.nvnProgramBuilderGetProgramRayTracingFlags(&builder), 6);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
 /// A clear recorded inside the Ounce's debug groups, between its markers, is the clear: the
 /// markers name work for the debug layer and record nothing a picture shows.
 static void OunceMarkersCase(const char *name, const float rgba[4], const uint8_t expected[4]) {
@@ -2164,6 +2202,8 @@ static void LayerCases(void) {
 #if NVN_LAYER_API >= 231
     static const char *const OUNCE_MARKERS = "a clear between the Ounce's graphics and compute "
                                              "markers and groups is the clear";
+    static const char *const PROGRAM_BUILDER = "an Ounce program builder gives back what it "
+                                               "was set, a ray tracing program's numbers too";
 #endif
     static const char *const WINDOW_BUILDER = "a window builder gives back what it was set";
     static const char *const WINDOW_SAYS = "a window says what it is of, and keeps the active "
@@ -2185,7 +2225,8 @@ static void LayerCases(void) {
                                          SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
                                          BUFFER_RANGE, BUFFER_COPY, DEBUG, WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
-                                         OUNCE_MARKERS, WINDOW_HDR_BUILDER, WINDOW_HDR,
+                                         OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
+                                         WINDOW_HDR,
 #endif
                                          WINDOW, WINDOW_SAYS, WINDOW_SYNC };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
@@ -2344,6 +2385,7 @@ static void LayerCases(void) {
     static const float teal[4] = { 0.0f, 128.0f / 255.0f, 128.0f / 255.0f, 1.0f };
     static const uint8_t teal_bytes[4] = { 0x00, 0x80, 0x80, 0xff };
     OunceMarkersCase(OUNCE_MARKERS, teal, teal_bytes);
+    ProgramBuilderCase(PROGRAM_BUILDER);
     WindowHdrBuilderCase(WINDOW_HDR_BUILDER);
 #endif
 

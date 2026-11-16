@@ -42,12 +42,12 @@ set behind the version.
 
 | Part | Files | In which build |
 | --- | --- | --- |
-| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has twenty nine names more (compute, storage buffers and images, the program builder, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
+| the entry points: one list of every function with its prototype | `include/nvnlayer_procs.h` | both; the API 231 build has forty names more (compute, storage buffers and images, the program builder and its getters, push constants, mesh draws, a window's colour space and HDR metadata, the markers and groups that name graphics or compute work) |
 | the lookup: `nvnBootstrapLoader`, `nvnDeviceGetProcAddress`, `NvnLoadProcs` | `source/layer.c` | both |
 | `nvnDeviceGetInteger`'s switch, in assembly, with the version's two numbers | `source/layer.c` | both |
 | the failure a program reads, the abort guard, the fatal hook | `source/layer.c` | both |
 | the types and the object sizes | `include/nvn/nvn.h` | both; the API 231 build adds the Ounce's objects and its larger window builder |
-| NVN on deko3d: every function's body | `source/api55_deko3d.c`, `api55_draw.c`, `api55_command.c`, `api55_debug.c` | API 55 |
+| NVN on deko3d: every function's body | `source/api55_deko3d.c`, `api55_draw.c`, `api55_command.c`, `api55_debug.c`, `api55_object.c` | API 55 |
 | a DKSH as an NVN program's code and control section | `source/api55_shader.c` | API 55 |
 | bodies that stop the program, naming the function | `source/api231_surface.c` | API 231 |
 
@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Three hundred and thirty six functions, each recording the deko3d commands that do what NVN says it does:
+Three hundred and forty five functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -172,6 +172,9 @@ Three hundred and thirty six functions, each recording the deko3d commands that 
   with: no callback is installed and no object database walked, no debugger is attached, no object is numbered,
   every checkpoint switch and checkpoint answers that it was taken and records nothing, a debug domain is the next
   number from 0, and a label, a marker or a group goes nowhere;
+- **what a device and its builder answer of themselves** (the flags, the two modes), **the clear values a
+  program registers**, taken and kept nowhere, deko3d having no such hint, and **a program set from NVN 55's longer
+  shader data**, whose first sixteen bytes a stage are the shader data the layer draws with;
 - **syncs**: `nvnQueueFenceSync` and `nvnCommandBufferFenceSync` are deko3d's fence signalled by the queue or by
   the list, for the one condition deko3d has (every command done) and no flag; `nvnSyncWait` polls the fence and
   then waits, so it can tell a sync that had signalled from one it waited for, and fails at once for a sync nothing

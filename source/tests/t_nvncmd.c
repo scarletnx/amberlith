@@ -1416,6 +1416,116 @@ static void MarksCase(DrawPathKind kind, const char *name) {
     KitJudge(&kit, name, 1u << 5 | 1u << 6 | 1u << 7, why);
 }
 
+// ---- the device and a program of its own
+
+/// What the device and a builder say of themselves, and whether each clear value was taken.
+typedef struct {
+    int flags;
+    NVNwindowOriginMode origin;
+    NVNdepthMode depth;
+    bool taken[5];
+} DeviceAnswers;
+
+#define DEVICE_FLAGS (NVN_DEVICE_FLAG_DEFERRED_FINALIZE | NVN_DEVICE_FLAG_DEBUG_ENABLE_LEVEL_1)
+
+static void DeviceAskedRecorded(Kit *kit, DeviceAnswers *out) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    _Alignas(8) NVNdeviceBuilder builder;
+    n->nvnDeviceBuilderSetDefaults(&builder);
+    n->nvnDeviceBuilderSetFlags(&builder, DEVICE_FLAGS);
+    out->flags = n->nvnDeviceBuilderGetFlags(&builder);
+    out->origin = n->nvnDeviceGetWindowOriginMode(kit->nvn.device);
+    out->depth = n->nvnDeviceGetDepthMode(kit->nvn.device);
+    static const float colour[4] = { 0.25f, 0.5f, 0.75f, 1.0f };
+    static const int signed_colour[4] = { -1, 2, -3, 4 };
+    static const uint32_t unsigned_colour[4] = { 1u, 2u, 3u, 4u };
+    out->taken[0] = n->nvnDeviceRegisterFastClearColor(kit->nvn.device, colour, NVN_FORMAT_RGBA8);
+    out->taken[1] =
+        n->nvnDeviceRegisterFastClearColori(kit->nvn.device, signed_colour, NVN_FORMAT_RGBA8I);
+    out->taken[2] = n->nvnDeviceRegisterFastClearColorui(kit->nvn.device, unsigned_colour,
+                                                         NVN_FORMAT_RGBA8UI);
+    out->taken[3] = n->nvnDeviceRegisterFastClearDepth(kit->nvn.device, 0.5f);
+    out->taken[4] = n->nvnDeviceRegisterFastClearStencil(kit->nvn.device, 0x5a);
+}
+
+/// A device builder gives back its flags; the device says the origin and the depth mode it was
+/// set, the top left origin and a near plane at zero, which every way of a scene sets; and each
+/// of the five clear values registered with it is taken. A clear after them is the same clear:
+/// the target cleared and a cell drawn are as in every case.
+static void DeviceCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    DeviceAnswers got;
+    memset(&got, 0, sizeof(got));
+    DeviceAskedRecorded(&kit, &got);
+    KitBegin(&kit, true);
+    KitCell(&kit, 13);
+    if (KitEnd(&kit, why, sizeof(why))) {
+        Holds(why, sizeof(why), "the device builder's flags", (unsigned)got.flags, DEVICE_FLAGS);
+        Holds(why, sizeof(why), "the device's window origin mode", (unsigned)got.origin,
+              NVN_WINDOW_ORIGIN_MODE_UPPER_LEFT);
+        Holds(why, sizeof(why), "the device's depth mode", (unsigned)got.depth,
+              NVN_DEPTH_MODE_NEAR_IS_ZERO);
+        static const char *const which[5] = {
+            "whether the float clear colour was taken", "whether the signed clear colour was taken",
+            "whether the unsigned clear colour was taken", "whether the clear depth was taken",
+            "whether the clear stencil was taken" };
+        for (int i = 0; i < 5; ++i) {
+            Holds(why, sizeof(why), which[i], got.taken[i], 1);
+        }
+    }
+    KitJudge(&kit, name, 1u << 13, why);
+}
+
+/// A program of the case's own, set from the way's program's stages in NVN 55's longer shader
+/// data, and bound for the draws after it. False when it was not made or not set.
+static bool LongProgramRecorded(Kit *kit, NVNprogram *program, bool *made) {
+    const NvnProcs *const n = kit->nvn.nvn;
+    struct {
+        NVNshaderData data;
+        uint64_t more;
+    } stages[2];
+    memset(stages, 0, sizeof(stages));
+    stages[0].data = kit->nvn.stages[kit->program][0];
+    stages[1].data = kit->nvn.stages[kit->program][1];
+    *made = n->nvnProgramInitialize(program, kit->nvn.device);
+    if (!*made || !n->nvnProgramSetShadersExt(program, 2, stages)) {
+        return false;
+    }
+    n->nvnCommandBufferBindProgram(kit->nvn.command, program,
+                                   NVN_SHADER_STAGE_VERTEX_BIT | NVN_SHADER_STAGE_FRAGMENT_BIT);
+    return true;
+}
+
+/// A program set through nvnProgramSetShadersExt, whose shader data is eight bytes longer a
+/// stage than nvnProgramSetShaders', draws as the same stages set the short way: three cells.
+static void LongProgramCase(DrawPathKind kind, const char *name) {
+    Kit kit;
+    if (!ReportStart(SUITE, name) || !KitOpen(&kit, kind, name)) {
+        return;
+    }
+    char why[240] = "";
+    static _Alignas(8) NVNprogram program;
+    bool made = false;
+    KitBegin(&kit, true);
+    const bool set = LongProgramRecorded(&kit, &program, &made);
+    for (uint32_t k = 9; k < 12u; ++k) {
+        KitCell(&kit, k);
+    }
+    if (KitEnd(&kit, why, sizeof(why)) && !set) {
+        snprintf(why, sizeof(why), "%s answered false: %s",
+                 made ? "nvnProgramSetShadersExt" : "nvnProgramInitialize",
+                 NvnLayerError()[0] != '\0' ? NvnLayerError() : "no reason given");
+    }
+    if (made) {
+        kit.nvn.nvn->nvnProgramFinalize(&program);
+    }
+    KitJudge(&kit, name, set ? 1u << 9 | 1u << 10 | 1u << 11 : 0u, why);
+}
+
 // ---- the cases, by way
 
 void NvnCommandFirst(void) {
@@ -1469,6 +1579,10 @@ void NvnCommandFirst(void) {
                                "through the layer's own NVN functions");
     MarksCase(DRAW_PATH_LAYER, "draws between debug markers, groups and checkpoints are as "
                                "without them, through the layer's own NVN functions");
+    DeviceCase(DRAW_PATH_LAYER, "the device says its modes and its builder its flags, and "
+                                "clear values register, through the layer's own NVN functions");
+    LongProgramCase(DRAW_PATH_LAYER, "a program set from the longer shader data draws, through "
+                                     "the layer's own NVN functions");
 }
 
 void NvnCommandLast(void) {
@@ -1521,4 +1635,8 @@ void NvnCommandLast(void) {
                              "through the NVN the program looks up");
     MarksCase(DRAW_PATH_NVN, "draws between debug markers, groups and checkpoints are as "
                              "without them, through the NVN the program looks up");
+    DeviceCase(DRAW_PATH_NVN, "the device says its modes and its builder its flags, and clear "
+                              "values register, through the NVN the program looks up");
+    LongProgramCase(DRAW_PATH_NVN, "a program set from the longer shader data draws, through "
+                                   "the NVN the program looks up");
 }
