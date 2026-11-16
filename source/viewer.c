@@ -64,13 +64,19 @@ static void CloseScreen(void) {
     }
 }
 
+// Held around every frame drawn while a run is on and around what the running screen is drawn
+// from: the run's thread, a demo's frames' thread and the running screen's keeper all draw into
+// the one framebuffer.
+static Mutex screen_lock;
+
 // Whether the running screen is what the window shows: the last frame drawn into it was that
 // screen's own. A demo's or a step's frames, the pad's screen and the listening screen take the
 // window from it, and B is not the running screen's to read until it has drawn again.
 static bool progress_shown;
 
+/// Another screen's frame went to the window. The lock is held.
 static void ProgressLostWindow(void) {
-    __atomic_store_n(&progress_shown, false, __ATOMIC_RELEASE);
+    progress_shown = false;
 }
 
 static void ReadPad(PadState *pad) {
@@ -624,9 +630,11 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
             __atomic_store_n(&demo.paused, true, __ATOMIC_RELEASE);
         }
     }
+    mutexLock(&screen_lock);
     uint32_t stride = 0;
     uint8_t *const out = (uint8_t *)framebufferBegin(&screen, &stride);
     if (out == NULL) {
+        mutexUnlock(&screen_lock);
         return false;
     }
     if (stride >= SCREEN_WIDTH * 4u) {
@@ -640,6 +648,7 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
     }
     framebufferEnd(&screen);
     ProgressLostWindow();
+    mutexUnlock(&screen_lock);
     if (!demo.on || demo.paused) {
         // A frame shown again under the menu is no new frame, and its time no frame's.
         demo.last = 0u;
@@ -664,14 +673,17 @@ bool ViewerShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
 }
 
 
-// The running screen, drawn between cases into the program's one framebuffer while the run is
-// on. Nothing here is read by a case: the counts are the report's, the pass is the timer's.
+// The running screen, drawn into the program's one framebuffer while the run is on: by the run's
+// own thread between cases and, inside a case that lasts, by its keeper, a thread beside the run.
+// Nothing here is read by a case: the counts are the report's, the pass is the timer's.
 static bool progress_on;
 static UiProgress progress;
 // The pad the running screen reads for B, which cancels a run a person attends.
 static PadState progress_pad;
 static bool progress_pad_open;
 static UiProgressCancel progress_cancel;
+// The report was told of the cancel: only the run's thread writes to the report.
+static bool progress_cancel_told;
 static UiProgressCount progress_count;
 static uint64_t progress_began;
 static uint64_t progress_drawn;
@@ -679,33 +691,72 @@ static bool progress_drawn_once;
 static char progress_suite[REPORT_KEPT_SUITE];
 static char progress_name[REPORT_KEPT_NAME];
 
+// The keeper: its thread, when the last frame it drew was, and the word that ends it.
+static Thread keeper_thread;
+static bool keeper_on;
+static bool keeper_stop;
+static uint64_t keeper_drawn;
+
+#define KEEPER_STACK 0x8000
+// The lowest a program's thread takes on the console, under every thread a case makes: the
+// keeper runs on a core nothing else wants and never takes one from a case.
+#define KEEPER_PRIORITY 0x3B
+
 // The listening sequence's screen and the pad screen are each up from their first frame to their
 // close, and the running screen keeps off them; declared here, set below.
 static bool listen_open;
 static bool pad_open;
 
-static void ProgressDraw(bool step_began) {
-    if (!progress_on || !screen_open || listen_open || pad_open) {
-        return;
+/// One look at B while the running screen has the window, by either thread: whether it is the
+/// press that cancels, which the screen then says. The lock is held.
+static bool ProgressLookAtB(void) {
+    if (!progress_pad_open || progress.quick || progress.cancelling) {
+        return false;
     }
-    if (!__atomic_load_n(&progress_shown, __ATOMIC_ACQUIRE)) {
-        UiProgressCancelReset(&progress_cancel);
-    } else if (progress_pad_open && !progress.quick && !progress.cancelling) {
-        // Held, not newly pressed: between two cases is when this is read.
-        padUpdate(&progress_pad);
-        if (UiProgressCancelLook(&progress_cancel,
-                                 (padGetButtons(&progress_pad) & HidNpadButton_B) != 0u)) {
-            ReportCancel();
-            progress.cancelling = true;
-            step_began = true;
-        }
+    // Held, not newly pressed: a look is one moment, and the press may be older than it.
+    padUpdate(&progress_pad);
+    if (!UiProgressCancelLook(&progress_cancel,
+                              (padGetButtons(&progress_pad) & HidNpadButton_B) != 0u)) {
+        return false;
     }
-    const uint64_t now = armGetSystemTick();
-    if (!UiProgressDue(progress_drawn_once, armTicksToNs(progress_drawn), armTicksToNs(now),
-                       step_began)) {
-        return;
-    }
+    progress.cancelling = true;
+    return true;
+}
+
+/// The running screen as it is now, into the framebuffer. The lock is held.
+static bool ProgressCompose(uint64_t now) {
     progress.elapsed_ns = armTicksToNs(now - progress_began);
+    uint32_t stride = 0;
+    uint8_t *const pixels = (uint8_t *)framebufferBegin(&screen, &stride);
+    if (pixels == NULL) {
+        return false;
+    }
+    if (stride >= SCREEN_WIDTH * 4u) {
+        const UiFrame frame = { pixels, SCREEN_WIDTH, SCREEN_HEIGHT, stride };
+        UiComposeProgress(&frame, &progress);
+    }
+    framebufferEnd(&screen);
+    progress_shown = true;
+    return true;
+}
+
+/// The run's own thread at a case's start or end, or a step's: B looked at, the counts taken
+/// from the report and the timer, which only this thread asks, and the frame drawn when one is
+/// due.
+static void ProgressDraw(bool step_began) {
+    mutexLock(&screen_lock);
+    if (!progress_on || !screen_open || listen_open || pad_open) {
+        mutexUnlock(&screen_lock);
+        return;
+    }
+    if (!progress_shown) {
+        UiProgressCancelReset(&progress_cancel);
+    } else {
+        (void)ProgressLookAtB();
+    }
+    // The keeper's look may have seen the press: the report hears of it here, from this thread.
+    const bool tell = progress.cancelling && !progress_cancel_told;
+    progress_cancel_told = progress.cancelling;
     progress.passed = (uint32_t)ReportPassed();
     progress.failed = (uint32_t)ReportFailed();
     progress.skipped = (uint32_t)ReportSkipped();
@@ -714,27 +765,92 @@ static void ProgressDraw(bool step_began) {
     progress.case_number = progress_count.count;
     // How many the pass before met is how many this one will, from the second pass on.
     progress.case_total = progress.pass > 1u ? progress_count.previous : 0u;
-    uint32_t stride = 0;
-    uint8_t *const pixels = (uint8_t *)framebufferBegin(&screen, &stride);
-    if (pixels == NULL) {
+    const uint64_t now = armGetSystemTick();
+    if (UiProgressDue(progress_drawn_once, armTicksToNs(progress_drawn), armTicksToNs(now),
+                      step_began || tell) &&
+        ProgressCompose(now)) {
+        progress_drawn = now;
+        progress_drawn_once = true;
+    }
+    mutexUnlock(&screen_lock);
+    if (tell) {
+        ReportCancel();
+    }
+}
+
+/// The keeper's thread: a look at B every UI_PROGRESS_LOOK_NANOSECONDS and a frame when the run's
+/// thread has drawn none for a while, only while the running screen has the window. It asks the
+/// report and the timer nothing: what it draws is what the run's thread left at its last case.
+static void KeeperMain(void *argument) {
+    (void)argument;
+    for (;;) {
+        svcSleepThread((s64)UI_PROGRESS_LOOK_NANOSECONDS);
+        mutexLock(&screen_lock);
+        const bool stop = keeper_stop;
+        if (!stop && progress_on && progress_shown) {
+            const bool asked = ProgressLookAtB();
+            const uint64_t now = armGetSystemTick();
+            if (UiProgressKeeperDraws(armTicksToNs(progress_drawn), armTicksToNs(keeper_drawn),
+                                      armTicksToNs(now), asked, progress.passes > 0u) &&
+                ProgressCompose(now)) {
+                keeper_drawn = now;
+            }
+        }
+        mutexUnlock(&screen_lock);
+        if (stop) {
+            return;
+        }
+    }
+}
+
+/// Starts the keeper on a core the run's thread is not on: a case that holds the run's core for
+/// minutes is what it is for. A machine that gives no thread keeps the screen as it was, drawn
+/// between cases, and the report says so.
+static void KeeperStart(void) {
+    if (keeper_on) {
         return;
     }
-    if (stride >= SCREEN_WIDTH * 4u) {
-        const UiFrame frame = { pixels, SCREEN_WIDTH, SCREEN_HEIGHT, stride };
-        UiComposeProgress(&frame, &progress);
+    keeper_stop = false;
+    keeper_drawn = 0u;
+    const int core = svcGetCurrentProcessorNumber() == 0 ? 1 : 0;
+    Result rc = threadCreate(&keeper_thread, KeeperMain, NULL, NULL, KEEPER_STACK,
+                             KEEPER_PRIORITY, core);
+    if (R_SUCCEEDED(rc)) {
+        rc = threadStart(&keeper_thread);
+        if (R_FAILED(rc)) {
+            threadClose(&keeper_thread);
+        }
     }
-    framebufferEnd(&screen);
-    __atomic_store_n(&progress_shown, true, __ATOMIC_RELEASE);
-    progress_drawn = now;
-    progress_drawn_once = true;
+    if (R_FAILED(rc)) {
+        ReportNote("running screen: the thread that draws it inside a long case did not start "
+                   "on core %d at priority %d, result 0x%x: the screen is drawn between cases "
+                   "only, and a long case leaves it still",
+                   core, KEEPER_PRIORITY, (unsigned)rc);
+        return;
+    }
+    keeper_on = true;
+}
+
+static void KeeperStop(void) {
+    if (!keeper_on) {
+        return;
+    }
+    mutexLock(&screen_lock);
+    keeper_stop = true;
+    mutexUnlock(&screen_lock);
+    threadWaitForExit(&keeper_thread);
+    threadClose(&keeper_thread);
+    keeper_on = false;
 }
 
 static void ProgressWatch(const char *suite, const char *name, bool started) {
+    mutexLock(&screen_lock);
     UiProgressCountCase(&progress_count, progress.passes > 0u ? PerfPassNumber() : 0u, started);
     snprintf(progress_suite, sizeof(progress_suite), "%s", suite != NULL ? suite : "");
     snprintf(progress_name, sizeof(progress_name), "%s", name != NULL ? name : "");
     progress.suite = progress_suite;
     progress.name = progress_name;
+    mutexUnlock(&screen_lock);
     ProgressDraw(false);
 }
 
@@ -743,6 +859,7 @@ void ViewerProgressBegin(const char *heading, const char *folder, uint32_t steps
     if (!screen_open && !(open && OpenScreen())) {
         return;
     }
+    mutexLock(&screen_lock);
     memset(&progress, 0, sizeof(progress));
     if (!quick) {
         ReadPad(&progress_pad);
@@ -753,15 +870,20 @@ void ViewerProgressBegin(const char *heading, const char *folder, uint32_t steps
     progress.steps = steps;
     progress.quick = quick;
     UiProgressCountReset(&progress_count);
+    progress_cancel_told = false;
     progress_began = armGetSystemTick();
     progress_drawn_once = false;
     ProgressLostWindow();
     progress_on = true;
+    mutexUnlock(&screen_lock);
     ReportSetWatcher(ProgressWatch);
+    KeeperStart();
 }
 
 void ViewerProgressStep(uint32_t step, const char *name, bool timed) {
+    mutexLock(&screen_lock);
     if (!progress_on) {
+        mutexUnlock(&screen_lock);
         return;
     }
     progress.step = step;
@@ -770,12 +892,23 @@ void ViewerProgressStep(uint32_t step, const char *name, bool timed) {
     progress.suite = NULL;
     progress.name = NULL;
     UiProgressCountReset(&progress_count);
+    mutexUnlock(&screen_lock);
     ProgressDraw(true);
 }
 
 void ViewerProgressEnd(void) {
     ReportSetWatcher(NULL);
+    KeeperStop();
+    mutexLock(&screen_lock);
     progress_on = false;
+    // A press the keeper saw in the run's last case, with no case after it to tell the report:
+    // the browser goes back to the start for it, as for any other cancel.
+    const bool tell = progress.cancelling && !progress_cancel_told;
+    progress_cancel_told = progress.cancelling;
+    mutexUnlock(&screen_lock);
+    if (tell) {
+        ReportCancel();
+    }
 }
 
 // The listening sequence's screen, up during the sequence to name what is playing; it is not
@@ -815,18 +948,21 @@ void ViewerListenShow(UiListenScreen shown, double left, double right) {
     if (listen_drawn && shown == listen_screen && left == listen_left && right == listen_right) {
         return;
     }
+    mutexLock(&screen_lock);
     uint32_t stride = 0;
     uint8_t *const pixels = (uint8_t *)framebufferBegin(&screen, &stride);
     if (pixels == NULL || stride < SCREEN_WIDTH * 4u) {
         if (pixels != NULL) {
             framebufferEnd(&screen);
         }
+        mutexUnlock(&screen_lock);
         return;
     }
     const UiFrame frame = { pixels, SCREEN_WIDTH, SCREEN_HEIGHT, stride };
     UiComposeListen(&frame, shown, left, right);
     framebufferEnd(&screen);
     ProgressLostWindow();
+    mutexUnlock(&screen_lock);
     listen_screen = shown;
     listen_left = left;
     listen_right = right;
@@ -891,9 +1027,11 @@ bool ViewerPadShow(const UiPadScreen *shown) {
         pad_opened_screen = !was_open;
         pad_open = true;
     }
+    mutexLock(&screen_lock);
     uint32_t stride = 0;
     uint8_t *const pixels = (uint8_t *)framebufferBegin(&screen, &stride);
     if (pixels == NULL) {
+        mutexUnlock(&screen_lock);
         return false;
     }
     if (stride >= SCREEN_WIDTH * 4u) {
@@ -902,6 +1040,7 @@ bool ViewerPadShow(const UiPadScreen *shown) {
     }
     framebufferEnd(&screen);
     ProgressLostWindow();
+    mutexUnlock(&screen_lock);
     return true;
 }
 
@@ -917,9 +1056,11 @@ bool ViewerTouchShow(const UiTouchScreen *shown) {
         pad_opened_screen = !was_open;
         pad_open = true;
     }
+    mutexLock(&screen_lock);
     uint32_t stride = 0;
     uint8_t *const pixels = (uint8_t *)framebufferBegin(&screen, &stride);
     if (pixels == NULL) {
+        mutexUnlock(&screen_lock);
         return false;
     }
     if (stride >= SCREEN_WIDTH * 4u) {
@@ -928,6 +1069,7 @@ bool ViewerTouchShow(const UiTouchScreen *shown) {
     }
     framebufferEnd(&screen);
     ProgressLostWindow();
+    mutexUnlock(&screen_lock);
     return true;
 }
 
