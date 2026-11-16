@@ -2725,6 +2725,44 @@ static void DebugCase(const char *name) {
                why[0] != '\0' ? why : NvnLayerError());
 }
 
+/// The first word of a linkage map, and the bytes of its header, as ScarletNX reads the map a
+/// console's shader compiler writes of a stage with subroutines.
+#define LINKAGE_MAGIC 0xfabffabcu
+#define LINKAGE_HEADER_BYTES 80u
+
+/// A program takes a linkage map for each of its stages that declares subroutines and for no
+/// other, and says whether the maps it was given are those stages': a driver answers false to a
+/// map for a stage that declares none, to no map and to no array of maps. A program no shader
+/// was set for has no such stage. The map offered is a header alone, with the magic, the
+/// fragment stage and its own length where a compiler's map has them.
+static void SubroutineLinkageCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNprogram program;
+    if (!nvn.nvn.nvnProgramInitialize(&program, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnProgramInitialize answered false"));
+        return;
+    }
+    static _Alignas(8) uint32_t header[LINKAGE_HEADER_BYTES / 4u];
+    memset(header, 0, sizeof(header));
+    header[0] = LINKAGE_MAGIC;
+    header[1] = NVN_SHADER_STAGE_FRAGMENT;
+    header[5] = LINKAGE_HEADER_BYTES;
+    const NVNsubroutineLinkageMapPtr maps[1] = { header };
+    Gives(why, sizeof(why), "whether a program with no subroutine took a linkage map",
+          nvn.nvn.nvnProgramSetSubroutineLinkage(&program, 1, maps), 0);
+    Gives(why, sizeof(why), "whether it took none of an array of linkage maps",
+          nvn.nvn.nvnProgramSetSubroutineLinkage(&program, 0, maps), 0);
+    Gives(why, sizeof(why), "whether it took one linkage map of no array",
+          nvn.nvn.nvnProgramSetSubroutineLinkage(&program, 1, NULL), 0);
+    nvn.nvn.nvnProgramFinalize(&program);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 #if NVN_LAYER_API >= 231
 /// Records into the open command buffer the Ounce's markers and groups, which say whether they
 /// name graphics or compute work: a compute group inside a graphics one, a marker in each.
@@ -2771,6 +2809,53 @@ static void ProgramBuilderCase(const char *name) {
           nvn.nvn.nvnProgramBuilderGetMaxTraceRecursionDepth(&builder), 5);
     Gives(why, sizeof(why), "the builder's ray tracing flags",
           nvn.nvn.nvnProgramBuilderGetProgramRayTracingFlags(&builder), 6);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
+/// The Ounce's program builder keeps the subroutine linkage it is given, an array of maps by
+/// its address and their number, and has none until then: an Ounce game's driver writes and
+/// reads the two in the builder, and its defaults put nought in both. The builder is filled with
+/// a byte first, so the defaults are the driver's and not the memory's. It makes no program, so
+/// the maps are only named.
+static void ProgramBuilderLinkageCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    char why[256] = "";
+    static const NVNsubroutineLinkageMapPtr named[3];
+    _Alignas(8) NVNprogramBuilder builder;
+    memset(&builder, 0xa5, sizeof(builder));
+    nvn.nvn.nvnProgramBuilderSetDefaults(&builder);
+    Gives(why, sizeof(why), "a new builder's linkage maps",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetSubroutineLinkage(&builder), 0);
+    Gives(why, sizeof(why), "a new builder's number of linkage maps",
+          nvn.nvn.nvnProgramBuilderGetSubroutineLinkageCount(&builder), 0);
+    nvn.nvn.nvnProgramBuilderSetSubroutineLinkage(&builder, 3, named);
+    Gives(why, sizeof(why), "the builder's linkage maps",
+          (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetSubroutineLinkage(&builder),
+          (long long)(uintptr_t)named);
+    Gives(why, sizeof(why), "the builder's number of linkage maps",
+          nvn.nvn.nvnProgramBuilderGetSubroutineLinkageCount(&builder), 3);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+}
+
+/// The scratch memory a warp of a program's ray tracing needs is a number of its ray tracing
+/// part, which a program has once ray tracing modules made it one: an Ounce game's driver
+/// answers nought for a program without that part, and a program no module was given has none.
+static void ProgramScratchCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    static _Alignas(8) NVNprogram program;
+    if (!nvn.nvn.nvnProgramInitialize(&program, &nvn.device)) {
+        ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnProgramInitialize answered false"));
+        return;
+    }
+    Gives(why, sizeof(why), "the scratch bytes per warp of a program with no ray tracing",
+          (long long)nvn.nvn.nvnProgramGetScratchBytesPerWarp(&program), 0);
+    nvn.nvn.nvnProgramFinalize(&program);
     CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
 }
 
@@ -3290,11 +3375,17 @@ static void LayerCases(LayerWay way) {
                                                 "are, and a builder registers as its sampler");
     const char *const DEBUG = Way("the debug layer's calls are answered as a release "
                                      "driver answers them, and a label changes no object");
+    const char *const SUBROUTINE_LINKAGE = Way("a program with no subroutine takes no linkage "
+                                                  "map, one offered or none");
 #if NVN_LAYER_API >= 231
     const char *const OUNCE_MARKERS = Way("a clear between the Ounce's graphics and compute "
                                              "markers and groups is the clear");
     const char *const PROGRAM_BUILDER = Way("an Ounce program builder gives back what it "
                                                "was set, a ray tracing program's numbers too");
+    const char *const BUILDER_LINKAGE = Way("an Ounce program builder gives back the "
+                                               "subroutine linkage it was set, and none before");
+    const char *const PROGRAM_SCRATCH = Way("an Ounce program with no ray tracing asks for no "
+                                               "scratch memory per warp");
 #endif
     const char *const WINDOW_BUILDER = Way("a window builder gives back what it was set");
     const char *const WINDOW_SAYS = Way("a window says what it is of, and keeps the active "
@@ -3316,7 +3407,7 @@ static void LayerCases(LayerWay way) {
                                          UNFENCED, NO_OPENGL, NATIVE_HANDLE,
                                          QUEUE_ERROR, QUEUE_BUILDER, EVENT,
                                          SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
-                                         BUFFER_RANGE, BUFFER_COPY, DEBUG,
+                                         BUFFER_RANGE, BUFFER_COPY, DEBUG, SUBROUTINE_LINKAGE,
                                          BLEND_STATE, COLOR_STATE, DEPTH_STENCIL_STATE,
                                          MULTISAMPLE_STATE, POLYGON_VERTEX_STATE,
                                          TEXTURE_MORE, TEXTURE_SELF, TEXELS, TEXELS_STRIDED,
@@ -3326,7 +3417,7 @@ static void LayerCases(LayerWay way) {
                                          WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
-                                         WINDOW_HDR,
+                                         WINDOW_HDR, BUILDER_LINKAGE, PROGRAM_SCRATCH,
 #endif
                                          WINDOW, WINDOW_SAYS, WINDOW_SYNC };
     const size_t after_count = sizeof(AFTER_DEVICE) / sizeof(AFTER_DEVICE[0]);
@@ -3516,6 +3607,7 @@ static void LayerCases(LayerWay way) {
     VirtualPoolCase(VIRTUAL_POOL);
 
     DebugCase(DEBUG);
+    SubroutineLinkageCase(SUBROUTINE_LINKAGE);
     WindowBuilderCase(WINDOW_BUILDER);
 #if NVN_LAYER_API >= 231
     // A colour no case before left in the target or in the readback.
@@ -3523,6 +3615,8 @@ static void LayerCases(LayerWay way) {
     static const uint8_t teal_bytes[4] = { 0x00, 0x80, 0x80, 0xff };
     OunceMarkersCase(OUNCE_MARKERS, teal, teal_bytes);
     ProgramBuilderCase(PROGRAM_BUILDER);
+    ProgramBuilderLinkageCase(BUILDER_LINKAGE);
+    ProgramScratchCase(PROGRAM_SCRATCH);
     WindowHdrBuilderCase(WINDOW_HDR_BUILDER);
 #endif
 

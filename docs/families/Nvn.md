@@ -24,7 +24,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, two hundred cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, two hundred and two cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -68,7 +68,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
-  and thirty two.
+  and thirty three.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -184,6 +184,13 @@ The reference is the graphics unit running what the layer recorded, never the of
   sampler, a program, a sync and the texture and sampler pools, each still says of itself what it said. The
   window gets its label in the window's case. These are what ScarletNX read in an NVN 55 release driver, the
   driver a game ships with; the layer answers the same on the console, so only a runtime's answers are news.
+- **a program with no subroutine takes no linkage map, one offered or none** (exact):
+  `nvnProgramSetSubroutineLinkage` answers false to a map for a program none of whose stages declares a
+  subroutine, to none of an array of maps and to one map of no array. A driver keeps a map for each stage that
+  declares some and says whether the maps it was given are those stages', which is what the code of an NVN 55
+  driver and of an Ounce game's driver does; the program here had no shader set, so it has no such stage. The map
+  offered is a header alone, with the magic, the fragment stage and its length where ScarletNX reads them of a
+  compiler's map. The layer answers the same: the control section it writes declares no subroutine.
 - **a window builder gives back what it was set** (exact): the device, the native window, three textures that
   are only named, each by its place and how many, a present interval of two and two active textures. The builder
   makes no window.
@@ -640,15 +647,29 @@ The Ounce's `nvnCommandBufferSetShadingRatePaletteMode` is set by the nvn2 suite
   failing pixel is the other texture's (the wrong descriptor), an edge texel drawn out (the first texture's own
   sampler), or nothing.
 
-The Switch 2 program has **an Ounce program builder gives back what it was set, a ray tracing program's numbers
-too** (exact), in the suite's first part: the builder's device, its shader data by address and count, its sample
-shading mode, and the greatest callable and trace recursion depths and the flags of a ray tracing program. The
-builder makes no program. ScarletNX draws no ray tracing yet, so nothing else of it has a case: the acceleration
-structures, a program's shader groups and a queue's ray tracing memory are answers it makes up.
+The Switch 2 program has three more of a program and its builder (API 231), in the suite's first part:
 
-Without a case: subroutine linkage, which needs shaders with subroutines and the map a console's compiler writes
-of them; `nvnProgramSetSampleShading`'s modes past the first, which need a multisampled target to show; and
-`nvnProgramGetScratchBytesPerWarp`, a number of ray tracing's that ScarletNX makes up.
+- **an Ounce program builder gives back what it was set, a ray tracing program's numbers too** (exact): the
+  builder's device, its shader data by address and count, its sample shading mode, and the greatest callable and
+  trace recursion depths and the flags of a ray tracing program. The builder makes no program.
+- **an Ounce program builder gives back the subroutine linkage it was set, and none before** (exact):
+  `nvnProgramBuilderSetSubroutineLinkage` with an array of three maps that are only named, then
+  `nvnProgramBuilderGetSubroutineLinkage` and `GetSubroutineLinkageCount`: the array's address and three, and
+  nought of both on a new builder, which is filled with a byte before its defaults are set. An Ounce game's
+  driver keeps the two in the builder and its defaults put nought there. ScarletNX 75b49fbec2 answers nought to
+  both getters whatever was set, so the case fails on it.
+- **an Ounce program with no ray tracing asks for no scratch memory per warp** (exact):
+  `nvnProgramGetScratchBytesPerWarp` of a program no ray tracing module was given is nought. The number is of a
+  program's ray tracing part, and an Ounce game's driver answers nought for a program that has none. ScarletNX
+  75b49fbec2 answers 0x1000 for every program, a number it makes up for the games that size memory by it, so
+  the case fails on it.
+
+ScarletNX draws no ray tracing yet, so nothing else of it has a case: the acceleration structures, a program's
+shader groups and a queue's ray tracing memory are answers it makes up.
+
+Without a case: a linkage map that is taken, and the subroutines a list then chooses, which need shaders with
+subroutines and the map a console's compiler writes of them; and `nvnProgramSetSampleShading`'s modes past the
+first, which need a multisampled target to show.
 
 ## Where nvn/nvn.h comes from
 

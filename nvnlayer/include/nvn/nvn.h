@@ -156,6 +156,10 @@ typedef struct {
     const void* control;
 } NVNshaderData;
 
+/* A stage's linkage map, which a console's shader compiler writes of a shader with subroutines:
+   NVN takes it by its address */
+typedef void* NVNsubroutineLinkageMapPtr;
+
 #if NVN_LAYER_API >= 231
 /* The Ounce's objects (API 231), the bytes ScarletNX's implementation keeps of each (its
    src/nx/gpu/nvn/nvn.h): the program builder, DLSS's three, and the device's command and message
