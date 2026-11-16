@@ -22,7 +22,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty three cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and twenty seven cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -66,7 +66,7 @@ The reference is the graphics unit running what the layer recorded, never the of
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
-  and eighty five.
+  and eighty eight.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -207,6 +207,18 @@ The reference is the graphics unit running what the layer recorded, never the of
   (exact): `nvnQueueBuilderSetQueueMemory`, `SetQueuePriority` and `SetPrimaryQueue` with their getters, and the
   command, control and compute memory a queue has used right after `nvnQueueResetMemoryUsageCounts`. What the
   counts come to after work is a driver's own, as the queue memory a builder asks for is, and held to nothing.
+- **a list writes an event's value over the one the processor signalled**, **a list adds to an event's value**
+  (exact): `nvnCommandBufferSignalEvent` in its two modes, the value read with `nvnEventGetValue` once the queue
+  has finished. The sum is skipped as `unavailable` where the layer answers: deko3d has a write by the graphics
+  unit and no sum.
+- **a list that waits for an event's value runs when the processor signals it, and not before** (exact):
+  `nvnCommandBufferWaitEvent` for 9 ahead of a clear and a copy, flushed while the event is 7 with a sync fenced
+  behind it. The sync must run out a wait of a twentieth of a second, and signal once the processor writes 9, with
+  the clear there. Skipped as `unavailable` where the layer answers.
+- **a virtual pool's page is the physical pool's page mapped into it** (exact): a physical pool of two 64 KiB
+  pages and a virtual one, `nvnMemoryPoolMapVirtual` of the physical pool's second page as the virtual pool's
+  first, and bytes the processor wrote through the physical pool copied by the graphics unit from the virtual
+  pool's address. Skipped as `unavailable` where the layer answers: deko3d has no such memory.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its

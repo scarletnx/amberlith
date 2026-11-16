@@ -648,7 +648,14 @@
     X(size_t, nvnQueueGetTotalCommandMemoryUsed, (NVNqueue * queue))                              \
     X(size_t, nvnQueueGetTotalControlMemoryUsed, (NVNqueue * queue))                              \
     X(size_t, nvnQueueGetTotalComputeMemoryUsed, (NVNqueue * queue))                              \
-    X(void, nvnQueueResetMemoryUsageCounts, (NVNqueue * queue))
+    X(void, nvnQueueResetMemoryUsageCounts, (NVNqueue * queue))                                   \
+    X(NVNboolean, nvnMemoryPoolMapVirtual,                                                        \
+      (NVNmemoryPool * pool, int count, const NVNmappingRequest *requests))                       \
+    X(void, nvnCommandBufferSignalEvent,                                                          \
+      (NVNcommandBuffer * cmd, const NVNevent *event, NVNeventSignalMode mode,                    \
+       NVNeventSignalLocation location, int flags, uint32_t value))                               \
+    X(void, nvnCommandBufferWaitEvent,                                                            \
+      (NVNcommandBuffer * cmd, const NVNevent *event, NVNeventWaitMode mode, uint32_t value))
 
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \

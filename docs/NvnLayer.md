@@ -102,6 +102,11 @@ if (!nvn.nvnDeviceInitialize(&device, &builder)) { /* NvnLayerError() says why, 
   question through a function.
 - **`NvnLayerError()`** is the first failure the API 55 build met since `NvnLayerClearError()`, a sentence with
   the value refused, or `""`. NVN's own results have no room for a reason. Under ScarletNX it is always `""`.
+- **`NvnLayerLacks()`** is whether a call since the last clear was one deko3d gives the layer no way to do at
+  all, whatever its arguments: a virtual memory pool and `nvnMemoryPoolMapVirtual`, a list that waits on an event
+  (`nvnCommandBufferWaitEvent`) or adds to one (`nvnCommandBufferSignalEvent` in its add mode). A program that
+  can do without tells that from a call it got wrong; edenprobe's cases skip as unavailable on it. Never under
+  ScarletNX.
 - **`NvnLayerSetGuard(guard)`**: deko3d ends the program when it cannot make an object. A program that can turn
   that abort into a return (edenprobe's `AbortGuarded`, a linker wrap of `diagAbortWithResult`) gives the layer its
   guard, and a bring-up that fails is then a false NVN result with its reason. Without one the abort stands.
@@ -130,7 +135,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and eighty five functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and eighty eight functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -191,7 +196,9 @@ Four hundred and eighty five functions, each recording the deko3d commands that 
   fenced, as NVN does; `nvnQueueWaitSync` and `nvnCommandBufferWaitSync` are deko3d's waits. An NVN sync is as
   large as deko3d's fence, so the layer keeps the fences itself, sixteen at a time;
 - **events** as the processor signals them: a word in a pool the processor reaches, written or added to, with
-  the builder's and the event's getters. A list that signals or waits on one is not there yet;
+  the builder's and the event's getters. A list writes one (`nvnCommandBufferSignalEvent`, deko3d's data pushed
+  into the list, wherever in the pipeline NVN would have the write); it cannot add to one or wait on one, which
+  the layer lacks;
 - **the queue's error** (`nvnQueueGetError`: none, or NVN's unknown error for a queue deko3d says faulted) and
   **what a queue builder answers of itself**: the flags, and four sizes each set or left to the driver. A queue is
   made with no flags, and deko3d's queue keeps its own sizes;
