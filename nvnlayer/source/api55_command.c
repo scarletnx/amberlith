@@ -565,6 +565,12 @@ void LayerBindRasterizer(const LayerCommandBuffer *record) {
     // NVN's faces are deko3d's numbers, none 0 to both 3, and its front faces too.
     raster.cullMode = (DkFace)dynamic->cull;
     raster.frontFace = (DkFrontFace)dynamic->front;
+    if (dynamic->polygon) {
+        // NVN's polygon modes and offset enables are deko3d's numbers too.
+        raster.polygonModeFront = (DkPolygonMode)dynamic->mode;
+        raster.polygonModeBack = (DkPolygonMode)dynamic->mode;
+        raster.depthBiasEnableMask = dynamic->offset;
+    }
     raster.rasterizerEnable = !dynamic->discard;
     raster.depthClampEnable = dynamic->depth_clamp;
     raster.provokingVertex =

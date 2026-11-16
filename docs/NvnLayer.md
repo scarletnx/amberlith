@@ -130,7 +130,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Three hundred and fifty five functions, each recording the deko3d commands that do what NVN says it does:
+Four hundred and twenty one functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -208,15 +208,22 @@ Three hundred and fifty five functions, each recording the deko3d commands that 
   and `nvnSamplerCompare`, which holds for two samplers of one state;
 - the **texture pool** and the **sampler pool**, with where each is and how many descriptors it holds, and
   `nvnSamplerPoolRegisterSamplerBuilder`, the descriptor a sampler made from the builder would get;
-- **the state objects**: blend, channel mask, colour, depth and stencil (the depth test, write and function),
-  multisample, polygon (the cull face and the front face), vertex attributes (float formats of one to four
-  components, and RGBA8) and vertex streams (the stride);
+- **the state objects**, every setter and getter of each: blend (the target, the functions, the equations, the
+  advanced mode's four fields), channel mask, colour (a target's blending, the logic operation, the alpha test),
+  depth and stencil (the depth test, write and function, and each face's stencil function and operations),
+  multisample (the samples, the raster samples, alpha to coverage, coverage to colour, coverage modulation, the
+  sample locations and their grid), polygon (the cull face, the front face, the mode, the offset enables), vertex
+  attributes (float formats of one to four components, and RGBA8) and vertex streams (the stride and the divisor).
+  A setter keeps one of NVN's numbers and complains of any other; a bind hands deko3d the same numbers, which are
+  the graphics unit's in both (the layer's build asserts it), and refuses what deko3d has no state for: an advanced
+  blend mode, sixteen samples, the program's own sample locations, coverage truncation. No case draws with the
+  blend, stencil, logic, alpha, multisample and polygon mode fields yet: the cases read them back;
 - **the binds**: a program, each state, vertex buffers, uniform buffers, textures by handle; and **the draw**,
   `nvnCommandBufferDrawArrays`, with the colour and depth clears.
 
 A choice NVN has and the layer has not made yet (a format, a target, a flag, a view, a setter) is refused with its
 value in `NvnLayerError`, or is a name the lookup does not have; none is filled in with a guess. Compute, storage
-buffers, images, instanced and indirect draws, stencil and blending are not there yet.
+buffers, images, and instanced and indirect draws are not there yet.
 
 `nvnDeviceGetInteger` answers the items deko3d fixes (alignments, counts, the code pool's padding) and NVN's own
 count of reserved descriptors, 256 in each pool, so a program numbers its textures and samplers from the same
