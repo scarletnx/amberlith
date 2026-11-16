@@ -31,7 +31,10 @@ static struct {
     DkSwapchain swapchain;
     DkQueue acquire_queue;
     DkSwapchain acquire_swapchain;
+    DkFence *acquire_fence;
     int acquired;
+    int32_t crop[4];
+    uint32_t interval;
 } pending;
 
 static void MakeDevice(void) {
@@ -52,6 +55,19 @@ static void MakeSwapchain(void) {
 
 static void AcquireImage(void) {
     pending.acquired = dkQueueAcquireImage(pending.acquire_queue, pending.acquire_swapchain);
+}
+
+static void AcquireFenced(void) {
+    dkSwapchainAcquireImage(pending.acquire_swapchain, &pending.acquired, pending.acquire_fence);
+}
+
+static void SetCrop(void) {
+    dkSwapchainSetCrop(pending.acquire_swapchain, pending.crop[0], pending.crop[1],
+                       pending.crop[0] + pending.crop[2], pending.crop[1] + pending.crop[3]);
+}
+
+static void SetInterval(void) {
+    dkSwapchainSetSwapInterval(pending.acquire_swapchain, pending.interval);
 }
 
 // ---- the device
@@ -528,11 +544,28 @@ void Nvnl_nvnCommandBufferWaitSync(NVNcommandBuffer *cmd, const NVNsync *sync) {
     dkCmdBufWaitFence(record->cmdbuf, &syncs[slot].fence);
 }
 
+/// The textures @p record hands in turn: the ones named, all of them when none or too many were.
+static int WindowActive(const LayerWindow *record) {
+    return record->active > 0 && record->active < record->count ? record->active : record->count;
+}
+
+/// Whether @p record may acquire: deko3d takes whichever texture the display hands back, so a
+/// window told to hand only its first few is one the layer cannot keep its word for.
+static bool WindowHandsAll(const LayerWindow *record, const char *what) {
+    if (WindowActive(record) != record->count) {
+        LayerComplain("%s: %d of the window's %d textures are active, and the layer acquires "
+                      "from all of them",
+                      what, WindowActive(record), record->count);
+        return false;
+    }
+    return true;
+}
+
 NVNqueueAcquireTextureResult Nvnl_nvnQueueAcquireTexture(NVNqueue *queue,
                                                                 NVNwindow *window, int *index) {
     LayerQueue *const record = QueueOf(queue, "nvnQueueAcquireTexture");
     LayerWindow *const target = WindowOf(window, "nvnQueueAcquireTexture");
-    if (record == NULL || target == NULL) {
+    if (record == NULL || target == NULL || !WindowHandsAll(target, "nvnQueueAcquireTexture")) {
         return NVN_QUEUE_ACQUIRE_TEXTURE_RESULT_NATIVE_ERROR;
     }
     pending.acquire_queue = record->queue;
@@ -545,6 +578,29 @@ NVNqueueAcquireTextureResult Nvnl_nvnQueueAcquireTexture(NVNqueue *queue,
     }
     *index = pending.acquired;
     return NVN_QUEUE_ACQUIRE_TEXTURE_RESULT_SUCCESS;
+}
+
+/// The window's own acquire: the texture comes at once, and @p sync signals when the display has
+/// let it go, which is deko3d's fence of the dequeued buffer.
+NVNwindowAcquireTextureResult Nvnl_nvnWindowAcquireTexture(NVNwindow *window, NVNsync *sync,
+                                                           int *index) {
+    LayerWindow *const target = WindowOf(window, "nvnWindowAcquireTexture");
+    const int slot = SyncOf(sync, "nvnWindowAcquireTexture");
+    if (target == NULL || slot < 0 || !WindowHandsAll(target, "nvnWindowAcquireTexture")) {
+        return NVN_WINDOW_ACQUIRE_TEXTURE_RESULT_NATIVE_ERROR;
+    }
+    pending.acquire_swapchain = target->swapchain;
+    pending.acquire_fence = &syncs[slot].fence;
+    pending.acquired = -1;
+    if (!LayerGuarded(AcquireFenced, "nvnWindowAcquireTexture: dkSwapchainAcquireImage") ||
+        pending.acquired < 0) {
+        LayerComplain("nvnWindowAcquireTexture: dkSwapchainAcquireImage gave slot %d",
+                      pending.acquired);
+        return NVN_WINDOW_ACQUIRE_TEXTURE_RESULT_NATIVE_ERROR;
+    }
+    syncs[slot].fenced = true;
+    *index = pending.acquired;
+    return NVN_WINDOW_ACQUIRE_TEXTURE_RESULT_SUCCESS;
 }
 
 void Nvnl_nvnQueuePresentTexture(NVNqueue *queue, NVNwindow *window, int index) {
@@ -1797,6 +1853,11 @@ void Nvnl_nvnCommandBufferSetCopyRowStride(NVNcommandBuffer *cmd, ptrdiff_t stri
 
 void Nvnl_nvnWindowBuilderSetDefaults(NVNwindowBuilder *builder) {
     memset(builder, 0, sizeof(*builder));
+    LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetDefaults");
+    if (record != NULL) {
+        // NVN's default: a present every refresh.
+        record->interval = 1;
+    }
 }
 
 void Nvnl_nvnWindowBuilderSetDevice(NVNwindowBuilder *builder, NVNdevice *device) {
@@ -1817,10 +1878,96 @@ void Nvnl_nvnWindowBuilderSetNativeWindow(NVNwindowBuilder *builder,
 void Nvnl_nvnWindowBuilderSetTextures(NVNwindowBuilder *builder, int count,
                                              NVNtexture *const *textures) {
     LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetTextures");
-    if (record != NULL) {
-        record->count = count;
-        record->textures = textures;
+    if (record == NULL) {
+        return;
     }
+    if (count < 0 || count > WINDOW_TEXTURES_MAX || (count > 0 && textures == NULL)) {
+        LayerComplain("nvnWindowBuilderSetTextures: %d textures%s, where a window takes up to %d",
+                      count, textures == NULL ? " and no list" : "", WINDOW_TEXTURES_MAX);
+        return;
+    }
+    memset(record->textures, 0, sizeof(record->textures));
+    record->count = (int16_t)count;
+    for (int i = 0; i < count; ++i) {
+        record->textures[i] = textures[i];
+    }
+}
+
+void Nvnl_nvnWindowBuilderSetPresentInterval(NVNwindowBuilder *builder, int interval) {
+    LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetPresentInterval");
+    if (record != NULL) {
+        record->interval = interval;
+    }
+}
+
+void Nvnl_nvnWindowBuilderSetNumActiveTextures(NVNwindowBuilder *builder, int count) {
+    LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderSetNumActiveTextures");
+    if (record == NULL) {
+        return;
+    }
+    if (count < 0 || count > WINDOW_TEXTURES_MAX) {
+        LayerComplain("nvnWindowBuilderSetNumActiveTextures: %d active textures, where a window "
+                      "has up to %d",
+                      count, WINDOW_TEXTURES_MAX);
+        return;
+    }
+    record->active = (int16_t)count;
+}
+
+NVNdevice *Nvnl_nvnWindowBuilderGetDevice(const NVNwindowBuilder *builder) {
+    const LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderGetDevice");
+    return record != NULL ? record->device : NULL;
+}
+
+NVNnativeWindow Nvnl_nvnWindowBuilderGetNativeWindow(const NVNwindowBuilder *builder) {
+    const LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderGetNativeWindow");
+    return record != NULL ? record->native : NULL;
+}
+
+int Nvnl_nvnWindowBuilderGetNumTextures(const NVNwindowBuilder *builder) {
+    const LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderGetNumTextures");
+    return record != NULL ? record->count : 0;
+}
+
+NVNtexture *Nvnl_nvnWindowBuilderGetTexture(const NVNwindowBuilder *builder, int index) {
+    const LayerWindowBuilder *const record = Record(builder, "nvnWindowBuilderGetTexture");
+    if (record == NULL) {
+        return NULL;
+    }
+    if (index < 0 || index >= record->count) {
+        LayerComplain("nvnWindowBuilderGetTexture: texture %d of a builder that has %d", index,
+                      record->count);
+        return NULL;
+    }
+    return record->textures[index];
+}
+
+int Nvnl_nvnWindowBuilderGetPresentInterval(const NVNwindowBuilder *builder) {
+    const LayerWindowBuilder *const record =
+        Record(builder, "nvnWindowBuilderGetPresentInterval");
+    return record != NULL ? record->interval : 0;
+}
+
+int Nvnl_nvnWindowBuilderGetNumActiveTextures(const NVNwindowBuilder *builder) {
+    const LayerWindowBuilder *const record =
+        Record(builder, "nvnWindowBuilderGetNumActiveTextures");
+    return record != NULL ? record->active : 0;
+}
+
+/// Gives deko3d @p interval for @p record's swapchain, and keeps it; false with a complaint
+/// naming @p what for one deko3d has no word for, or when deko3d aborts.
+static bool WindowInterval(LayerWindow *record, int interval, const char *what) {
+    if (interval < 0) {
+        LayerComplain("%s: a present interval of %d, where the least is 0", what, interval);
+        return false;
+    }
+    pending.acquire_swapchain = record->swapchain;
+    pending.interval = (uint32_t)interval;
+    if (!LayerGuarded(SetInterval, "dkSwapchainSetSwapInterval")) {
+        return false;
+    }
+    record->interval = interval;
+    return true;
 }
 
 NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBuilder *builder) {
@@ -1833,8 +1980,7 @@ NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBuilder *b
     if (device == NULL) {
         return 0;
     }
-    if (from->count < 2 || from->count > WINDOW_TEXTURES_MAX || from->textures == NULL ||
-        from->native == NULL) {
+    if (from->count < 2 || from->count > WINDOW_TEXTURES_MAX || from->native == NULL) {
         LayerComplain("nvnWindowInitialize: %d textures and %s native window, where NVN takes 2 to "
                       "%d and one",
                       from->count, from->native != NULL ? "a" : "no", WINDOW_TEXTURES_MAX);
@@ -1857,7 +2003,92 @@ NVNboolean Nvnl_nvnWindowInitialize(NVNwindow *window, const NVNwindowBuilder *b
     memset(window, 0, sizeof(*window));
     record->magic = MAGIC_WINDOW;
     record->swapchain = pending.swapchain;
+    record->native = from->native;
+    record->count = from->count;
+    record->active = from->active;
+    // deko3d's swapchain starts at NVN's default too.
+    record->interval = 1;
+    // No crop set: NVN shows the whole texture.
+    const LayerTexture *const first = TextureOf(from->textures[0], "nvnWindowInitialize");
+    record->crop[2] = first->width;
+    record->crop[3] = first->height;
+    if (from->interval != 1 && !WindowInterval(record, from->interval, "nvnWindowInitialize")) {
+        dkSwapchainDestroy(record->swapchain);
+        record->magic = 0;
+        return 0;
+    }
     return 1;
+}
+
+NVNnativeWindow Nvnl_nvnWindowGetNativeWindow(const NVNwindow *window) {
+    const LayerWindow *const record = WindowOf(window, "nvnWindowGetNativeWindow");
+    return record != NULL ? record->native : NULL;
+}
+
+int Nvnl_nvnWindowGetNumTextures(const NVNwindow *window) {
+    const LayerWindow *const record = WindowOf(window, "nvnWindowGetNumTextures");
+    return record != NULL ? record->count : 0;
+}
+
+int Nvnl_nvnWindowGetNumActiveTextures(const NVNwindow *window) {
+    const LayerWindow *const record = WindowOf(window, "nvnWindowGetNumActiveTextures");
+    return record != NULL ? WindowActive(record) : 0;
+}
+
+void Nvnl_nvnWindowSetNumActiveTextures(NVNwindow *window, int count) {
+    LayerWindow *const record = WindowOf(window, "nvnWindowSetNumActiveTextures");
+    if (record == NULL) {
+        return;
+    }
+    if (count < 0 || count > WINDOW_TEXTURES_MAX) {
+        LayerComplain("nvnWindowSetNumActiveTextures: %d active textures, where a window has up "
+                      "to %d",
+                      count, WINDOW_TEXTURES_MAX);
+        return;
+    }
+    record->active = (int16_t)count;
+}
+
+int Nvnl_nvnWindowGetPresentInterval(const NVNwindow *window) {
+    const LayerWindow *const record = WindowOf(window, "nvnWindowGetPresentInterval");
+    return record != NULL ? record->interval : 0;
+}
+
+void Nvnl_nvnWindowSetPresentInterval(NVNwindow *window, int interval) {
+    LayerWindow *const record = WindowOf(window, "nvnWindowSetPresentInterval");
+    if (record != NULL) {
+        WindowInterval(record, interval, "nvnWindowSetPresentInterval");
+    }
+}
+
+void Nvnl_nvnWindowGetCrop(const NVNwindow *window, NVNrectangle *crop) {
+    const LayerWindow *const record = WindowOf(window, "nvnWindowGetCrop");
+    if (record != NULL) {
+        crop->x = record->crop[0];
+        crop->y = record->crop[1];
+        crop->width = record->crop[2];
+        crop->height = record->crop[3];
+    }
+}
+
+void Nvnl_nvnWindowSetCrop(NVNwindow *window, int x, int y, int width, int height) {
+    LayerWindow *const record = WindowOf(window, "nvnWindowSetCrop");
+    if (record == NULL) {
+        return;
+    }
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) {
+        LayerComplain("nvnWindowSetCrop: %d,%d %dx%d is not a rectangle of a texture", x, y,
+                      width, height);
+        return;
+    }
+    pending.acquire_swapchain = record->swapchain;
+    pending.crop[0] = x;
+    pending.crop[1] = y;
+    pending.crop[2] = width;
+    pending.crop[3] = height;
+    if (LayerGuarded(SetCrop, "nvnWindowSetCrop: dkSwapchainSetCrop")) {
+        memcpy(record->crop, pending.crop, sizeof(record->crop));
+    }
 }
 
 void Nvnl_nvnWindowFinalize(NVNwindow *window) {

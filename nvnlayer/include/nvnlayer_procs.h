@@ -14,11 +14,12 @@
 ///
 /// Three lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
-///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER and NVN_LAYER_PROCS_BUFFER, parts of it
-///   written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER and
+///   NVN_LAYER_PROCS_WINDOW, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
-/// - NVN_LAYER_PROCS_231: the functions only the API 231 build has, compute's among them, which
+/// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, a part of it written apart): the
+///   functions only the API 231 build has, compute's among them, which
 ///   NVN 55 has too and the deko3d build does not implement yet.
 
 // What a texture, its builder and a view answer of themselves, and the levels of a texture.
@@ -192,6 +193,55 @@
     X(void, nvnBufferInvalidateMappedRange,                                                       \
       (const NVNbuffer *buffer, ptrdiff_t offset, size_t size))
 
+// The rest of a window: what it and its builder answer of themselves, its crop, its present
+// interval, the textures it hands in turn, and a texture acquired with a sync of the program's.
+#define NVN_LAYER_PROCS_WINDOW(X)                                                                 \
+    X(void, nvnWindowBuilderSetPresentInterval, (NVNwindowBuilder * builder, int interval))       \
+    X(void, nvnWindowBuilderSetNumActiveTextures, (NVNwindowBuilder * builder, int count))        \
+    X(NVNdevice *, nvnWindowBuilderGetDevice, (const NVNwindowBuilder *builder))                  \
+    X(NVNnativeWindow, nvnWindowBuilderGetNativeWindow, (const NVNwindowBuilder *builder))        \
+    X(int, nvnWindowBuilderGetNumTextures, (const NVNwindowBuilder *builder))                     \
+    X(NVNtexture *, nvnWindowBuilderGetTexture, (const NVNwindowBuilder *builder, int index))     \
+    X(int, nvnWindowBuilderGetPresentInterval, (const NVNwindowBuilder *builder))                 \
+    X(int, nvnWindowBuilderGetNumActiveTextures, (const NVNwindowBuilder *builder))               \
+    X(NVNnativeWindow, nvnWindowGetNativeWindow, (const NVNwindow *window))                       \
+    X(int, nvnWindowGetNumTextures, (const NVNwindow *window))                                    \
+    X(int, nvnWindowGetNumActiveTextures, (const NVNwindow *window))                              \
+    X(void, nvnWindowSetNumActiveTextures, (NVNwindow * window, int count))                       \
+    X(int, nvnWindowGetPresentInterval, (const NVNwindow *window))                                \
+    X(void, nvnWindowSetPresentInterval, (NVNwindow * window, int interval))                      \
+    X(void, nvnWindowGetCrop, (const NVNwindow *window, NVNrectangle *crop))                      \
+    X(void, nvnWindowSetCrop, (NVNwindow * window, int x, int y, int width, int height))          \
+    X(NVNwindowAcquireTextureResult, nvnWindowAcquireTexture,                                     \
+      (NVNwindow * window, NVNsync *sync, int *index))
+
+// The Ounce's windows (API 231): the colour space a builder keeps, and the HDR metadata of the
+// display and of the content, on a builder and on a window.
+#define NVN_LAYER_PROCS_WINDOW_231(X)                                                             \
+    X(void, nvnWindowBuilderSetColorSpace, (NVNwindowBuilder * builder, int space))               \
+    X(int, nvnWindowBuilderGetColorSpace, (const NVNwindowBuilder *builder))                      \
+    X(void, nvnWindowBuilderSetHdrDisplayMetadata,                                                \
+      (NVNwindowBuilder * builder, float red_x, float red_y, float green_x, float green_y,        \
+       float blue_x, float blue_y, float white_x, float white_y, float least, float most))        \
+    X(void, nvnWindowBuilderGetHdrDisplayMetadata,                                                \
+      (const NVNwindowBuilder *builder, float *red_x, float *red_y, float *green_x,               \
+       float *green_y, float *blue_x, float *blue_y, float *white_x, float *white_y,              \
+       float *least, float *most))                                                                \
+    X(void, nvnWindowBuilderSetHdrContentMetadata,                                                \
+      (NVNwindowBuilder * builder, float most, float frame_average))                              \
+    X(void, nvnWindowBuilderGetHdrContentMetadata,                                                \
+      (const NVNwindowBuilder *builder, float *most, float *frame_average))                       \
+    X(void, nvnWindowSetHdrDisplayMetadata,                                                       \
+      (NVNwindow * window, float red_x, float red_y, float green_x, float green_y, float blue_x,  \
+       float blue_y, float white_x, float white_y, float least, float most))                      \
+    X(void, nvnWindowGetHdrDisplayMetadata,                                                       \
+      (const NVNwindow *window, float *red_x, float *red_y, float *green_x, float *green_y,       \
+       float *blue_x, float *blue_y, float *white_x, float *white_y, float *least, float *most))  \
+    X(void, nvnWindowSetHdrContentMetadata,                                                       \
+      (NVNwindow * window, float most, float frame_average))                                      \
+    X(void, nvnWindowGetHdrContentMetadata,                                                       \
+      (const NVNwindow *window, float *most, float *frame_average))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -279,7 +329,8 @@
     NVN_LAYER_PROCS_POOL(X)                                                                       \
     NVN_LAYER_PROCS_SYNC(X)                                                                       \
     NVN_LAYER_PROCS_SAMPLER(X)                                                                    \
-    NVN_LAYER_PROCS_BUFFER(X)
+    NVN_LAYER_PROCS_BUFFER(X)                                                                     \
+    NVN_LAYER_PROCS_WINDOW(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.
@@ -390,7 +441,8 @@
     X(void, nvnCommandBufferPushComputeConstants,                                                 \
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferSetGeometryProcessingMode, (NVNcommandBuffer *cmd, int mode))         \
-    X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))
+    X(void, nvnCommandBufferDrawMeshTasks, (NVNcommandBuffer *cmd, int first, int count))         \
+    NVN_LAYER_PROCS_WINDOW_231(X)
 
 #if NVN_LAYER_API >= 231
 #define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_231(X)
