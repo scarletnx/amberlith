@@ -405,6 +405,36 @@ static void TestControl(void) {
            "%u and winding 0x%x",
            (unsigned)Read(section, 0x738), (unsigned)Read(section, 0x73c),
            (unsigned)Read(section, 0x740), (unsigned)Read(section, 0x744));
+    // A capture of a vertex stage's outputs, where ScarletNX reads it: the position's first
+    // three words, two of generic output 0 and four of generic output 1 into buffer 0.
+    Module(module, 0, 0);
+    EXPECT(NvnLayerShaderControl(module, sizeof(module), section, &code), "a vertex module: %s",
+           NvnLayerError());
+    static const NvnLayerCaptureGroup vertex[3] = { { NVN_LAYER_CAPTURE_POSITION, 0, 3 },
+                                                    { NVN_LAYER_CAPTURE_GENERIC(0), 0, 2 },
+                                                    { NVN_LAYER_CAPTURE_GENERIC(1), 0, 4 } };
+    NvnLayerClearError();
+    EXPECT(NvnLayerShaderCapture(section, 0, vertex, 3), "a capture of three groups: %s",
+           NvnLayerError());
+    EXPECT(section[0x6ec] == 1u && section[0x6e8] == 3u && section[0x6e4] == 0u &&
+               section[0x6dc] == 36u && section[0x6dd] == 0u,
+           "the capture says on %u, %u groups, stream %u, a stride of %u", section[0x6ec],
+           section[0x6e8], section[0x6e4], (unsigned)(section[0x6dc] | section[0x6dd] << 8));
+    EXPECT(section[0xdc] == 0u && section[0xdd] == 0x20u && section[0xde] == 0x21u &&
+               section[0x2dc] == 0u && section[0x4dc] == 3u && section[0x4dd] == 2u &&
+               section[0x4de] == 4u,
+           "the groups' outputs are %u, %u, %u and their counts %u, %u, %u", section[0xdc],
+           section[0xdd], section[0xde], section[0x4dc], section[0x4dd], section[0x4de]);
+    EXPECT(ScarletNxTakes(section), "ScarletNX's conditions refuse the capturing section");
+    static const NvnLayerCaptureGroup past[1] = { { NVN_LAYER_CAPTURE_POSITION, 2, 3 } };
+    NvnLayerClearError();
+    EXPECT(!NvnLayerShaderCapture(section, 0, past, 1) &&
+               strstr(NvnLayerError(), "3 words from word 2") != NULL,
+           "three words from word 2 of an output: %s", NvnLayerError());
+    NvnLayerClearError();
+    EXPECT(!NvnLayerShaderCapture(section, 4, vertex, 3) &&
+               strstr(NvnLayerError(), "buffer 4") != NULL,
+           "a capture into buffer 4: %s", NvnLayerError());
 
     // What is refused, each with the value given in its sentence.
     static const struct {

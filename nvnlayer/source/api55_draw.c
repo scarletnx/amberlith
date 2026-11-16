@@ -2075,6 +2075,68 @@ void Nvnl_nvnCommandBufferDrawTexture(NVNcommandBuffer *cmd, NVNtextureHandle ha
               (unsigned long long)handle);
 }
 
+// Transform feedback, which deko3d has no call for: the graphics unit takes it through
+// registers the layer does not write, so the layer lacks every part of it.
+
+void Nvnl_nvnCommandBufferBindTransformFeedbackBuffer(NVNcommandBuffer *cmd, int index,
+                                                      NVNbufferAddress buffer, size_t size) {
+    (void)cmd;
+    LayerLack("nvnCommandBufferBindTransformFeedbackBuffer: 0x%zx bytes at 0x%llx as capture "
+              "buffer %d, and deko3d has no call for transform feedback",
+              size, (unsigned long long)buffer, index);
+}
+
+void Nvnl_nvnCommandBufferBindTransformFeedbackBuffers(NVNcommandBuffer *cmd, int first,
+                                                       int count,
+                                                       const NVNbufferRange *ranges) {
+    (void)cmd;
+    (void)ranges;
+    LayerLack("nvnCommandBufferBindTransformFeedbackBuffers: %d capture buffers from buffer %d, "
+              "and deko3d has no call for transform feedback",
+              count, first);
+}
+
+void Nvnl_nvnCommandBufferBeginTransformFeedback(NVNcommandBuffer *cmd,
+                                                 NVNbufferAddress control) {
+    (void)cmd;
+    LayerLack("nvnCommandBufferBeginTransformFeedback: a capture begun with its control at "
+              "0x%llx, and deko3d has no call for transform feedback",
+              (unsigned long long)control);
+}
+
+void Nvnl_nvnCommandBufferEndTransformFeedback(NVNcommandBuffer *cmd, NVNbufferAddress control) {
+    (void)cmd;
+    LayerLack("nvnCommandBufferEndTransformFeedback: a capture ended with its control at "
+              "0x%llx, and deko3d has no call for transform feedback",
+              (unsigned long long)control);
+}
+
+void Nvnl_nvnCommandBufferPauseTransformFeedback(NVNcommandBuffer *cmd,
+                                                 NVNbufferAddress control) {
+    (void)cmd;
+    LayerLack("nvnCommandBufferPauseTransformFeedback: a capture paused with its control at "
+              "0x%llx, and deko3d has no call for transform feedback",
+              (unsigned long long)control);
+}
+
+void Nvnl_nvnCommandBufferResumeTransformFeedback(NVNcommandBuffer *cmd,
+                                                  NVNbufferAddress control) {
+    (void)cmd;
+    LayerLack("nvnCommandBufferResumeTransformFeedback: a capture resumed with its control at "
+              "0x%llx, and deko3d has no call for transform feedback",
+              (unsigned long long)control);
+}
+
+void Nvnl_nvnCommandBufferDrawTransformFeedback(NVNcommandBuffer *cmd,
+                                                NVNdrawPrimitive primitive,
+                                                NVNbufferAddress control) {
+    (void)cmd;
+    LayerLack("nvnCommandBufferDrawTransformFeedback: primitive %d of as many vertices as the "
+              "capture with its control at 0x%llx wrote, and deko3d has no call for transform "
+              "feedback",
+              (int)primitive, (unsigned long long)control);
+}
+
 /// An indexed draw of @p count indices of @p type at @p indices, @p base_vertex added to each,
 /// @p instances times from instance @p base_instance.
 static void DrawElements(NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,

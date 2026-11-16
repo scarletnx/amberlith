@@ -677,6 +677,127 @@ static bool RareDraw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
+// ---- a capture of what a vertex stage writes
+
+// The seventh scene, for the NVN the program looks up alone, as the sixth is: transform
+// feedback. The instanced scene's program draws cells 0, 1 and 2 of the top row, one instance a
+// draw, with its vertex stage's outputs captured: the capture begins before cell 0, is paused
+// for cell 1, resumed for cell 2 and ended. A captured vertex is a GpuVertex (the position the
+// stage wrote, its texture coordinate, its colour), so the capture buffer is then bound as the
+// vertices and drawn with as many vertices as the capture wrote, through one instance that
+// moves it down a row and gives it cell 7's colour: the bottom row holds cells 0 and 2 again,
+// and nothing under cell 1, which no capture took. A capture a pause does not stop paints under
+// cell 1, and one a resume does not start again leaves the place under cell 2 clear.
+
+#define CAPTURE_BYTES 0x400u
+#define CAPTURE_CONTROL_BYTES 32u
+
+static void CaptureExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t cell = x / INSTANCE_CELL_WIDTH;
+    if (y < INSTANCE_CELL_HEIGHT && cell < 3u) {
+        InstanceColour(cell, out);
+    } else if (y >= INSTANCE_CELL_HEIGHT && (cell == 0u || cell == 2u)) {
+        InstanceColour(7, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+static const char *CaptureLooksLike(const uint8_t pixel[4]) {
+    static const char *const NAMES[4] = {
+        "cell 0's colour (drawn while the capture ran)",
+        "cell 1's colour (drawn while the capture was paused)",
+        "cell 2's colour (drawn once the capture was resumed)",
+        "the colour of what the capture wrote, drawn again",
+    };
+    static const uint32_t CELLS[4] = { 0, 1, 2, 7 };
+    for (uint32_t i = 0; i < 4u; ++i) {
+        uint8_t colour[4];
+        InstanceColour(CELLS[i], colour);
+        if (memcmp(pixel, colour, 4) == 0) {
+            return NAMES[i];
+        }
+    }
+    return memcmp(pixel, SCENE_CLEAR, 4) == 0 ? "the clear colour: nothing drawn"
+                                              : "nothing the scene draws";
+}
+
+static bool CaptureDrawBy(DrawPath *path, bool several, char *why, size_t why_size) {
+    const int program = DrawPathProgramCapturing(path, ShaderData(SHADER_SCENE_INSTANCED_VERT),
+                                                 ShaderSize(SHADER_SCENE_INSTANCED_VERT),
+                                                 ShaderData(SHADER_SCENE_FRAG),
+                                                 ShaderSize(SHADER_SCENE_FRAG));
+    DrawBuffer vertices, entries, again, paint, captured, control;
+    const bool ok = program >= 0 &&
+                    DrawPathAlloc(path, 6u * (uint32_t)sizeof(GpuVertex), &vertices) &&
+                    DrawPathAlloc(path, 3u * (uint32_t)sizeof(DrawInstance), &entries) &&
+                    DrawPathAlloc(path, (uint32_t)sizeof(DrawInstance), &again) &&
+                    DrawPathAlloc(path, (uint32_t)sizeof(Paint), &paint) &&
+                    DrawPathAlloc(path, CAPTURE_BYTES, &captured) &&
+                    DrawPathAlloc(path, CAPTURE_CONTROL_BYTES, &control);
+    if (!ok) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    GpuVertex quad[6];
+    Quad(quad, 0, 0, INSTANCE_CELL_WIDTH, INSTANCE_CELL_HEIGHT, 0.5f, SCENE_FAR);
+    memcpy(vertices.bytes, quad, sizeof(quad));
+    DrawInstance instances[3];
+    for (uint32_t i = 0; i < 3u; ++i) {
+        uint8_t colour[4];
+        InstanceColour(i, colour);
+        const DrawInstance instance = { { (float)i * 0.5f, 0.0f, 0.0f, 0.0f },
+                                        { (float)colour[0] / 255.0f, (float)colour[1] / 255.0f,
+                                          (float)colour[2] / 255.0f, (float)colour[3] / 255.0f } };
+        instances[i] = instance;
+    }
+    memcpy(entries.bytes, instances, sizeof(instances));
+    // What draws the captured vertices: down a row, in cell 7's colour.
+    uint8_t last[4];
+    InstanceColour(7, last);
+    const DrawInstance down = { { 0.0f, -1.0f, 0.0f, 0.0f },
+                                { (float)last[0] / 255.0f, (float)last[1] / 255.0f,
+                                  (float)last[2] / 255.0f, (float)last[3] / 255.0f } };
+    memcpy(again.bytes, &down, sizeof(down));
+    const Paint flat = { { 1.0f, 1.0f, 1.0f, 1.0f }, { PAINT_VERTEX, 0, 0, 0 } };
+    memcpy(paint.bytes, &flat, sizeof(flat));
+    memset(captured.bytes, 0, CAPTURE_BYTES);
+    memset(control.bytes, 0, CAPTURE_CONTROL_BYTES);
+
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathUseProgram(path, program);
+    DrawPathVertices(path, &vertices, sizeof(quad));
+    DrawPathInstances(path, &entries, sizeof(instances));
+    DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
+    DrawPathCaptureInto(path, &captured, CAPTURE_BYTES, several);
+    DrawPathCapture(path, DRAW_CAPTURE_BEGIN, &control);
+    DrawPathDrawInstanced(path, NULL, 0, 6, 0, 1);
+    DrawPathCapture(path, DRAW_CAPTURE_PAUSE, &control);
+    DrawPathDrawInstanced(path, NULL, 0, 6, 1, 1);
+    DrawPathCapture(path, DRAW_CAPTURE_RESUME, &control);
+    DrawPathDrawInstanced(path, NULL, 0, 6, 2, 1);
+    DrawPathCapture(path, DRAW_CAPTURE_END, &control);
+    DrawPathVertices(path, &captured, 12u * (uint32_t)sizeof(GpuVertex));
+    DrawPathInstances(path, &again, sizeof(down));
+    DrawPathDrawCaptured(path, &control);
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
+static bool CaptureDraw(DrawPath *path, char *why, size_t why_size) {
+    return CaptureDrawBy(path, false, why, why_size);
+}
+
+static bool CaptureSeveralDraw(DrawPath *path, char *why, size_t why_size) {
+    return CaptureDrawBy(path, true, why, why_size);
+}
+
 /// A scene the suite draws down each way: what it asks of a way, how it draws, and what each of
 /// its pixels has to hold.
 typedef struct {
@@ -706,6 +827,10 @@ static const Scene UPDATED = { false, 0, 0, UpdatedDraw, IndexedExpected, Indexe
 static const Scene RARE = { false, 1,           SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
                             RareDraw, RareExpected, RareLooksLike,
                             DRAW_BINDS_SINGLE };
+static const Scene CAPTURE = { false, 0, 0, CaptureDraw, CaptureExpected, CaptureLooksLike,
+                               DRAW_BINDS_SINGLE };
+static const Scene CAPTURE_SEVERAL = { false,           0, 0, CaptureSeveralDraw, CaptureExpected,
+                                       CaptureLooksLike, DRAW_BINDS_SINGLE };
 static const Scene INSTANCED = { false,           0, 0, InstancedDraw, InstancedExpected,
                                  InstancedLooksLike, DRAW_BINDS_SINGLE };
 
@@ -849,4 +974,10 @@ void NvnSceneLast(void) {
     SceneCase(DRAW_PATH_NVN, &RARE,
               "a texture drawn with no program and as many draws as a word says, through the "
               "NVN the program looks up, are each in its place");
+    SceneCase(DRAW_PATH_NVN, &CAPTURE,
+              "what a capture took of two draws, paused for a third between them, is drawn "
+              "again a row down through the NVN the program looks up");
+    SceneCase(DRAW_PATH_NVN, &CAPTURE_SEVERAL,
+              "the same capture into a buffer bound by the call that takes several is drawn "
+              "again a row down");
 }

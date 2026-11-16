@@ -206,6 +206,28 @@ void DrawPathDrawIndirectCount(DrawPath *path, const DrawElements *elements,
 /// alone, as the draw above is.
 void DrawPathDrawTexture(DrawPath *path, int texture, const float destination[4],
                          const float source[4]);
+/// As DrawPathProgram, with the vertex stage's outputs captured into capture buffer 0 while a
+/// capture runs (transform feedback): a vertex's position without its fourth number, then the
+/// two numbers of generic output 0 and the four of generic output 1, which for the instanced
+/// scene's vertex stage is a GpuVertex. NVN's alone, as every call of a capture below is: the
+/// deko3d way fails them, deko3d having no call for a capture.
+int DrawPathProgramCapturing(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
+                             const void *fragment_dksh, uint32_t fragment_bytes);
+/// @p bytes at @p into as capture buffer 0, by NVN's call for one buffer or, with @p several,
+/// by its call for several.
+void DrawPathCaptureInto(DrawPath *path, const DrawBuffer *into, uint32_t bytes, bool several);
+typedef enum {
+    DRAW_CAPTURE_BEGIN,
+    DRAW_CAPTURE_PAUSE,
+    DRAW_CAPTURE_RESUME,
+    DRAW_CAPTURE_END,
+} DrawCaptureStep;
+/// A step of the capture whose state the graphics unit keeps at @p control, 32 bytes of nought
+/// before the capture begins: the draws between a begin or a resume and the next pause or end
+/// are captured.
+void DrawPathCapture(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control);
+/// Triangles of as many vertices as the capture of @p control wrote, from the vertices bound.
+void DrawPathDrawCaptured(DrawPath *path, const DrawBuffer *control);
 /// Ends the list, submits it and waits for the graphics unit. False when anything since
 /// DrawPathBegin failed, with DrawPathFailure saying what.
 bool DrawPathEnd(DrawPath *path);

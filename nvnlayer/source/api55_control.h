@@ -35,6 +35,20 @@
 #define LAYER_SECTION_AT_TESS_POINTS 0x740u
 #define LAYER_SECTION_AT_TESS_WINDING 0x744u
 
+// What ScarletNX reads of the capture a stage's outputs go through, transform feedback (its
+// nvn_object.c, xfb_of): a byte that says the stage captures; for buffer i of four its stream,
+// its stride (16 bits) and how many groups it has; and for group j of a buffer the output it
+// takes words of, the first of them and how many.
+#define LAYER_SECTION_AT_CAPTURES 0x6ecu
+#define LAYER_SECTION_AT_CAPTURE_STREAM 0x6e4u
+#define LAYER_SECTION_AT_CAPTURE_STRIDE 0x6dcu
+#define LAYER_SECTION_AT_CAPTURE_GROUPS 0x6e8u
+#define LAYER_SECTION_AT_GROUP_OUTPUT 0x0dcu
+#define LAYER_SECTION_AT_GROUP_FIRST 0x2dcu
+#define LAYER_SECTION_AT_GROUP_COUNT 0x4dcu
+#define LAYER_SECTION_CAPTURE_BUFFERS 4
+#define LAYER_SECTION_GROUPS 0x80
+
 // A DKSH's header and its program's, in words (deko3d's source/dksh.h): the magic, the header's
 // bytes, the control and code sections' bytes, the programs' offset and count; then, for a
 // program, its type, entry point, registers, the constants' offset and bytes.

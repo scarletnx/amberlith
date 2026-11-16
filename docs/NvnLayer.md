@@ -106,7 +106,8 @@ if (!nvn.nvnDeviceInitialize(&device, &builder)) { /* NvnLayerError() says why, 
   all, whatever its arguments: a virtual memory pool and `nvnMemoryPoolMapVirtual`, a list that waits on an event
   (`nvnCommandBufferWaitEvent`) or adds to one (`nvnCommandBufferSignalEvent` in its add mode), as many draws
   as a word the graphics unit reads says (`nvnCommandBufferMultiDrawArraysIndirectCount` and
-  `MultiDrawElementsIndirectCount`), a texture drawn with no program (`nvnCommandBufferDrawTexture`). A program that
+  `MultiDrawElementsIndirectCount`), a texture drawn with no program (`nvnCommandBufferDrawTexture`), transform
+  feedback (its two binds, its four steps and `nvnCommandBufferDrawTransformFeedback`). A program that
   can do without tells that from a call it got wrong; edenprobe's cases skip as unavailable on it. Never under
   ScarletNX.
 - **`NvnLayerSetGuard(guard)`**: deko3d ends the program when it cannot make an object. A program that can turn
@@ -137,7 +138,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Four hundred and ninety one functions, each recording the deko3d commands that do what NVN says it does:
+Five hundred and five functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
@@ -281,7 +282,10 @@ memory. `NvnLayerShaderControl` makes both from a DKSH:
   bytes, at 0x708 the program's offset (0x30), at 0x714 the stage, and for a fragment stage at 0x718 whether it
   asked for the early tests, and for a tessellation evaluation stage its four declarations (the domain, the
   spacing, points or not, the winding), each in GLSL's own word for it, from the DKSH's tessellation mode word.
-  Every other byte is nought. The last 0x100 are the layer's own: the DKSH's header
+  Every other byte is nought, unless `NvnLayerShaderCapture` then says what a capture takes of the stage's outputs
+  (transform feedback): a one at 0x6ec, and for each of four capture buffers its stride at 0x6dc, its stream at
+  0x6e4 and its groups' count at 0x6e8, a group being an output (the position, 0, or generic n, 0x20 + n) at 0xdc,
+  its first word at 0x2dc and how many at 0x4dc. The last 0x100 are the layer's own: the DKSH's header
   with its one program's, which deko3d takes as a control section apart from the code, and the `DkShader` the API
   55 build's `nvnProgramSetShaders` makes there, an NVN program object being too small for five of them.
 
