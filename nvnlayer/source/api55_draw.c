@@ -1742,32 +1742,40 @@ void Nvnl_nvnCommandBufferBindVertexStreamState(NVNcommandBuffer *cmd, int count
     dkCmdBufBindVtxBufferState(record->cmdbuf, buffers, (uint32_t)count);
 }
 
-void Nvnl_nvnCommandBufferBindVertexBuffer(NVNcommandBuffer *cmd, int index,
-                                           NVNbufferAddress address, size_t size) {
-    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindVertexBuffer");
+// The binds of one and of several share these: an entry point never calls another by name,
+// which a runtime that takes the entry points over by their addresses could not follow.
+
+static void VertexBufferBind(NVNcommandBuffer *cmd, int index, NVNbufferAddress address,
+                             size_t size, const char *what) {
+    LayerCommandBuffer *const record = CmdOf(cmd, what);
     if (record == NULL) {
         return;
     }
     if (index < 0 || index >= DK_MAX_VERTEX_BUFFERS || size > UINT32_MAX) {
-        LayerComplain("nvnCommandBufferBindVertexBuffer: stream %d of %d, 0x%llx bytes", index,
-                      DK_MAX_VERTEX_BUFFERS, (unsigned long long)size);
+        LayerComplain("%s: stream %d of %d, 0x%llx bytes", what, index, DK_MAX_VERTEX_BUFFERS,
+                      (unsigned long long)size);
         return;
     }
     dkCmdBufBindVtxBuffer(record->cmdbuf, (uint32_t)index, address, (uint32_t)size);
 }
 
-void Nvnl_nvnCommandBufferBindUniformBuffer(NVNcommandBuffer *cmd, NVNshaderStage stage,
-                                            int index, NVNbufferAddress address, size_t size) {
-    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindUniformBuffer");
+void Nvnl_nvnCommandBufferBindVertexBuffer(NVNcommandBuffer *cmd, int index,
+                                           NVNbufferAddress address, size_t size) {
+    VertexBufferBind(cmd, index, address, size, "nvnCommandBufferBindVertexBuffer");
+}
+
+static void UniformBufferBind(NVNcommandBuffer *cmd, NVNshaderStage stage, int index,
+                              NVNbufferAddress address, size_t size, const char *what) {
+    LayerCommandBuffer *const record = CmdOf(cmd, what);
     if (record == NULL) {
         return;
     }
     const int to = StageOf(stage);
     // Slot r is deko3d's uniform buffer r + 1, the constant buffer an NVN program reads it from.
     if (to < 0 || index < 0 || index + 1 >= DK_NUM_UNIFORM_BUFS || size > DK_UNIFORM_BUF_MAX_SIZE) {
-        LayerComplain("nvnCommandBufferBindUniformBuffer: stage %d, slot %d, 0x%llx bytes, where "
-                      "the layer takes the graphics stages, slots 0 to %d and 0x%x bytes",
-                      (int)stage, index, (unsigned long long)size, DK_NUM_UNIFORM_BUFS - 2,
+        LayerComplain("%s: stage %d, slot %d, 0x%llx bytes, where the layer takes the graphics "
+                      "stages, slots 0 to %d and 0x%x bytes",
+                      what, (int)stage, index, (unsigned long long)size, DK_NUM_UNIFORM_BUFS - 2,
                       (unsigned)DK_UNIFORM_BUF_MAX_SIZE);
         return;
     }
@@ -1775,22 +1783,32 @@ void Nvnl_nvnCommandBufferBindUniformBuffer(NVNcommandBuffer *cmd, NVNshaderStag
                               (uint32_t)size);
 }
 
-void Nvnl_nvnCommandBufferBindTexture(NVNcommandBuffer *cmd, NVNshaderStage stage, int index,
-                                      NVNtextureHandle handle) {
-    LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindTexture");
+void Nvnl_nvnCommandBufferBindUniformBuffer(NVNcommandBuffer *cmd, NVNshaderStage stage,
+                                            int index, NVNbufferAddress address, size_t size) {
+    UniformBufferBind(cmd, stage, index, address, size, "nvnCommandBufferBindUniformBuffer");
+}
+
+static void TextureBind(NVNcommandBuffer *cmd, NVNshaderStage stage, int index,
+                        NVNtextureHandle handle, const char *what) {
+    LayerCommandBuffer *const record = CmdOf(cmd, what);
     if (record == NULL) {
         return;
     }
     if (StageOf(stage) < 0 || index < 0 || index >= LAYER_HANDLE_SLOTS) {
-        LayerComplain("nvnCommandBufferBindTexture: stage %d, slot %d, where the layer takes "
-                      "the graphics stages and slots 0 to %d",
-                      (int)stage, index, LAYER_HANDLE_SLOTS - 1);
+        LayerComplain("%s: stage %d, slot %d, where the layer takes the graphics stages and "
+                      "slots 0 to %d",
+                      what, (int)stage, index, LAYER_HANDLE_SLOTS - 1);
         return;
     }
     // Kept until the next draw, which is when the graphics unit has to find it.
     LayerDraw *const draw = record->draw;
     memcpy(draw->handles[stage] + LAYER_HANDLE_FIRST + 8u * (uint32_t)index, &handle, 8);
     draw->dirty |= (uint8_t)(1u << stage);
+}
+
+void Nvnl_nvnCommandBufferBindTexture(NVNcommandBuffer *cmd, NVNshaderStage stage, int index,
+                                      NVNtextureHandle handle) {
+    TextureBind(cmd, stage, index, handle, "nvnCommandBufferBindTexture");
 }
 
 // The binds of several at once are the single binds, one after another. A deferred bind reads
@@ -1800,7 +1818,8 @@ void Nvnl_nvnCommandBufferBindTexture(NVNcommandBuffer *cmd, NVNshaderStage stag
 void Nvnl_nvnCommandBufferBindVertexBuffers(NVNcommandBuffer *cmd, int first, int count,
                                             const NVNbufferRange *ranges) {
     for (int i = 0; i < count; ++i) {
-        Nvnl_nvnCommandBufferBindVertexBuffer(cmd, first + i, ranges[i].address, ranges[i].size);
+        VertexBufferBind(cmd, first + i, ranges[i].address, ranges[i].size,
+                         "nvnCommandBufferBindVertexBuffers");
     }
 }
 
@@ -1808,28 +1827,33 @@ void Nvnl_nvnCommandBufferBindUniformBuffers(NVNcommandBuffer *cmd, NVNshaderSta
                                              int first, int count,
                                              const NVNbufferRange *ranges) {
     for (int i = 0; i < count; ++i) {
-        Nvnl_nvnCommandBufferBindUniformBuffer(cmd, stage, first + i, ranges[i].address,
-                                               ranges[i].size);
+        UniformBufferBind(cmd, stage, first + i, ranges[i].address, ranges[i].size,
+                          "nvnCommandBufferBindUniformBuffers");
     }
 }
 
 void Nvnl_nvnCommandBufferBindUniformBuffersDeferred(NVNcommandBuffer *cmd, NVNshaderStage stage,
                                                      int first, int count,
                                                      const NVNbufferRange *ranges) {
-    Nvnl_nvnCommandBufferBindUniformBuffers(cmd, stage, first, count, ranges);
+    for (int i = 0; i < count; ++i) {
+        UniformBufferBind(cmd, stage, first + i, ranges[i].address, ranges[i].size,
+                          "nvnCommandBufferBindUniformBuffersDeferred");
+    }
 }
 
 void Nvnl_nvnCommandBufferBindTextures(NVNcommandBuffer *cmd, NVNshaderStage stage, int first,
                                        int count, const NVNtextureHandle *handles) {
     for (int i = 0; i < count; ++i) {
-        Nvnl_nvnCommandBufferBindTexture(cmd, stage, first + i, handles[i]);
+        TextureBind(cmd, stage, first + i, handles[i], "nvnCommandBufferBindTextures");
     }
 }
 
 void Nvnl_nvnCommandBufferBindTexturesDeferred(NVNcommandBuffer *cmd, NVNshaderStage stage,
                                                int first, int count,
                                                const NVNtextureHandle *handles) {
-    Nvnl_nvnCommandBufferBindTextures(cmd, stage, first, count, handles);
+    for (int i = 0; i < count; ++i) {
+        TextureBind(cmd, stage, first + i, handles[i], "nvnCommandBufferBindTexturesDeferred");
+    }
 }
 
 void Nvnl_nvnCommandBufferUpdateUniformBuffer(NVNcommandBuffer *cmd, NVNbufferAddress buffer,
