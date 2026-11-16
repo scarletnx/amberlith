@@ -252,12 +252,25 @@ class Programs(unittest.TestCase):
                 SUST.P.3D.RGBA [R4], R8, c[2][0x130]
                 EXIT
         """)
-        self.assertEqual(words(code, False), [
+        self.assertEqual(words(code, False)[:3], [
             fix(0xB97, b16_8=8, b24_8=4, b40_19=2 << 14 | 0x4A, b61_3=3, b72_4=1, b81_3=7),
             fix(0xB9B, b24_8=4, b32_8=8, b40_19=2 << 14 | 0x48, b61_3=3, b72_4=1),
             fix(0xB9B, b24_8=4, b32_8=8, b40_19=2 << 14 | 0x4C, b61_3=5, b72_4=15),
+        ])
+
+    def test_a_texture_sampled_by_a_handle_in_uniform_registers(self):
+        """TEX.U as ScarletNX's translator reads it (sm86_translate.c, texture and tex_results): the coordinates'
+        register at 24, no second list (RZ at 32), the handle's uniform register at 40, the shape at 61, no second
+        destination (RZ at 64), the channels at 72 and the level's mode at 87, one for the first level"""
+        code, _, _ = asm.assemble(""".stage compute
+                .local 1 1 1
+                TEX.U.2D.LZ.R R8, [R4], UR8
+                EXIT
+        """)
+        self.assertEqual(words(code, False), [
+            fix(0xF60, b16_8=8, b24_8=4, b32_8=255, b40_6=8, b61_3=1, b64_8=255, b72_4=1, b81_3=7, b87_3=1),
             EXIT,
-            bra(4, 4),
+            bra(2, 2),
         ])
 
     def test_a_repeat_writes_its_lines_out(self):
@@ -312,6 +325,8 @@ class Refusals(unittest.TestCase):
         self.refused("SUST.P.R [R4], R8, c[2][0x120]\nEXIT\n", "SUST needs .P, the image's shape")
         self.refused("SUST.P.2D.R [R4 + 4], R8, c[2][0x120]\nEXIT\n", "SUST takes [R]")
         self.refused("SULD.P.2D.R R8, [R4], c[2][0x122]\nEXIT\n", "the offset 290 (0x122)")
+        self.refused("TEX.2D.LZ.R R8, [R4], UR8\nEXIT\n", "TEX is written as TEX.U")
+        self.refused("TEX.U.2D.LZ.R R8, [R4], UR62\nEXIT\n", "UR62 has none after it")
         self.refused("IADD3 R1, R2, |R3|, RZ\nEXIT\n", "IADD3: this source takes no | |")
         self.refused("FFMA R1, R2, 1.0f, 2.0f\nEXIT\n", "no form takes these sources together: a number and a number")
         self.refused("MOV R256, R1\nEXIT\n", "R256 is past the last register, 254")

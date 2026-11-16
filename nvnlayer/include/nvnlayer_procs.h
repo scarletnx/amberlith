@@ -925,6 +925,22 @@
     X(void, nvnCommandBufferBindImagesDeferred,                                                   \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
        const NVNimageHandle *handles))                                                            \
+    X(void, nvnCommandBufferBindSeparateTexture,                                                  \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int index, NVNseparateTextureHandle handle))  \
+    X(void, nvnCommandBufferBindSeparateSampler,                                                  \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int index, NVNseparateSamplerHandle handle))  \
+    X(void, nvnCommandBufferBindSeparateTextures,                                                 \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNseparateTextureHandle *handles))                                                  \
+    X(void, nvnCommandBufferBindSeparateSamplers,                                                 \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNseparateSamplerHandle *handles))                                                  \
+    X(void, nvnCommandBufferBindSeparateTexturesDeferred,                                         \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNseparateTextureHandle *handles))                                                  \
+    X(void, nvnCommandBufferBindSeparateSamplersDeferred,                                         \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
+       const NVNseparateSamplerHandle *handles))                                                  \
     X(void, nvnCommandBufferDispatchCompute, (NVNcommandBuffer *cmd, int x, int y, int z))        \
     X(void, nvnCommandBufferPushGraphicsConstants,                                                \
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \

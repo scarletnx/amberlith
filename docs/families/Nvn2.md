@@ -9,7 +9,7 @@
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch
 2's own shader code, a compute dispatch that writes a storage buffer, and a draw whose geometry a mesh program
 writes. Only the probe's Switch 2 build runs it ([The probe as a Switch 2 program](../Ounce.md)), in the nvn
-family, after the `nvn` suite. Twenty four cases.
+family, after the `nvn` suite. Twenty seven cases.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.
@@ -34,6 +34,8 @@ What a pass says, and what it cannot, is in [The probe as a Switch 2 program](..
 | the same picture with no texture bound as the shading rate image | `nvnCommandBufferBindShadingRateImage` with no texture and no view before the draw, which is no shading rate image: every pixel is shaded | every pixel, exact (`MandelExpected`) |
 | a dispatch loads each texel of one image and stores three times it plus its column into another | `ounce/shaders/image.comp.sm86`: one block of 16 by 16 invocations, a texel each, over two textures of a word a texel made with the image flag, registered with `nvnTexturePoolRegisterImage` and bound by their handles with `nvnCommandBufferBindImage`; image 1 is filled and image 0 preset by copies from a buffer | every texel of image 0, exact, copied out by the graphics unit |
 | the same images bound by the call that takes several; ... by the deferred call (two cases) | `nvnCommandBufferBindImages` and `BindImagesDeferred` (its handles left where they are until the list has run) | the same texels |
+| a dispatch samples a texture bound apart from its sampler, slot 1 of each, past the texture's edge | `ounce/shaders/apart.comp.sm86`: sixteen invocations sample a 4 by 4 texture of a float a texel with `TEX.U`, its handle the words `nvnCommandBufferBindSeparateTexture` and `BindSeparateSampler` gave slot 1 (`nvnDeviceGetSeparateTextureHandle`, `GetSeparateSamplerHandle`), at columns past the right edge. Slot 1's sampler repeats; slot 0 holds a decoy texture and a sampler that holds the edge | every float, bit for bit: the texel a repeat lands on, copied out by the graphics unit |
+| the same texture and sampler bound by the calls that take several; ... by the deferred calls (two cases) | `nvnCommandBufferBindSeparateTextures` and `BindSeparateSamplers`, then their deferred forms | the same floats |
 
 ## The Mandelbrot, in three stages
 

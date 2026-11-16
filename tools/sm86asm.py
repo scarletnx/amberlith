@@ -337,6 +337,8 @@ SIZE = {"U8": ("size", 0), "S8": ("size", 1), "U16": ("size", 2), "S16": ("size"
 # An image instruction's shape, as ScarletNX's translator reads bits 61 to 63, and its channels, a bit each from
 # red at bit 72: the registers hold as many words as channels are named, one after the other.
 IMAGE_DIM = {"1D": 0, "1DARRAY": 2, "2D": 3, "2DARRAY": 4, "3D": 5}
+# A texture instruction's shape, bits 61 to 63 too, with other numbers (Mesa's NAK's TexDim).
+TEXTURE_DIM = {"1D": 0, "2D": 1, "3D": 2, "CUBE": 3, "1DARRAY": 4, "2DARRAY": 5, "CUBEARRAY": 7}
 IMAGE_CHANNELS = {"".join(c for i, c in enumerate("RGBA") if bits >> i & 1): ("channels", bits)
                   for bits in range(1, 16)}
 
@@ -620,6 +622,34 @@ def encode(program, index, mnemonic, mods, guard, ops):
         word.put(78, 1, got.get("skew", 0), ".SKEW")
         word.put(79, 1, got.get("output", 0), ".O")
         return word
+    if mnemonic == "TEX":
+        count(mnemonic, ops, 3)
+        known = {"U": ("u", 1), "LZ": ("lod", 1)}
+        known.update((name, ("dim", value)) for name, value in TEXTURE_DIM.items())
+        known.update(IMAGE_CHANNELS)
+        got = modifiers(mnemonic, mods, known)
+        if "u" not in got or "lod" not in got or "dim" not in got or "channels" not in got:
+            raise Refused("TEX is written as TEX.U, its handle in a uniform register pair, with .LZ, the first "
+                          "level, the texture's shape (%s) and its channels, .R to .RGBA"
+                          % ", ".join("." + name for name in TEXTURE_DIM))
+        place = want(ops[1], Mem, "the coordinates", mnemonic)
+        if place.kind != "memory" or place.ureg is not None or place.offset != 0:
+            raise Refused("TEX takes [R], the first register of the coordinates")
+        handle = reg_of(ops[2], "the handle", mnemonic, uniform=True)
+        if handle + 1 >= URZ:
+            raise Refused("TEX.U takes the texture's word in a uniform register and the sampler's in the next, "
+                          "and UR%d has none after it" % handle)
+        start(word, single(program, "TEX_U"), guard)
+        word.put(16, 8, reg_of(ops[0], "the destination", mnemonic), "the destination")
+        word.put(24, 8, place.reg, "the coordinates' register")
+        word.put(32, 8, RZ, "the second list's register")
+        word.put(40, 6, handle, "the handle's uniform register")
+        word.put(61, 3, got["dim"], "the texture's shape")
+        word.put(64, 8, RZ, "the second destination")
+        word.put(72, 4, got["channels"], "the channels")
+        word.put(81, 3, PT, "the predicate it sets")
+        word.put(87, 3, got["lod"], "the level")
+        return word
     if mnemonic in ("SULD", "SUST"):
         count(mnemonic, ops, 3)
         known = {"P": ("p", 1)}
@@ -650,7 +680,7 @@ def encode(program, index, mnemonic, mods, guard, ops):
         word.put(72, 4, got["channels"], "the channels")
         return word
     raise Refused("%s is not an instruction the assembler writes yet: MOV, FADD, FMUL, FFMA, FSETP, ISETP, IADD3, "
-                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, SULD, SUST, IPA, "
+                  "IMAD, SHF, LOP3, I2F, F2I, SEL, IMNMX, FMNMX, HMMA, S2R, ULDC, LDC, LDG, STG, TEX, SULD, SUST, IPA, "
                   "ALD, AST, ISBERD, ISBEWR, BRA, EXIT, KILL and NOP" % mnemonic)
 
 
