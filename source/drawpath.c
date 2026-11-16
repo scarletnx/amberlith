@@ -116,6 +116,20 @@ void DrawPathUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_by
     path->way->update(path, buffer, buffer_bytes, offset, data, bytes);
 }
 
+void DrawPathInstances(DrawPath *path, const DrawBuffer *instances, uint32_t bytes) {
+    path->way->instances(path, instances, bytes);
+}
+
+void DrawPathDrawInstanced(DrawPath *path, const DrawElements *elements, uint32_t first,
+                           uint32_t count, uint32_t base_instance, uint32_t instances) {
+    path->way->draw_instanced(path, elements, first, count, base_instance, instances);
+}
+
+void DrawPathDrawIndirect(DrawPath *path, const DrawElements *elements,
+                          const DrawBuffer *numbers) {
+    path->way->draw_indirect(path, elements, numbers);
+}
+
 void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
                          uint32_t count, int32_t base_vertex) {
     path->way->draw_indexed(path, type, indices, count, base_vertex);
@@ -353,6 +367,64 @@ static void DkDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indi
     }
 }
 
+static const DkIdxFormat DK_INDEX_FORMATS[] = { DkIdxFormat_Uint8, DkIdxFormat_Uint16,
+                                                DkIdxFormat_Uint32 };
+
+static void DkInstances(DrawPath *path, const DrawBuffer *instances, uint32_t bytes) {
+    Deko3dPath *const dk = Dk(path);
+    // GpuVertex's three attributes again, as DkVertices bound them, and the instance's two from
+    // a second buffer that steps once an instance.
+    static const DkVtxAttribState attributes[] = {
+        { .bufferId = 0, .offset = offsetof(GpuVertex, x), .size = DkVtxAttribSize_3x32,
+          .type = DkVtxAttribType_Float },
+        { .bufferId = 0, .offset = offsetof(GpuVertex, u), .size = DkVtxAttribSize_2x32,
+          .type = DkVtxAttribType_Float },
+        { .bufferId = 0, .offset = offsetof(GpuVertex, r), .size = DkVtxAttribSize_4x32,
+          .type = DkVtxAttribType_Float },
+        { .bufferId = 1, .offset = offsetof(DrawInstance, place), .size = DkVtxAttribSize_4x32,
+          .type = DkVtxAttribType_Float },
+        { .bufferId = 1, .offset = offsetof(DrawInstance, tint), .size = DkVtxAttribSize_4x32,
+          .type = DkVtxAttribType_Float },
+    };
+    static const DkVtxBufferState buffers[] = { { sizeof(GpuVertex), 0 },
+                                                { sizeof(DrawInstance), 1 } };
+    dkCmdBufBindVtxAttribState(dk->gpu.cmdbuf, attributes, 5);
+    dkCmdBufBindVtxBufferState(dk->gpu.cmdbuf, buffers, 2);
+    dkCmdBufBindVtxBuffer(dk->gpu.cmdbuf, 1, instances->address, bytes);
+}
+
+static void DkDrawInstanced(DrawPath *path, const DrawElements *elements, uint32_t first,
+                            uint32_t count, uint32_t base_instance, uint32_t instances) {
+    Deko3dPath *const dk = Dk(path);
+    if (!DkHandles(path)) {
+        return;
+    }
+    if (elements != NULL && elements->indexed) {
+        dkCmdBufBindIdxBuffer(dk->gpu.cmdbuf, DK_INDEX_FORMATS[elements->type],
+                              elements->indices->address);
+        dkCmdBufDrawIndexed(dk->gpu.cmdbuf, DkPrimitive_Triangles, count, instances, first, 0,
+                            base_instance);
+    } else {
+        dkCmdBufDraw(dk->gpu.cmdbuf, DkPrimitive_Triangles, count, instances, first,
+                     base_instance);
+    }
+}
+
+static void DkDrawIndirect(DrawPath *path, const DrawElements *elements,
+                           const DrawBuffer *numbers) {
+    Deko3dPath *const dk = Dk(path);
+    if (!DkHandles(path)) {
+        return;
+    }
+    if (elements != NULL && elements->indexed) {
+        dkCmdBufBindIdxBuffer(dk->gpu.cmdbuf, DK_INDEX_FORMATS[elements->type],
+                              elements->indices->address);
+        dkCmdBufDrawIndexedIndirect(dk->gpu.cmdbuf, DkPrimitive_Triangles, numbers->address);
+    } else {
+        dkCmdBufDrawIndirect(dk->gpu.cmdbuf, DkPrimitive_Triangles, numbers->address);
+    }
+}
+
 static void DkUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,
                      uint32_t offset, const void *data, uint32_t bytes) {
     if (offset > buffer_bytes || bytes > buffer_bytes - offset) {
@@ -382,7 +454,7 @@ static const uint8_t *DkRead(DrawPath *path) {
 static const DrawPathWay DEKO3D_WAY = {
     DkClose, DkProgram, DkTexture, DkAlloc,       DkBegin, DkClear, DkClearDepth, DkDepth,
     DkUseProgram, DkVertices, DkUniform, DkBindTexture, DkDraw,  DkEnd,   DkRead,
-    DkDrawIndexed, DkUpdate,
+    DkDrawIndexed, DkUpdate, DkInstances, DkDrawInstanced, DkDrawIndirect,
 };
 
 DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_size) {

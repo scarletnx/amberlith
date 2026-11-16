@@ -170,6 +170,31 @@ typedef enum {
 /// with @p base_vertex added.
 void DrawPathDrawIndexed(DrawPath *path, DrawIndex type, const DrawBuffer *indices,
                          uint32_t count, int32_t base_vertex);
+/// One instance's entry of the second vertex stream, which steps once an instance: where the
+/// instance goes, added to each vertex's position, and its colour (scene_instanced.vert.glsl).
+typedef struct {
+    float place[4];
+    float tint[4];
+} DrawInstance;
+/// @p bytes of DrawInstance at @p instances, for the instanced draws after it. After
+/// DrawPathVertices, which it adds a stream to.
+void DrawPathInstances(DrawPath *path, const DrawBuffer *instances, uint32_t bytes);
+/// What an instanced draw draws with: nothing (DrawPathDraw's vertices), or indices.
+typedef struct {
+    bool indexed;
+    DrawIndex type;
+    const DrawBuffer *indices;
+} DrawElements;
+/// A triangle list of @p count vertices from @p first, or of @p count indices of @p elements,
+/// @p instances times, the instances' entries from @p base_instance on.
+void DrawPathDrawInstanced(DrawPath *path, const DrawElements *elements, uint32_t first,
+                           uint32_t count, uint32_t base_instance, uint32_t instances);
+/// The same draw with its numbers read by the graphics unit from @p numbers: four words for a
+/// draw of vertices (the count, the instances, the first vertex, the base instance), five for
+/// an indexed one (the count, the instances, the first index, the base vertex, the base
+/// instance).
+void DrawPathDrawIndirect(DrawPath *path, const DrawElements *elements,
+                          const DrawBuffer *numbers);
 /// Ends the list, submits it and waits for the graphics unit. False when anything since
 /// DrawPathBegin failed, with DrawPathFailure saying what.
 bool DrawPathEnd(DrawPath *path);

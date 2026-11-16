@@ -455,6 +455,116 @@ static bool UpdatedDraw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
+// ---- instanced draws, and draws whose numbers the graphics unit reads
+
+// The fifth scene: eight cells, four across and two down, each one instance of the same quad.
+// The quad's vertices are the first cell's; an instance's entry of a second vertex stream, which
+// steps once an instance, moves it to its cell and colours it (scene_instanced.vert.glsl). Two
+// instances a draw, four draws: vertices instanced, indices instanced, and each again with its
+// numbers in a buffer the graphics unit reads. Every draw but the first starts at a base
+// instance, so one that starts at nought draws the first two cells again and leaves its own
+// the clear colour.
+
+#define INSTANCE_CELLS 8u
+#define INSTANCE_CELL_WIDTH (SCENE_SIZE / 4u)
+#define INSTANCE_CELL_HEIGHT (SCENE_SIZE / 2u)
+
+static void InstanceColour(uint32_t cell, uint8_t out[4]) {
+    out[0] = (uint8_t)(0x20u + 0x18u * cell);
+    out[1] = (uint8_t)(0xf0u - 0x18u * cell);
+    out[2] = (uint8_t)(0x40u + 0x11u * cell);
+    out[3] = 0xff;
+}
+
+static void InstancedExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    InstanceColour((y / INSTANCE_CELL_HEIGHT) * 4u + x / INSTANCE_CELL_WIDTH, out);
+}
+
+static const char *InstancedLooksLike(const uint8_t pixel[4]) {
+    static const char *const NAMES[INSTANCE_CELLS] = {
+        "instance 0's colour (vertices instanced)", "instance 1's colour (vertices instanced)",
+        "instance 2's colour (indices instanced)",  "instance 3's colour (indices instanced)",
+        "instance 4's colour (vertices, numbers in a buffer)",
+        "instance 5's colour (vertices, numbers in a buffer)",
+        "instance 6's colour (indices, numbers in a buffer)",
+        "instance 7's colour (indices, numbers in a buffer)",
+    };
+    for (uint32_t i = 0; i < INSTANCE_CELLS; ++i) {
+        uint8_t colour[4];
+        InstanceColour(i, colour);
+        if (memcmp(pixel, colour, 4) == 0) {
+            return NAMES[i];
+        }
+    }
+    return memcmp(pixel, SCENE_CLEAR, 4) == 0 ? "the clear colour: nothing drawn"
+                                              : "nothing the scene draws";
+}
+
+static bool InstancedDraw(DrawPath *path, char *why, size_t why_size) {
+    const int program = DrawPathProgram(path, ShaderData(SHADER_SCENE_INSTANCED_VERT),
+                                        ShaderSize(SHADER_SCENE_INSTANCED_VERT),
+                                        ShaderData(SHADER_SCENE_FRAG),
+                                        ShaderSize(SHADER_SCENE_FRAG));
+    DrawBuffer vertices, entries, paint, indices, of_vertices, of_indices;
+    const bool ok = program >= 0 &&
+                    DrawPathAlloc(path, 6u * (uint32_t)sizeof(GpuVertex), &vertices) &&
+                    DrawPathAlloc(path, INSTANCE_CELLS * (uint32_t)sizeof(DrawInstance),
+                                  &entries) &&
+                    DrawPathAlloc(path, (uint32_t)sizeof(Paint), &paint) &&
+                    DrawPathAlloc(path, 6u * 2u, &indices) &&
+                    DrawPathAlloc(path, 4u * 4u, &of_vertices) &&
+                    DrawPathAlloc(path, 5u * 4u, &of_indices);
+    if (!ok) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    // The first cell's quad, in a colour no cell has: the instance's is the one drawn.
+    GpuVertex quad[6];
+    Quad(quad, 0, 0, INSTANCE_CELL_WIDTH, INSTANCE_CELL_HEIGHT, 0.5f, SCENE_FAR);
+    memcpy(vertices.bytes, quad, sizeof(quad));
+    DrawInstance instances[INSTANCE_CELLS];
+    for (uint32_t i = 0; i < INSTANCE_CELLS; ++i) {
+        uint8_t colour[4];
+        InstanceColour(i, colour);
+        // A cell across is half the clip space's width a quarter of the target is, a cell down
+        // its whole height a half is.
+        const DrawInstance instance = { { (float)(i % 4u) * 0.5f, -(float)(i / 4u), 0.0f, 0.0f },
+                                        { (float)colour[0] / 255.0f, (float)colour[1] / 255.0f,
+                                          (float)colour[2] / 255.0f, (float)colour[3] / 255.0f } };
+        instances[i] = instance;
+    }
+    memcpy(entries.bytes, instances, sizeof(instances));
+    static const uint16_t order[6] = { 0, 1, 2, 3, 4, 5 };
+    // The count, the instances, the first vertex and the base instance; then the same for
+    // indices, with the base vertex before the base instance.
+    static const uint32_t vertex_numbers[4] = { 6, 2, 0, 4 };
+    static const uint32_t index_numbers[5] = { 6, 2, 0, 0, 6 };
+    memcpy(indices.bytes, order, sizeof(order));
+    memcpy(of_vertices.bytes, vertex_numbers, sizeof(vertex_numbers));
+    memcpy(of_indices.bytes, index_numbers, sizeof(index_numbers));
+    const Paint flat = { { 1.0f, 1.0f, 1.0f, 1.0f }, { PAINT_VERTEX, 0, 0, 0 } };
+    memcpy(paint.bytes, &flat, sizeof(flat));
+
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    const DrawElements by_index = { true, DRAW_INDEX_U16, &indices };
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathUseProgram(path, program);
+    DrawPathVertices(path, &vertices, sizeof(quad));
+    DrawPathInstances(path, &entries, sizeof(instances));
+    DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
+    DrawPathDrawInstanced(path, NULL, 0, 6, 0, 2);
+    DrawPathDrawInstanced(path, &by_index, 0, 6, 2, 2);
+    DrawPathDrawIndirect(path, NULL, &of_vertices);
+    DrawPathDrawIndirect(path, &by_index, &of_indices);
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
 /// A scene the suite draws down each way: what it asks of a way, how it draws, and what each of
 /// its pixels has to hold.
 typedef struct {
@@ -481,6 +591,8 @@ static const Scene FIVE_DEFERRED = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TE
                                      Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_DEFERRED };
 static const Scene UPDATED = { false, 0, 0, UpdatedDraw, IndexedExpected, IndexedLooksLike,
                                DRAW_BINDS_SINGLE };
+static const Scene INSTANCED = { false,           0, 0, InstancedDraw, InstancedExpected,
+                                 InstancedLooksLike, DRAW_BINDS_SINGLE };
 
 /// One way's case: @p scene drawn down @p kind and every pixel judged.
 static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
@@ -583,6 +695,12 @@ void NvnSceneFirst(void) {
     SceneCase(DRAW_PATH_LAYER, &UPDATED,
               "the same four quads of an updated uniform buffer through the layer's own NVN "
               "functions are each its own colour");
+    SceneCase(DRAW_PATH_DEKO3D, &INSTANCED,
+              "eight instances of a quad drawn through deko3d, by instanced draws and by "
+              "draws that read their numbers, are each in its cell");
+    SceneCase(DRAW_PATH_LAYER, &INSTANCED,
+              "the same eight instances through the layer's own NVN functions are each in "
+              "its cell");
 }
 
 void NvnSceneLast(void) {
@@ -604,4 +722,7 @@ void NvnSceneLast(void) {
     SceneCase(DRAW_PATH_NVN, &UPDATED,
               "the same four quads of an updated uniform buffer through the NVN the program "
               "looks up are each its own colour");
+    SceneCase(DRAW_PATH_NVN, &INSTANCED,
+              "the same eight instances through the NVN the program looks up are each in its "
+              "cell");
 }

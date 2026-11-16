@@ -736,6 +736,17 @@
     X(void, nvnCommandBufferDrawElementsBaseVertex,                                               \
       (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type, int count,           \
        NVNbufferAddress indices, int base_vertex))                                                \
+    X(void, nvnCommandBufferDrawArraysInstanced,                                                  \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, int first, int count,                   \
+       int base_instance, int instances))                                                         \
+    X(void, nvnCommandBufferDrawElementsInstanced,                                                \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type, int count,           \
+       NVNbufferAddress indices, int base_vertex, int base_instance, int instances))              \
+    X(void, nvnCommandBufferDrawArraysIndirect,                                                   \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNbufferAddress indirect))             \
+    X(void, nvnCommandBufferDrawElementsIndirect,                                                 \
+      (NVNcommandBuffer *cmd, NVNdrawPrimitive primitive, NVNindexType type,                      \
+       NVNbufferAddress indices, NVNbufferAddress indirect))                                      \
     X(void, nvnCommandBufferBindVertexBuffers,                                                    \
       (NVNcommandBuffer *cmd, int first, int count, const NVNbufferRange *ranges))                \
     X(void, nvnCommandBufferBindUniformBuffers,                                                   \
