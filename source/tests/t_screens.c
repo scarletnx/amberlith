@@ -1982,6 +1982,30 @@ static void CheckProgress(Fixture *f) {
                (int)second_pass, (unsigned)timed.count, words[1], words[2], words[3],
                elapsed[0], elapsed[1], elapsed[2], elapsed[3]);
 
+    // The B that answered the judge's question, or stopped a demo, is still down at the running
+    // screen's first looks: it cancels nothing, and the press after it was let go does.
+    UiProgressCancel cancel;
+    UiProgressCancelReset(&cancel);
+    const bool held[2] = { UiProgressCancelLook(&cancel, true),
+                           UiProgressCancelLook(&cancel, true) };
+    const bool let_go = UiProgressCancelLook(&cancel, false);
+    const bool pressed = UiProgressCancelLook(&cancel, true);
+    // Another screen took the window and gave it back with B down again.
+    UiProgressCancelReset(&cancel);
+    const bool held_again = UiProgressCancelLook(&cancel, true);
+    UiProgressCancel fresh;
+    UiProgressCancelReset(&fresh);
+    const bool up_first = UiProgressCancelLook(&fresh, false);
+    const bool then_down = UiProgressCancelLook(&fresh, true);
+    CHECK_TRUE(SUITE, "B cancels a run only once it was seen up on the running screen",
+               CHECK_NONE,
+               !held[0] && !held[1] && !let_go && pressed && !held_again && !up_first &&
+                   then_down && !UiProgressCancelLook(NULL, true),
+               "held since the screen before %d %d, let go %d, pressed %d, held over another "
+               "screen %d; up at the first look %d, then down %d",
+               (int)held[0], (int)held[1], (int)let_go, (int)pressed, (int)held_again,
+               (int)up_first, (int)then_down);
+
     UiProgress progress;
     memset(&progress, 0, sizeof(progress));
     progress.heading = "edenprobe 0.3.0 (test)";

@@ -2737,6 +2737,23 @@ bool UiProgressDue(bool drawn_before, uint64_t drawn_ns, uint64_t now_ns, bool s
            now_ns - drawn_ns >= UI_PROGRESS_NANOSECONDS;
 }
 
+void UiProgressCancelReset(UiProgressCancel *cancel) {
+    if (cancel != NULL) {
+        cancel->seen_up = false;
+    }
+}
+
+bool UiProgressCancelLook(UiProgressCancel *cancel, bool down) {
+    if (cancel == NULL) {
+        return false;
+    }
+    if (!down) {
+        cancel->seen_up = true;
+        return false;
+    }
+    return cancel->seen_up;
+}
+
 void UiProgressCountReset(UiProgressCount *count) {
     if (count != NULL) {
         memset(count, 0, sizeof(*count));

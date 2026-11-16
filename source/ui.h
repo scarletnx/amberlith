@@ -649,6 +649,19 @@ typedef struct {
 /// readings of one clock.
 bool UiProgressDue(bool drawn_before, uint64_t drawn_ns, uint64_t now_ns, bool step_began);
 
+/// B on the running screen, which cancels the run. It is a press only once B was seen up while
+/// that screen had the window: the B that answered the judge's question or stopped a demo is
+/// still down when the running screen comes up after it, and asked for neither.
+typedef struct {
+    bool seen_up;
+} UiProgressCancel;
+
+/// The running screen has just taken the window, at a run's start or from another screen.
+void UiProgressCancelReset(UiProgressCancel *cancel);
+
+/// One look at B, @p down as the pad has it now: whether it is the press that cancels.
+bool UiProgressCancelLook(UiProgressCancel *cancel, bool down);
+
 /// The cases one step has met, pass by pass, from the report's starts and ends: a case that
 /// starts counts, and so does one that ends without having started, as the judge's do.
 typedef struct {
