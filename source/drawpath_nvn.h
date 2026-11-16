@@ -38,6 +38,13 @@ typedef struct {
 /// Fills @p parts for @p path. False for the deko3d way, which has none of them.
 bool DrawPathNvn(DrawPath *path, DrawPathNvnParts *parts);
 
+/// The shader data of one more stage, for a program a scene makes itself (a stage past the
+/// two DrawPathProgram takes): @p dksh, a whole compiled module, with its code in the way's
+/// code pool and a control section the way keeps until it is taken down. False with
+/// DrawPathFailure saying why, and on the deko3d way.
+bool DrawPathNvnStage(DrawPath *path, const void *dksh, uint32_t dksh_bytes,
+                      NVNshaderData *stage);
+
 #ifdef __cplusplus
 }
 #endif

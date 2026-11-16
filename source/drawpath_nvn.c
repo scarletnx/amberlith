@@ -30,6 +30,9 @@
 // What a copy leaves when it never lands: no pixel a scene judges is four of these.
 #define READ_PRESET 0xa5u
 
+/// How many stages a scene may ask for by themselves.
+#define DRAW_PATH_MORE_STAGES 4u
+
 typedef struct {
     NVNmemoryPool pool;
     void *storage;
@@ -67,6 +70,9 @@ typedef struct {
     int sampler_base;
     _Alignas(8) NVNprogram programs[DRAW_PATH_PROGRAMS];
     NVNshaderData stages[DRAW_PATH_PROGRAMS][2];
+    /// The control sections of the stages a scene asked for by themselves (DrawPathNvnStage).
+    void *more_sections[DRAW_PATH_MORE_STAGES];
+    uint32_t more_count;
     void *sections[DRAW_PATH_PROGRAMS][2];
     uint32_t program_count;
     _Alignas(8) NVNtexture textures[DRAW_PATH_TEXTURES];
@@ -214,6 +220,11 @@ static void NvClose(DrawPath *path) {
         nv->nvn.nvnCommandBufferFinalize(&nv->command);
         nv->command_up = false;
     }
+    for (uint32_t i = 0; i < nv->more_count; ++i) {
+        free(nv->more_sections[i]);
+        nv->more_sections[i] = NULL;
+    }
+    nv->more_count = 0;
     free(nv->control);
     nv->control = NULL;
     if (nv->depth_up) {
@@ -240,6 +251,34 @@ static void NvClose(DrawPath *path) {
     }
 }
 
+/// One stage's shader data from @p module, a whole DKSH: its control section made and kept in
+/// @p section, which stays for as long as the program does, the layer keeping its own record of
+/// the stage in it, and its code copied into the code pool. False with the way's failure set.
+static bool Stage(NvnPath *nv, const void *module, uint32_t bytes, const char *which,
+                  void **section, NVNshaderData *stage) {
+    uint8_t *const code_memory = nv->nvn.nvnMemoryPoolMap(&nv->code_pool.pool);
+    const NVNbufferAddress code_address =
+        nv->nvn.nvnMemoryPoolGetBufferAddress(&nv->code_pool.pool);
+    *section = aligned_alloc(8u, RoundUp(NVN_LAYER_CONTROL_BYTES, 8u));
+    NvnLayerShaderCode code;
+    if (*section == NULL || code_memory == NULL ||
+        !NvnLayerShaderControl(module, bytes, *section, &code)) {
+        DrawPathFail(&nv->base, "a program's %s stage: %s", which,
+                     Why("no memory for its control section, or no code pool mapping"));
+        return false;
+    }
+    const size_t at = Carve(&nv->code_pool, code.code_bytes, 0x100u);
+    if (at == SIZE_MAX) {
+        DrawPathFail(&nv->base, "no 0x%x bytes left in the code pool for a program's stage",
+                     (unsigned)code.code_bytes);
+        return false;
+    }
+    memcpy(code_memory + at, code.code, code.code_bytes);
+    stage->data = code_address + at;
+    stage->control = *section;
+    return true;
+}
+
 static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
                      const void *fragment_dksh, uint32_t fragment_bytes) {
     NvnPath *const nv = Nv(path);
@@ -252,29 +291,11 @@ static int NvProgram(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
     const void *const modules[2] = { vertex_dksh, fragment_dksh };
     const uint32_t sizes[2] = { vertex_bytes, fragment_bytes };
     NVNshaderData stages[2];
-    uint8_t *const code_memory = nv->nvn.nvnMemoryPoolMap(&nv->code_pool.pool);
-    const NVNbufferAddress code_address =
-        nv->nvn.nvnMemoryPoolGetBufferAddress(&nv->code_pool.pool);
     for (int i = 0; i < 2; ++i) {
-        // The section stays for as long as the program does: the layer keeps its own record of
-        // the stage in it.
-        nv->sections[index][i] = aligned_alloc(8u, RoundUp(NVN_LAYER_CONTROL_BYTES, 8u));
-        NvnLayerShaderCode code;
-        if (nv->sections[index][i] == NULL || code_memory == NULL ||
-            !NvnLayerShaderControl(modules[i], sizes[i], nv->sections[index][i], &code)) {
-            DrawPathFail(path, "a program's %s stage: %s", i == 0 ? "vertex" : "fragment",
-                         Why("no memory for its control section, or no code pool mapping"));
+        if (!Stage(nv, modules[i], sizes[i], i == 0 ? "vertex" : "fragment",
+                   &nv->sections[index][i], &stages[i])) {
             return -1;
         }
-        const size_t at = Carve(&nv->code_pool, code.code_bytes, 0x100u);
-        if (at == SIZE_MAX) {
-            DrawPathFail(path, "no 0x%x bytes left in the code pool for a program's stage",
-                         (unsigned)code.code_bytes);
-            return -1;
-        }
-        memcpy(code_memory + at, code.code, code.code_bytes);
-        stages[i].data = code_address + at;
-        stages[i].control = nv->sections[index][i];
     }
     if (!nv->nvn.nvnProgramInitialize(&nv->programs[index], &nv->device)) {
         DrawPathFail(path, "nvnProgramInitialize: %s", Why("false"));
@@ -667,6 +688,20 @@ static bool BringUp(NvnPath *nv, const DrawPathSpec *spec, bool own, char *why,
         return false;
     }
     return true;
+}
+
+bool DrawPathNvnStage(DrawPath *path, const void *dksh, uint32_t dksh_bytes,
+                      NVNshaderData *stage) {
+    if (path == NULL || path->way != &NVN_WAY) {
+        return false;
+    }
+    NvnPath *const nv = Nv(path);
+    if (nv->more_count >= DRAW_PATH_MORE_STAGES) {
+        DrawPathFail(path, "a stage past the %u a scene may ask for by themselves",
+                     (unsigned)DRAW_PATH_MORE_STAGES);
+        return false;
+    }
+    return Stage(nv, dksh, dksh_bytes, "own", &nv->more_sections[nv->more_count++], stage);
 }
 
 bool DrawPathNvn(DrawPath *path, DrawPathNvnParts *parts) {

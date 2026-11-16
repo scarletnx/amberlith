@@ -311,7 +311,7 @@
 
 // The render state a list sets by itself: viewports and scissors by number, depth ranges and
 // bounds, the rasterizer's switches, the point size, the restart index, the tiled cache, the
-// line width and conservative rasterization.
+// line width, conservative rasterization, and a patch's size and tessellation levels.
 #define NVN_LAYER_PROCS_STATE(X)                                                                  \
     X(void, nvnCommandBufferSetViewports,                                                         \
       (NVNcommandBuffer * cmd, int first, int count, const float *rectangles))                    \
@@ -338,7 +338,12 @@
     X(void, nvnCommandBufferSetConservativeRasterEnable,                                          \
       (NVNcommandBuffer * cmd, NVNboolean enable))                                                \
     X(void, nvnCommandBufferSetConservativeRasterDilate, (NVNcommandBuffer * cmd, float dilate))  \
-    X(void, nvnCommandBufferSetSubpixelPrecisionBias, (NVNcommandBuffer * cmd, int x, int y))
+    X(void, nvnCommandBufferSetSubpixelPrecisionBias, (NVNcommandBuffer * cmd, int x, int y))     \
+    X(void, nvnCommandBufferSetPatchSize, (NVNcommandBuffer * cmd, int size))                     \
+    X(void, nvnCommandBufferSetOuterTessellationLevels,                                           \
+      (NVNcommandBuffer * cmd, const float *levels))                                              \
+    X(void, nvnCommandBufferSetInnerTessellationLevels,                                           \
+      (NVNcommandBuffer * cmd, const float *levels))
 
 // The debug layer's calls, as a release driver answers them: labels, markers and groups, object
 // numbers, the callback, the object database and the checkpoints.

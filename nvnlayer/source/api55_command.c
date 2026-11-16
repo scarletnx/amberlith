@@ -812,3 +812,37 @@ void Nvnl_nvnCommandBufferSetSubpixelPrecisionBias(NVNcommandBuffer *cmd, int x,
     }
     dkCmdBufSetSubpixelPrecisionBias(record->cmdbuf, (uint32_t)x, (uint32_t)y);
 }
+
+// ---- tessellation, each deko3d's own command
+
+void Nvnl_nvnCommandBufferSetPatchSize(NVNcommandBuffer *cmd, int size) {
+    const LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferSetPatchSize");
+    if (record == NULL) {
+        return;
+    }
+    if (size < 1 || size > 32) {
+        LayerComplain("nvnCommandBufferSetPatchSize: %d vertices a patch, where a patch has 1 "
+                      "to 32",
+                      size);
+        return;
+    }
+    dkCmdBufSetPatchSize(record->cmdbuf, (uint32_t)size);
+}
+
+void Nvnl_nvnCommandBufferSetOuterTessellationLevels(NVNcommandBuffer *cmd,
+                                                     const float *levels) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetOuterTessellationLevels");
+    if (record != NULL) {
+        dkCmdBufSetTessOuterLevels(record->cmdbuf, levels[0], levels[1], levels[2], levels[3]);
+    }
+}
+
+void Nvnl_nvnCommandBufferSetInnerTessellationLevels(NVNcommandBuffer *cmd,
+                                                     const float *levels) {
+    const LayerCommandBuffer *const record =
+        CmdOf(cmd, "nvnCommandBufferSetInnerTessellationLevels");
+    if (record != NULL) {
+        dkCmdBufSetTessInnerLevels(record->cmdbuf, levels[0], levels[1]);
+    }
+}
