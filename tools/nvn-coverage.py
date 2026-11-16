@@ -73,6 +73,14 @@ GUARDS = {"DrawPathOpenNvn": "DRAW_PATH_NVN"}
 # told by its name's end: such a scene goes down the layer's own way too.
 GUARDED_END = ("Recorded", "DRAW_PATH_NVN")
 
+# A suite's cases down the layer's own functions (source/tests/t_nvn.c, LayerCases): a function a call gave this
+# constant runs the layer's own bodies, so nothing it calls is a call of a runtime's NVN, and a name it makes with
+# this function is the case's name after these words. The report keeps this many characters of a name.
+OWN_WAY = "LAYER_OWN"
+OWN_NAMER = "Way"
+OWN_PREFIX = "the layer's own: "
+NAME_MOST = 127
+
 # What the layer's own loader calls for a program: a case that calls the loader has called these.
 LOADERS = {"NvnLoadProcs": ("nvnBootstrapLoader", "nvnDeviceGetProcAddress")}
 
@@ -468,9 +476,19 @@ def top_level(tokens):
     return out
 
 
+class WayName(str):
+    """A case's name as the looked up way has it: the layer's own way puts OWN_PREFIX before it."""
+
+
 def string_constants(tokens):
-    """{name: text} of each `char ... NAME = "text";` among @p tokens."""
+    """{name: text} of each `char ... NAME = "text";` among @p tokens, and of each `char ... NAME = Way("text");`
+    as a WayName."""
     out = {}
+    for i in range(1, len(tokens) - 5):
+        if (tokens[i].text == "=" and tokens[i].kind == "punct" and tokens[i - 1].kind == "word"
+                and tokens[i + 1].kind == "word" and tokens[i + 1].text == OWN_NAMER and tokens[i + 2].text == "("
+                and tokens[i + 3].kind == "string" and tokens[i + 4].text == ")" and tokens[i + 5].text == ";"):
+            out[tokens[i - 1].text] = WayName(tokens[i + 3].text)
     for i in range(1, len(tokens) - 2):
         if (tokens[i].text == "=" and tokens[i].kind == "punct" and tokens[i - 1].kind == "word"
                 and tokens[i + 1].kind == "string" and tokens[i + 2].text == ";"):
@@ -514,7 +532,14 @@ class Walk:
         if token.kind != "word":
             return None
         if token.text in function.strings:
-            return function.strings[token.text]
+            text = function.strings[token.text]
+            if isinstance(text, WayName):
+                own = any(isinstance(given, Constant) and given.name == OWN_WAY for given in bound.values())
+                text = (OWN_PREFIX if own else "") + text
+                if len(text) > NAME_MOST:
+                    raise Refused("%s:%d: the case name %r is %d characters down the layer's own way, and a "
+                                  "report keeps %d" % (function.where, token.line, text, len(text), NAME_MOST))
+            return text
         if (function.where, token.text) in self.sources.strings:
             return self.sources.strings[(function.where, token.text)]
         text = bound.get(token.text)
@@ -625,6 +650,12 @@ class Walk:
                     if judged == case:
                         case = OUTSIDE
                     i = end + 1
+                    continue
+                if OWN_WAY in tags:
+                    # the layer's own bodies: no runtime's NVN is called
+                    if self.sources.find(function.where, name) is not None:
+                        self.call(function, self.sources.find(function.where, name), tokens, i, case, bound, tags)
+                    i += 1
                     continue
                 for loaded in LOADERS.get(name, ()):
                     self.calls.setdefault(loaded, set()).add(case)
@@ -816,7 +847,10 @@ class Table:
         add("of the two functions it gets every other through. A call no case is open for is **outside a")
         add("case**. Of the scene's three ways (`source/drawpath.h`) only the one")
         add("through the NVN the program looks up is counted: the other two are deko3d's calls and the layer's")
-        add("own bodies, which no runtime's NVN takes. `#if NVN_LAYER_API` chooses a build's lines.")
+        add("own bodies, which no runtime's NVN takes. The same goes for the cases of the suite's own device")
+        add("(`LayerCases`), which run twice in the NRO: down the layer's own functions first, each named")
+        add("`%s...` and counted for nothing, then down the ones the program looks up." % OWN_PREFIX)
+        add("`#if NVN_LAYER_API` chooses a build's lines.")
         add("")
         add("`tools/nvn-coverage.py --check` says whether this file is what the tree gives, and the host build's")
         add("tests run it; `--gaps GROUP` lists a group's functions with no case.")

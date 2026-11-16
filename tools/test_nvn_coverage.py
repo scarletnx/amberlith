@@ -333,6 +333,16 @@ class Tree(unittest.TestCase):
         self.assertEqual([case for case in own if case in called], [])
         self.assertEqual([case for case in looked_up if case not in called], [])
 
+    def test_the_layer_s_own_way_counts_for_nothing(self):
+        # each case of the layer's own way has its looked up twin, and calls no runtime's NVN
+        called = {case for cases_ in self.table.calls.values() for case in cases_ if case is not tool.OUTSIDE}
+        own = [case for case in self.table.cases if case[1].startswith(tool.OWN_PREFIX)]
+        self.assertGreaterEqual(len(own), 1)
+        self.assertEqual([case for case in own if case in called], [])
+        twins = [(suite, name[len(tool.OWN_PREFIX):]) for suite, name in own]
+        self.assertEqual([case for case in twins if case not in self.table.cases], [])
+        self.assertEqual([case for case in twins if case not in called], [])
+
     def test_a_case_calls_only_what_the_layer_has(self):
         for name in self.table.calls:
             self.assertIn(name, self.table.layer)
@@ -371,6 +381,19 @@ class Refusals(unittest.TestCase):
             self.assertTrue(file.read().endswith("more\n"))
         self.assertEqual(self.run_tool()[0], 0)
         self.assertEqual(self.run_tool("--check")[0], 0)
+
+    def test_a_name_too_long_down_the_layer_s_own_way(self):
+        # a name of its own, so the test holds whatever names the tree has
+        path = os.path.join(self.root, "source", "tests", "t_nvn.c")
+        with open(path, encoding="utf-8") as file:
+            text = file.read()
+        short = 'Way("the device initializes")'
+        self.assertEqual(text.count(short), 1)
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(text.replace(short, 'Way("%s")' % ("a device " * 13 + "comes up")))
+        code, _, err = self.run_tool()
+        self.assertEqual(code, 1)
+        self.assertIn("is 142 characters down the layer's own way, and a report keeps 127", err)
 
     def test_a_copy_of_the_hook_that_is_not_the_pinned_one(self):
         with open(os.path.join(self.root, tool.HOOK), "a", encoding="utf-8") as file:
