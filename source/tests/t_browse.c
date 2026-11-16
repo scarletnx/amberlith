@@ -799,17 +799,24 @@ static void DumpBrowser(uint8_t *pixels) {
         const char *name;
         UiTab tab;
         uint32_t level;
+        /// As the word opens it, nothing pressed yet: the countdown on the foot.
+        bool countdown;
+        /// Plus pressed: the judge question over the tab.
+        bool asks;
     } SHOTS[] = {
-        { "30-browse-start", UI_TAB_START, 0u },   { "31-browse-families", UI_TAB_SUITES, 0u },
-        { "32-browse-suites", UI_TAB_SUITES, 1u }, { "33-browse-cases", UI_TAB_SUITES, 2u },
-        { "34-browse-demos", UI_TAB_DEMOS, 0u },   { "35-browse-options", UI_TAB_OPTIONS, 0u },
-        { "36-browse-countdown", UI_TAB_SUITES, 0u },
+        { "30-browse-start", UI_TAB_START, 0u, false, false },
+        { "31-browse-families", UI_TAB_SUITES, 0u, false, false },
+        { "32-browse-suites", UI_TAB_SUITES, 1u, false, false },
+        { "33-browse-cases", UI_TAB_SUITES, 2u, false, false },
+        { "34-browse-demos", UI_TAB_DEMOS, 0u, false, false },
+        { "35-browse-options", UI_TAB_OPTIONS, 0u, false, false },
+        { "36-browse-countdown", UI_TAB_SUITES, 0u, true, false },
+        { "37-browse-judge-question", UI_TAB_SUITES, 1u, false, true },
     };
     for (size_t i = 0; i < sizeof(SHOTS) / sizeof(SHOTS[0]); ++i) {
-        // The last as the word opens it, nothing pressed yet.
-        info.seconds_left = i + 1u == sizeof(SHOTS) / sizeof(SHOTS[0])
-                                ? (uint32_t)(UI_BROWSE_NANOSECONDS / 1000000000ull)
-                                : 0u;
+        info.seconds_left =
+            SHOTS[i].countdown ? (uint32_t)(UI_BROWSE_NANOSECONDS / 1000000000ull) : 0u;
+        state.waiting = SHOTS[i].asks ? UI_ASK_RUN : UI_ASK_NONE;
         state.tab = SHOTS[i].tab;
         state.level = SHOTS[i].level;
         state.suite = UiBrowseSuiteIndex("coverage");

@@ -2158,6 +2158,12 @@ static void CheckProgress(Fixture *f) {
     const uint32_t footer =
         CountColour(&frame, 0, BAND_TOP, FRAME_WIDTH, FRAME_HEIGHT, RUN_PAGE);
     DumpFrame(&frame, "11-running");
+    // What it says once B was pressed, while the case under way ends.
+    progress.cancelling = true;
+    UiComposeProgress(&frame, &progress);
+    DumpFrame(&frame, "13-running-cancelling");
+    progress.cancelling = false;
+    UiComposeProgress(&frame, &progress);
 #ifdef EDENPROBE_HOST
     CheckKeeperSide(f, &progress);
     UiComposeProgress(&frame, &progress);
