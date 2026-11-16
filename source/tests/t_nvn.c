@@ -1553,6 +1553,267 @@ static void BufferCopyCase(const char *name) {
                want_first, READ_PRESET);
 }
 
+// ---- what the state objects answer of themselves
+
+// A state object is a few bytes a game fills with setters and binds. Each case here sets every
+// field of one kind of state to a number that is no default and reads it back; no state here is
+// bound, so the numbers need not be a state a draw could use.
+
+static void BlendStateCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNblendState state;
+    nvn.nvn.nvnBlendStateSetDefaults(&state);
+    nvn.nvn.nvnBlendStateSetBlendTarget(&state, 5);
+    nvn.nvn.nvnBlendStateSetBlendFunc(&state, NVN_BLEND_FUNC_SRC_ALPHA,
+                                      NVN_BLEND_FUNC_ONE_MINUS_SRC_ALPHA,
+                                      NVN_BLEND_FUNC_ONE_MINUS_DST_ALPHA,
+                                      NVN_BLEND_FUNC_CONSTANT_ALPHA);
+    nvn.nvn.nvnBlendStateSetBlendEquation(&state, NVN_BLEND_EQUATION_REVERSE_SUB,
+                                          NVN_BLEND_EQUATION_MAX);
+    nvn.nvn.nvnBlendStateSetAdvancedMode(&state, NVN_BLEND_ADVANCED_MODE_BLUE);
+    nvn.nvn.nvnBlendStateSetAdvancedOverlap(&state, NVN_BLEND_ADVANCED_OVERLAP_CONJOINT);
+    nvn.nvn.nvnBlendStateSetAdvancedPremultipliedSrc(&state, 0);
+    nvn.nvn.nvnBlendStateSetAdvancedNormalizedDst(&state, 0);
+    NVNblendFunc src_rgb = NVN_BLEND_FUNC_ZERO, dst_rgb = NVN_BLEND_FUNC_ZERO;
+    NVNblendFunc src_alpha = NVN_BLEND_FUNC_ZERO, dst_alpha = NVN_BLEND_FUNC_ZERO;
+    NVNblendEquation rgb = NVN_BLEND_EQUATION_ADD, alpha = NVN_BLEND_EQUATION_ADD;
+    nvn.nvn.nvnBlendStateGetBlendFunc(&state, &src_rgb, &dst_rgb, &src_alpha, &dst_alpha);
+    nvn.nvn.nvnBlendStateGetBlendEquation(&state, &rgb, &alpha);
+    Gives(why, sizeof(why), "the blend target", nvn.nvn.nvnBlendStateGetBlendTarget(&state), 5);
+    Gives(why, sizeof(why), "the source colour function", src_rgb, NVN_BLEND_FUNC_SRC_ALPHA);
+    Gives(why, sizeof(why), "the destination colour function", dst_rgb,
+          NVN_BLEND_FUNC_ONE_MINUS_SRC_ALPHA);
+    Gives(why, sizeof(why), "the source alpha function", src_alpha,
+          NVN_BLEND_FUNC_ONE_MINUS_DST_ALPHA);
+    Gives(why, sizeof(why), "the destination alpha function", dst_alpha,
+          NVN_BLEND_FUNC_CONSTANT_ALPHA);
+    Gives(why, sizeof(why), "the colour equation", rgb, NVN_BLEND_EQUATION_REVERSE_SUB);
+    Gives(why, sizeof(why), "the alpha equation", alpha, NVN_BLEND_EQUATION_MAX);
+    Gives(why, sizeof(why), "the advanced mode", nvn.nvn.nvnBlendStateGetAdvancedMode(&state),
+          NVN_BLEND_ADVANCED_MODE_BLUE);
+    Gives(why, sizeof(why), "the advanced overlap",
+          nvn.nvn.nvnBlendStateGetAdvancedOverlap(&state), NVN_BLEND_ADVANCED_OVERLAP_CONJOINT);
+    Gives(why, sizeof(why), "whether the advanced mode's source is premultiplied",
+          nvn.nvn.nvnBlendStateGetAdvancedPremultipliedSrc(&state), 0);
+    Gives(why, sizeof(why), "whether the advanced mode's destination is normalized",
+          nvn.nvn.nvnBlendStateGetAdvancedNormalizedDst(&state), 0);
+    nvn.nvn.nvnBlendStateSetAdvancedPremultipliedSrc(&state, 1);
+    Gives(why, sizeof(why), "whether the source is premultiplied once it is set so",
+          nvn.nvn.nvnBlendStateGetAdvancedPremultipliedSrc(&state), 1);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The channel mask of one target and the colour state: a target's blending, the logic
+/// operation and the alpha test.
+static void ColorStateCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNchannelMaskState mask;
+    _Alignas(8) NVNcolorState color;
+    nvn.nvn.nvnChannelMaskStateSetDefaults(&mask);
+    nvn.nvn.nvnChannelMaskStateSetChannelMask(&mask, 3, 1, 0, 1, 0);
+    NVNboolean r = 0, g = 1, b = 0, a = 1;
+    nvn.nvn.nvnChannelMaskStateGetChannelMask(&mask, 3, &r, &g, &b, &a);
+    Gives(why, sizeof(why), "target 3's channels written, as red 1, green 2, blue 4, alpha 8",
+          (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0), 5);
+    nvn.nvn.nvnChannelMaskStateGetChannelMask(&mask, 2, &r, &g, &b, &a);
+    Gives(why, sizeof(why), "target 2's channels written, which nothing changed",
+          (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0), 15);
+
+    nvn.nvn.nvnColorStateSetDefaults(&color);
+    nvn.nvn.nvnColorStateSetBlendEnable(&color, 5, 1);
+    nvn.nvn.nvnColorStateSetLogicOp(&color, NVN_LOGIC_OP_XOR);
+    nvn.nvn.nvnColorStateSetAlphaTest(&color, NVN_ALPHA_FUNC_GREATER);
+    Gives(why, sizeof(why), "whether target 5 blends", nvn.nvn.nvnColorStateGetBlendEnable(&color, 5),
+          1);
+    Gives(why, sizeof(why), "whether target 4 blends, which nothing enabled",
+          nvn.nvn.nvnColorStateGetBlendEnable(&color, 4), 0);
+    Gives(why, sizeof(why), "the logic operation", nvn.nvn.nvnColorStateGetLogicOp(&color),
+          NVN_LOGIC_OP_XOR);
+    Gives(why, sizeof(why), "the alpha test's function", nvn.nvn.nvnColorStateGetAlphaTest(&color),
+          NVN_ALPHA_FUNC_GREATER);
+    nvn.nvn.nvnColorStateSetBlendEnable(&color, 5, 0);
+    Gives(why, sizeof(why), "whether target 5 blends once it is disabled",
+          nvn.nvn.nvnColorStateGetBlendEnable(&color, 5), 0);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+static void DepthStencilStateCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNdepthStencilState state;
+    nvn.nvn.nvnDepthStencilStateSetDefaults(&state);
+    nvn.nvn.nvnDepthStencilStateSetDepthTestEnable(&state, 1);
+    nvn.nvn.nvnDepthStencilStateSetDepthWriteEnable(&state, 0);
+    nvn.nvn.nvnDepthStencilStateSetDepthFunc(&state, NVN_DEPTH_FUNC_GEQUAL);
+    nvn.nvn.nvnDepthStencilStateSetStencilTestEnable(&state, 1);
+    nvn.nvn.nvnDepthStencilStateSetStencilFunc(&state, NVN_FACE_FRONT, NVN_STENCIL_FUNC_EQUAL);
+    nvn.nvn.nvnDepthStencilStateSetStencilFunc(&state, NVN_FACE_BACK, NVN_STENCIL_FUNC_NOTEQUAL);
+    nvn.nvn.nvnDepthStencilStateSetStencilOp(&state, NVN_FACE_FRONT, NVN_STENCIL_OP_REPLACE,
+                                             NVN_STENCIL_OP_INCR, NVN_STENCIL_OP_DECR_WRAP);
+    nvn.nvn.nvnDepthStencilStateSetStencilOp(&state, NVN_FACE_BACK, NVN_STENCIL_OP_INVERT,
+                                             NVN_STENCIL_OP_ZERO, NVN_STENCIL_OP_INCR_WRAP);
+    Gives(why, sizeof(why), "whether depth is tested",
+          nvn.nvn.nvnDepthStencilStateGetDepthTestEnable(&state), 1);
+    Gives(why, sizeof(why), "whether depth is written",
+          nvn.nvn.nvnDepthStencilStateGetDepthWriteEnable(&state), 0);
+    Gives(why, sizeof(why), "the depth function", nvn.nvn.nvnDepthStencilStateGetDepthFunc(&state),
+          NVN_DEPTH_FUNC_GEQUAL);
+    Gives(why, sizeof(why), "whether stencil is tested",
+          nvn.nvn.nvnDepthStencilStateGetStencilTestEnable(&state), 1);
+    Gives(why, sizeof(why), "the front stencil function",
+          nvn.nvn.nvnDepthStencilStateGetStencilFunc(&state, NVN_FACE_FRONT),
+          NVN_STENCIL_FUNC_EQUAL);
+    Gives(why, sizeof(why), "the back stencil function",
+          nvn.nvn.nvnDepthStencilStateGetStencilFunc(&state, NVN_FACE_BACK),
+          NVN_STENCIL_FUNC_NOTEQUAL);
+    NVNstencilOp fail = NVN_STENCIL_OP_KEEP, depth_fail = NVN_STENCIL_OP_KEEP;
+    NVNstencilOp pass = NVN_STENCIL_OP_KEEP;
+    nvn.nvn.nvnDepthStencilStateGetStencilOp(&state, NVN_FACE_FRONT, &fail, &depth_fail, &pass);
+    Gives(why, sizeof(why), "the front operation for a failed stencil test", fail,
+          NVN_STENCIL_OP_REPLACE);
+    Gives(why, sizeof(why), "the front operation for a failed depth test", depth_fail,
+          NVN_STENCIL_OP_INCR);
+    Gives(why, sizeof(why), "the front operation for a pass", pass, NVN_STENCIL_OP_DECR_WRAP);
+    nvn.nvn.nvnDepthStencilStateGetStencilOp(&state, NVN_FACE_BACK, &fail, &depth_fail, &pass);
+    Gives(why, sizeof(why), "the back operation for a failed stencil test", fail,
+          NVN_STENCIL_OP_INVERT);
+    Gives(why, sizeof(why), "the back operation for a failed depth test", depth_fail,
+          NVN_STENCIL_OP_ZERO);
+    Gives(why, sizeof(why), "the back operation for a pass", pass, NVN_STENCIL_OP_INCR_WRAP);
+    // Both faces in one call.
+    nvn.nvn.nvnDepthStencilStateSetStencilFunc(&state, NVN_FACE_FRONT_AND_BACK,
+                                               NVN_STENCIL_FUNC_GREATER);
+    Gives(why, sizeof(why), "the front stencil function set for both faces",
+          nvn.nvn.nvnDepthStencilStateGetStencilFunc(&state, NVN_FACE_FRONT),
+          NVN_STENCIL_FUNC_GREATER);
+    Gives(why, sizeof(why), "the back stencil function set for both faces",
+          nvn.nvn.nvnDepthStencilStateGetStencilFunc(&state, NVN_FACE_BACK),
+          NVN_STENCIL_FUNC_GREATER);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+static void MultisampleStateCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNmultisampleState state;
+    nvn.nvn.nvnMultisampleStateSetDefaults(&state);
+    Gives(why, sizeof(why), "whether a new state multisamples",
+          nvn.nvn.nvnMultisampleStateGetMultisampleEnable(&state), 0);
+    nvn.nvn.nvnMultisampleStateSetMultisampleEnable(&state, 1);
+    nvn.nvn.nvnMultisampleStateSetSamples(&state, 4);
+    nvn.nvn.nvnMultisampleStateSetRasterSamples(&state, 8);
+    nvn.nvn.nvnMultisampleStateSetAlphaToCoverageEnable(&state, 1);
+    nvn.nvn.nvnMultisampleStateSetAlphaToCoverageDither(&state, 1);
+    nvn.nvn.nvnMultisampleStateSetCoverageToColorEnable(&state, 1);
+    nvn.nvn.nvnMultisampleStateSetCoverageToColorOutput(&state, 3);
+    nvn.nvn.nvnMultisampleStateSetCoverageModulationMode(&state,
+                                                         NVN_COVERAGE_MODULATION_MODE_ALPHA);
+    nvn.nvn.nvnMultisampleStateSetCoverageTruncationEnable(&state, 1);
+    nvn.nvn.nvnMultisampleStateSetSampleLocationsEnable(&state, 1);
+    nvn.nvn.nvnMultisampleStateSetSampleLocationsGridEnable(&state, 1);
+    static const float locations[4] = { 0.25f, 0.75f, 0.5f, 0.125f };
+    nvn.nvn.nvnMultisampleStateSetSampleLocations(&state, 2, 2, locations);
+    Gives(why, sizeof(why), "whether it multisamples",
+          nvn.nvn.nvnMultisampleStateGetMultisampleEnable(&state), 1);
+    Gives(why, sizeof(why), "the samples", nvn.nvn.nvnMultisampleStateGetSamples(&state), 4);
+    Gives(why, sizeof(why), "the raster samples",
+          nvn.nvn.nvnMultisampleStateGetRasterSamples(&state), 8);
+    Gives(why, sizeof(why), "whether alpha goes to coverage",
+          nvn.nvn.nvnMultisampleStateGetAlphaToCoverageEnable(&state), 1);
+    Gives(why, sizeof(why), "whether alpha to coverage dithers",
+          nvn.nvn.nvnMultisampleStateGetAlphaToCoverageDither(&state), 1);
+    Gives(why, sizeof(why), "whether coverage goes to a colour",
+          nvn.nvn.nvnMultisampleStateGetCoverageToColorEnable(&state), 1);
+    Gives(why, sizeof(why), "the output coverage goes to",
+          nvn.nvn.nvnMultisampleStateGetCoverageToColorOutput(&state), 3);
+    Gives(why, sizeof(why), "the coverage modulation mode",
+          nvn.nvn.nvnMultisampleStateGetCoverageModulationMode(&state),
+          NVN_COVERAGE_MODULATION_MODE_ALPHA);
+    Gives(why, sizeof(why), "whether coverage is truncated",
+          nvn.nvn.nvnMultisampleStateGetCoverageTruncationEnable(&state), 1);
+    Gives(why, sizeof(why), "whether the sample locations are the program's",
+          nvn.nvn.nvnMultisampleStateGetSampleLocationsEnable(&state), 1);
+    Gives(why, sizeof(why), "whether the sample locations are a grid's",
+          nvn.nvn.nvnMultisampleStateGetSampleLocationsGridEnable(&state), 1);
+    // Sixteen locations in all: with eight raster samples they cover one pixel by two.
+    int width = -1, height = -1;
+    nvn.nvn.nvnMultisampleStateGetSampleLocationsGrid(&state, &width, &height);
+    Gives(why, sizeof(why), "the width of the sample locations' grid", width, 1);
+    Gives(why, sizeof(why), "the height of the sample locations' grid", height, 2);
+    nvn.nvn.nvnMultisampleStateSetAlphaToCoverageDither(&state, 0);
+    Gives(why, sizeof(why), "whether alpha to coverage dithers once it is set not to",
+          nvn.nvn.nvnMultisampleStateGetAlphaToCoverageDither(&state), 0);
+    Gives(why, sizeof(why), "whether alpha goes to coverage, the flag beside the one cleared",
+          nvn.nvn.nvnMultisampleStateGetAlphaToCoverageEnable(&state), 1);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
+/// The polygon state, a vertex attribute and a vertex stream.
+static void PolygonVertexStateCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[256] = "";
+    _Alignas(8) NVNpolygonState polygon;
+    _Alignas(8) NVNvertexAttribState attrib;
+    _Alignas(8) NVNvertexStreamState stream;
+    nvn.nvn.nvnPolygonStateSetDefaults(&polygon);
+    nvn.nvn.nvnPolygonStateSetCullFace(&polygon, NVN_FACE_BACK);
+    nvn.nvn.nvnPolygonStateSetFrontFace(&polygon, NVN_FRONT_FACE_CW);
+    nvn.nvn.nvnPolygonStateSetPolygonMode(&polygon, NVN_POLYGON_MODE_LINE);
+    nvn.nvn.nvnPolygonStateSetPolygonOffsetEnables(
+        &polygon, NVN_POLYGON_OFFSET_ENABLE_LINE | NVN_POLYGON_OFFSET_ENABLE_FILL);
+    Gives(why, sizeof(why), "the culled face", nvn.nvn.nvnPolygonStateGetCullFace(&polygon),
+          NVN_FACE_BACK);
+    Gives(why, sizeof(why), "the front face", nvn.nvn.nvnPolygonStateGetFrontFace(&polygon),
+          NVN_FRONT_FACE_CW);
+    Gives(why, sizeof(why), "the polygon mode", nvn.nvn.nvnPolygonStateGetPolygonMode(&polygon),
+          NVN_POLYGON_MODE_LINE);
+    Gives(why, sizeof(why), "the polygon offset enables",
+          nvn.nvn.nvnPolygonStateGetPolygonOffsetEnables(&polygon),
+          NVN_POLYGON_OFFSET_ENABLE_LINE | NVN_POLYGON_OFFSET_ENABLE_FILL);
+
+    nvn.nvn.nvnVertexAttribStateSetDefaults(&attrib);
+    nvn.nvn.nvnVertexAttribStateSetFormat(&attrib, NVN_FORMAT_RG32F, 24);
+    nvn.nvn.nvnVertexAttribStateSetStreamIndex(&attrib, 3);
+    NVNformat format = NVN_FORMAT_NONE;
+    ptrdiff_t offset = -1;
+    nvn.nvn.nvnVertexAttribStateGetFormat(&attrib, &format, &offset);
+    Gives(why, sizeof(why), "the attribute's format", format, NVN_FORMAT_RG32F);
+    Gives(why, sizeof(why), "the attribute's offset", (long long)offset, 24);
+    Gives(why, sizeof(why), "the attribute's stream",
+          nvn.nvn.nvnVertexAttribStateGetStreamIndex(&attrib), 3);
+
+    nvn.nvn.nvnVertexStreamStateSetDefaults(&stream);
+    nvn.nvn.nvnVertexStreamStateSetStride(&stream, 36);
+    nvn.nvn.nvnVertexStreamStateSetDivisor(&stream, 2);
+    Gives(why, sizeof(why), "the stream's stride",
+          (long long)nvn.nvn.nvnVertexStreamStateGetStride(&stream), 36);
+    Gives(why, sizeof(why), "the stream's divisor",
+          nvn.nvn.nvnVertexStreamStateGetDivisor(&stream), 2);
+    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+               why[0] != '\0' ? why : NvnLayerError());
+}
+
 // ---- the debug layer's calls
 
 /// How often the debug callback and the database walk were called.
@@ -2187,6 +2448,17 @@ static void LayerCases(void) {
                                              "which of its sizes were set";
     static const char *const EVENT = "an event keeps what the processor signals: a write, an "
                                      "add and an add that wraps";
+    static const char *const BLEND_STATE = "a blend state gives back its target, functions, "
+                                           "equations and advanced mode";
+    static const char *const COLOR_STATE = "a channel mask and a colour state give back a "
+                                           "target's channels, blending, the logic operation "
+                                           "and the alpha test";
+    static const char *const DEPTH_STENCIL_STATE = "a depth and stencil state gives back its "
+                                                   "depth test and each face's stencil";
+    static const char *const MULTISAMPLE_STATE = "a multisample state gives back its samples, "
+                                                 "its switches and its sample locations' grid";
+    static const char *const POLYGON_VERTEX_STATE = "a polygon state, a vertex attribute and a "
+                                                    "vertex stream give back what they were set";
     static const char *const BUFFER_RANGE = "a buffer is a range of its pool: its address, its "
                                             "mapping, and what it and its builder say";
     static const char *const BUFFER_COPY = "bytes flushed from one buffer and copied to "
@@ -2223,7 +2495,10 @@ static void LayerCases(void) {
                                          POOL, POOL_CACHE, FENCED, FENCED_LIST, WAITED,
                                          UNFENCED, QUEUE_ERROR, QUEUE_BUILDER, EVENT,
                                          SAMPLER_BUILDER, SAMPLER, DESCRIPTOR_POOLS,
-                                         BUFFER_RANGE, BUFFER_COPY, DEBUG, WINDOW_BUILDER,
+                                         BUFFER_RANGE, BUFFER_COPY, DEBUG,
+                                         BLEND_STATE, COLOR_STATE, DEPTH_STENCIL_STATE,
+                                         MULTISAMPLE_STATE, POLYGON_VERTEX_STATE,
+                                         WINDOW_BUILDER,
 #if NVN_LAYER_API >= 231
                                          OUNCE_MARKERS, PROGRAM_BUILDER, WINDOW_HDR_BUILDER,
                                          WINDOW_HDR,
@@ -2377,6 +2652,11 @@ static void LayerCases(void) {
         BufferCase(BUFFER_RANGE);
         BufferCopyCase(BUFFER_COPY);
     }
+    BlendStateCase(BLEND_STATE);
+    ColorStateCase(COLOR_STATE);
+    DepthStencilStateCase(DEPTH_STENCIL_STATE);
+    MultisampleStateCase(MULTISAMPLE_STATE);
+    PolygonVertexStateCase(POLYGON_VERTEX_STATE);
 
     DebugCase(DEBUG);
     WindowBuilderCase(WINDOW_BUILDER);

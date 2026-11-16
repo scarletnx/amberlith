@@ -220,6 +220,11 @@ typedef struct {
     /// The polygon state last bound, as nvnCommandBufferBindPolygonState took it.
     uint8_t cull;
     uint8_t front;
+    /// Its polygon mode and its offset enables, once polygon says one was bound: until then
+    /// deko3d's own, filled polygons and no offset.
+    uint8_t mode;
+    uint8_t offset;
+    bool polygon;
     bool discard;
     bool depth_clamp;
     bool provoking_first;
@@ -321,8 +326,20 @@ typedef struct {
     uint32_t divisor;
 } LayerVertexStream;
 
+// A blend state's two words: the target and the four functions, then the equations and the
+// advanced mode's four fields.
 typedef struct {
-    uint32_t target;
+    uint32_t target : 3;
+    uint32_t src_rgb : 7;
+    uint32_t dst_rgb : 7;
+    uint32_t src_alpha : 7;
+    uint32_t dst_alpha : 7;
+    uint32_t equation_rgb : 3;
+    uint32_t equation_alpha : 3;
+    uint32_t advanced : 8;
+    uint32_t overlap : 2;
+    uint32_t premultiplied : 1;
+    uint32_t normalized : 1;
 } LayerBlend;
 
 typedef struct {
@@ -331,21 +348,52 @@ typedef struct {
 
 typedef struct {
     uint32_t blend_enable : 8;
+    uint32_t logic_op : 4;
+    uint32_t alpha_func : 4;
 } LayerColor;
 
+// A face's stencil state: its function and what a failed stencil test, a failed depth test and
+// a pass do.
 typedef struct {
     uint32_t depth_test : 1;
     uint32_t depth_write : 1;
     uint32_t depth_func : 4;
+    uint32_t stencil_test : 1;
+    uint32_t front_func : 4;
+    uint32_t front_fail : 4;
+    uint32_t front_depth_fail : 4;
+    uint32_t front_pass : 4;
+    uint32_t back_func : 4;
+    uint32_t back_fail : 4;
+    uint32_t back_depth_fail : 4;
+    uint32_t back_pass : 4;
 } LayerDepthStencil;
 
+// The flags of a multisample state.
+#define MULTISAMPLE_ENABLE 0x01u
+#define MULTISAMPLE_ALPHA_TO_COVERAGE 0x02u
+#define MULTISAMPLE_DITHER 0x04u
+#define MULTISAMPLE_COVERAGE_TO_COLOR 0x08u
+#define MULTISAMPLE_LOCATIONS 0x10u
+#define MULTISAMPLE_GRID 0x20u
+#define MULTISAMPLE_TRUNCATION 0x40u
+#define MULTISAMPLE_LOCATIONS_MAX 16
+
 typedef struct {
-    uint32_t samples;
+    uint8_t samples;
+    uint8_t raster_samples;
+    uint8_t coverage_modulation;
+    uint8_t coverage_to_color_output;
+    uint8_t flags;
+    /// The sample locations, x in the low four bits and y in the high, sixteenths of a pixel.
+    uint8_t locations[MULTISAMPLE_LOCATIONS_MAX];
 } LayerMultisample;
 
 typedef struct {
     uint32_t cull : 2;
     uint32_t front : 1;
+    uint32_t mode : 2;
+    uint32_t offset : 3;
 } LayerPolygon;
 
 /// A builder keeps its textures themselves, as NVN's does: the program's list need not outlive

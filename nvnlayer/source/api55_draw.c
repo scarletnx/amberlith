@@ -669,12 +669,196 @@ void Nvnl_nvnCommandBufferSetSamplerPool(NVNcommandBuffer *cmd, const NVNsampler
 
 // ---- the state objects
 
+// A state object is a few bytes the program owns. A setter keeps what it is given when that is
+// one of NVN's numbers, and complains of any other, since the fields are as wide as NVN's
+// numbers are; a getter gives back what the setter took. What a state does to a draw is said
+// when it is bound.
+
+// NVN's numbers for these are the graphics unit's own, as deko3d's are: a bind hands them on.
+_Static_assert((int)NVN_BLEND_FUNC_ZERO == (int)DkBlendFactor_Zero &&
+                   (int)NVN_BLEND_FUNC_ONE_MINUS_SRC1_ALPHA == (int)DkBlendFactor_InvSrc1Alpha &&
+                   (int)NVN_BLEND_EQUATION_ADD == (int)DkBlendOp_Add &&
+                   (int)NVN_BLEND_EQUATION_MAX == (int)DkBlendOp_Max,
+               "NVN's blend functions and equations are deko3d's numbers");
+_Static_assert((int)NVN_LOGIC_OP_CLEAR == (int)DkLogicOp_Clear &&
+                   (int)NVN_LOGIC_OP_COPY == (int)DkLogicOp_Copy &&
+                   (int)NVN_LOGIC_OP_SET == (int)DkLogicOp_Set &&
+                   (int)NVN_ALPHA_FUNC_NEVER == (int)DkCompareOp_Never &&
+                   (int)NVN_ALPHA_FUNC_ALWAYS == (int)DkCompareOp_Always,
+               "NVN's logic operations and alpha functions are deko3d's numbers");
+_Static_assert((int)NVN_STENCIL_FUNC_NEVER == (int)DkCompareOp_Never &&
+                   (int)NVN_STENCIL_FUNC_ALWAYS == (int)DkCompareOp_Always &&
+                   (int)NVN_STENCIL_OP_KEEP == (int)DkStencilOp_Keep &&
+                   (int)NVN_STENCIL_OP_DECR_WRAP == (int)DkStencilOp_DecrWrap,
+               "NVN's stencil functions and operations are deko3d's numbers");
+_Static_assert((int)NVN_POLYGON_MODE_POINT == (int)DkPolygonMode_Point &&
+                   (int)NVN_POLYGON_MODE_FILL == (int)DkPolygonMode_Fill &&
+                   (int)NVN_POLYGON_OFFSET_ENABLE_POINT == (int)DkPolygonFlag_Point &&
+                   (int)NVN_POLYGON_OFFSET_ENABLE_FILL == (int)DkPolygonFlag_Fill &&
+                   (int)NVN_COVERAGE_MODULATION_MODE_RGBA == (int)DkCoverageModulation_Rgba,
+               "NVN's polygon modes, offset enables and coverage modulations are deko3d's numbers");
+
+/// Whether @p value is one of NVN's blend functions.
+static bool BlendFuncIs(int value) {
+    return (value >= NVN_BLEND_FUNC_ZERO && value <= NVN_BLEND_FUNC_SRC_ALPHA_SATURATE) ||
+           (value >= NVN_BLEND_FUNC_SRC1_COLOR && value <= NVN_BLEND_FUNC_ONE_MINUS_SRC1_ALPHA) ||
+           (value >= NVN_BLEND_FUNC_CONSTANT_COLOR &&
+            value <= NVN_BLEND_FUNC_ONE_MINUS_CONSTANT_ALPHA);
+}
+
 void Nvnl_nvnBlendStateSetDefaults(NVNblendState *state) {
-    // Target 0, the source's colour replacing the target's: all the layer has setters for yet.
+    // Target 0, the source replacing the target; the advanced mode off, with the premultiplied
+    // source and normalized destination ScarletNX has as a driver's.
     LayerBlend *const record = StateRecord(state, "nvnBlendStateSetDefaults");
     if (record != NULL) {
         memset(state, 0, sizeof(*state));
+        record->src_rgb = record->src_alpha = NVN_BLEND_FUNC_ONE;
+        record->dst_rgb = record->dst_alpha = NVN_BLEND_FUNC_ZERO;
+        record->equation_rgb = record->equation_alpha = NVN_BLEND_EQUATION_ADD;
+        record->premultiplied = 1;
+        record->normalized = 1;
     }
+}
+
+void Nvnl_nvnBlendStateSetBlendTarget(NVNblendState *state, int target) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetBlendTarget");
+    if (record == NULL) {
+        return;
+    }
+    if (target < 0 || target >= COLOR_TARGETS_MAX) {
+        LayerComplain("nvnBlendStateSetBlendTarget: target %d of %d", target, COLOR_TARGETS_MAX);
+        return;
+    }
+    record->target = (uint32_t)target;
+}
+
+void Nvnl_nvnBlendStateSetBlendFunc(NVNblendState *state, NVNblendFunc src_rgb,
+                                    NVNblendFunc dst_rgb, NVNblendFunc src_alpha,
+                                    NVNblendFunc dst_alpha) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetBlendFunc");
+    if (record == NULL) {
+        return;
+    }
+    if (!BlendFuncIs(src_rgb) || !BlendFuncIs(dst_rgb) || !BlendFuncIs(src_alpha) ||
+        !BlendFuncIs(dst_alpha)) {
+        LayerComplain("nvnBlendStateSetBlendFunc: functions 0x%x, 0x%x, 0x%x and 0x%x, of which "
+                      "one is none of NVN's",
+                      (unsigned)src_rgb, (unsigned)dst_rgb, (unsigned)src_alpha,
+                      (unsigned)dst_alpha);
+        return;
+    }
+    record->src_rgb = (uint32_t)src_rgb;
+    record->dst_rgb = (uint32_t)dst_rgb;
+    record->src_alpha = (uint32_t)src_alpha;
+    record->dst_alpha = (uint32_t)dst_alpha;
+}
+
+void Nvnl_nvnBlendStateSetBlendEquation(NVNblendState *state, NVNblendEquation rgb,
+                                        NVNblendEquation alpha) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetBlendEquation");
+    if (record == NULL) {
+        return;
+    }
+    if (rgb < NVN_BLEND_EQUATION_ADD || rgb > NVN_BLEND_EQUATION_MAX ||
+        alpha < NVN_BLEND_EQUATION_ADD || alpha > NVN_BLEND_EQUATION_MAX) {
+        LayerComplain("nvnBlendStateSetBlendEquation: equations %d and %d, of NVN's %d to %d",
+                      (int)rgb, (int)alpha, (int)NVN_BLEND_EQUATION_ADD,
+                      (int)NVN_BLEND_EQUATION_MAX);
+        return;
+    }
+    record->equation_rgb = (uint32_t)rgb;
+    record->equation_alpha = (uint32_t)alpha;
+}
+
+void Nvnl_nvnBlendStateSetAdvancedMode(NVNblendState *state, NVNblendAdvancedMode mode) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetAdvancedMode");
+    if (record == NULL) {
+        return;
+    }
+    if (mode < 0 || mode > 0xff) {
+        LayerComplain("nvnBlendStateSetAdvancedMode: mode 0x%x, past the byte NVN's modes fit",
+                      (unsigned)mode);
+        return;
+    }
+    record->advanced = (uint32_t)mode;
+}
+
+void Nvnl_nvnBlendStateSetAdvancedOverlap(NVNblendState *state,
+                                          NVNblendAdvancedOverlap overlap) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetAdvancedOverlap");
+    if (record == NULL) {
+        return;
+    }
+    if (overlap < NVN_BLEND_ADVANCED_OVERLAP_UNCORRELATED ||
+        overlap > NVN_BLEND_ADVANCED_OVERLAP_CONJOINT) {
+        LayerComplain("nvnBlendStateSetAdvancedOverlap: overlap %d, of NVN's %d to %d",
+                      (int)overlap, (int)NVN_BLEND_ADVANCED_OVERLAP_UNCORRELATED,
+                      (int)NVN_BLEND_ADVANCED_OVERLAP_CONJOINT);
+        return;
+    }
+    record->overlap = (uint32_t)overlap;
+}
+
+void Nvnl_nvnBlendStateSetAdvancedPremultipliedSrc(NVNblendState *state, NVNboolean on) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetAdvancedPremultipliedSrc");
+    if (record != NULL) {
+        record->premultiplied = on != 0;
+    }
+}
+
+void Nvnl_nvnBlendStateSetAdvancedNormalizedDst(NVNblendState *state, NVNboolean on) {
+    LayerBlend *const record = StateRecord(state, "nvnBlendStateSetAdvancedNormalizedDst");
+    if (record != NULL) {
+        record->normalized = on != 0;
+    }
+}
+
+int Nvnl_nvnBlendStateGetBlendTarget(const NVNblendState *state) {
+    const LayerBlend *const record = StateRecord(state, "nvnBlendStateGetBlendTarget");
+    return record != NULL ? (int)record->target : 0;
+}
+
+void Nvnl_nvnBlendStateGetBlendFunc(const NVNblendState *state, NVNblendFunc *src_rgb,
+                                    NVNblendFunc *dst_rgb, NVNblendFunc *src_alpha,
+                                    NVNblendFunc *dst_alpha) {
+    const LayerBlend *const record = StateRecord(state, "nvnBlendStateGetBlendFunc");
+    if (record != NULL) {
+        *src_rgb = (NVNblendFunc)record->src_rgb;
+        *dst_rgb = (NVNblendFunc)record->dst_rgb;
+        *src_alpha = (NVNblendFunc)record->src_alpha;
+        *dst_alpha = (NVNblendFunc)record->dst_alpha;
+    }
+}
+
+void Nvnl_nvnBlendStateGetBlendEquation(const NVNblendState *state, NVNblendEquation *rgb,
+                                        NVNblendEquation *alpha) {
+    const LayerBlend *const record = StateRecord(state, "nvnBlendStateGetBlendEquation");
+    if (record != NULL) {
+        *rgb = (NVNblendEquation)record->equation_rgb;
+        *alpha = (NVNblendEquation)record->equation_alpha;
+    }
+}
+
+NVNblendAdvancedMode Nvnl_nvnBlendStateGetAdvancedMode(const NVNblendState *state) {
+    const LayerBlend *const record = StateRecord(state, "nvnBlendStateGetAdvancedMode");
+    return record != NULL ? (NVNblendAdvancedMode)record->advanced : NVN_BLEND_ADVANCED_MODE_NONE;
+}
+
+NVNblendAdvancedOverlap Nvnl_nvnBlendStateGetAdvancedOverlap(const NVNblendState *state) {
+    const LayerBlend *const record = StateRecord(state, "nvnBlendStateGetAdvancedOverlap");
+    return record != NULL ? (NVNblendAdvancedOverlap)record->overlap
+                          : NVN_BLEND_ADVANCED_OVERLAP_UNCORRELATED;
+}
+
+NVNboolean Nvnl_nvnBlendStateGetAdvancedPremultipliedSrc(const NVNblendState *state) {
+    const LayerBlend *const record =
+        StateRecord(state, "nvnBlendStateGetAdvancedPremultipliedSrc");
+    return record != NULL && record->premultiplied != 0;
+}
+
+NVNboolean Nvnl_nvnBlendStateGetAdvancedNormalizedDst(const NVNblendState *state) {
+    const LayerBlend *const record = StateRecord(state, "nvnBlendStateGetAdvancedNormalizedDst");
+    return record != NULL && record->normalized != 0;
 }
 
 void Nvnl_nvnChannelMaskStateSetDefaults(NVNchannelMaskState *state) {
@@ -684,21 +868,116 @@ void Nvnl_nvnChannelMaskStateSetDefaults(NVNchannelMaskState *state) {
     }
 }
 
+void Nvnl_nvnChannelMaskStateSetChannelMask(NVNchannelMaskState *state, int target,
+                                            NVNboolean r, NVNboolean g, NVNboolean b,
+                                            NVNboolean a) {
+    LayerChannelMask *const record = StateRecord(state, "nvnChannelMaskStateSetChannelMask");
+    if (record == NULL) {
+        return;
+    }
+    if (target < 0 || target >= COLOR_TARGETS_MAX) {
+        LayerComplain("nvnChannelMaskStateSetChannelMask: target %d of %d", target,
+                      COLOR_TARGETS_MAX);
+        return;
+    }
+    // Four bits a target, red the lowest: deko3d's mask, and the graphics unit's.
+    const uint32_t mask = (r ? 1u : 0u) | (g ? 2u : 0u) | (b ? 4u : 0u) | (a ? 8u : 0u);
+    record->masks = (record->masks & ~(0xfu << (4 * target))) | mask << (4 * target);
+}
+
+void Nvnl_nvnChannelMaskStateGetChannelMask(const NVNchannelMaskState *state, int target,
+                                            NVNboolean *r, NVNboolean *g, NVNboolean *b,
+                                            NVNboolean *a) {
+    const LayerChannelMask *const record =
+        StateRecord(state, "nvnChannelMaskStateGetChannelMask");
+    if (record == NULL) {
+        return;
+    }
+    const uint32_t mask =
+        target >= 0 && target < COLOR_TARGETS_MAX ? record->masks >> (4 * target) : 0u;
+    *r = (mask & 1u) != 0u;
+    *g = (mask & 2u) != 0u;
+    *b = (mask & 4u) != 0u;
+    *a = (mask & 8u) != 0u;
+}
+
 void Nvnl_nvnColorStateSetDefaults(NVNcolorState *state) {
+    // No target blends, the colour written as it is, every alpha passes.
     LayerColor *const record = StateRecord(state, "nvnColorStateSetDefaults");
     if (record != NULL) {
-        memset(state, 0, sizeof(*state)); // no target blends
+        memset(state, 0, sizeof(*state));
+        record->logic_op = NVN_LOGIC_OP_COPY;
+        record->alpha_func = NVN_ALPHA_FUNC_ALWAYS;
     }
 }
 
+void Nvnl_nvnColorStateSetBlendEnable(NVNcolorState *state, int target, NVNboolean enable) {
+    LayerColor *const record = StateRecord(state, "nvnColorStateSetBlendEnable");
+    if (record == NULL) {
+        return;
+    }
+    if (target < 0 || target >= COLOR_TARGETS_MAX) {
+        LayerComplain("nvnColorStateSetBlendEnable: target %d of %d", target, COLOR_TARGETS_MAX);
+        return;
+    }
+    const uint32_t bit = 1u << target;
+    record->blend_enable = enable ? record->blend_enable | bit : record->blend_enable & ~bit;
+}
+
+void Nvnl_nvnColorStateSetLogicOp(NVNcolorState *state, NVNlogicOp op) {
+    LayerColor *const record = StateRecord(state, "nvnColorStateSetLogicOp");
+    if (record == NULL) {
+        return;
+    }
+    if (op < NVN_LOGIC_OP_CLEAR || op > NVN_LOGIC_OP_SET) {
+        LayerComplain("nvnColorStateSetLogicOp: operation %d, of NVN's %d to %d", (int)op,
+                      (int)NVN_LOGIC_OP_CLEAR, (int)NVN_LOGIC_OP_SET);
+        return;
+    }
+    record->logic_op = (uint32_t)op;
+}
+
+void Nvnl_nvnColorStateSetAlphaTest(NVNcolorState *state, NVNalphaFunc func) {
+    LayerColor *const record = StateRecord(state, "nvnColorStateSetAlphaTest");
+    if (record == NULL) {
+        return;
+    }
+    if (func < NVN_ALPHA_FUNC_NEVER || func > NVN_ALPHA_FUNC_ALWAYS) {
+        LayerComplain("nvnColorStateSetAlphaTest: function %d, of NVN's %d to %d", (int)func,
+                      (int)NVN_ALPHA_FUNC_NEVER, (int)NVN_ALPHA_FUNC_ALWAYS);
+        return;
+    }
+    record->alpha_func = (uint32_t)func;
+}
+
+NVNboolean Nvnl_nvnColorStateGetBlendEnable(const NVNcolorState *state, int target) {
+    const LayerColor *const record = StateRecord(state, "nvnColorStateGetBlendEnable");
+    return record != NULL && target >= 0 && target < COLOR_TARGETS_MAX &&
+           (record->blend_enable >> target & 1u) != 0u;
+}
+
+NVNlogicOp Nvnl_nvnColorStateGetLogicOp(const NVNcolorState *state) {
+    const LayerColor *const record = StateRecord(state, "nvnColorStateGetLogicOp");
+    return record != NULL ? (NVNlogicOp)record->logic_op : NVN_LOGIC_OP_COPY;
+}
+
+NVNalphaFunc Nvnl_nvnColorStateGetAlphaTest(const NVNcolorState *state) {
+    const LayerColor *const record = StateRecord(state, "nvnColorStateGetAlphaTest");
+    return record != NULL ? (NVNalphaFunc)record->alpha_func : NVN_ALPHA_FUNC_ALWAYS;
+}
+
 void Nvnl_nvnDepthStencilStateSetDefaults(NVNdepthStencilState *state) {
-    // No depth test, depth written, less: a program sets the ones it relies on, as it cannot
-    // ask what a driver's defaults are.
+    // No depth test, depth written, less; no stencil test, every stencil function passing and
+    // every operation keeping. A program sets the ones it relies on, as it cannot ask what a
+    // driver's defaults are.
     LayerDepthStencil *const record = StateRecord(state, "nvnDepthStencilStateSetDefaults");
     if (record != NULL) {
         memset(state, 0, sizeof(*state));
         record->depth_write = 1;
         record->depth_func = NVN_DEPTH_FUNC_LESS;
+        record->front_func = record->back_func = NVN_STENCIL_FUNC_ALWAYS;
+        record->front_fail = record->front_depth_fail = record->front_pass = NVN_STENCIL_OP_KEEP;
+        record->back_fail = record->back_depth_fail = record->back_pass = NVN_STENCIL_OP_KEEP;
     }
 }
 
@@ -733,20 +1012,306 @@ void Nvnl_nvnDepthStencilStateSetDepthFunc(NVNdepthStencilState *state, NVNdepth
     record->depth_func = (uint32_t)func;
 }
 
+void Nvnl_nvnDepthStencilStateSetStencilTestEnable(NVNdepthStencilState *state,
+                                                   NVNboolean enable) {
+    LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateSetStencilTestEnable");
+    if (record != NULL) {
+        record->stencil_test = enable != 0;
+    }
+}
+
+void Nvnl_nvnDepthStencilStateSetStencilFunc(NVNdepthStencilState *state, NVNface faces,
+                                             NVNstencilFunc func) {
+    LayerDepthStencil *const record = StateRecord(state, "nvnDepthStencilStateSetStencilFunc");
+    if (record == NULL) {
+        return;
+    }
+    if (faces < NVN_FACE_NONE || faces > NVN_FACE_FRONT_AND_BACK || func < NVN_STENCIL_FUNC_NEVER ||
+        func > NVN_STENCIL_FUNC_ALWAYS) {
+        LayerComplain("nvnDepthStencilStateSetStencilFunc: function %d for faces %d, of NVN's "
+                      "functions %d to %d and faces %d to %d",
+                      (int)func, (int)faces, (int)NVN_STENCIL_FUNC_NEVER,
+                      (int)NVN_STENCIL_FUNC_ALWAYS, (int)NVN_FACE_NONE,
+                      (int)NVN_FACE_FRONT_AND_BACK);
+        return;
+    }
+    if ((faces & NVN_FACE_FRONT) != 0) {
+        record->front_func = (uint32_t)func;
+    }
+    if ((faces & NVN_FACE_BACK) != 0) {
+        record->back_func = (uint32_t)func;
+    }
+}
+
+static bool StencilOpIs(NVNstencilOp op) {
+    return op >= NVN_STENCIL_OP_KEEP && op <= NVN_STENCIL_OP_DECR_WRAP;
+}
+
+void Nvnl_nvnDepthStencilStateSetStencilOp(NVNdepthStencilState *state, NVNface faces,
+                                           NVNstencilOp fail, NVNstencilOp depth_fail,
+                                           NVNstencilOp pass) {
+    LayerDepthStencil *const record = StateRecord(state, "nvnDepthStencilStateSetStencilOp");
+    if (record == NULL) {
+        return;
+    }
+    if (faces < NVN_FACE_NONE || faces > NVN_FACE_FRONT_AND_BACK || !StencilOpIs(fail) ||
+        !StencilOpIs(depth_fail) || !StencilOpIs(pass)) {
+        LayerComplain("nvnDepthStencilStateSetStencilOp: operations %d, %d and %d for faces %d, "
+                      "of NVN's operations %d to %d and faces %d to %d",
+                      (int)fail, (int)depth_fail, (int)pass, (int)faces, (int)NVN_STENCIL_OP_KEEP,
+                      (int)NVN_STENCIL_OP_DECR_WRAP, (int)NVN_FACE_NONE,
+                      (int)NVN_FACE_FRONT_AND_BACK);
+        return;
+    }
+    if ((faces & NVN_FACE_FRONT) != 0) {
+        record->front_fail = (uint32_t)fail;
+        record->front_depth_fail = (uint32_t)depth_fail;
+        record->front_pass = (uint32_t)pass;
+    }
+    if ((faces & NVN_FACE_BACK) != 0) {
+        record->back_fail = (uint32_t)fail;
+        record->back_depth_fail = (uint32_t)depth_fail;
+        record->back_pass = (uint32_t)pass;
+    }
+}
+
+NVNboolean Nvnl_nvnDepthStencilStateGetDepthTestEnable(const NVNdepthStencilState *state) {
+    const LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateGetDepthTestEnable");
+    return record != NULL && record->depth_test != 0;
+}
+
+NVNboolean Nvnl_nvnDepthStencilStateGetDepthWriteEnable(const NVNdepthStencilState *state) {
+    const LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateGetDepthWriteEnable");
+    return record != NULL && record->depth_write != 0;
+}
+
+NVNdepthFunc Nvnl_nvnDepthStencilStateGetDepthFunc(const NVNdepthStencilState *state) {
+    const LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateGetDepthFunc");
+    return record != NULL ? (NVNdepthFunc)record->depth_func : NVN_DEPTH_FUNC_LESS;
+}
+
+NVNboolean Nvnl_nvnDepthStencilStateGetStencilTestEnable(const NVNdepthStencilState *state) {
+    const LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateGetStencilTestEnable");
+    return record != NULL && record->stencil_test != 0;
+}
+
+// A face's stencil state is the back's for NVN_FACE_BACK and the front's for any other face.
+
+NVNstencilFunc Nvnl_nvnDepthStencilStateGetStencilFunc(const NVNdepthStencilState *state,
+                                                       NVNface face) {
+    const LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateGetStencilFunc");
+    if (record == NULL) {
+        return NVN_STENCIL_FUNC_ALWAYS;
+    }
+    return (NVNstencilFunc)(face == NVN_FACE_BACK ? record->back_func : record->front_func);
+}
+
+void Nvnl_nvnDepthStencilStateGetStencilOp(const NVNdepthStencilState *state, NVNface face,
+                                           NVNstencilOp *fail, NVNstencilOp *depth_fail,
+                                           NVNstencilOp *pass) {
+    const LayerDepthStencil *const record =
+        StateRecord(state, "nvnDepthStencilStateGetStencilOp");
+    if (record == NULL) {
+        return;
+    }
+    const bool back = face == NVN_FACE_BACK;
+    *fail = (NVNstencilOp)(back ? record->back_fail : record->front_fail);
+    *depth_fail = (NVNstencilOp)(back ? record->back_depth_fail : record->front_depth_fail);
+    *pass = (NVNstencilOp)(back ? record->back_pass : record->front_pass);
+}
+
 void Nvnl_nvnMultisampleStateSetDefaults(NVNmultisampleState *state) {
     LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateSetDefaults");
     if (record != NULL) {
-        memset(state, 0, sizeof(*state)); // one sample
+        memset(state, 0, sizeof(*state)); // one sample, nothing of the rest on
+    }
+}
+
+/// Whether @p count is a number of samples a target can have, nought being none set.
+static bool SamplesIs(int count) {
+    return count == 0 || count == 1 || count == 2 || count == 4 || count == 8 || count == 16;
+}
+
+void Nvnl_nvnMultisampleStateSetSamples(NVNmultisampleState *state, int samples) {
+    LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateSetSamples");
+    if (record == NULL) {
+        return;
+    }
+    if (!SamplesIs(samples)) {
+        LayerComplain("nvnMultisampleStateSetSamples: %d samples, of 0, 1, 2, 4, 8 and 16",
+                      samples);
+        return;
+    }
+    record->samples = (uint8_t)samples;
+}
+
+void Nvnl_nvnMultisampleStateSetRasterSamples(NVNmultisampleState *state, int samples) {
+    LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateSetRasterSamples");
+    if (record == NULL) {
+        return;
+    }
+    if (!SamplesIs(samples) || samples == 1) {
+        LayerComplain("nvnMultisampleStateSetRasterSamples: %d raster samples, of 0, 2, 4, 8 and "
+                      "16",
+                      samples);
+        return;
+    }
+    record->raster_samples = (uint8_t)samples;
+}
+
+void Nvnl_nvnMultisampleStateSetCoverageToColorOutput(NVNmultisampleState *state, int output) {
+    LayerMultisample *const record =
+        StateRecord(state, "nvnMultisampleStateSetCoverageToColorOutput");
+    if (record == NULL) {
+        return;
+    }
+    if (output < 0 || output >= COLOR_TARGETS_MAX) {
+        LayerComplain("nvnMultisampleStateSetCoverageToColorOutput: output %d of %d", output,
+                      COLOR_TARGETS_MAX);
+        return;
+    }
+    record->coverage_to_color_output = (uint8_t)output;
+}
+
+void Nvnl_nvnMultisampleStateSetCoverageModulationMode(NVNmultisampleState *state,
+                                                       NVNcoverageModulationMode mode) {
+    LayerMultisample *const record =
+        StateRecord(state, "nvnMultisampleStateSetCoverageModulationMode");
+    if (record == NULL) {
+        return;
+    }
+    if (mode < NVN_COVERAGE_MODULATION_MODE_NONE || mode > NVN_COVERAGE_MODULATION_MODE_RGBA) {
+        LayerComplain("nvnMultisampleStateSetCoverageModulationMode: mode %d, of NVN's %d to %d",
+                      (int)mode, (int)NVN_COVERAGE_MODULATION_MODE_NONE,
+                      (int)NVN_COVERAGE_MODULATION_MODE_RGBA);
+        return;
+    }
+    record->coverage_modulation = (uint8_t)mode;
+}
+
+int Nvnl_nvnMultisampleStateGetSamples(const NVNmultisampleState *state) {
+    const LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateGetSamples");
+    return record != NULL ? record->samples : 0;
+}
+
+int Nvnl_nvnMultisampleStateGetRasterSamples(const NVNmultisampleState *state) {
+    const LayerMultisample *const record =
+        StateRecord(state, "nvnMultisampleStateGetRasterSamples");
+    return record != NULL ? record->raster_samples : 0;
+}
+
+int Nvnl_nvnMultisampleStateGetCoverageToColorOutput(const NVNmultisampleState *state) {
+    const LayerMultisample *const record =
+        StateRecord(state, "nvnMultisampleStateGetCoverageToColorOutput");
+    return record != NULL ? record->coverage_to_color_output : 0;
+}
+
+NVNcoverageModulationMode
+Nvnl_nvnMultisampleStateGetCoverageModulationMode(const NVNmultisampleState *state) {
+    const LayerMultisample *const record =
+        StateRecord(state, "nvnMultisampleStateGetCoverageModulationMode");
+    return record != NULL ? (NVNcoverageModulationMode)record->coverage_modulation
+                          : NVN_COVERAGE_MODULATION_MODE_NONE;
+}
+
+// The switches of a multisample state, each a flag.
+#define MULTISAMPLE_FLAG(name, parameter, flag)                                                   \
+    void Nvnl_nvnMultisampleStateSet##name(NVNmultisampleState *state, NVNboolean parameter) {    \
+        LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateSet" #name);      \
+        if (record != NULL) {                                                                     \
+            record->flags = (uint8_t)(parameter ? record->flags | (flag)                          \
+                                                : record->flags & ~(flag));                       \
+        }                                                                                         \
+    }                                                                                             \
+    NVNboolean Nvnl_nvnMultisampleStateGet##name(const NVNmultisampleState *state) {              \
+        const LayerMultisample *const record =                                                    \
+            StateRecord(state, "nvnMultisampleStateGet" #name);                                   \
+        return record != NULL && (record->flags & (flag)) != 0u;                                  \
+    }
+MULTISAMPLE_FLAG(MultisampleEnable, enable, MULTISAMPLE_ENABLE)
+MULTISAMPLE_FLAG(AlphaToCoverageEnable, enable, MULTISAMPLE_ALPHA_TO_COVERAGE)
+MULTISAMPLE_FLAG(AlphaToCoverageDither, on, MULTISAMPLE_DITHER)
+MULTISAMPLE_FLAG(CoverageToColorEnable, on, MULTISAMPLE_COVERAGE_TO_COLOR)
+MULTISAMPLE_FLAG(CoverageTruncationEnable, on, MULTISAMPLE_TRUNCATION)
+MULTISAMPLE_FLAG(SampleLocationsEnable, on, MULTISAMPLE_LOCATIONS)
+MULTISAMPLE_FLAG(SampleLocationsGridEnable, on, MULTISAMPLE_GRID)
+#undef MULTISAMPLE_FLAG
+
+void Nvnl_nvnMultisampleStateSetSampleLocations(NVNmultisampleState *state, int first, int count,
+                                                const float *xy) {
+    LayerMultisample *const record = StateRecord(state, "nvnMultisampleStateSetSampleLocations");
+    if (record == NULL) {
+        return;
+    }
+    if (first < 0 || count < 0 || first > MULTISAMPLE_LOCATIONS_MAX ||
+        count > MULTISAMPLE_LOCATIONS_MAX - first || (count != 0 && xy == NULL)) {
+        LayerComplain("nvnMultisampleStateSetSampleLocations: %d locations from %d, of %d", count,
+                      first, MULTISAMPLE_LOCATIONS_MAX);
+        return;
+    }
+    for (int i = 0; i < count; ++i) {
+        // Sixteenths of a pixel, the nearest, kept inside the pixel.
+        uint8_t packed = 0;
+        for (int axis = 0; axis < 2; ++axis) {
+            const float at = xy[2 * i + axis] >= 0.0f ? xy[2 * i + axis] : 0.0f;
+            const uint8_t step = at < 0.9375f ? (uint8_t)(at * 16.0f + 0.5f) : 15u;
+            packed |= (uint8_t)(step << (4 * axis));
+        }
+        record->locations[first + i] = packed;
+    }
+}
+
+void Nvnl_nvnMultisampleStateGetSampleLocationsGrid(NVNmultisampleState *state, int *width,
+                                                    int *height) {
+    // The pixels sixteen sample locations cover, by the greater of the samples and the raster
+    // samples: ScarletNX's answer for a driver, kept the same here.
+    const LayerMultisample *const record =
+        StateRecord(state, "nvnMultisampleStateGetSampleLocationsGrid");
+    if (record == NULL) {
+        return;
+    }
+    const int samples =
+        record->samples > record->raster_samples ? record->samples : record->raster_samples;
+    switch (samples) {
+    case 0:
+    case 1:
+        *width = 4;
+        *height = 4;
+        break;
+    case 2:
+        *width = 2;
+        *height = 4;
+        break;
+    case 4:
+        *width = 2;
+        *height = 2;
+        break;
+    case 8:
+        *width = 1;
+        *height = 2;
+        break;
+    default:
+        *width = 1;
+        *height = 1;
+        break;
     }
 }
 
 void Nvnl_nvnPolygonStateSetDefaults(NVNpolygonState *state) {
-    // Nothing culled, counterclockwise in front, filled; a program sets the ones it relies on.
+    // Nothing culled, counterclockwise in front, filled, no offset; a program sets the ones it
+    // relies on.
     LayerPolygon *const record = StateRecord(state, "nvnPolygonStateSetDefaults");
     if (record != NULL) {
         memset(state, 0, sizeof(*state));
         record->cull = NVN_FACE_NONE;
         record->front = NVN_FRONT_FACE_CCW;
+        record->mode = NVN_POLYGON_MODE_FILL;
     }
 }
 
@@ -775,6 +1340,56 @@ void Nvnl_nvnPolygonStateSetFrontFace(NVNpolygonState *state, NVNfrontFace face)
         return;
     }
     record->front = (uint32_t)face;
+}
+
+void Nvnl_nvnPolygonStateSetPolygonMode(NVNpolygonState *state, NVNpolygonMode mode) {
+    LayerPolygon *const record = StateRecord(state, "nvnPolygonStateSetPolygonMode");
+    if (record == NULL) {
+        return;
+    }
+    if (mode < NVN_POLYGON_MODE_POINT || mode > NVN_POLYGON_MODE_FILL) {
+        LayerComplain("nvnPolygonStateSetPolygonMode: mode %d, of NVN's %d to %d", (int)mode,
+                      (int)NVN_POLYGON_MODE_POINT, (int)NVN_POLYGON_MODE_FILL);
+        return;
+    }
+    record->mode = (uint32_t)mode;
+}
+
+void Nvnl_nvnPolygonStateSetPolygonOffsetEnables(NVNpolygonState *state, int enables) {
+    LayerPolygon *const record = StateRecord(state, "nvnPolygonStateSetPolygonOffsetEnables");
+    if (record == NULL) {
+        return;
+    }
+    const int all = NVN_POLYGON_OFFSET_ENABLE_POINT | NVN_POLYGON_OFFSET_ENABLE_LINE |
+                    NVN_POLYGON_OFFSET_ENABLE_FILL;
+    if ((enables & ~all) != 0) {
+        LayerComplain("nvnPolygonStateSetPolygonOffsetEnables: enables 0x%x, of the bits 0x%x",
+                      (unsigned)enables, (unsigned)all);
+        return;
+    }
+    record->offset = (uint32_t)enables;
+}
+
+NVNface Nvnl_nvnPolygonStateGetCullFace(const NVNpolygonState *state) {
+    const LayerPolygon *const record = StateRecord(state, "nvnPolygonStateGetCullFace");
+    return record != NULL ? (NVNface)record->cull : NVN_FACE_NONE;
+}
+
+NVNfrontFace Nvnl_nvnPolygonStateGetFrontFace(const NVNpolygonState *state) {
+    const LayerPolygon *const record = StateRecord(state, "nvnPolygonStateGetFrontFace");
+    return record != NULL ? (NVNfrontFace)record->front : NVN_FRONT_FACE_CCW;
+}
+
+NVNpolygonMode Nvnl_nvnPolygonStateGetPolygonMode(const NVNpolygonState *state) {
+    const LayerPolygon *const record = StateRecord(state, "nvnPolygonStateGetPolygonMode");
+    return record != NULL ? (NVNpolygonMode)record->mode : NVN_POLYGON_MODE_FILL;
+}
+
+NVNpolygonOffsetEnable Nvnl_nvnPolygonStateGetPolygonOffsetEnables(const NVNpolygonState *state) {
+    const LayerPolygon *const record =
+        StateRecord(state, "nvnPolygonStateGetPolygonOffsetEnables");
+    return record != NULL ? (NVNpolygonOffsetEnable)record->offset
+                          : NVN_POLYGON_OFFSET_ENABLE_NONE;
 }
 
 void Nvnl_nvnVertexAttribStateSetDefaults(NVNvertexAttribState *state) {
@@ -833,7 +1448,61 @@ void Nvnl_nvnVertexStreamStateSetStride(NVNvertexStreamState *state, ptrdiff_t s
     record->stride = (uint32_t)stride;
 }
 
+void Nvnl_nvnVertexAttribStateGetFormat(const NVNvertexAttribState *state, NVNformat *format,
+                                        ptrdiff_t *offset) {
+    const LayerVertexAttrib *const record = StateRecord(state, "nvnVertexAttribStateGetFormat");
+    if (record != NULL) {
+        *format = (NVNformat)record->format;
+        *offset = (ptrdiff_t)record->offset;
+    }
+}
+
+int Nvnl_nvnVertexAttribStateGetStreamIndex(const NVNvertexAttribState *state) {
+    const LayerVertexAttrib *const record =
+        StateRecord(state, "nvnVertexAttribStateGetStreamIndex");
+    return record != NULL ? (int)record->stream : 0;
+}
+
+void Nvnl_nvnVertexStreamStateSetDivisor(NVNvertexStreamState *state, int divisor) {
+    LayerVertexStream *const record = StateRecord(state, "nvnVertexStreamStateSetDivisor");
+    if (record == NULL) {
+        return;
+    }
+    if (divisor < 0) {
+        LayerComplain("nvnVertexStreamStateSetDivisor: a divisor of %d", divisor);
+        return;
+    }
+    record->divisor = (uint32_t)divisor;
+}
+
+ptrdiff_t Nvnl_nvnVertexStreamStateGetStride(const NVNvertexStreamState *state) {
+    const LayerVertexStream *const record = StateRecord(state, "nvnVertexStreamStateGetStride");
+    return record != NULL ? (ptrdiff_t)record->stride : 0;
+}
+
+int Nvnl_nvnVertexStreamStateGetDivisor(const NVNvertexStreamState *state) {
+    const LayerVertexStream *const record = StateRecord(state, "nvnVertexStreamStateGetDivisor");
+    return record != NULL ? (int)record->divisor : 0;
+}
+
 // ---- the binds
+
+/// deko3d's blend factor for one of NVN's functions: the same number, but for the four of the
+/// constant colour, which deko3d numbers apart.
+static DkBlendFactor FactorOf(uint32_t func) {
+    switch (func) {
+    case NVN_BLEND_FUNC_CONSTANT_COLOR:
+        return DkBlendFactor_ConstColor;
+    case NVN_BLEND_FUNC_ONE_MINUS_CONSTANT_COLOR:
+        return DkBlendFactor_InvConstColor;
+    case NVN_BLEND_FUNC_CONSTANT_ALPHA:
+        return DkBlendFactor_ConstAlpha;
+    case NVN_BLEND_FUNC_ONE_MINUS_CONSTANT_ALPHA:
+        return DkBlendFactor_InvConstAlpha;
+    default:
+        return (DkBlendFactor)func;
+    }
+}
 
 void Nvnl_nvnCommandBufferBindBlendState(NVNcommandBuffer *cmd, const NVNblendState *state) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindBlendState");
@@ -841,12 +1510,20 @@ void Nvnl_nvnCommandBufferBindBlendState(NVNcommandBuffer *cmd, const NVNblendSt
     if (record == NULL || from == NULL) {
         return;
     }
+    if (from->advanced != NVN_BLEND_ADVANCED_MODE_NONE) {
+        LayerComplain("nvnCommandBufferBindBlendState: advanced blend mode 0x%x, and deko3d "
+                      "blends with functions and equations alone (mode 0x%x)",
+                      (unsigned)from->advanced, (unsigned)NVN_BLEND_ADVANCED_MODE_NONE);
+        return;
+    }
     DkBlendState blend;
     dkBlendStateDefaults(&blend);
-    blend.srcColorBlendFactor = DkBlendFactor_One;
-    blend.dstColorBlendFactor = DkBlendFactor_Zero;
-    blend.srcAlphaBlendFactor = DkBlendFactor_One;
-    blend.dstAlphaBlendFactor = DkBlendFactor_Zero;
+    blend.colorBlendOp = (DkBlendOp)from->equation_rgb;
+    blend.alphaBlendOp = (DkBlendOp)from->equation_alpha;
+    blend.srcColorBlendFactor = FactorOf(from->src_rgb);
+    blend.dstColorBlendFactor = FactorOf(from->dst_rgb);
+    blend.srcAlphaBlendFactor = FactorOf(from->src_alpha);
+    blend.dstAlphaBlendFactor = FactorOf(from->dst_alpha);
     dkCmdBufBindBlendStates(record->cmdbuf, from->target, &blend, 1);
 }
 
@@ -871,6 +1548,8 @@ void Nvnl_nvnCommandBufferBindColorState(NVNcommandBuffer *cmd, const NVNcolorSt
     DkColorState color;
     dkColorStateDefaults(&color);
     color.blendEnableMask = from->blend_enable;
+    color.logicOp = (DkLogicOp)from->logic_op;
+    color.alphaCompareOp = (DkCompareOp)from->alpha_func;
     dkCmdBufBindColorState(record->cmdbuf, &color);
 }
 
@@ -886,20 +1565,73 @@ void Nvnl_nvnCommandBufferBindDepthStencilState(NVNcommandBuffer *cmd,
     dkDepthStencilStateDefaults(&depth);
     depth.depthTestEnable = from->depth_test;
     depth.depthWriteEnable = from->depth_write;
-    depth.stencilTestEnable = false;
+    depth.stencilTestEnable = from->stencil_test;
     // NVN's depth functions are the graphics unit's, as deko3d's are: never 1 to always 8.
     depth.depthCompareOp = (DkCompareOp)from->depth_func;
+    depth.stencilFrontCompareOp = (DkCompareOp)from->front_func;
+    depth.stencilFrontFailOp = (DkStencilOp)from->front_fail;
+    depth.stencilFrontDepthFailOp = (DkStencilOp)from->front_depth_fail;
+    depth.stencilFrontPassOp = (DkStencilOp)from->front_pass;
+    depth.stencilBackCompareOp = (DkCompareOp)from->back_func;
+    depth.stencilBackFailOp = (DkStencilOp)from->back_fail;
+    depth.stencilBackDepthFailOp = (DkStencilOp)from->back_depth_fail;
+    depth.stencilBackPassOp = (DkStencilOp)from->back_pass;
     dkCmdBufBindDepthStencilState(record->cmdbuf, &depth);
+}
+
+/// deko3d's mode for a number of samples, or false for sixteen, which it has none for.
+static bool MsModeOf(uint8_t samples, DkMsMode *mode) {
+    switch (samples) {
+    case 0:
+    case 1:
+        *mode = DkMsMode_1x;
+        return true;
+    case 2:
+        *mode = DkMsMode_2x;
+        return true;
+    case 4:
+        *mode = DkMsMode_4x;
+        return true;
+    case 8:
+        *mode = DkMsMode_8x;
+        return true;
+    default:
+        return false;
+    }
 }
 
 void Nvnl_nvnCommandBufferBindMultisampleState(NVNcommandBuffer *cmd,
                                                const NVNmultisampleState *state) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindMultisampleState");
-    if (record == NULL || StateRecord(state, "nvnCommandBufferBindMultisampleState") == NULL) {
+    const LayerMultisample *const from =
+        StateRecord(state, "nvnCommandBufferBindMultisampleState");
+    if (record == NULL || from == NULL) {
         return;
     }
     DkMultisampleState multisample;
     dkMultisampleStateDefaults(&multisample);
+    DkMsMode mode = DkMsMode_1x, raster = DkMsMode_1x;
+    const uint8_t undrawn = MULTISAMPLE_LOCATIONS | MULTISAMPLE_GRID | MULTISAMPLE_TRUNCATION;
+    if (!MsModeOf(from->samples, &mode) ||
+        !MsModeOf(from->raster_samples != 0 ? from->raster_samples : from->samples, &raster) ||
+        (from->flags & undrawn) != 0u) {
+        LayerComplain("nvnCommandBufferBindMultisampleState: %u samples, %u raster samples and "
+                      "flags 0x%x, where the layer draws with 1, 2, 4 or 8 samples and none of "
+                      "the sample locations and coverage truncation flags (0x%x)",
+                      (unsigned)from->samples, (unsigned)from->raster_samples,
+                      (unsigned)from->flags, (unsigned)undrawn);
+        return;
+    }
+    // A state that does not enable multisampling draws one sample, whatever its count.
+    if ((from->flags & MULTISAMPLE_ENABLE) != 0u) {
+        multisample.mode = mode;
+        multisample.rasterizerMode = raster;
+    }
+    multisample.alphaToCoverageEnable = (from->flags & MULTISAMPLE_ALPHA_TO_COVERAGE) != 0u;
+    multisample.alphaToCoverageDither = (from->flags & MULTISAMPLE_DITHER) != 0u;
+    multisample.coverageToColorEnable = (from->flags & MULTISAMPLE_COVERAGE_TO_COLOR) != 0u;
+    multisample.coverageToColorOutput = from->coverage_to_color_output;
+    multisample.coverageModulation = (DkCoverageModulation)from->coverage_modulation;
     dkCmdBufBindMultisampleState(record->cmdbuf, &multisample);
 }
 
@@ -911,6 +1643,9 @@ void Nvnl_nvnCommandBufferBindPolygonState(NVNcommandBuffer *cmd, const NVNpolyg
     }
     record->draw->dynamic.cull = (uint8_t)from->cull;
     record->draw->dynamic.front = (uint8_t)from->front;
+    record->draw->dynamic.mode = (uint8_t)from->mode;
+    record->draw->dynamic.offset = (uint8_t)from->offset;
+    record->draw->dynamic.polygon = true;
     LayerBindRasterizer(record);
 }
 

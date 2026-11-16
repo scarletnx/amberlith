@@ -16,8 +16,8 @@
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
 ///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING,
-///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE, NVN_LAYER_PROCS_DEBUG and
-///   NVN_LAYER_PROCS_OBJECT, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
+///   NVN_LAYER_PROCS_CLEAR, NVN_LAYER_PROCS_STATE, NVN_LAYER_PROCS_DEBUG, NVN_LAYER_PROCS_OBJECT
+///   and NVN_LAYER_PROCS_STATE_OBJECTS, parts of it written apart) and NVN_LAYER_PROCS_DRAW: both API
 ///   versions have them. The API 55
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231 and
@@ -450,6 +450,113 @@
     X(void, nvnProgramBuilderSetProgramRayTracingFlags, (NVNprogramBuilder * builder, int flags)) \
     X(int, nvnProgramBuilderGetProgramRayTracingFlags, (const NVNprogramBuilder *builder))
 
+// The rest of the state objects: every setter, and what each state says of itself.
+#define NVN_LAYER_PROCS_STATE_OBJECTS(X)                                                          \
+    X(void, nvnBlendStateSetBlendTarget, (NVNblendState * state, int target))                     \
+    X(void, nvnBlendStateSetBlendFunc,                                                            \
+      (NVNblendState * state, NVNblendFunc src_rgb, NVNblendFunc dst_rgb, NVNblendFunc src_alpha, \
+       NVNblendFunc dst_alpha))                                                                   \
+    X(void, nvnBlendStateSetBlendEquation,                                                        \
+      (NVNblendState * state, NVNblendEquation rgb, NVNblendEquation alpha))                      \
+    X(void, nvnBlendStateSetAdvancedMode, (NVNblendState * state, NVNblendAdvancedMode mode))     \
+    X(void, nvnBlendStateSetAdvancedOverlap,                                                      \
+      (NVNblendState * state, NVNblendAdvancedOverlap overlap))                                   \
+    X(void, nvnBlendStateSetAdvancedPremultipliedSrc, (NVNblendState * state, NVNboolean on))     \
+    X(void, nvnBlendStateSetAdvancedNormalizedDst, (NVNblendState * state, NVNboolean on))        \
+    X(int, nvnBlendStateGetBlendTarget, (const NVNblendState *state))                             \
+    X(void, nvnBlendStateGetBlendFunc,                                                            \
+      (const NVNblendState *state, NVNblendFunc *src_rgb, NVNblendFunc *dst_rgb,                  \
+       NVNblendFunc *src_alpha, NVNblendFunc *dst_alpha))                                         \
+    X(void, nvnBlendStateGetBlendEquation,                                                        \
+      (const NVNblendState *state, NVNblendEquation *rgb, NVNblendEquation *alpha))               \
+    X(NVNblendAdvancedMode, nvnBlendStateGetAdvancedMode, (const NVNblendState *state))           \
+    X(NVNblendAdvancedOverlap, nvnBlendStateGetAdvancedOverlap, (const NVNblendState *state))     \
+    X(NVNboolean, nvnBlendStateGetAdvancedPremultipliedSrc, (const NVNblendState *state))         \
+    X(NVNboolean, nvnBlendStateGetAdvancedNormalizedDst, (const NVNblendState *state))            \
+    X(void, nvnChannelMaskStateSetChannelMask,                                                    \
+      (NVNchannelMaskState * state, int target, NVNboolean r, NVNboolean g, NVNboolean b,         \
+       NVNboolean a))                                                                             \
+    X(void, nvnChannelMaskStateGetChannelMask,                                                    \
+      (const NVNchannelMaskState *state, int target, NVNboolean *r, NVNboolean *g, NVNboolean *b, \
+       NVNboolean *a))                                                                            \
+    X(void, nvnColorStateSetBlendEnable, (NVNcolorState * state, int target, NVNboolean enable))  \
+    X(void, nvnColorStateSetLogicOp, (NVNcolorState * state, NVNlogicOp op))                      \
+    X(void, nvnColorStateSetAlphaTest, (NVNcolorState * state, NVNalphaFunc func))                \
+    X(NVNboolean, nvnColorStateGetBlendEnable, (const NVNcolorState *state, int target))          \
+    X(NVNlogicOp, nvnColorStateGetLogicOp, (const NVNcolorState *state))                          \
+    X(NVNalphaFunc, nvnColorStateGetAlphaTest, (const NVNcolorState *state))                      \
+    X(void, nvnDepthStencilStateSetStencilTestEnable,                                             \
+      (NVNdepthStencilState * state, NVNboolean enable))                                          \
+    X(void, nvnDepthStencilStateSetStencilFunc,                                                   \
+      (NVNdepthStencilState * state, NVNface faces, NVNstencilFunc func))                         \
+    X(void, nvnDepthStencilStateSetStencilOp,                                                     \
+      (NVNdepthStencilState * state, NVNface faces, NVNstencilOp fail, NVNstencilOp depth_fail,   \
+       NVNstencilOp pass))                                                                        \
+    X(NVNboolean, nvnDepthStencilStateGetDepthTestEnable, (const NVNdepthStencilState *state))    \
+    X(NVNboolean, nvnDepthStencilStateGetDepthWriteEnable, (const NVNdepthStencilState *state))   \
+    X(NVNdepthFunc, nvnDepthStencilStateGetDepthFunc, (const NVNdepthStencilState *state))        \
+    X(NVNboolean, nvnDepthStencilStateGetStencilTestEnable, (const NVNdepthStencilState *state))  \
+    X(NVNstencilFunc, nvnDepthStencilStateGetStencilFunc,                                         \
+      (const NVNdepthStencilState *state, NVNface face))                                          \
+    X(void, nvnDepthStencilStateGetStencilOp,                                                     \
+      (const NVNdepthStencilState *state, NVNface face, NVNstencilOp *fail,                       \
+       NVNstencilOp *depth_fail, NVNstencilOp *pass))                                             \
+    X(void, nvnMultisampleStateSetMultisampleEnable,                                              \
+      (NVNmultisampleState * state, NVNboolean enable))                                           \
+    X(void, nvnMultisampleStateSetSamples, (NVNmultisampleState * state, int samples))            \
+    X(void, nvnMultisampleStateSetRasterSamples, (NVNmultisampleState * state, int samples))      \
+    X(void, nvnMultisampleStateSetAlphaToCoverageEnable,                                          \
+      (NVNmultisampleState * state, NVNboolean enable))                                           \
+    X(void, nvnMultisampleStateSetAlphaToCoverageDither,                                          \
+      (NVNmultisampleState * state, NVNboolean on))                                               \
+    X(void, nvnMultisampleStateSetCoverageToColorEnable,                                          \
+      (NVNmultisampleState * state, NVNboolean on))                                               \
+    X(void, nvnMultisampleStateSetCoverageToColorOutput,                                          \
+      (NVNmultisampleState * state, int output))                                                  \
+    X(void, nvnMultisampleStateSetCoverageModulationMode,                                         \
+      (NVNmultisampleState * state, NVNcoverageModulationMode mode))                              \
+    X(void, nvnMultisampleStateSetCoverageTruncationEnable,                                       \
+      (NVNmultisampleState * state, NVNboolean on))                                               \
+    X(void, nvnMultisampleStateSetSampleLocationsEnable,                                          \
+      (NVNmultisampleState * state, NVNboolean on))                                               \
+    X(void, nvnMultisampleStateSetSampleLocationsGridEnable,                                      \
+      (NVNmultisampleState * state, NVNboolean on))                                               \
+    X(void, nvnMultisampleStateSetSampleLocations,                                                \
+      (NVNmultisampleState * state, int first, int count, const float *xy))                       \
+    X(NVNboolean, nvnMultisampleStateGetMultisampleEnable, (const NVNmultisampleState *state))    \
+    X(int, nvnMultisampleStateGetSamples, (const NVNmultisampleState *state))                     \
+    X(int, nvnMultisampleStateGetRasterSamples, (const NVNmultisampleState *state))               \
+    X(NVNboolean, nvnMultisampleStateGetAlphaToCoverageEnable,                                    \
+      (const NVNmultisampleState *state))                                                         \
+    X(NVNboolean, nvnMultisampleStateGetAlphaToCoverageDither,                                    \
+      (const NVNmultisampleState *state))                                                         \
+    X(NVNboolean, nvnMultisampleStateGetCoverageToColorEnable,                                    \
+      (const NVNmultisampleState *state))                                                         \
+    X(int, nvnMultisampleStateGetCoverageToColorOutput, (const NVNmultisampleState *state))       \
+    X(NVNcoverageModulationMode, nvnMultisampleStateGetCoverageModulationMode,                    \
+      (const NVNmultisampleState *state))                                                         \
+    X(NVNboolean, nvnMultisampleStateGetCoverageTruncationEnable,                                 \
+      (const NVNmultisampleState *state))                                                         \
+    X(NVNboolean, nvnMultisampleStateGetSampleLocationsEnable,                                    \
+      (const NVNmultisampleState *state))                                                         \
+    X(NVNboolean, nvnMultisampleStateGetSampleLocationsGridEnable,                                \
+      (const NVNmultisampleState *state))                                                         \
+    X(void, nvnMultisampleStateGetSampleLocationsGrid,                                            \
+      (NVNmultisampleState * state, int *width, int *height))                                     \
+    X(void, nvnPolygonStateSetPolygonMode, (NVNpolygonState * state, NVNpolygonMode mode))        \
+    X(void, nvnPolygonStateSetPolygonOffsetEnables, (NVNpolygonState * state, int enables))       \
+    X(NVNface, nvnPolygonStateGetCullFace, (const NVNpolygonState *state))                        \
+    X(NVNfrontFace, nvnPolygonStateGetFrontFace, (const NVNpolygonState *state))                  \
+    X(NVNpolygonMode, nvnPolygonStateGetPolygonMode, (const NVNpolygonState *state))              \
+    X(NVNpolygonOffsetEnable, nvnPolygonStateGetPolygonOffsetEnables,                             \
+      (const NVNpolygonState *state))                                                             \
+    X(void, nvnVertexAttribStateGetFormat,                                                        \
+      (const NVNvertexAttribState *state, NVNformat *format, ptrdiff_t *offset))                  \
+    X(int, nvnVertexAttribStateGetStreamIndex, (const NVNvertexAttribState *state))               \
+    X(void, nvnVertexStreamStateSetDivisor, (NVNvertexStreamState * state, int divisor))          \
+    X(ptrdiff_t, nvnVertexStreamStateGetStride, (const NVNvertexStreamState *state))              \
+    X(int, nvnVertexStreamStateGetDivisor, (const NVNvertexStreamState *state))
+
 // The objects, the queue, the copies and the window.
 #define NVN_LAYER_PROCS_BASE(X)                                                                   \
     X(void, nvnDeviceBuilderSetDefaults, (NVNdeviceBuilder * builder))                            \
@@ -544,7 +651,8 @@
     NVN_LAYER_PROCS_CLEAR(X)                                                                      \
     NVN_LAYER_PROCS_STATE(X)                                                                      \
     NVN_LAYER_PROCS_DEBUG(X)                                                                      \
-    NVN_LAYER_PROCS_OBJECT(X)
+    NVN_LAYER_PROCS_OBJECT(X)                                                                     \
+    NVN_LAYER_PROCS_STATE_OBJECTS(X)
 
 // What a draw takes: programs, samplers, the texture and sampler pools, the state objects, the
 // binds and the draw.

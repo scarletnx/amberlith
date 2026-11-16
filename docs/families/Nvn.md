@@ -19,7 +19,7 @@
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
-row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and one cases.
+row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, a hundred and six cases.
 
 [NVN coverage](../NvnCoverage.md) lists every NVN function ScarletNX answers with the cases that call it, and the
 ones no case calls yet.
@@ -62,8 +62,8 @@ The reference is the graphics unit running what the layer recorded, never the of
 
 ## The cases
 
-- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, three
-  hundred and fifty five.
+- **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, four hundred
+  and twenty one.
 - **the device initializes** (none tier): `nvnDeviceInitialize` with no flags. If it fails, the rest are skipped as
   `depends`.
 - **the device answers the layer's API version** (exact): items 0 and 1 of `nvnDeviceGetInteger` are 55 and 8.
@@ -170,6 +170,15 @@ The reference is the graphics unit running what the layer recorded, never the of
 - **a window builder gives back what it was set** (exact): the device, the native window, three textures that
   are only named, each by its place and how many, a present interval of two and two active textures. The builder
   makes no window.
+- **a blend state gives back its target, functions, equations and advanced mode**, **a channel mask and a colour
+  state give back a target's channels, blending, the logic operation and the alpha test**, **a depth and stencil
+  state gives back its depth test and each face's stencil**, **a multisample state gives back its samples, its
+  switches and its sample locations' grid**, **a polygon state, a vertex attribute and a vertex stream give back
+  what they were set** (exact): every setter of each state object with a number that is no default, and its
+  getters. A face's stencil state is set for the front, for the back and for both in one call; a flag cleared
+  leaves the one beside it; the grid of sixteen sample locations with eight raster samples is one pixel by two,
+  which is ScarletNX's answer for a driver and the layer's too. No state here is bound: what a draw makes of the
+  fields is for cases that draw with them.
 - **a window acquires and presents both its textures** (none tier): two 1280x720 textures on the default window,
   each acquired with `nvnQueueAcquireTexture`, cleared and presented once. Nothing is read back. Skipped as
   `unavailable` while the program's screen holds the window, which a run begun on the start screen keeps up to its
