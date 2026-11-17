@@ -78,6 +78,7 @@ static char pending_name[JOURNAL_NAME_MAX];
 static uint32_t bookkeeping_notes;
 
 static ReportWatcher watcher;
+static ReportUnasked unasked;
 
 // The cases a run the browser began asks for; NULL, every run from the mode file, for all.
 static ReportPicked picked;
@@ -864,13 +865,34 @@ static void EndSkip(const char *suite, const char *name, ReportReason reason,
     JournalCase(JOURNAL_END, suite, key, as_crash ? JOURNAL_CRASHED : JOURNAL_SKIPPED);
 }
 
+ReportUnasked ReportSetUnasked(ReportUnasked next) {
+    const ReportUnasked previous = unasked;
+    unasked = next;
+    return previous;
+}
+
+/// A case with a verdict whose question the frontend says the machine was never asked: ended as
+/// a skip, unavailable, with the frontend's sentence. False when nobody says so, and the verdict
+/// stands.
+static bool EndUnasked(const char *suite, const char *name, bool passed_) {
+    char why[REPORT_KEPT_DETAIL];
+    why[0] = '\0';
+    if (unasked == NULL || !unasked(suite, name, passed_, why, sizeof(why))) {
+        return false;
+    }
+    EndSkip(suite, name, REPORT_REASON_UNAVAILABLE, why);
+    return true;
+}
+
 void ReportCase(const char *suite, const char *name, CheckTier tier, bool passed_,
                 const char *detail) {
     if (Unpicked(suite, name)) {
         PictureDiscard();
         return;
     }
-    EndCase(suite, name, tier, passed_, detail, NULL, REPORT_FROM_UNSAID);
+    if (!EndUnasked(suite, name, passed_)) {
+        EndCase(suite, name, tier, passed_, detail, NULL, REPORT_FROM_UNSAID);
+    }
     Watch(suite, name);
 }
 
@@ -880,7 +902,9 @@ void ReportCaseFrom(const char *suite, const char *name, CheckTier tier, ReportF
         PictureDiscard();
         return;
     }
-    EndCase(suite, name, tier, passed_, detail, NULL, from);
+    if (!EndUnasked(suite, name, passed_)) {
+        EndCase(suite, name, tier, passed_, detail, NULL, from);
+    }
     Watch(suite, name);
 }
 
@@ -890,7 +914,9 @@ void ReportCaseTime(const char *suite, const char *name, CheckTier tier, bool pa
         PictureDiscard();
         return;
     }
-    EndCase(suite, name, tier, passed_, detail, &us, REPORT_FROM_UNSAID);
+    if (!EndUnasked(suite, name, passed_)) {
+        EndCase(suite, name, tier, passed_, detail, &us, REPORT_FROM_UNSAID);
+    }
     Watch(suite, name);
 }
 

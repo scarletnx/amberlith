@@ -266,6 +266,16 @@ bool ReportStart(const char *suite, const char *name);
 typedef void (*ReportWatcher)(const char *suite, const char *name, bool started);
 ReportWatcher ReportSetWatcher(ReportWatcher watcher);
 
+/// What a frontend sets for a machine that can tell, as a case ends, that the case could not ask
+/// its question there: a function the case called that the machine has not, and that answered
+/// nothing. Asked as each case ends with a verdict, @p passed, before anything of its end is
+/// done; true, with a sentence in @p why, ends the case as a skip, unavailable, with that
+/// sentence in place of the verdict, which judged an answer nobody gave. Never asked for a case
+/// that ends as a skip. NULL asks nobody, which is the default. Hands back the one it replaces.
+typedef bool (*ReportUnasked)(const char *suite, const char *name, bool passed, char *why,
+                              size_t why_size);
+ReportUnasked ReportSetUnasked(ReportUnasked unasked);
+
 /// Whether a case that reports a verdict must have started. On for the families that ask the
 /// machine something, where one that did not is a case a crash could not skip, and says so in a
 /// note.

@@ -7,7 +7,7 @@ family reports can be believed without them.
   apart and a zero budget rejects them; that an absolute budget is the same on both sides of the
   expected value; that a NaN equals nothing, itself included, whatever the budget; and that three
   units in the last place reach six representable values below a power of two and three above it.
-- **support**, two hundred and thirty four cases, no hardware involved: what the program does
+- **support**, two hundred and thirty five cases, no hardware involved: what the program does
   around a verdict rather than to reach one. First the way the run asks the services a machine may
   answer in a game's own code, by IPC or through the SDK's functions, and what answered them (see
   [The hooks mode](../Hooks.md)); then the pictures a failing case leaves and the names they
@@ -23,7 +23,8 @@ family reports can be believed without them.
   whole in the journal, the families each frontend runs and the runner's files under its root, the `skip` result, the time a case reports (twenty cases, see [Time per
   case](../TimePerCase.md)), the journal, the crash list, the hang table, the ban list, the suites
   `skip=` leaves out and what a launch decides from them, a launch a runner stopped at its time
-  limit among them (thirty four cases, see [When the program ends in the middle](../Crashes.md)),
+  limit among them, and a case its frontend says the machine could not be asked, which ends as a
+  skip (thirty five cases, see [When the program ends in the middle](../Crashes.md)),
   the last copy a device waits for before it closes, and the note a late one leaves (eight cases),
   and a baseline: the limit a case's samples allow, its file and lines,
   the words that name one and the mode line they can make too long, what a run with them does and a
