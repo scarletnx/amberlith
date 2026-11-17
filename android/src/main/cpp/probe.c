@@ -60,7 +60,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
     JNIEnv* env = NULL;
     g_probe.onload_getenv = (*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6);
     if (g_probe.onload_getenv != JNI_OK) return JNI_ERR;
-    jclass cls = (*env)->FindClass(env, "org/scarletnx/edenprobe/NativeLib");
+    jclass cls = (*env)->FindClass(env, "org/scarletnx/amberlith/NativeLib");
     if (!cls) return JNI_ERR;
     JNINativeMethod methods[] = {{"registered", "()Ljava/lang/String;", (void*)registered}};
     if ((*env)->RegisterNatives(env, cls, methods, 1) != JNI_OK) return JNI_ERR;
