@@ -106,7 +106,7 @@ _1 family, 2 suites, 35 cases: 0 with a judge, 0 without one, 35 not yet seen ju
 ### The judge and the tools
 
 <!-- counts: category tools -->
-_3 suites, 805 cases: the probe's own code held to its references, before every run._
+_3 suites, 812 cases: the probe's own code held to its references, before every run._
 <!-- /counts -->
 
 - **[The judge](./families/Judge.md)** - selfcheck, support and reference: the probe's own code held to its

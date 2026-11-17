@@ -552,6 +552,10 @@ void RunReferenceSvc(void);
 /// suite.
 void RunReferenceCpuFp(void);
 
+/// The pace family's arithmetic: its samples' summary, its line's number and sentence, and what
+/// its loops and its memory walk leave, held to tools/pace-expect.py: part of the reference suite.
+void RunReferencePace(void);
+
 #ifdef __cplusplus
 }
 #endif

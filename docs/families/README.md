@@ -34,7 +34,7 @@ judge no machine, so the last line leaves them out.
 | System and services | [Net](Net.md) | 6 | 53 | 18 | 5 | 30 |
 | System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 |
 | Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 35 |
-| The judge and the tools | [The judge](Judge.md) | 3 | 805 | - | - | - |
+| The judge and the tools | [The judge](Judge.md) | 3 | 812 | - | - | - |
 | **On a machine** | | **112** | **1626** | **1318** | **233** | **75** |
 <!-- /counts -->
 
