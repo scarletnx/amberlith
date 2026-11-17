@@ -77,8 +77,14 @@ static const Look RUN = {
 
 // The set the screen being composed is in; each UiCompose* names its own before drawing. One a
 // thread: the running screen is composed on a thread of its own while the run's thread composes
-// the screens its cases judge.
+// the screens its cases judge. A build on one thread whose thread pointer is not its C library's
+// (the mod of a game, mod.mk) keeps one for the process: reading a thread-local there reads the
+// game's thread data as libnx's.
+#ifdef EDENPROBE_ONE_THREAD
+static const Look *g_look = &MENU;
+#else
 static _Thread_local const Look *g_look = &MENU;
+#endif
 
 #define BACKGROUND (g_look->page)
 #define TEXT (g_look->ink)

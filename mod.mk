@@ -33,9 +33,12 @@ APP_BUILD   := $(strip $(shell git describe --tags --match 'v[0-9]*' --always --
 APP_HASH    := $(strip $(shell git describe --always --dirty --abbrev=7 --exclude='*' 2>/dev/null || echo unknown))
 
 ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC
+# One thread runs the probe, and its thread pointer is the game's SDK's: EDENPROBE_ONE_THREAD keeps
+# the engine off thread-locals, which libnx's reader would look up in libnx's thread data.
 CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
             -Wall -Wextra -Werror -Wno-unused-parameter \
-            -D__SWITCH__ -I$(LIBNX)/include -Isource -Imod -I$(BUILD) $(NVNLAYER_CFLAGS)
+            -D__SWITCH__ -DEDENPROBE_ONE_THREAD -I$(LIBNX)/include -Isource -Imod -I$(BUILD) \
+            $(NVNLAYER_CFLAGS)
 # A shared object with libnx's section layout and none of its start: the game's dynamic linker
 # relocates the module, binds its imports and calls its DT_INIT. No packed relocations, which a
 # linker of an older SDK does not read. Every import is bound at load (-z now), and a weak one
