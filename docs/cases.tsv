@@ -4,6 +4,7 @@
 # Written by tools/case-counts.py catalogue from these reports; the docs' counts by case-counts.py write.
 # host: edenprobe host build
 # nro: edenprobe 0.18.1 (v0.18.1-5-gafd862f), machine scarletnx 75b49fb
+# nro: edenprobe 0.18.1 (v0.18.1-5-gafd862f), machine scarletnx 75b49fb
 # ounce: edenprobe 0.18.1 (v0.18.1-5-gafd862f)
 suite	case	family	judge	from	builds
 selfcheck	integer arithmetic	judge	none	-	nro,ounce,host
@@ -1881,7 +1882,7 @@ hwopus	a decoder closed makes room for the next one	service	exact	emulator	nro
 am	an application's functions open, with a user to ask about	service	none	-	nro
 am	GetSaveDataSize reads back the size ExtendSaveData gave the save	service	exact	emulator	nro
 fsp	the temporary storage opens	service	none	-	nro
-fsp	the temporary storage starts each launch empty	service	exact	-	nro
+fsp	the temporary storage starts each launch empty	service	exact	emulator	nro
 account	acc:u0 opens and counts its users	service	none	-	nro
 account	TrySelectUserWithoutInteraction answers as its deprecated twin	service	exact	emulator	nro
 ldn	ldn:u opens	service	none	-	nro
