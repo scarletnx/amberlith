@@ -22,12 +22,16 @@ LAYERTEST := build-host/nvnlayer-test-55 build-host/nvnlayer-test-231 \
              build-host/nvnlayer-test-game-55 build-host/nvnlayer-test-game-231
 LAYERFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -Invnlayer/include
 
+# What the mod reads of the SDK module of the game it is loaded in (mod/host.c), on bytes the
+# test makes.
+MODTEST := build-host/mod-host-test
+
 .PHONY: host host-run host-clean music-wav
 
 # Where the fluid demo's budgets come from, measured on the processor (tools/fluid-envelope.c).
 FLUIDTOOL := build-host/fluid-envelope
 
-host: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST)
+host: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
 
 build-host/nvnlayer-test-55: nvnlayer/tests/layer_test.c nvnlayer/source/layer.c \
                              nvnlayer/source/api55_shader.c $(wildcard nvnlayer/source/*.h) \
@@ -49,6 +53,10 @@ build-host/nvnlayer-test-game-%: nvnlayer/tests/game_test.c nvnlayer/source/laye
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=$* -DNVN_LAYER_GAME_DRIVER $(filter %.c,$^) -o $@
 
+build-host/mod-host-test: mod/tests/host_test.c mod/host.c mod/host.h
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(LAYERFLAGS) $(filter %.c,$^) -o $@
+
 build-host/%.o: source/%.c
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(HOSTFLAGS) -c $< -o $@
@@ -66,13 +74,14 @@ $(FLUIDTOOL): tools/fluid-envelope.c build-host/demo_fluidref.o
 # scripts in .github/scripts, against a fake GitHub and a fake Discord, and the APK's runners,
 # against a fake adb and a fake ScarletNX driver. The fluid demo's budgets are measured between
 # them, on the early frames and a default run's 600.
-host-run: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST)
+host-run: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
 	./$(HOSTOUT)
 	cd / && exec $(CURDIR)/$(HOSTOUT)
 	./build-host/nvnlayer-test-55
 	./build-host/nvnlayer-test-231
 	./build-host/nvnlayer-test-game-55
 	./build-host/nvnlayer-test-game-231
+	./$(MODTEST)
 	./$(FLUIDTOOL) 64 600
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts
