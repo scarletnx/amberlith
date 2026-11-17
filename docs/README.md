@@ -8,6 +8,7 @@
   * [Video and audio](#video-and-audio)
   * [System and services](#system-and-services)
   * [Input](#input)
+  * [Speed](#speed)
   * [The judge and the tools](#the-judge-and-the-tools)
 
 New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) and [the report](./Report.md).
@@ -103,10 +104,20 @@ _1 family, 2 suites, 35 cases: 0 with a judge, 0 without one, 35 not yet seen ju
 - **[Pad](./families/Pad.md)** and **[touch](./families/Touch.md)** - a controller in a person's hands, and the
   touch screen
 
+### Speed
+
+<!-- counts: category speed -->
+_1 family, 6 suites, 36 cases: 0 with a judge, 36 without one._
+<!-- /counts -->
+
+- **[Pace](./families/Pace.md)** - how fast the machine goes: the processor's loops on each core, memory, a thread
+  woken and a mutex passed, the counter and sleeps, the card and the graphics unit, each timed several times over and
+  none judged until a console's run is the reference
+
 ### The judge and the tools
 
 <!-- counts: category tools -->
-_3 suites, 812 cases: the probe's own code held to its references, before every run._
+_3 suites, 813 cases: the probe's own code held to its references, before every run._
 <!-- /counts -->
 
 - **[The judge](./families/Judge.md)** - selfcheck, support and reference: the probe's own code held to its

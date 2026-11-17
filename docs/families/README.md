@@ -1,7 +1,7 @@
 # What it checks
 
 The families run in this order: the judge, the processor, pad (when a word names it), graphics, nvn (when its word
-names it), fs, then kernel,
+names it), fs, then kernel, pace,
 display, video, audio and service (each when a word names it), net, game, demo and music (each when its word names
 it); libc, on the console, when a word names it. Android's frontend has the judge, libc, graphics, net, jni and framework
 ([On Android](../Android.md)). The
@@ -34,8 +34,9 @@ judge no machine, so the last line leaves them out.
 | System and services | [Net](Net.md) | 6 | 53 | 18 | 5 | 30 |
 | System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 |
 | Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 35 |
-| The judge and the tools | [The judge](Judge.md) | 3 | 812 | - | - | - |
-| **On a machine** | | **112** | **1626** | **1318** | **233** | **75** |
+| Speed | [Pace](Pace.md) | 6 | 36 | 0 | 36 | 0 |
+| The judge and the tools | [The judge](Judge.md) | 3 | 813 | - | - | - |
+| **On a machine** | | **118** | **1662** | **1318** | **269** | **75** |
 <!-- /counts -->
 
 - **[The judge](./Judge.md)** - selfcheck, support and reference, no hardware involved
@@ -48,6 +49,9 @@ judge no machine, so the last line leaves them out.
 - **[fs](./Fs.md)** - reads through the file system service
 - **[Kernel](./Kernel.md)** - the scheduler: priority inheritance, preemption and migration; and the kernel's
   answers to waits, events, handles and memory calls ([svc](./Kernel.md#svc))
+- **[Pace](./Pace.md)** - how fast the machine goes: the processor's loops on each core, memory, a thread woken
+  and a mutex passed, the counter and sleeps, the card and the graphics unit, each timed several times over, none
+  judged until a console's run is the reference
 - **[Display](./Display.md)** - the buffer producer's history, on a layer of its own
 - **[Video](./Video.md)** - the video image compositor, and the decoder on VP9 jobs ([nvdec](./Nvdec.md))
 - **[Audio](./Audio.md)** - the audio renderer, and the listening sequence

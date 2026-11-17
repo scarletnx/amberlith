@@ -27,7 +27,9 @@ writing the line or a picture and drawing the running screen all happen outside 
 quick run from the mode file, which draws no running screen.
 
 The game scene's seven times are frame statistics, measured once; see [The game family](families/Game.md#what-is-timed).
-`tools/perf.py` compares them case by case and leaves them out of its per-suite sums. The tex8k suite
+`tools/perf.py` compares them case by case and leaves them out of its per-suite sums. The [pace
+family](families/Pace.md)'s cases time work of their own several times over, by the system tick around it, and each
+line carries the middle time. The tex8k suite
 runs once too, each case timing its own submits ([the graphics family](families/Graphics.md#tex8k)):
 one sample a run, not the smallest of nine, which three runs a side make up for.
 

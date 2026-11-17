@@ -1090,7 +1090,7 @@ static void CheckLaunchAndMode(void) {
             (MODE_FAMILY_CPU | MODE_FAMILY_PAD | MODE_FAMILY_GRAPHICS | MODE_FAMILY_FS |
              MODE_FAMILY_KERNEL | MODE_FAMILY_DISPLAY | MODE_FAMILY_VIDEO | MODE_FAMILY_AUDIO |
              MODE_FAMILY_SERVICE | MODE_FAMILY_NET | MODE_FAMILY_GAME | MODE_FAMILY_NVN |
-             MODE_FAMILY_LIBC | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC) &&
+             MODE_FAMILY_LIBC | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC | MODE_FAMILY_PACE) &&
         strcmp(net_said,
                "mode: quick, from the mode file; pictures of failures only; families net") == 0;
     const RunMode flood = ModeFromText(
@@ -1746,15 +1746,16 @@ static void CheckSkipWord(void) {
                (unsigned)wrong, first, said);
 }
 
-/// all: every family a frontend has but pad, nvn, demo and music, which named beside it add theirs;
-/// in the key, through a launch that goes on with the start screen's choice, and gone once the screen
+/// all: every family a frontend has but pad, nvn, demo, music and pace, which named beside it add
+/// theirs; in the key, through a launch that goes on with the start screen's choice, and gone once the screen
 /// changes a family row, the families it named that have no row kept.
 static void CheckAllWord(void) {
     char said[REPORT_NOTE_MAX + 1];
     char key[MODE_KEY_MAX];
     const uint32_t present = MODE_FAMILIES_PRESENT;
     const uint32_t everything_alone =
-        present & ~(MODE_FAMILY_PAD | MODE_FAMILY_NVN | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC);
+        present & ~(MODE_FAMILY_PAD | MODE_FAMILY_NVN | MODE_FAMILY_DEMO | MODE_FAMILY_MUSIC |
+                    MODE_FAMILY_PACE);
     const RunMode all = ModeFromText("quick all");
     ModeDescribe(said, sizeof(said), &all, present);
     ModeKey(key, sizeof(key), &all);
@@ -1768,10 +1769,11 @@ static void CheckAllWord(void) {
                                                      .families_named = MODE_FAMILY_PAD |
                                                                        MODE_FAMILY_NVN |
                                                                        MODE_FAMILY_DEMO |
-                                                                       MODE_FAMILY_MUSIC },
+                                                                       MODE_FAMILY_MUSIC |
+                                                                       MODE_FAMILY_PACE },
                                          present) == present &&
                        ModeFamiliesToRun(&(RunMode){ 0 }, present) == MODE_FAMILIES_DEFAULT;
-    const RunMode named = ModeFromText("quick all nvn pad demo music");
+    const RunMode named = ModeFromText("quick all nvn pad demo music pace");
     const uint32_t android = MODE_FAMILY_LIBC | MODE_FAMILY_GRAPHICS | MODE_FAMILY_NET |
                              MODE_FAMILY_JNI | MODE_FAMILY_FRAMEWORK;
     const bool other_frontend = ModeFamiliesToRunOf(&all, android, 0u) == android &&
@@ -1794,10 +1796,10 @@ static void CheckAllWord(void) {
                              (everything_alone & ~MODE_FAMILY_GRAPHICS) &&
                          screen.chosen_on_screen;
     CHECK_TRUE(SUITE,
-               "all runs every family but pad, nvn, demo and music, which named beside it add "
-               "theirs",
+               "all runs every family but pad, nvn, demo, music and pace, which named beside it "
+               "add theirs",
                CHECK_NONE, console && added && other_frontend && kept && changed,
-               "console %d, pad, nvn and demo added %d, another frontend %d, a launch going on %d, "
+               "console %d, pad, nvn, demo, music and pace added %d, another frontend %d, a launch going on %d, "
                "a row changed %d (families 0x%x); key \"%.8s\"; said \"%.150s\"",
                (int)console, (int)added, (int)other_frontend, (int)kept, (int)changed,
                (unsigned)ModeFamiliesToRun(&screen, present), key, said);
@@ -1890,7 +1892,7 @@ static void CheckWidestMode(void) {
                                  "level=0 level=4 level=3 libc listen "
                                  "machine=scarletnx-android@12345678901234567890123456789012 "
                                  "music net "
-                                 "notime nvn pad retry service skip=abcdefghijklmnop "
+                                 "notime nvn pace pad retry service skip=abcdefghijklmnop "
                                  "skip=bcdefghijklmnopq skip=cdefghijklmnopqr "
                                  "skip=defghijklmnopqrs stress unban video vram=1048576";
     static const char KEY[] = "all audio cpu demo display fatal frames=36000 framework fs game "
@@ -1898,7 +1900,7 @@ static void CheckWidestMode(void) {
                               "level=3 level=4 libc listen "
                               "machine=scarletnx-android@12345678901234567890123456789012 "
                               "music net "
-                              "notime nvn pad retry service skip=abcdefghijklmnop "
+                              "notime nvn pace pad retry service skip=abcdefghijklmnop "
                               "skip=bcdefghijklmnopq skip=cdefghijklmnopqr skip=defghijklmnopqrs "
                               "stress unban video vram=1048576";
     const RunMode file = ModeFromText(WIDEST);

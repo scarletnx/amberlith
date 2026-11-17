@@ -322,6 +322,23 @@ void RunSched(void);
 /// kernel's: only when the word kernel names the family.
 void RunSvc(void);
 
+/// The pace family (docs/families/Pace.md), a suite a part of the machine: the integer, floating
+/// point and vector loops on each core; a walk, a fill, a sum and a copy over memory; a thread
+/// woken by an event and a mutex passed, on one core and across two; the system counter read and
+/// sleeps held to the time they asked for; a file written and read back and small files made and
+/// removed; and quads, an upload and a readback on the graphics unit. Each case times its work
+/// several times over and its line carries the middle time and the spread; none judges a speed.
+void RunPaceCpu(void);
+void RunPaceMem(void);
+void RunPaceThread(void);
+void RunPaceTimer(void);
+void RunPaceFs(void);
+void RunPaceGpu(void);
+
+/// Whether the pace cases run: off for a run with the mode word `notime`, where each is a skip
+/// that was asked for, since a time is all one has.
+void PaceSetTiming(bool on);
+
 /// The display family: the buffer producer of a layer of its own, asked for its buffer history
 /// after a number of frames, the raw reply judged by binderref.c.
 void RunBinder(void);
