@@ -10,9 +10,9 @@ builds of one emulator. No case needs a person to look at the screen.
 
 ## Quick start
 
-The newest version is on [its release](https://github.com/scarletnx/edenprobe/releases/latest), as
+The newest version is on [its release](https://github.com/scarletnx/amberlith/releases/latest), as
 `amberlith-<version>.nro`, and the newest nightly on
-[nightly](https://github.com/scarletnx/edenprobe/releases/tag/nightly) ([Releases](docs/Releases.md)).
+[nightly](https://github.com/scarletnx/amberlith/releases/tag/nightly) ([Releases](docs/Releases.md)).
 
 - On a console: put it in the SD card's `switch/` folder and open it from the homebrew menu.
 - In an emulator: open the NRO.
