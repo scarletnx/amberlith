@@ -71,6 +71,7 @@ source/topologyref.c
 source/copyref.c
 source/vertexref.c
 source/svcref.c
+source/paceref.c
 source/tests/t_selfcheck.c
 source/tests/t_support.c
 source/tests/t_screens.c
@@ -116,4 +117,5 @@ source/tests/t_copyref.c
 source/tests/t_vertexref.c
 source/tests/t_svcref.c
 source/tests/t_cpufpref.c
+source/tests/t_paceref.c
 source/tests/t_libc.c

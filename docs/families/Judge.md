@@ -8,8 +8,8 @@ family reports can be believed without them.
 |---|--:|--:|--:|--:|
 | selfcheck | 16 | 16 | 16 | 16 |
 | support | 246 | 235 | 235 | 245 |
-| reference | 543 | 539 | 539 | 543 |
-| **All** | **805** | **790** | **790** | **804** |
+| reference | 550 | 539 | 539 | 550 |
+| **All** | **812** | **790** | **790** | **811** |
 <!-- /counts -->
 
 - **selfcheck**, no hardware involved. That two neighbouring floats measure one unit
@@ -122,6 +122,11 @@ family reports can be believed without them.
     estimates; FRECPE, FRSQRTE and FRECPX of one, two, four, the edges, noughts, infinities,
     negative values and NaNs, with their flags; half precision under AHP and DN; and the order
     the minimum and maximum put NaNs and noughts in;
+  - seven on the pace family's arithmetic, `source/paceref.c`: the middle, the ends, the hundredths
+    and the scatter of a case's samples, a product past 64 bits divided whole, and the number and
+    the sentence a line carries, against answers worked out by hand; and what the integer, the
+    floating point and the vector loop and the memory walk leave, against `tools/pace-expect.py`,
+    which restates them in Python and runs the floating point loop in doubles beside whole numbers;
   - thirty six on the astc suite's answers: the ASTC reference decoder, `source/astcref.c`, held
     block by block to hashes of what ARM's decoder (astcenc) makes of the same twenty six blocks,
     three of them to texels worked out by hand as well, its

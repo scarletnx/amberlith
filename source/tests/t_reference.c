@@ -2505,4 +2505,5 @@ void RunReference(void) {
     RunReferenceVertex();
     RunReferenceSvc();
     RunReferenceCpuFp();
+    RunReferencePace();
 }

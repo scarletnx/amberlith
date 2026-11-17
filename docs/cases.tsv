@@ -811,6 +811,13 @@ reference	the mandelbrot zoom's judged frames come to their pinned hashes	judge	
 reference	the julia zoom's judged frames come to their pinned hashes	judge	none	-	host
 reference	the mandelbrot zoom in double precision and multiplied and added apart: the pixels that differ	judge	none	-	host
 reference	the julia zoom in double precision and multiplied and added apart: the pixels that differ	judge	none	-	host
+reference	pace: the middle, the ends, the hundredths and the scatter of a case's samples	judge	none	-	host
+reference	pace: a product past 64 bits divides whole, and a window's work gives its time and its rate	judge	none	-	host
+reference	pace: the number a line carries and the sentence beside it	judge	none	-	host
+reference	pace: the integer loop leaves the sums worked out apart	judge	none	-	host
+reference	pace: the floating point loop leaves the sums worked out apart	judge	none	-	host
+reference	pace: the vector loop leaves the sums worked out apart	judge	none	-	host
+reference	pace: the memory walk reads every slot once before it is back at its start	judge	none	-	host
 cpu	clz counts each of sixteen 8-bit lanes	cpu	exact	-	nro
 cpu	clz counts each of eight 16-bit lanes	cpu	exact	-	nro
 cpu	clz counts each of four 32-bit lanes	cpu	exact	-	nro
