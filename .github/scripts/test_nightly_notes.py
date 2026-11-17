@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""nightly-notes.py on a history of its own: merged pull requests, direct commits, a branch never merged; the NRO with
-its size and SHA-256, and text that would be markdown shown as it is."""
+"""nightly-notes.py on a history of its own: merged pull requests, direct commits, a branch never merged; the NRO, the
+APK and the ExeFS zips with their sizes and SHA-256, and text that would be markdown shown as it is."""
 
 import importlib.util
 import os
@@ -84,6 +84,32 @@ class NightlyNotes(unittest.TestCase):
         self.assertIn(f"[edenprobe.nro.sha256]({WHERE}/edenprobe.nro.sha256)", self.text)
         self.assertIn("`sha256sum -c edenprobe.nro.sha256`", self.text)
         self.assertIn(f"{URL}/blob/{self.sha}/docs/Releases.md", self.text)
+
+    def test_the_apk_and_the_exefs_zips(self):
+        exefs = [
+            nightly.Packed(nightly.OUNCE, nightly.OUNCE_SUM, 650_000, "cd" * 32),
+            nightly.Packed(nightly.MOD, nightly.MOD_SUM, 210_000, "ef" * 32),
+        ]
+        text = nightly.notes(
+            self.checkout, self.sha, "", "owner/repo", WHERE, 1, DIGEST, "", apk=(9_000_000, "01" * 32), exefs=exefs
+        )
+        self.assertIn(f"| [edenprobe-ounce.zip]({WHERE}/edenprobe-ounce.zip) | 0.7 MB | `{'cd' * 32}` |", text)
+        self.assertIn(f"| [edenprobe-mod.zip]({WHERE}/edenprobe-mod.zip) | 0.2 MB | `{'ef' * 32}` |", text)
+        # every file's row in the order the release lists them, the NRO first
+        rows = [line.split("]")[0][3:] for line in text.splitlines() if line.startswith("| [")]
+        self.assertEqual(rows, ["edenprobe.nro", "edenprobe.apk", "edenprobe-ounce.zip", "edenprobe-mod.zip"])
+        self.assertIn(
+            "`sha256sum -c edenprobe.nro.sha256 edenprobe.apk.sha256 edenprobe-ounce.zip.sha256 "
+            "edenprobe-mod.zip.sha256` beside them checks them all.",
+            text,
+        )
+        self.assertIn(f"edenprobe-mod.zip holds an ExeFS folder, {nightly.RUNS[nightly.MOD]}", text)
+        self.assertIn(f"[Mod.md]({URL}/blob/{self.sha}/docs/Mod.md)", text)
+        self.assertIn(f"[Ounce.md]({URL}/blob/{self.sha}/docs/Ounce.md)", text)
+        self.assertIn("- edenprobe-ounce.zip and edenprobe-mod.zip were built in the same container as the NRO", text)
+        # a release with the NRO alone names no other document nor licence
+        self.assertNotIn("Mod.md", self.text)
+        self.assertNotIn("edenprobe-mod.zip", self.text)
 
     def test_changes_counted_and_linked(self):
         self.assertIn(f"- \\[ci\\] its title ([#5]({URL}/pull/5))", self.text)

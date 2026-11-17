@@ -46,7 +46,9 @@ for a Switch 2 program is gigabytes.
 
 ## Running it
 
-In ScarletNX, as an extracted game's ExeFS is run: recompile the folder, then start the program it wrote.
+In ScarletNX, as an extracted game's ExeFS is run: recompile the folder, then start the program it wrote. A release's
+`edenprobe-ounce.zip` ([Releases](Releases.md)) holds the same folder, `exefs/`: unzipped in `edenprobe-ounce/`, it
+is the one the commands below name.
 
 ```sh
 scarletnx -r edenprobe-ounce/exefs -o edenprobe-ounce --outdir GAMES
