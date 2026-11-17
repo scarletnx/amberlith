@@ -22,6 +22,13 @@
   * [The device and a program](#the-device-and-a-program)
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
+<!-- counts: family nvn -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| nvn | 215 | 200 | 9 | 6 |
+| **All** | **215** | **200** | **9** | **6** |
+<!-- /counts -->
+
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
 itself is asked them too. Only the word `nvn` runs it (see [The mode file](../ModeFile.md)); the start screen has no
 row for it, and a file that names it keeps it whatever the screen changes. Its one suite is `nvn`, two hundred and

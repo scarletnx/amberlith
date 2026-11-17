@@ -3,7 +3,14 @@
 The fs family reads the memory card through FsFile, as a game reads its files: one IFile::Read
 with an offset each time, which is the command an emulator serves and where it does its seek.
 
-- **fs**, fifteen cases. A 64 MiB file and 256 small ones are written on the first pass; then
+<!-- counts: family fs -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| fs | 15 | 13 | 2 | 0 |
+| **All** | **15** | **13** | **2** | **0** |
+<!-- /counts -->
+
+- **fs**: a 64 MiB file and 256 small ones are written on the first pass; then
   sequential reads of 512 bytes, 4 KiB, 64 KiB, 1 MiB and 16 MiB, 4096 random 4 KiB reads at
   aligned and at odd offsets, 64 KiB reads backwards, 4096 reads of the same 4 KiB, and the small
   files opened, read and closed. Every byte is checked against the pattern, so a fast wrong read

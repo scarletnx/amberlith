@@ -12,6 +12,16 @@
   * [What rests on reasoning](#what-rests-on-reasoning)
 * [fluid and fluid-alias](#fluid-and-fluid-alias)
 
+<!-- counts: family demo -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| mandelbrot | 14 | 7 | 7 | 0 |
+| julia | 14 | 7 | 7 | 0 |
+| fluid | 19 | 13 | 6 | 0 |
+| fluid-alias | 20 | 14 | 6 | 0 |
+| **All** | **67** | **41** | **26** | **0** |
+<!-- /counts -->
+
 ## The family
 
 Demos a person watches, each one a graphics workload a game runs, drawn frame after frame, presented and timed, and

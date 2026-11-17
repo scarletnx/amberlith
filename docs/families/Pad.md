@@ -1,15 +1,31 @@
 # The pad family
 
+## Index
+
+* [The screen](#the-screen)
+* [The cases](#the-cases)
+* [What Eden does](#what-eden-does)
+* [Questions only a console answers](#questions-only-a-console-answers)
+* [Running it with a person's controller](#running-it-with-a-persons-controller)
+
 What a game receives from a controller in a person's hands, and from the touch screen. The screen
 names one thing at a time, a person does it, and the line says what arrived: the same controller on
 two machines gives two reports that compare line by line. Only the word `pad` runs it (see [The mode
 file](../ModeFile.md)), or its row on the start screen, since it waits for a person; it runs right
 after the processor, so nobody waits for the families that need no one.
 
-- **pad**, twenty six cases. The first is the controller answering; the sixteen buttons; the
+<!-- counts: family pad -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| pad | 26 | 0 | 0 | 26 |
+| touch | 9 | 0 | 0 | 9 |
+| **All** | **35** | **0** | **0** | **35** |
+<!-- /counts -->
+
+- **pad**: the first is the controller answering; the sixteen buttons; the
   controller they came from; the eight player slots and the handheld; each controller in turn; the
   sticks let go and pushed to their edges; and a vibration felt or not.
-- **touch**, nine cases, after the controller's: targets at the corners and the middle, two fingers,
+- **touch**, after the controller's: targets at the corners and the middle, two fingers,
   a drag and its lift. See [The touch suite](Touch.md).
 
 ## The screen

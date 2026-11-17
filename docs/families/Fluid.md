@@ -11,6 +11,14 @@
 * [In the browser](#in-the-browser)
 * [What rests on reasoning](#what-rests-on-reasoning)
 
+<!-- counts: suite fluid -->
+**19 cases**: 13 with a judge (exact 2, ulp 11), 6 without one.
+<!-- /counts -->
+
+<!-- counts: suite fluid-alias -->
+**20 cases**: 14 with a judge (exact 3, ulp 11), 6 without one.
+<!-- /counts -->
+
 A 2D Navier-Stokes fluid made the way a game makes one: Stam's stable fluids ("Stable Fluids", SIGGRAPH 1999) on a
 grid of cells, each frame a chain of fragment passes in ping-pong between two targets a field, as GPU Gems' chapter
 38 lays it out (Harris, "Fast Fluid Dynamics Simulation on the GPU", 2004). Three jets and a burst now and then
@@ -19,13 +27,13 @@ game scene's are ([game](Game.md)). One of the [demo family](Demo.md)'s demos: o
 leaves it out, and `frames=` sets its length (600 without it). `source/demo_fluidref.c` is every pass on the
 processor, operation for operation, and `source/tests/t_demo_fluid.c` the scene.
 
-- **fluid**, nineteen cases, fourteen with `notime`. One says the scene came up (none tier): a graphics device, the
+- **fluid**, five of its cases left out by `notime`, the ones that carry times. One says the scene came up (none tier): a graphics device, the
   fields' targets, the shaders, and a swapchain on the default window or the program's screen. Then the frames run,
   inside the case that holds the early frames to the processor's whole simulation; the ten after it hold every
   judged frame to its passes worked out again and to the invariants, one holds each judged frame's fields to the
   next's, and five carry the frames' times. The last holds, whatever the frames did, that the demos' music made
   nothing while the fluid ran: it plays only in the interactive mode and its own family ([the music family](Music.md)).
-- **fluid-alias**, twenty cases, fifteen with `notime`: the same demo with its targets drawn over their old
+- **fluid-alias**, five of its cases left out by `notime` as the fluid's: the same demo with its targets drawn over their old
   selves and a compute pass's storage image over them ([The aliasing level](#the-aliasing-level)), and a case more
   for the compute pass's words.
 

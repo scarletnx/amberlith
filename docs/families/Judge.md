@@ -3,11 +3,20 @@
 Three suites that ask the machine nothing, run first and run in the host build too: nothing a
 family reports can be believed without them.
 
-- **selfcheck**, sixteen cases, no hardware involved. That two neighbouring floats measure one unit
+<!-- counts: family judge -->
+| Suite | Cases | On the NRO | On the Switch 2 build | On the host build |
+|---|--:|--:|--:|--:|
+| selfcheck | 16 | 16 | 16 | 16 |
+| support | 246 | 235 | 235 | 245 |
+| reference | 543 | 539 | 539 | 543 |
+| **All** | **805** | **790** | **790** | **804** |
+<!-- /counts -->
+
+- **selfcheck**, no hardware involved. That two neighbouring floats measure one unit
   apart and a zero budget rejects them; that an absolute budget is the same on both sides of the
   expected value; that a NaN equals nothing, itself included, whatever the budget; and that three
   units in the last place reach six representable values below a power of two and three above it.
-- **support**, two hundred and thirty five cases, no hardware involved: what the program does
+- **support**, no hardware involved: what the program does
   around a verdict rather than to reach one. First the way the run asks the services a machine may
   answer in a game's own code, by IPC or through the SDK's functions, and what answered them (see
   [The hooks mode](../Hooks.md)); then the pictures a failing case leaves and the names they
@@ -33,7 +42,7 @@ family reports can be believed without them.
   the judge decided pixel by pixel, not from comparing two images, so a pixel that differs and was
   allowed to is not painted as a difference. Every line is the none tier, because none of it is a
   claim about a machine. On a computer (`make -f host.mk host-run`) the suite has all but the first,
-  which asks the console's services, and ten cases more: a backward seek that drops a buffered line, which needs the C library's own stream buffer; a
+  which asks the console's services, and these besides (`docs/cases.tsv` lists each case's builds): a backward seek that drops a buffered line, which needs the C library's own stream buffer; a
   baseline file that is there and cannot be read, which needs the computer's own file errors; a
   case that times itself, with the one that reads its line back off standard output, the debug
   channel only there, to see the time it was given last, the case counted, and a rehearsal of it
@@ -46,7 +55,7 @@ family reports can be believed without them.
   its cases skipped as asked, the next step run, and a name no case came up for said; and the same
   run with a runner's `timeout` after the first launch: the case skipped as timeout with the
   runner's two numbers, off the crash list, and started again by the next run.
-- **reference**, five hundred and forty three cases, no hardware involved either: the other half
+- **reference**, no hardware involved either: the other half
   of the judge, where the rules the cases judge by are pinned. Where clip space lands on the target,
   which pixels a triangle covers and which of two triangles owns the centres on their shared edge,
   projected from the very numbers the rasterisation cases hand the hardware, so it proves the

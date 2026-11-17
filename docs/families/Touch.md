@@ -8,12 +8,16 @@
 * [What Eden does](#what-eden-does)
 * [Running it on Eden with the mouse](#running-it-on-eden-with-the-mouse)
 
+<!-- counts: suite touch -->
+**9 cases**: 0 with a judge, 0 without one, 9 not yet seen judged.
+<!-- /counts -->
+
 The touch screen as a game reads it: a person taps targets drawn at known points, puts two fingers
 down, drags one across, and the line says where and under which id the touches arrived. It is part
 of [the pad family](Pad.md), right after the controller's prompts, so only the word `pad` or the
 pad row of the start screen runs it: it needs a person too.
 
-- **touch**, nine cases. The first is the touch screen answering; then a tap on a target at each
+- **touch**: the first is the touch screen answering; then a tap on a target at each
   corner and in the middle; two fingers at once; a finger dragged left to right; and the lift after
   the drag. One note gives the diameters and angles that arrived.
 

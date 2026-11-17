@@ -6,10 +6,17 @@
 * [The Mandelbrot, in three stages](#the-mandelbrot-in-three-stages)
 * [The matrix instruction](#the-matrix-instruction)
 
+<!-- counts: family nvn2 -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| nvn2 | 34 | 31 | 3 | 0 |
+| **All** | **34** | **31** | **3** | **0** |
+<!-- /counts -->
+
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch
 2's own shader code, a compute dispatch that writes a storage buffer, and a draw whose geometry a mesh program
 writes. Only the probe's Switch 2 build runs it ([The probe as a Switch 2 program](../Ounce.md)), in the nvn
-family, after the `nvn` suite. Thirty four cases.
+family, after the `nvn` suite.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.

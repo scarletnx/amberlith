@@ -9,6 +9,13 @@
 * [When it plays](#when-it-plays)
 * [Listening to it](#listening-to-it)
 
+<!-- counts: family music -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| music | 12 | 12 | 0 | 0 |
+| **All** | **12** | **12** | **0** | **0** |
+<!-- /counts -->
+
 The demos' music: AdLib tracker songs, composed afresh from a seed out of material each track's
 score holds, and played by an FM synthesizer in the manner of the OPL2 an AdLib card carried, all
 of it the probe's own (`source/musicscore.txt`, `source/musiccompose.c`, `source/music.c`), with
@@ -19,7 +26,7 @@ plays of it to that render. Only the word `music` runs it ([the mode file](../Mo
 `all` leaves it out: outside its cases and the interactive mode the music makes no thread, no voice
 and no sample ([When it plays](#when-it-plays)).
 
-- **music**, twelve cases. Four hold the first pass the fixed seed composes of each track,
+- **music**: four hold the first pass the fixed seed composes of each track,
   rendered on this machine, to the host's samples, one a switch between two tracks to the tracks
   rendered alone, and one a switch and a stop inside the silence (the host build runs these six
   too: their hashes are its own). Four play an excerpt of each track through the renderer and one
