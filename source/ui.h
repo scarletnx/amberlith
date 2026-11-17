@@ -526,6 +526,9 @@ uint32_t UiStartWarningTop(uint32_t frame_height);
 uint32_t UiStartNvnTop(void);
 /// The rectangle that line takes, beside the rows: two lines of the font's own size.
 UiRect UiStartNvnBox(uint32_t frame_width);
+/// Where the start screen draws Wimsy as Amberlith (source/wimsypicture.h): under the rows,
+/// in the middle of their column and of the room between the last one and the tip.
+UiRect UiStartWimsyRect(uint32_t frame_height);
 #define UI_START_NVN_SAID                                                                          \
     "nvn's window case is skipped in a run begun here: this screen holds the window to its end. " \
     "quick in the mode file runs it"

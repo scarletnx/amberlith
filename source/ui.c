@@ -8,6 +8,7 @@
 #include "icons.h"
 #include "padref.h"
 #include "ui.h"
+#include "wimsypicture.h"
 
 // The screens wear ScarletNX's look (its launcher, its game menu): the VGA font, its YoRHa
 // theme's colours, rows as boxes with the focused one inverted, and the keys on a band along the
@@ -2373,6 +2374,39 @@ uint32_t UiStartNvnTop(void) {
     return UI_BODY_TOP + START_HELP_HEIGHT - 2u * LINE - 6u;
 }
 
+UiRect UiStartWimsyRect(uint32_t frame_height) {
+    const uint32_t rows_end = UiStartRowTop(UI_START_ROWS - 1u) + START_BOX;
+    const uint32_t bottom = UI_BODY_BOTTOM(frame_height);
+    const uint32_t room = bottom > rows_end ? bottom - rows_end : 0u;
+    const uint32_t side = room >= WIMSY_PICTURE_SIDE ? WIMSY_PICTURE_SIDE : 0u;
+    const UiRect rect = { LIST_X + (START_WIDTH - side) / 2u, rows_end + (room - side) / 2u, side,
+                          side };
+    return rect;
+}
+
+/// Wimsy as Amberlith over what is drawn there, each pixel by its alpha; nothing where the frame
+/// has no room for her whole.
+static void DrawWimsy(const UiFrame *frame) {
+    const UiRect at = UiStartWimsyRect(frame->height);
+    if (at.width == 0u) {
+        return;
+    }
+    for (uint32_t y = 0; y < WIMSY_PICTURE_SIDE; ++y) {
+        for (uint32_t x = 0; x < WIMSY_PICTURE_SIDE; ++x) {
+            const uint8_t *const ink =
+                WIMSY_PICTURE_PALETTE[WIMSY_PICTURE[y * WIMSY_PICTURE_SIDE + x]];
+            if (ink[3] == 0u || at.x + x >= frame->width || at.y + y >= frame->height) {
+                continue;
+            }
+            uint8_t *const pixel = frame->pixels + (size_t)(at.y + y) * frame->pitch +
+                                   (size_t)(at.x + x) * 4u;
+            for (uint32_t c = 0; c < 3u; ++c) {
+                pixel[c] = (uint8_t)((ink[c] * ink[3] + pixel[c] * (255u - ink[3]) + 127u) / 255u);
+            }
+        }
+    }
+}
+
 UiRect UiStartNvnBox(uint32_t frame_width) {
     const uint32_t x = LIST_X + START_WIDTH + 2u * CW + CW / 2u;
     const UiRect box = { x, UiStartNvnTop(), frame_width > x + EDGE + CW ? frame_width - x - EDGE - CW : 0u,
@@ -2541,6 +2575,7 @@ static void ComposeStartBody(const UiFrame *frame, const UiStartInfo *info, UiSt
         }
     }
     Foot(frame, tip, tip_colour, keys, key_count);
+    DrawWimsy(frame);
 }
 
 void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState state,

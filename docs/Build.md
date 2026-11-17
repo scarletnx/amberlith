@@ -52,7 +52,7 @@ and the [libc](families/Libc.md) family's cases on this machine's C library. The
 own test, built for each of its API versions and for a game's own driver, the test of what the mod reads of a
 game's SDK module (`mod/tests/host_test.c`), and the tools' tests (`tools/perf.py`,
 `tools/run.py`, `tools/validate.py`, `tools/libc-math.py`, `tools/dksh-handles.py`, `tools/astc-blocks.py`,
-`tools/astc-images.py`, `tools/wimsy-mesh.py`, `tools/vic-expect.py`, `tools/blit2d-expect.py`,
+`tools/astc-images.py`, `tools/wimsy-mesh.py`, `tools/cover.py`, `tools/vic-expect.py`, `tools/blit2d-expect.py`,
 `tools/vp9-jobs.py`, `tools/nvn-lookups.py`, `tools/nvn-coverage.py`, `tools/npdm-ounce.py`, `tools/mod-imports.py`, `tools/mod-lacked.py` and
 `tools/sm86asm.py`), which need Python 3, the CI scripts' tests in `.github/scripts`, against a fake GitHub and a fake Discord, which also need
 git (and bash and jq for the pull request comment's tests, skipped and said so without them), and the APK's runners'

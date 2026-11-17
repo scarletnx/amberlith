@@ -30,7 +30,7 @@ APP_AUTHOR  := reden
 # the build id is what git says about the tree, so a report names the exact source it came
 # from, described from the version tags alone: the nightlies' tags would otherwise name it.
 # Both reach the program as macros and open every report. The cover, icon.jpg, is drawn
-# from static/icon.svg by `make icon` (rsvg-convert and magick, not needed for a build).
+# from Wimsy as Amberlith by `make icon` (rsvg-convert and magick, not needed for a build).
 APP_VERSION := $(strip $(shell cat VERSION))
 APP_BUILD   := $(strip $(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo unknown))
 # The commit alone, tags left out, with -dirty for uncommitted changes: what a run's folder is
@@ -238,9 +238,14 @@ validate: $(TARGET).nro
 	python3 tools/validate.py run $(EMULATOR) $(CURDIR)/$(BUILD)/validate.log
 .PHONY: validate
 
-# The cover from its source, 256 by 256 baseline JPEG as the loader wants it. Only when the
-# picture changes: the JPEG is committed so a build needs neither tool.
-icon: static/icon.svg
-	rsvg-convert -w 256 -h 256 $< -o $(BUILD)/icon.png
+# The cover from Wimsy as Amberlith, 256 by 256 baseline JPEG as the loader wants it, and the
+# picture of her the start screen draws. Only when the drawing changes: the cover, the JPEG and
+# the picture's source are committed so a build needs none of the tools.
+icon: static/wimsy-amberlith.svg tools/cover.py
+	python3 tools/cover.py
+	@mkdir -p $(BUILD)
+	rsvg-convert -w 256 -h 256 static/icon.svg -o $(BUILD)/icon.png
 	magick $(BUILD)/icon.png -background '#1b1b1f' -alpha remove -alpha off -interlace none -sampling-factor 1x1 -quality 92 icon.jpg
-.PHONY: icon
+wimsy-picture: static/wimsy-amberlith.svg tools/wimsy-picture.py
+	python3 tools/wimsy-picture.py
+.PHONY: icon wimsy-picture

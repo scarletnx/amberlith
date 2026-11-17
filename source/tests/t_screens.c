@@ -15,6 +15,7 @@
 #include "../report.h"
 #include "../touchref.h"
 #include "../ui.h"
+#include "../wimsypicture.h"
 #include "tests.h"
 
 // The detailed mode's screens: the index of the recorded cases, the walk from the overview to a
@@ -1559,6 +1560,40 @@ static void CheckStartScreen(Fixture *f) {
     DumpFrame(&frame, "9-start");
 }
 
+/// The start screen draws Wimsy as Amberlith under its rows, in the room above the tip: whole,
+/// clear of the last row and of the tip, her amber on the page and nothing of her outside.
+static void CheckStartWimsy(Fixture *f) {
+    const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
+    UiStartInfo info;
+    memset(&info, 0, sizeof(info));
+    info.heading = "Amberlith 0.3.0 (test)";
+    UiComposeStart(&frame, &info, StartFrom(NULL), 0u);
+    const UiRect at = UiStartWimsyRect(FRAME_HEIGHT);
+    const UiRect last = UiStartRowBox(UI_START_ROWS - 1u);
+    const bool placed = at.width == WIMSY_PICTURE_SIDE && at.height == WIMSY_PICTURE_SIDE &&
+                        at.y >= last.y + last.height && at.y + at.height <= TIP_TOP;
+    // Amber: much red, some green, little blue, which the page and the rows have none of.
+    uint32_t inside = 0;
+    uint32_t outside = 0;
+    for (uint32_t y = 0; y < FRAME_HEIGHT; ++y) {
+        for (uint32_t x = 0; x < FRAME_WIDTH; ++x) {
+            const uint8_t *const p = UiPixel(&frame, x, y);
+            const bool amber = p != NULL && p[0] > 200u && p[1] > 110u && p[1] < 225u && p[2] < 90u;
+            const bool in = x >= at.x && x < at.x + at.width && y >= at.y && y < at.y + at.height;
+            inside += amber && in ? 1u : 0u;
+            outside += amber && !in ? 1u : 0u;
+        }
+    }
+    CHECK_TRUE(SUITE, "the start screen draws Wimsy as Amberlith under its rows, clear of them and "
+                      "of the tip",
+               CHECK_NONE, placed && inside > 1500u && outside == 0u,
+               "at %u,%u, %u by %u, the last row ending at %u and the tip at %u; %u amber pixels "
+               "in her square and %u outside",
+               (unsigned)at.x, (unsigned)at.y, (unsigned)at.width, (unsigned)at.height,
+               (unsigned)(last.y + last.height), (unsigned)TIP_TOP, (unsigned)inside,
+               (unsigned)outside);
+}
+
 /// Moves the start screen's cursor down @p rows and presses A there, a frame each.
 static UiStartState StartChoose(UiStartState state, uint32_t row, const UiStartInfo *info) {
     uint32_t frame = UI_SETTLING_FRAMES;
@@ -2925,6 +2960,7 @@ void RunSupportScreens(void) {
     CheckOverflow(f);
     CheckEdges(f);
     CheckStartScreen(f);
+    CheckStartWimsy(f);
     CheckStartNvn(f);
     CheckStartMenu(f);
     CheckResumeScreen(f);
