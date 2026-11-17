@@ -9,10 +9,39 @@ it); libc, on the console, when a word names it. Android's frontend has the judg
 points at. A case that ends the program costs that case, not the rest of the run
 ([When the program ends in the middle](../Crashes.md)).
 
+Each family's suites and cases, written by `tools/case-counts.py` from [the catalogue](../cases.tsv): a case with a
+judge compares what the machine produced with an expected answer, at one of [the tiers](../Design.md#the-tiers); one
+without compares nothing (a device that opens, a time it measures); one not yet known only failed or skipped, with no
+tier, in the reports the catalogue was made from. The judge's cases hold the probe's own code to its references and
+judge no machine, so the last line leaves them out.
+
+<!-- counts: families -->
+| Category | Family | Suites | Cases | With a judge | Without one | Not yet known |
+|---|---|--:|--:|--:|--:|--:|
+| CPU and kernel | [The processor](Cpu.md) | 1 | 38 | 36 | 0 | 2 |
+| CPU and kernel | [Kernel](Kernel.md) | 2 | 29 | 27 | 2 | 0 |
+| GPU and NVN | [Graphics](Graphics.md) | 44 | 859 | 743 | 116 | 0 |
+| GPU and NVN | [nvn](Nvn.md) | 1 | 215 | 200 | 9 | 6 |
+| GPU and NVN | [nvn2](Nvn2.md) | 1 | 34 | 31 | 3 | 0 |
+| GPU and NVN | [Game](Game.md) | 2 | 87 | 34 | 53 | 0 |
+| GPU and NVN | [Demo](Demo.md) | 4 | 67 | 41 | 26 | 0 |
+| Video and audio | [Video](Video.md) | 2 | 27 | 25 | 2 | 0 |
+| Video and audio | [Audio](Audio.md) | 1 | 12 | 12 | 0 | 0 |
+| Video and audio | [Music](Music.md) | 1 | 12 | 12 | 0 | 0 |
+| System and services | [fs](Fs.md) | 1 | 15 | 13 | 2 | 0 |
+| System and services | [Display](Display.md) | 1 | 4 | 3 | 1 | 0 |
+| System and services | [Service](Service.md) | 40 | 125 | 109 | 14 | 2 |
+| System and services | [Net](Net.md) | 6 | 53 | 18 | 5 | 30 |
+| System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 |
+| Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 35 |
+| The judge and the tools | [The judge](Judge.md) | 3 | 805 | - | - | - |
+| **On a machine** | | **112** | **1626** | **1318** | **233** | **75** |
+<!-- /counts -->
+
 - **[The judge](./Judge.md)** - selfcheck, support and reference, no hardware involved
 - **[The processor](./Cpu.md)** - cpu
 - **[Pad](./Pad.md)** - a controller in a person's hands, and the touch screen ([touch](./Touch.md))
-- **[Graphics](./Graphics.md)** - the forty three drawing suites, clear to copy ([blit2d](./Blit2d.md)), and tex8k
+- **[Graphics](./Graphics.md)** - the drawing suites, clear to copy ([blit2d](./Blit2d.md)), and tex8k
 - **[nvn](./Nvn.md)** - the clear suite's question through the program's NVN, which ScarletNX takes as a game's
 - **[nvn2](./Nvn2.md)** - what a Switch 2 program asks of NVN: programs of its own shader code assembled by hand, a
   compute dispatch, and a Mandelbrot whose bars a mesh program draws; only the Switch 2 build runs it

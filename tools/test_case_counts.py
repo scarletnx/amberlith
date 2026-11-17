@@ -307,6 +307,17 @@ class ThisTree(unittest.TestCase):
     def test_every_block_is_what_the_catalogue_gives(self):
         self.assertEqual(tool.write(ROOT, check=True), [], "run tools/case-counts.py write")
 
+    def test_every_family_the_catalogue_has_is_counted_on_its_page_and_in_the_index(self):
+        rows = list(tool.read_catalogue(ROOT)[0].values())
+        written = collections.Counter((kind, name) for _, _, kind, name, _ in tool.blocks(ROOT))
+        for family in sorted({c.family for c in rows}):
+            with self.subTest(family=family):
+                self.assertGreaterEqual(written[("family", family)], 1, "no `counts: family %s` block" % family)
+        for category in tool.CATEGORIES:
+            with self.subTest(category=category):
+                self.assertEqual(written[("category", category)], 1, "docs/README.md's `counts: category` blocks")
+        self.assertEqual(written[("families", None)], 1)
+
     def test_the_host_build_ran_the_cases_the_catalogue_gives_it(self):
         if not os.path.exists(HOST_REPORT):
             self.fail("%s is missing: run make -f host.mk host-run" % HOST_REPORT)
