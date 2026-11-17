@@ -73,16 +73,32 @@ static const char *const LIMITER_MODE1 =
 #define SETTLE 24000u
 #define LOOP 48000u
 
-/// A case whose line carries what was measured, pass or fail.
+/// A case whose line carries what was measured, pass or fail, its expected level from @p from.
+static void CaseWith(const char *name, ReportFrom from, bool passed, const char *fmt,
+                     va_list args) {
+    char detail[480];
+    vsnprintf(detail, sizeof(detail), fmt, args);
+    ReportCaseFrom(SUITE, name, CHECK_LEVEL, from, passed, detail);
+}
+
+/// A case whose expected level the mixer's arithmetic gives, the suite's spec.
 static void Case(const char *name, bool passed, const char *fmt, ...)
     __attribute__((format(printf, 3, 4)));
 static void Case(const char *name, bool passed, const char *fmt, ...) {
-    char detail[480];
     va_list args;
     va_start(args, fmt);
-    vsnprintf(detail, sizeof(detail), fmt, args);
+    CaseWith(name, REPORT_FROM_UNSAID, passed, fmt, args);
     va_end(args);
-    ReportCase(SUITE, name, CHECK_LEVEL, passed, detail);
+}
+
+/// A case whose expected level comes from @p from.
+static void CaseFrom(const char *name, ReportFrom from, bool passed, const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+static void CaseFrom(const char *name, ReportFrom from, bool passed, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    CaseWith(name, from, passed, fmt, args);
+    va_end(args);
 }
 
 /// A line for the person listening: the emulator's log shows it as the part it names starts.
@@ -187,13 +203,14 @@ static void CaseThroughTables(void) {
         AudioSync(tone, LOOP * sizeof(int16_t));
         const double got = SubmixLevelAt(tone, c->hz, c->quality, (uint32_t)rate);
         const double want = AudioRefResampledLevel(c->taps, c->ratio, c->hz, 0.5);
-        Case(c->name, AudioRefWithin(got, want, 0.03),
-             "came out at %.4f, its table gives %.4f (%+.2f dB); the tables for a ratio up to 1, "
-             "below 1.3 and above give %.4f, %.4f and %.4f",
-             got, want, AudioRefDecibels(got, want),
-             AudioRefResampledLevelWith(c->taps, 1.0, c->ratio, c->hz, 0.5),
-             AudioRefResampledLevelWith(c->taps, 1.2, c->ratio, c->hz, 0.5),
-             AudioRefResampledLevelWith(c->taps, 2.0, c->ratio, c->hz, 0.5));
+        // The tables are fitted to the renderer's own as reden holds them (Audio.md).
+        CaseFrom(c->name, REPORT_FROM_EMULATOR, AudioRefWithin(got, want, 0.03),
+                 "came out at %.4f, its table gives %.4f (%+.2f dB); the tables for a ratio up to "
+                 "1, below 1.3 and above give %.4f, %.4f and %.4f",
+                 got, want, AudioRefDecibels(got, want),
+                 AudioRefResampledLevelWith(c->taps, 1.0, c->ratio, c->hz, 0.5),
+                 AudioRefResampledLevelWith(c->taps, 1.2, c->ratio, c->hz, 0.5),
+                 AudioRefResampledLevelWith(c->taps, 2.0, c->ratio, c->hz, 0.5));
     }
 }
 

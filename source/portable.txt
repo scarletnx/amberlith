@@ -7,6 +7,7 @@
 # read this list; the console's Makefile compiles every source of source/ anyway.
 source/runner.c
 source/report.c
+source/origin.c
 source/baseline.c
 source/journal.c
 source/hang.c

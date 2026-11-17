@@ -20,10 +20,17 @@ write puts the counts into every block of docs/ between `<!-- counts: KIND [NAME
 suites, `suite NAME` a suite's line. --check writes nothing and exits 1 naming each block that is not what the
 catalogue gives.
 
-unjudged lists the cases with no judge, or none known yet, of a family or of all.
+unjudged lists the cases with no judge, or none known yet, of a family or of all; unsaid the cases with a judge
+whose lines did not say where their expected answer comes from.
+
+Where a case's answer comes from is its lines' `expected_from` (docs/Report.md): the console, the driver, astcenc,
+another reference, an emulator or the specification, the strongest first. write and --check also hold
+source/origin.c, which gives each suite's lines theirs, to ui.c's families: every suite of a family that judges a
+machine has a row, with a word there is.
 
 Anything it cannot place stops it, named: a suite no family takes, a build that is not one, a host report given as
-another build's or another's as the host's, a block of a kind or a name there is not, a case name with a tab.
+another build's or another's as the host's, a block of a kind or a name there is not, a case name with a tab, a
+suite with no row in source/origin.c or a row with a source there is not.
 """
 
 import argparse
@@ -36,6 +43,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 CATALOGUE = "docs/cases.tsv"
 UI = "source/ui.c"
+ORIGIN = "source/origin.c"
 DOCS = "docs"
 
 BUILDS = ("nro", "ounce", "mod", "apk", "host")
@@ -48,10 +56,29 @@ BUILD_WORDS = {
     "apk": "Android",
     "host": "the host build",
 }
-FROM_WORDS = {"console": "the console", "astcenc": "astcenc", "spec": "the specification"}
+# Where a case's expected answer comes from, the strongest first: the words of source/report.c's FROM_WORDS and
+# origin.c's REPORT_FROM_* names, what a count calls each, and the column a table counts it in (astcenc's is one
+# reference among others).
+SOURCES = ("console", "driver", "astcenc", "reference", "emulator", "spec")
+FROM_WORDS = {
+    "console": "the console",
+    "driver": "the driver",
+    "astcenc": "astcenc",
+    "reference": "another reference",
+    "emulator": "an emulator",
+    "spec": "the specification",
+}
+COLUMNS = (
+    ("Console", ("console",)),
+    ("Driver", ("driver",)),
+    ("Reference", ("astcenc", "reference")),
+    ("Emulator", ("emulator",)),
+    ("Spec", ("spec",)),
+)
 
-# Suites ui.c's FAMILIES has no row for: the Switch 2 build's own family, and Android's two.
-EXTRA_FAMILIES = {"nvn2": "nvn2", "jni": "jni", "framework": "framework"}
+# Suites ui.c's FAMILIES has no row for: the Switch 2 build's own family, Android's two and its C library's
+# suite, and the mod's own, whose cases bring the game's NVN driver up.
+EXTRA_FAMILIES = {"nvn2": "nvn2", "jni": "jni", "framework": "framework", "bionic": "libc", "mod": "nvn"}
 # What a family is called in a table, and its page under docs/families/.
 FAMILY_PAGES = collections.OrderedDict(
     [
@@ -124,7 +151,59 @@ def read_families(root):
     return families
 
 
+ORIGIN_ROW = re.compile(r'\{\s*"([a-z0-9-]+)",\s*REPORT_FROM_([A-Z]+)\s*\}')
+
+
+def read_origins(root):
+    """origin.c's rows, suite to source word, in its order."""
+    with open(os.path.join(root, ORIGIN), encoding="utf-8") as file:
+        text = file.read()
+    start = text.find("ORIGINS[]")
+    if start < 0:
+        raise Refused("%s: no ORIGINS[] table" % ORIGIN)
+    origins = collections.OrderedDict()
+    for suite, word in ORIGIN_ROW.findall(text[start:]):
+        word = word.lower()
+        if word not in SOURCES:
+            raise Refused(
+                "%s: %s's source REPORT_FROM_%s is not one; the sources are %s"
+                % (ORIGIN, suite, word.upper(), ", ".join(SOURCES))
+            )
+        if suite in origins:
+            raise Refused("%s: %s has two rows" % (ORIGIN, suite))
+        origins[suite] = word
+    return origins
+
+
+def check_origins(root, families):
+    """Refused naming every machine suite origin.c has no row for, every row of a suite no family takes and every
+    row of a judge suite, which judges no machine."""
+    origins = read_origins(root)
+    missing = [suite for suite, family in families.items() if family != OWN and suite not in origins]
+    stray = [suite for suite in origins if suite not in families]
+    own = [suite for suite in origins if families.get(suite) == OWN]
+    problems = []
+    if missing:
+        problems.append("no row for %s" % ", ".join(missing))
+    if stray:
+        problems.append("rows for %s, which no family takes" % ", ".join(stray))
+    if own:
+        problems.append("rows for %s, the judge's, which judge no machine" % ", ".join(own))
+    if problems:
+        raise Refused("%s: %s" % (ORIGIN, "; ".join(problems)))
+    return origins
+
+
 Case = collections.namedtuple("Case", "suite name family judge source builds")
+
+
+def strongest(source):
+    """The strongest of a case's sources (its catalogue field, comma separated), or None when it has none."""
+    found = [word for word in source.split(",") if word != "-"]
+    for word in SOURCES:
+        if word in found:
+            return word
+    return found[0] if found else None
 
 
 def read_report(path, build):
@@ -275,6 +354,7 @@ class Tally:
         self.unknown = 0
         self.tiers = collections.Counter()
         self.sources = collections.Counter()
+        self.unsaid = 0
         self.builds = collections.Counter()
         self.suites = []
 
@@ -291,9 +371,14 @@ class Tally:
             self.judged += 1
             for tier in case.judge.split("+"):
                 self.tiers[tier] += 1
-        for source in case.source.split(","):
-            if source != "-":
-                self.sources[source] += 1
+            if strongest(case.source) is None and case.family != OWN:
+                self.unsaid += 1
+        source = strongest(case.source)
+        if source is not None:
+            self.sources[source] += 1
+
+    def column(self, words):
+        return sum(self.sources[word] for word in words)
 
 
 def tallies(rows, by):
@@ -309,9 +394,19 @@ def plural(n, word):
     return "%d %s" % (n, word[:-1] + "ies" if word.endswith("y") else word + "s")
 
 
+def source_words(t):
+    """Each source's count, the strongest first, then any word this tool does not know."""
+    known = ["%s %d" % (FROM_WORDS[s], t.sources[s]) for s in SOURCES if t.sources[s]]
+    other = ["%s %d" % (s, n) for s, n in sorted(t.sources.items()) if s not in SOURCES]
+    words = ", ".join(known + other)
+    if t.unsaid:
+        words += "%snot said %d" % (", " if words else "", t.unsaid)
+    return words
+
+
 def judged_words(t):
     tiers = ", ".join("%s %d" % (tier, t.tiers[tier]) for tier in TIERS if t.tiers[tier])
-    sources = ", ".join("%s %d" % (FROM_WORDS.get(s, s), n) for s, n in sorted(t.sources.items()))
+    sources = source_words(t)
     inside = tiers + ("; expected from " + sources if sources else "")
     return "%d with a judge%s" % (t.judged, " (%s)" % inside if inside else "")
 
@@ -327,7 +422,7 @@ def suite_line(t, own):
     if own:
         words = "%s, each held to an answer worked out by hand or by a reference program" % plural(t.cases, "case")
         if t.sources:
-            words += " (%s)" % ", ".join("%s %d" % (FROM_WORDS.get(s, s), n) for s, n in sorted(t.sources.items()))
+            words += " (%s)" % source_words(t)
         return "**%s**: the probe's own code, no machine output judged%s." % (words, by_build(t))
     parts = [judged_words(t), "%d without one" % t.none]
     if t.unknown:
@@ -335,17 +430,28 @@ def suite_line(t, own):
     return "**%s**: %s%s." % (plural(t.cases, "case"), ", ".join(parts), by_build(t))
 
 
+def origin_heads(unsaid):
+    """The columns that count a judged case by where its answer comes from; Not said only when a case is."""
+    return [title for title, _ in COLUMNS] + (["Not said"] if unsaid else [])
+
+
+def origin_cells(t, unsaid):
+    return [t.column(words) for _, words in COLUMNS] + ([t.unsaid] if unsaid else [])
+
+
 def table(rows, first, by, link=None):
-    head = "| %s | Cases | With a judge | Without one | Not yet known |\n|---|--:|--:|--:|--:|\n" % first
-    body = ""
     total = Tally()
     for case in rows:
         total.add(case)
-    for key, t in tallies(rows, by).items():
-        name = link(key) if link else key
-        body += "| %s | %d | %d | %d | %d |\n" % (name, t.cases, t.judged, t.none, t.unknown)
-    body += "| **All** | **%d** | **%d** | **%d** | **%d** |\n" % (total.cases, total.judged, total.none, total.unknown)
-    return head + body
+    unsaid = total.unsaid > 0
+    heads = [first, "Cases", "With a judge"] + origin_heads(unsaid) + ["Without one", "Not yet known"]
+    lines = ["| %s |" % " | ".join(heads), "|---|%s" % ("--:|" * (len(heads) - 1))]
+    for key, t in list(tallies(rows, by).items()) + [("**All**", total)]:
+        cells = [t.cases, t.judged] + origin_cells(t, unsaid) + [t.none, t.unknown]
+        bold = "**%d**" if key == "**All**" else "%d"
+        name = key if key == "**All**" or not link else link(key)
+        lines.append("| %s | %s |" % (name, " | ".join(bold % n for n in cells)))
+    return "\n".join(lines) + "\n"
 
 
 def render(kind, name, rows, families):
@@ -404,11 +510,14 @@ def render(kind, name, rows, families):
     if kind == "families":
         if name:
             raise Refused("families takes no name, and was given %r" % name)
-        lines = [
-            "| Category | Family | Suites | Cases | With a judge | Without one | Not yet known |",
-            "|---|---|--:|--:|--:|--:|--:|",
-        ]
         machine = Tally()
+        for case in rows:
+            if case.family != OWN:
+                machine.add(case)
+        unsaid = machine.unsaid > 0
+        heads = ["Category", "Family", "Suites", "Cases", "With a judge"] + origin_heads(unsaid)
+        heads += ["Without one", "Not yet known"]
+        lines = ["| %s |" % " | ".join(heads), "|---|---|%s" % ("--:|" * (len(heads) - 2))]
         for title, members in CATEGORIES.values():
             for family in members:
                 mine = [c for c in rows if c.family == family]
@@ -419,16 +528,13 @@ def render(kind, name, rows, families):
                     t.add(case)
                 label, page = FAMILY_PAGES[family]
                 if family == OWN:
-                    cells = "| %d | - | - | - |" % t.cases
+                    cells = ["%d" % t.cases] + ["-"] * (len(heads) - 4)
                 else:
-                    for case in mine:
-                        machine.add(case)
-                    cells = "| %d | %d | %d | %d |" % (t.cases, t.judged, t.none, t.unknown)
-                lines.append("| %s | [%s](%s) | %d %s" % (title, label, page, len(t.suites), cells))
-        lines.append(
-            "| **On a machine** | | **%d** | **%d** | **%d** | **%d** | **%d** |"
-            % (len(machine.suites), machine.cases, machine.judged, machine.none, machine.unknown)
-        )
+                    cells = ["%d" % n for n in [t.cases, t.judged] + origin_cells(t, unsaid) + [t.none, t.unknown]]
+                lines.append("| %s | [%s](%s) | %d | %s |" % (title, label, page, len(t.suites), " | ".join(cells)))
+        counts = [len(machine.suites), machine.cases, machine.judged] + origin_cells(machine, unsaid)
+        counts += [machine.none, machine.unknown]
+        lines.append("| **On a machine** | | %s |" % " | ".join("**%d**" % n for n in counts))
         return "\n".join(lines) + "\n"
     raise Refused("block kind %r is not one; the kinds are families, category, family and suite" % kind)
 
@@ -452,6 +558,7 @@ def blocks(root):
 def write(root, check):
     """The blocks written, or with @p check the ones that are stale, each as `path:line: kind name`."""
     families = read_families(root)
+    check_origins(root, families)
     # ui.c decides a suite's family, so moving one there moves its counts without a new catalogue
     rows = [c._replace(family=families.get(c.suite, c.family)) for c in read_catalogue(root)[0].values()]
     stale = []
@@ -482,12 +589,21 @@ def write(root, check):
     return stale
 
 
-def unjudged(root, family):
+def machine_cases(root, family):
+    """The catalogue's cases of @p family, or of every family but the judge's."""
     rows = list(read_catalogue(root)[0].values())
     families = list(collections.OrderedDict.fromkeys(read_families(root).values()))
     if family and family not in families:
         raise Refused("family %r is not one; the families are %s" % (family, ", ".join(families)))
-    return [c for c in rows if c.judge in ("none", "unknown") and c.family != OWN and family in (None, c.family)]
+    return [c for c in rows if c.family != OWN and family in (None, c.family)]
+
+
+def unjudged(root, family):
+    return [c for c in machine_cases(root, family) if c.judge in ("none", "unknown")]
+
+
+def unsaid(root, family):
+    return [c for c in machine_cases(root, family) if c.judge not in ("none", "unknown") and not strongest(c.source)]
 
 
 def parse_given(items):
@@ -514,6 +630,8 @@ def main(argv=None):
     out.add_argument("--check", action="store_true", help="write nothing; exit 1 naming each stale block")
     lack = commands.add_parser("unjudged", help="the cases with no judge, or none known yet")
     lack.add_argument("family", nargs="?")
+    quiet = commands.add_parser("unsaid", help="the judged cases that do not say where their answer comes from")
+    quiet.add_argument("family", nargs="?")
     args = parser.parse_args(argv)
     try:
         if args.command == "catalogue":
@@ -530,7 +648,8 @@ def main(argv=None):
             if not args.check and stale:
                 print("rewrote %s" % plural(len(stale), "block"))
             return 0
-        for case in unjudged(args.root, args.family):
+        listed = unjudged if args.command == "unjudged" else unsaid
+        for case in listed(args.root, args.family):
             print("%s\t%s\t%s\t%s" % (case.family, case.suite, case.judge, case.name))
         return 0
     except Refused as error:

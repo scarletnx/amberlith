@@ -278,10 +278,22 @@ size_t ReportBuildResultLine(char *out, size_t out_size, const char *suite, cons
                                       detail, paths, NULL);
 }
 
-static const char *const FROM_WORDS[REPORT_FROM_COUNT] = { NULL, "spec", "astcenc", "console" };
+static const char *const FROM_WORDS[REPORT_FROM_COUNT] = {
+    NULL, "spec", "astcenc", "console", "driver", "reference", "emulator",
+};
 
 const char *ReportFromWord(ReportFrom from) {
     return from < REPORT_FROM_COUNT ? FROM_WORDS[from] : NULL;
+}
+
+ReportFrom ReportOriginOf(const char *suite, CheckTier tier, ReportFrom said) {
+    if (tier == CHECK_NONE) {
+        return REPORT_FROM_UNSAID;
+    }
+    if (said != REPORT_FROM_UNSAID) {
+        return said;
+    }
+    return ReportSuiteFrom(suite);
 }
 
 size_t ReportBuildTimedResultLine(char *out, size_t out_size, const char *suite,
@@ -806,7 +818,7 @@ static void EndCase(const char *suite, const char *name, CheckTier tier, bool pa
 
     char line[REPORT_LINE_MAX];
     ReportBuildTimedResultLine(line, sizeof(line), suite, name, TierName(tier),
-                               tier != CHECK_NONE ? ReportFromWord(from) : NULL,
+                               ReportFromWord(ReportOriginOf(suite, tier, from)),
                                passed_ ? "pass" : "fail", NULL, detail, &paths,
                                timed ? &us : NULL);
     Emit(line);
@@ -916,6 +928,18 @@ void ReportCaseTime(const char *suite, const char *name, CheckTier tier, bool pa
     }
     if (!EndUnasked(suite, name, passed_)) {
         EndCase(suite, name, tier, passed_, detail, &us, REPORT_FROM_UNSAID);
+    }
+    Watch(suite, name);
+}
+
+void ReportCaseTimeFrom(const char *suite, const char *name, CheckTier tier, ReportFrom from,
+                        bool passed_, const char *detail, uint32_t us) {
+    if (Unpicked(suite, name)) {
+        PictureDiscard();
+        return;
+    }
+    if (!EndUnasked(suite, name, passed_)) {
+        EndCase(suite, name, tier, passed_, detail, &us, from);
     }
     Watch(suite, name);
 }

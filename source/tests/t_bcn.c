@@ -208,12 +208,13 @@ static void ArrayCaseRun(GpuContext *gpu, const DkShader *vertex_shader,
             }
         }
     }
-    CHECK_TRUE(SUITE, c->name, CHECK_EXACT, wrong == 0,
-               "%u of %u pixels wrong; level %u layer %u texel (%u, %u) is %02x%02x%02x%02x, "
-               "its block's %02x0000ff",
-               (unsigned)wrong, (unsigned)judged, (unsigned)first_level, (unsigned)first_layer,
-               (unsigned)first_x, (unsigned)first_y, seen[0], seen[1], seen[2], seen[3],
-               first_want);
+    // Where each block lies is the library's layout, which no decoder gives.
+    CHECK_TRUE_FROM(SUITE, c->name, CHECK_EXACT, REPORT_FROM_SPEC, wrong == 0,
+                    "%u of %u pixels wrong; level %u layer %u texel (%u, %u) is %02x%02x%02x%02x, "
+                    "its block's %02x0000ff",
+                    (unsigned)wrong, (unsigned)judged, (unsigned)first_level, (unsigned)first_layer,
+                    (unsigned)first_x, (unsigned)first_y, seen[0], seen[1], seen[2], seen[3],
+                    first_want);
 }
 
 // ---- one block of each format, decoded

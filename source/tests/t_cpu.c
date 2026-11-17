@@ -629,11 +629,11 @@ static void TickCase(void) {
     // At least the sleep's 1.92 million ticks, and less than ten times them: a wake up to a
     // second late still passes, a count at another rate does not.
     const uint64_t counted = after - before;
-    CHECK_TRUE(SUITE, TICK, CHECK_POSITION,
-               frequency == 19200000u && counted >= 1920000u && counted < 19200000u,
-               "cntfrq_el0 reads %llu; 100 ms asleep counted %llu ticks, at least 1920000 and under "
-               "19200000 at 19.2 MHz",
-               (unsigned long long)frequency, (unsigned long long)counted);
+    CHECK_TRUE_FROM(SUITE, TICK, CHECK_POSITION, REPORT_FROM_SPEC,
+                    frequency == 19200000u && counted >= 1920000u && counted < 19200000u,
+                    "cntfrq_el0 reads %llu; 100 ms asleep counted %llu ticks, at least 1920000 "
+                    "and under 19200000 at 19.2 MHz",
+                    (unsigned long long)frequency, (unsigned long long)counted);
 }
 
 static void ShiftCase(const char *name, unsigned first, unsigned count,
@@ -1086,9 +1086,9 @@ static void StoreCase(void) {
             first = i;
         }
     }
-    CHECK_TRUE(SUITE, STORE, CHECK_EXACT, wrong == 0,
-               "%u of 96 bytes wrong; the first, byte %u, holds 0x%02x, expected 0x%02x", wrong,
-               first, out[first], want[first]);
+    CHECK_TRUE_FROM(SUITE, STORE, CHECK_EXACT, REPORT_FROM_SPEC, wrong == 0,
+                    "%u of 96 bytes wrong; the first, byte %u, holds 0x%02x, expected 0x%02x",
+                    wrong, first, out[first], want[first]);
 }
 
 /// LDXP of the pair at @p pair, then STXP of @p next, retried while the store fails (as the
@@ -1130,18 +1130,19 @@ static void PairCases(void) {
     if (ReportStart(SUITE, PAIR)) {
         memcpy(pair, FIRST, sizeof(pair));
         const uint32_t status = ExclusivePair(pair, NEXT, old, false);
-        CHECK_TRUE(SUITE, PAIR, CHECK_EXACT,
-                   status == 0u && memcmp(old, FIRST, 16) == 0 && memcmp(pair, NEXT, 16) == 0,
-                   "status %u, loaded %016llx %016llx, the pair now %016llx %016llx",
-                   (unsigned)status, (unsigned long long)old[0], (unsigned long long)old[1],
-                   (unsigned long long)pair[0], (unsigned long long)pair[1]);
+        CHECK_TRUE_FROM(SUITE, PAIR, CHECK_EXACT, REPORT_FROM_SPEC,
+                        status == 0u && memcmp(old, FIRST, 16) == 0 && memcmp(pair, NEXT, 16) == 0,
+                        "status %u, loaded %016llx %016llx, the pair now %016llx %016llx",
+                        (unsigned)status, (unsigned long long)old[0], (unsigned long long)old[1],
+                        (unsigned long long)pair[0], (unsigned long long)pair[1]);
     }
     if (ReportStart(SUITE, PAIR_CLREX)) {
         memcpy(pair, FIRST, sizeof(pair));
         const uint32_t status = ExclusivePair(pair, NEXT, old, true);
-        CHECK_TRUE(SUITE, PAIR_CLREX, CHECK_EXACT, status == 1u && memcmp(pair, FIRST, 16) == 0,
-                   "status %u, the pair now %016llx %016llx", (unsigned)status,
-                   (unsigned long long)pair[0], (unsigned long long)pair[1]);
+        CHECK_TRUE_FROM(SUITE, PAIR_CLREX, CHECK_EXACT, REPORT_FROM_SPEC,
+                        status == 1u && memcmp(pair, FIRST, 16) == 0,
+                        "status %u, the pair now %016llx %016llx", (unsigned)status,
+                        (unsigned long long)pair[0], (unsigned long long)pair[1]);
     }
 }
 
@@ -1174,7 +1175,8 @@ void RunCpu(void) {
             wrong += out8[i] != CpuRefClz8(CPU_CLZ8_INPUT[i]);
             used += (size_t)snprintf(seen + used, sizeof(seen) - used, " %u", out8[i]);
         }
-        CHECK_TRUE(SUITE, CLZ8, CHECK_EXACT, wrong == 0, "%d lanes wrong, got%s", wrong, seen);
+        CHECK_TRUE_FROM(SUITE, CLZ8, CHECK_EXACT, REPORT_FROM_SPEC,
+                        wrong == 0, "%d lanes wrong, got%s", wrong, seen);
     }
 
     if (ReportStart(SUITE, CLZ16)) {
@@ -1186,7 +1188,8 @@ void RunCpu(void) {
             wrong += out16[i] != CpuRefClz16(CPU_CLZ16_INPUT[i]);
             used += (size_t)snprintf(seen + used, sizeof(seen) - used, " 0x%04x", out16[i]);
         }
-        CHECK_TRUE(SUITE, CLZ16, CHECK_EXACT, wrong == 0, "%d lanes wrong, got%s", wrong, seen);
+        CHECK_TRUE_FROM(SUITE, CLZ16, CHECK_EXACT, REPORT_FROM_SPEC,
+                        wrong == 0, "%d lanes wrong, got%s", wrong, seen);
     }
 
     if (ReportStart(SUITE, CLZ32)) {
@@ -1198,7 +1201,8 @@ void RunCpu(void) {
             wrong += out32[i] != CpuRefClz32(CPU_CLZ32_INPUT[i]);
             used += (size_t)snprintf(seen + used, sizeof(seen) - used, " %u", (unsigned)out32[i]);
         }
-        CHECK_TRUE(SUITE, CLZ32, CHECK_EXACT, wrong == 0, "%d lanes wrong, got%s", wrong, seen);
+        CHECK_TRUE_FROM(SUITE, CLZ32, CHECK_EXACT, REPORT_FROM_SPEC,
+                        wrong == 0, "%d lanes wrong, got%s", wrong, seen);
     }
 
     // Division by zero is defined on this processor: zero, whatever the dividend.
@@ -1337,24 +1341,27 @@ void RunCpu(void) {
         CpuGapRoundingShifts(CPU_RSHL_VALUE, CPU_RSHL_SHIFT, gap_out, gap_fpsr);
         const unsigned gap_wrong = GapCheck(CPU_GAP_RSHL, CPU_GAP_RSHL_FORMS, gap_out, gap_fpsr,
                                             gap_detail, sizeof(gap_detail));
-        CHECK_TRUE(SUITE, GAP_RSHL, CHECK_EXACT, gap_wrong == 0, "%u of %u wrong, first: %s",
-                   gap_wrong, CPU_GAP_RSHL_FORMS, gap_detail);
+        CHECK_TRUE_FROM(SUITE, GAP_RSHL, CHECK_EXACT, REPORT_FROM_SPEC,
+                        gap_wrong == 0, "%u of %u wrong, first: %s",
+                        gap_wrong, CPU_GAP_RSHL_FORMS, gap_detail);
     }
     if (ReportStart(SUITE, GAP_DMUL)) {
         memset(gap_out, 0, sizeof(gap_out));
         CpuGapDoublingMultiplies(CPU_DMUL_A, CPU_DMUL_B, CPU_DMUL_ACC, gap_out, gap_fpsr);
         const unsigned gap_wrong = GapCheck(CPU_GAP_DMUL, CPU_GAP_DMUL_FORMS, gap_out, gap_fpsr,
                                             gap_detail, sizeof(gap_detail));
-        CHECK_TRUE(SUITE, GAP_DMUL, CHECK_EXACT, gap_wrong == 0, "%u of %u wrong, first: %s",
-                   gap_wrong, CPU_GAP_DMUL_FORMS, gap_detail);
+        CHECK_TRUE_FROM(SUITE, GAP_DMUL, CHECK_EXACT, REPORT_FROM_SPEC,
+                        gap_wrong == 0, "%u of %u wrong, first: %s",
+                        gap_wrong, CPU_GAP_DMUL_FORMS, gap_detail);
     }
     if (ReportStart(SUITE, GAP_RNARROW)) {
         memset(gap_out, 0, sizeof(gap_out));
         CpuGapRoundingNarrows(CPU_RNARROW_VALUE, gap_out, gap_fpsr);
         const unsigned gap_wrong = GapCheck(CPU_GAP_RNARROW, CPU_GAP_RNARROW_FORMS, gap_out,
                                             gap_fpsr, gap_detail, sizeof(gap_detail));
-        CHECK_TRUE(SUITE, GAP_RNARROW, CHECK_EXACT, gap_wrong == 0, "%u of %u wrong, first: %s",
-                   gap_wrong, CPU_GAP_RNARROW_FORMS, gap_detail);
+        CHECK_TRUE_FROM(SUITE, GAP_RNARROW, CHECK_EXACT, REPORT_FROM_SPEC,
+                        gap_wrong == 0, "%u of %u wrong, first: %s",
+                        gap_wrong, CPU_GAP_RNARROW_FORMS, gap_detail);
     }
 
     // The floating point rules a translator emulates in software or maps to a host's own
@@ -1369,15 +1376,16 @@ void RunCpu(void) {
     if (ReportStart(SUITE, CNTVCT)) {
         uint64_t counts[4];
         ReadCounts(counts);
-        CHECK_TRUE(SUITE, CNTVCT, CHECK_EXACT,
-                   counts[1] <= counts[2] && counts[2] - counts[1] <= counts[3] - counts[0],
-                   "physical %llu, virtual %llu then %llu, physical %llu",
-                   (unsigned long long)counts[0], (unsigned long long)counts[1],
-                   (unsigned long long)counts[2], (unsigned long long)counts[3]);
+        CHECK_TRUE_FROM(SUITE, CNTVCT, CHECK_EXACT, REPORT_FROM_SPEC,
+                        counts[1] <= counts[2] && counts[2] - counts[1] <= counts[3] - counts[0],
+                        "physical %llu, virtual %llu then %llu, physical %llu",
+                        (unsigned long long)counts[0], (unsigned long long)counts[1],
+                        (unsigned long long)counts[2], (unsigned long long)counts[3]);
     }
     if (ReportStart(SUITE, DAIF)) {
         const uint64_t daif = ReadDaif();
-        CHECK_TRUE(SUITE, DAIF, CHECK_EXACT, (daif & ~0x3c0ull) == 0, "daif %016llx",
-                   (unsigned long long)daif);
+        CHECK_TRUE_FROM(SUITE, DAIF, CHECK_EXACT, REPORT_FROM_SPEC,
+                        (daif & ~0x3c0ull) == 0, "daif %016llx",
+                        (unsigned long long)daif);
     }
 }
