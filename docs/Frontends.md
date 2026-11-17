@@ -68,6 +68,7 @@ The rest is the frontend's own code, around the runner's calls (`runner.h`):
 | The console (NRO) | `source/main.c`, `source/platform_switch.c` | `sdmc:/edenprobe` | judge and cpu always; graphics, fs, net when no word names one; pad, kernel, display, video, audio, service, game, libc and music when named |
 | Android (APK) | `android/src/main/cpp/frontend.c`, `platform_android.c`, the Java in `android/src/main/java` | the app's external files, `edenprobe/` | judge always; libc, graphics, net, jni and framework when no word names one ([On Android](Android.md)) |
 | The Switch 2 (ExeFS) | `ounce/frontend.c`, `source/platform_switch.c` | `sdmc:/edenprobe` | judge always; nvn (the `nvn` and `nvn2` suites) when no word names one ([The probe as a Switch 2 program](Ounce.md)) |
+| A mod of a game (`subsdk9`) | `mod/frontend.c`, `mod/start.c`, `mod/platform.c` | `sdmc:/edenprobe` | the judge's selfcheck and support always; nvn (the `mod` suite and the `nvn` suite's looked up way, on the game's own driver) when no word names one ([The probe as a mod of a game](Mod.md)) |
 | Host | `source/host_main.c`, `source/platform_host.c` | none: `edenprobe-host-report.jsonl` where it runs | the judge and the libc family, every time ([Build](Build.md#the-host-build)) |
 
 The console runs the libc family only when a word names it, so a run that names no family reports what it did

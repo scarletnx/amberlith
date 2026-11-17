@@ -18,9 +18,42 @@
 // abort turned into a return, the program's screen that may hold the window, and the scene's
 // deko3d way.
 #if NVN_LAYER_API < 231
+#ifndef NVN_LAYER_GAME_DRIVER
 #include "../gpu.h"
 #include "../viewer.h"
+#else
+// A program loaded into a game (the layer's build for a game's own driver) has none of them
+// either: no deko3d whose abort a guard would turn, and no screen of its own.
+static bool AbortGuarded(void (*call)(void), uint32_t *result) {
+    (void)result;
+    call();
+    return true;
+}
+
+static bool ViewerScreenUp(void) {
+    return false;
+}
 #endif
+#endif
+
+// A window is made on the program's own native window, which a program loaded into a game has
+// none of: the game's is the game's to make.
+#ifdef NVN_LAYER_GAME_DRIVER
+#define NVN_HAS_WINDOW 0
+#else
+#define NVN_HAS_WINDOW 1
+#endif
+
+/// The native window a window builder is given. With none of the program's own, an address a
+/// builder only keeps and gives back: no window is made of it (NVN_HAS_WINDOW).
+static NVNnativeWindow NativeWindow(void) {
+#if NVN_HAS_WINDOW
+    return (NVNnativeWindow)nwindowGetDefault();
+#else
+    static char none;
+    return (NVNnativeWindow)&none;
+#endif
+}
 
 // The nvn family: the clear suite's question asked through NVN, as a game asks it, with the
 // layer of nvnlayer/ as the driver. On the console and in Eden the layer records deko3d
@@ -3099,7 +3132,7 @@ static bool WindowUp(char *why, size_t why_size) {
     _Alignas(8) NVNwindowBuilder window_builder;
     nvn.nvn.nvnWindowBuilderSetDefaults(&window_builder);
     nvn.nvn.nvnWindowBuilderSetDevice(&window_builder, &nvn.device);
-    nvn.nvn.nvnWindowBuilderSetNativeWindow(&window_builder, nwindowGetDefault());
+    nvn.nvn.nvnWindowBuilderSetNativeWindow(&window_builder, NativeWindow());
     nvn.nvn.nvnWindowBuilderSetTextures(&window_builder, WINDOW_TEXTURES, list);
     win.window_up = nvn.nvn.nvnWindowInitialize(&win.window, &window_builder);
     if (!win.window_up) {
@@ -3173,7 +3206,7 @@ static void WindowBuilderCase(const char *name) {
     _Alignas(8) NVNwindowBuilder builder;
     nvn.nvn.nvnWindowBuilderSetDefaults(&builder);
     nvn.nvn.nvnWindowBuilderSetDevice(&builder, &nvn.device);
-    nvn.nvn.nvnWindowBuilderSetNativeWindow(&builder, nwindowGetDefault());
+    nvn.nvn.nvnWindowBuilderSetNativeWindow(&builder, NativeWindow());
     nvn.nvn.nvnWindowBuilderSetTextures(&builder, 3, list);
     nvn.nvn.nvnWindowBuilderSetPresentInterval(&builder, 2);
     nvn.nvn.nvnWindowBuilderSetNumActiveTextures(&builder, 2);
@@ -3182,7 +3215,7 @@ static void WindowBuilderCase(const char *name) {
           (long long)(uintptr_t)&nvn.device);
     Gives(why, sizeof(why), "the builder's native window",
           (long long)(uintptr_t)nvn.nvn.nvnWindowBuilderGetNativeWindow(&builder),
-          (long long)(uintptr_t)nwindowGetDefault());
+          (long long)(uintptr_t)NativeWindow());
     Gives(why, sizeof(why), "the builder's number of textures",
           nvn.nvn.nvnWindowBuilderGetNumTextures(&builder), 3);
     static const char *const which[3] = { "the builder's texture 0", "the builder's texture 1",
@@ -3213,7 +3246,7 @@ static void WindowSaysCase(const char *name) {
     nvn.nvn.nvnWindowSetDebugLabel(&win.window, "edenprobe's window");
     Gives(why, sizeof(why), "the window's native window",
           (long long)(uintptr_t)nvn.nvn.nvnWindowGetNativeWindow(&win.window),
-          (long long)(uintptr_t)nwindowGetDefault());
+          (long long)(uintptr_t)NativeWindow());
     Gives(why, sizeof(why), "the window's number of textures",
           nvn.nvn.nvnWindowGetNumTextures(&win.window), WINDOW_TEXTURES);
     nvn.nvn.nvnWindowSetNumActiveTextures(&win.window, 1);
@@ -3618,10 +3651,21 @@ static void LayerCases(LayerWay way) {
         int minor = -1;
         nvn.nvn.nvnDeviceGetInteger(&nvn.device, NVN_DEVICE_INFO_API_MAJOR_VERSION, &major);
         nvn.nvn.nvnDeviceGetInteger(&nvn.device, NVN_DEVICE_INFO_API_MINOR_VERSION, &minor);
+#ifdef NVN_LAYER_GAME_DRIVER
+        // The game's driver has its own version; its major is one this build has the objects
+        // of, or the device above was made in storage of another size.
+        CHECK_TRUE(SUITE, VERSION, CHECK_EXACT,
+                   major >= NVN_LAYER_GAME_API_MAJOR_OLDEST && major <= NVN_LAYER_API_MAJOR &&
+                       minor >= 0,
+                   "API %d.%d, the game's driver's, where this build has the objects of API %d "
+                   "to %d",
+                   major, minor, NVN_LAYER_GAME_API_MAJOR_OLDEST, NVN_LAYER_API_MAJOR);
+#else
         CHECK_TRUE(SUITE, VERSION, CHECK_EXACT,
                    major == NVN_LAYER_API_MAJOR && minor == NVN_LAYER_API_MINOR,
                    "API %d.%d, where the layer answers %d.%d", major, minor, NVN_LAYER_API_MAJOR,
                    NVN_LAYER_API_MINOR);
+#endif
     }
 
     if (!ReportStart(SUITE, TARGET)) {
@@ -3804,6 +3848,14 @@ static void LayerCases(LayerWay way) {
         for (size_t i = 0; i < on_window; ++i) {
             ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, HELD);
         }
+    } else if (!NVN_HAS_WINDOW) {
+        static const char *const NONE =
+            "a program loaded into a game has no native window of its own: the game's is the "
+            "game's to make, and the program makes none";
+        ReportSkip(SUITE, WINDOW, REPORT_REASON_UNAVAILABLE, NONE);
+        for (size_t i = 0; i < on_window; ++i) {
+            ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, NONE);
+        }
     } else if (ReportStart(SUITE, WINDOW)) {
         NvnLayerClearError();
         const bool window_up = WindowUp(why, sizeof(why));
@@ -3826,6 +3878,7 @@ static void LayerCases(LayerWay way) {
     TearDown();
 }
 
+#ifndef NVN_LAYER_GAME_DRIVER
 void RunNvn(void) {
 #if NVN_LAYER_API < 231
     // Before the first lookup: a runtime that runs a game's NVN itself takes each function at
@@ -3844,3 +3897,11 @@ void RunNvn(void) {
     LayerCases(LAYER_LOOKED_UP);
 #endif
 }
+#else
+// In a game the family is the looked up way alone: the layer has no functions of its own there,
+// and the scene's and the commands' programs are uam's code under a control section the layer
+// writes, which a game's own driver does not read.
+void RunNvnInGame(void) {
+    LayerCases(LAYER_LOOKED_UP);
+}
+#endif

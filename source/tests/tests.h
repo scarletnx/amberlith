@@ -294,6 +294,9 @@ void Tex8kSetVram(uint32_t mib);
 /// pixel by pixel, and a window that acquires and presents both its textures. Under ScarletNX the
 /// same calls reach ScarletNX's NVN instead of the layer.
 void RunNvn(void);
+/// The nvn family of a program loaded into a game (the layer's build for a game's own driver),
+/// in RunNvn's place: the suite's looked up way, on the game's driver.
+void RunNvnInGame(void);
 
 /// The nvn suite's scene (drawpath.h), judged alike down each way (sceneref.h): through deko3d
 /// and through the layer's own NVN functions, which RunNvn runs before anything looks the

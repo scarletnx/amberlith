@@ -20,6 +20,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   the names alone for the Switch 2
 - **[NVN coverage](./NvnCoverage.md)** - which NVN functions a case calls, of the ones ScarletNX answers, by group
 - **[The probe as a Switch 2 program](./Ounce.md)** - the ExeFS build ScarletNX runs, and what a pass there says
+- **[The probe as a mod of a game](./Mod.md)** - the module a game's process loads, its NVN the game's own driver: on a console and under ScarletNX
 - **[Switch 2 shader programs](./Sm86.md)** - `tools/sm86asm.py`, which assembles them from their instructions
 - Reading a run:
   - **[The report](./Report.md)** - its lines, and where a run leaves them

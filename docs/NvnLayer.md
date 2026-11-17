@@ -65,12 +65,18 @@ Both builds are tested (see [Tests](#tests)): games use both versions.
 ## A game's own driver
 
 `NVNLAYER_DRIVER := game`, before the make fragment is included, builds the layer for a program that is loaded into
-a game as one more of its modules. The NVN is then the game's driver, so the layer is its types, its list of names
-and `NvnLoadProcs`, and no body: it defines no `nvnBootstrapLoader`, the program exports none (a second one in the
-process would be found in the driver's place), and the one `NvnLoadProcs` calls is the driver's, bound by the game's
-dynamic linker. `NvnLayerOwnProcs` gives nothing there and says why, and `NvnLayerError` is `""` after every NVN
-call, as under ScarletNX. The object sizes are still the build's `NVNLAYER_API`'s, so the program asks the driver
-its version before it makes an object.
+a game as one more of its modules ([The probe as a mod of a game](Mod.md)). The NVN is then the game's driver, so the
+layer is its types, its list of names
+and `NvnLoadProcs`: it defines no `nvnBootstrapLoader`, the program exports none (a second one in the process would
+be found in the driver's place), and the one `NvnLoadProcs` calls is the driver's, bound by the game's dynamic
+linker. `NvnLayerOwnProcs` gives nothing there and says why, and `NvnLayerError` is `""` after every NVN call, as
+under ScarletNX. The object sizes are still the build's `NVNLAYER_API`'s, so the program asks the driver its version
+before it makes an object.
+
+A game's driver has the names of its own API version, where the list has every version's. A name the driver
+answers nothing for fails no load there, but for the two the lookup is made of: its field holds one of the bodies
+the API 231 build has under every name, which ends the program saying which function was called and that the
+game's driver has none of that name, and `NvnLayerLackedCount` and `NvnLayerLackedName` give the names.
 
 ## Using it in a program
 

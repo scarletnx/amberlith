@@ -1,0 +1,3 @@
+# The module exports nothing: a symbol a module of a game exports is found by the game's dynamic
+# linker before the SDK's own of that name, and the mod's C library has the names of the SDK's.
+{ local: *; };
