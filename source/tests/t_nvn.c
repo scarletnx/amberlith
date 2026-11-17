@@ -36,23 +36,25 @@ static bool ViewerScreenUp(void) {
 #endif
 #endif
 
-// A window is made on the program's own native window, which a program loaded into a game has
-// none of: the game's is the game's to make.
+/// The native window the window cases present to, or NULL with why there is none in @p why: the
+/// program's own default one, or in a game's process the one the mod made on a layer of its own
+/// through the game's nn::vi (NvnGameWindow), which the mode file's nowindow keeps closed.
+static NVNnativeWindow NativeWindowOr(const char **why) {
 #ifdef NVN_LAYER_GAME_DRIVER
-#define NVN_HAS_WINDOW 0
+    return (NVNnativeWindow)NvnGameWindow(why);
 #else
-#define NVN_HAS_WINDOW 1
-#endif
-
-/// The native window a window builder is given. With none of the program's own, an address a
-/// builder only keeps and gives back: no window is made of it (NVN_HAS_WINDOW).
-static NVNnativeWindow NativeWindow(void) {
-#if NVN_HAS_WINDOW
+    *why = NULL;
     return (NVNnativeWindow)nwindowGetDefault();
-#else
-    static char none;
-    return (NVNnativeWindow)&none;
 #endif
+}
+
+/// The native window a window builder is given. With none, an address a builder only keeps and
+/// gives back: no window is made of it.
+static NVNnativeWindow NativeWindow(void) {
+    const char *why = NULL;
+    const NVNnativeWindow window = NativeWindowOr(&why);
+    static char none;
+    return window != NULL ? window : (NVNnativeWindow)&none;
 }
 
 // The nvn family: the clear suite's question asked through NVN, as a game asks it, with the
@@ -3824,6 +3826,7 @@ static void LayerCases(LayerWay way) {
 #endif
     };
     const size_t on_window = sizeof(ON_WINDOW) / sizeof(ON_WINDOW[0]);
+    const char *no_window = NULL;
 #if NVN_LAYER_API < 231
     const bool screen_up = ViewerScreenUp();
 #else
@@ -3851,13 +3854,10 @@ static void LayerCases(LayerWay way) {
         for (size_t i = 0; i < on_window; ++i) {
             ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, HELD);
         }
-    } else if (!NVN_HAS_WINDOW) {
-        static const char *const NONE =
-            "a program loaded into a game has no native window of its own: the game's is the "
-            "game's to make, and the program makes none";
-        ReportSkip(SUITE, WINDOW, REPORT_REASON_UNAVAILABLE, NONE);
+    } else if (NativeWindowOr(&no_window) == NULL) {
+        ReportSkip(SUITE, WINDOW, REPORT_REASON_UNAVAILABLE, no_window);
         for (size_t i = 0; i < on_window; ++i) {
-            ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, NONE);
+            ReportSkip(SUITE, ON_WINDOW[i], REPORT_REASON_UNAVAILABLE, no_window);
         }
     } else if (ReportStart(SUITE, WINDOW)) {
         NvnLayerClearError();

@@ -4,8 +4,9 @@
 // The mod's frontend (docs/Frontends.md, docs/Mod.md): the engine as one more module of a game,
 // run before the game's own main. Its NVN is the game's driver, looked up by name as the game
 // looks it up, so on a console the cases are answered by the console's own NVN, and under
-// ScarletNX by ScarletNX's at the game's API version. No screen and no pad: the run leaves when
-// its report is closed, and the process ends with it.
+// ScarletNX by ScarletNX's at the game's API version. A window of its own on a layer the game's
+// nn::vi gives, for the window cases, unless the mode file says nowindow; no screens and no pad:
+// the run leaves when its report is closed, and the process ends with it.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -340,6 +341,107 @@ static void NoteTaken(void) {
     }
 }
 
+// ---- the mod's window
+
+/// The window the mod opens for the nvn suite's window cases, as the plain program has its own: a
+/// layer of the mod's on the game's default display and the layer's native window, through the
+/// game's nn::vi. Opened on the first ask and kept to the run's end; the mode file's nowindow
+/// keeps it closed, and the game then keeps the screen.
+static struct {
+    bool wanted;
+    bool asked;
+    bool initialized;
+    GameViDisplay *display;
+    GameViLayer *layer;
+    void *native;
+    char why[320];
+} window;
+
+/// Opens the window, or keeps in window.why what stopped it, naming the result or the names the
+/// game's SDK has not.
+static void WindowOpen(void) {
+    void (*const volatile initialize)(void) = GameViInitialize;
+    __typeof__(GameViOpenDefaultDisplay) *const volatile open_display = GameViOpenDefaultDisplay;
+    __typeof__(GameViCreateLayer) *const volatile create_layer = GameViCreateLayer;
+    __typeof__(GameViGetNativeWindow) *const volatile get_native = GameViGetNativeWindow;
+    const HostName NAMES[] = {
+        { "nn::vi::Initialize", initialize != NULL },
+        { "nn::vi::OpenDefaultDisplay", open_display != NULL },
+        { "nn::vi::CreateLayer", create_layer != NULL },
+        { "nn::vi::GetNativeWindow", get_native != NULL },
+    };
+    char lacked[200];
+    if (HostLacks(lacked, sizeof(lacked), NAMES, sizeof(NAMES) / sizeof(NAMES[0])) != 0u) {
+        snprintf(window.why, sizeof(window.why),
+                 "the game's SDK has no %s, so the mod has no window of its own", lacked);
+        return;
+    }
+    initialize();
+    window.initialized = true;
+    uint32_t rc = open_display(&window.display);
+    if (R_FAILED(rc)) {
+        window.display = NULL;
+        snprintf(window.why, sizeof(window.why),
+                 "nn::vi::OpenDefaultDisplay returned 0x%x, so the mod has no window of its own",
+                 (unsigned)rc);
+        return;
+    }
+    rc = create_layer(&window.layer, window.display);
+    if (R_FAILED(rc)) {
+        window.layer = NULL;
+        snprintf(window.why, sizeof(window.why),
+                 "nn::vi::CreateLayer on the default display returned 0x%x, so the mod has no "
+                 "window of its own",
+                 (unsigned)rc);
+        return;
+    }
+    rc = get_native(&window.native, window.layer);
+    if (R_FAILED(rc) || window.native == NULL) {
+        snprintf(window.why, sizeof(window.why),
+                 "nn::vi::GetNativeWindow of the mod's layer returned 0x%x and %s, so the mod has "
+                 "no window of its own",
+                 (unsigned)rc, window.native == NULL ? "no window" : "a window");
+        window.native = NULL;
+        return;
+    }
+    ReportNote("host: the mod's window, a layer of its own on the default display through the "
+               "game's nn::vi");
+}
+
+void *NvnGameWindow(const char **why) {
+    if (!window.wanted) {
+        *why = "the mode file says nowindow: the mod opens no window of its own, and the game keeps "
+               "the screen";
+        return NULL;
+    }
+    if (!window.asked) {
+        window.asked = true;
+        WindowOpen();
+    }
+    *why = window.native != NULL ? NULL : window.why;
+    return window.native;
+}
+
+/// Closes what WindowOpen opened, the layer, the display and nn::vi, each when the game has it.
+static void WindowClose(void) {
+    void (*const volatile destroy_layer)(GameViLayer *) = GameViDestroyLayer;
+    void (*const volatile close_display)(GameViDisplay *) = GameViCloseDisplay;
+    void (*const volatile finalize)(void) = GameViFinalize;
+    if (window.layer != NULL && destroy_layer != NULL) {
+        destroy_layer(window.layer);
+    }
+    if (window.display != NULL && close_display != NULL) {
+        close_display(window.display);
+    }
+    if (window.initialized && finalize != NULL) {
+        finalize();
+    }
+    window.layer = NULL;
+    window.display = NULL;
+    window.native = NULL;
+    window.initialized = false;
+}
+
 /// The mod's own suite, then the nvn family when the driver is of the API this build has the
 /// objects of: a device of another API would be made in storage of another size.
 static void RunInGame(void) {
@@ -444,7 +546,9 @@ int ModRun(const ModStart *start) {
         NoteHost();
     }
     const bool timing = !mode.no_timing;
+    window.wanted = !mode.no_window;
     RunnerSteps(&runner, families, timing, NULL);
+    WindowClose();
     RunnerFinish(&runner, &mode, timing);
     return ReportFailed() == 0 ? 0 : 1;
 }

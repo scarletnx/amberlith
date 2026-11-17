@@ -302,6 +302,12 @@ void RunNvn(void);
 /// in RunNvn's place: the suite's looked up way, on the game's driver.
 void RunNvnInGame(void);
 
+/// The native window of the mod's own layer in the game's process, made on the first call through
+/// the game's nn::vi and kept to the process's end, for the nvn suite's window cases; NULL with
+/// the reason in *@p why (the mode file's nowindow, a name the game's SDK lacks, a call that
+/// failed with its result) when there is none. The mod's frontend (mod/frontend.c) has it.
+void *NvnGameWindow(const char **why);
+
 /// The nvn suite's scene (drawpath.h), judged alike down each way (sceneref.h): through deko3d
 /// and through the layer's own NVN functions, which RunNvn runs before anything looks the
 /// program's NVN up, and through the NVN the program looks up, once the suite's own objects are

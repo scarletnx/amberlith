@@ -121,9 +121,34 @@ static void TestBuildId(void) {
            text);
 }
 
+static void TestLacks(void) {
+    const HostName NAMES[] = {
+        { "nn::vi::Initialize", true },
+        { "nn::vi::OpenDefaultDisplay", false },
+        { "nn::vi::CreateLayer", true },
+        { "nn::vi::GetNativeWindow", false },
+    };
+    char out[64] = "untouched";
+    EXPECT(HostLacks(out, sizeof(out), NAMES, 1) == 0u && out[0] == '\0',
+           "a game with every name lacked \"%s\"", out);
+    EXPECT(HostLacks(out, sizeof(out), NAMES, 4) == 2u &&
+               strcmp(out, "nn::vi::OpenDefaultDisplay, nn::vi::GetNativeWindow") == 0,
+           "two lacked read as \"%s\"", out);
+    char small[36] = "untouched";
+    EXPECT(HostLacks(small, sizeof(small), NAMES, 4) == 2u &&
+               strcmp(small, "nn::vi::OpenDefaultDisplay, ...") == 0,
+           "two lacked in 36 bytes read as \"%s\"", small);
+    char tiny[8] = "touched";
+    EXPECT(HostLacks(tiny, sizeof(tiny), NAMES, 4) == 2u && strcmp(tiny, "...") == 0,
+           "two lacked in 8 bytes read as \"%s\"", tiny);
+    char none[1] = "";
+    EXPECT(HostLacks(none, 0, NAMES, 4) == 2u, "no room still counted the lacked");
+}
+
 int main(void) {
     TestSdkVersion();
     TestBuildId();
+    TestLacks();
     if (failures != 0) {
         printf("mod host test: %d failed\n", failures);
         return 1;

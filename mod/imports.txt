@@ -38,3 +38,13 @@ required _ZN2nn2fs14CloseDirectoryENS0_15DirectoryHandleE
 optional _ZN2nn2oe10InitializeEv
 optional _ZN2nv20SetGraphicsAllocatorEPFPvmmS0_EPFvS0_S0_EPFS0_S0_mS0_ES0_
 optional _ZN2nv18InitializeGraphicsEPvm
+
+# the mod's own window, unless the mode file says nowindow: a layer on the default display and its
+# native window (NvnGameWindow), closed as the run ends
+optional _ZN2nn2vi10InitializeEv
+optional _ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE
+optional _ZN2nn2vi11CreateLayerEPPNS0_5LayerEPNS0_7DisplayE
+optional _ZN2nn2vi15GetNativeWindowEPPvPNS0_5LayerE
+optional _ZN2nn2vi12DestroyLayerEPNS0_5LayerE
+optional _ZN2nn2vi12CloseDisplayEPNS0_7DisplayE
+optional _ZN2nn2vi8FinalizeEv

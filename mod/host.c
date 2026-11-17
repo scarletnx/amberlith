@@ -75,6 +75,41 @@ bool HostBuildId(const uint8_t *bytes, size_t size, char out[HOST_BUILD_ID_TEXT]
     return true;
 }
 
+size_t HostLacks(char *out, size_t size, const HostName *names, size_t count) {
+    size_t lacked = 0;
+    size_t used = 0;
+    bool cut = false;
+    if (size != 0u) {
+        out[0] = '\0';
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (names[i].present) {
+            continue;
+        }
+        const char *const between = lacked != 0u ? ", " : "";
+        ++lacked;
+        if (cut || size == 0u) {
+            continue;
+        }
+        const size_t need = strlen(between) + strlen(names[i].name);
+        if (used + need < size) {
+            memcpy(out + used, between, strlen(between));
+            memcpy(out + used + strlen(between), names[i].name, strlen(names[i].name));
+            used += need;
+            out[used] = '\0';
+        } else {
+            cut = true;
+            if (used + strlen(between) + 3u < size) {
+                memcpy(out + used, between, strlen(between));
+                memcpy(out + used + strlen(between), "...", 3u);
+                used += strlen(between) + 3u;
+                out[used] = '\0';
+            }
+        }
+    }
+    return lacked;
+}
+
 #ifdef __SWITCH__
 #include <switch.h>
 
