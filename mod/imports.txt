@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Every symbol the mod's module asks of the game it is loaded in (docs/Mod.md), a line each: how
+# it is asked, then the symbol. tools/mod-imports.py holds the built module to this list.
+#
+#   required  bound by the game's dynamic linker as the module loads: a game without it is no
+#             host for the mod
+#   optional  a weak import, its address nought in a game that has none: the mod compares it
+#             before a call and says which it went without
+
+# the NVN driver
+required nvnBootstrapLoader
+
+# the memory card: one of the two mounts, then nn::fs's files (source/sdk_card.c)
+optional _ZN2nn2fs19MountSdCardForDebugEPKc
+optional _ZN2nn2fs11MountSdCardEPKc
+required _ZN2nn2fs7UnmountEPKc
+required _ZN2nn2fs10CreateFileEPKcl
+required _ZN2nn2fs10DeleteFileEPKc
+required _ZN2nn2fs10RenameFileEPKcS2_
+required _ZN2nn2fs8OpenFileEPNS0_10FileHandleEPKci
+required _ZN2nn2fs9CloseFileENS0_10FileHandleE
+required _ZN2nn2fs8ReadFileEPmNS0_10FileHandleElPvm
+required _ZN2nn2fs9WriteFileENS0_10FileHandleElPKvmRKNS0_11WriteOptionE
+required _ZN2nn2fs9FlushFileENS0_10FileHandleE
+required _ZN2nn2fs11GetFileSizeEPlNS0_10FileHandleE
+required _ZN2nn2fs11SetFileSizeENS0_10FileHandleEl
+required _ZN2nn2fs12GetEntryTypeEPNS0_18DirectoryEntryTypeEPKc
+required _ZN2nn2fs15CreateDirectoryEPKc
+required _ZN2nn2fs15DeleteDirectoryEPKc
+required _ZN2nn2fs15RenameDirectoryEPKcS2_
+required _ZN2nn2fs13OpenDirectoryEPNS0_15DirectoryHandleEPKci
+required _ZN2nn2fs13ReadDirectoryEPlPNS0_14DirectoryEntryENS0_15DirectoryHandleEl
+required _ZN2nn2fs14CloseDirectoryENS0_15DirectoryHandleE
+
+# what a game's start does before its main, and what it gives the driver before the first device
+optional _ZN2nn2oe10InitializeEv
+optional _ZN2nv20SetGraphicsAllocatorEPFPvmmS0_EPFvS0_S0_EPFS0_S0_mS0_ES0_
+optional _ZN2nv18InitializeGraphicsEPvm
