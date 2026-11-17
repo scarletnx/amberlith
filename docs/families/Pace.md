@@ -75,9 +75,10 @@ quick pace compare=console      # on an emulator, with the console's file copied
 ```
 
 A compared run gets a `baseline` line a case, `same`, `slower` or `faster`, held to the console's median with the
-larger of 20 percent and one and a half times the console's own spread as the limit. Both ways count here: `faster`
-is as far from the console as `slower`, and is where a game's races show. Until a console's file exists, compare a
-machine with itself: `baseline=<name>` on one build, `compare=<name>` on the next.
+larger of 20 percent and one and a half times the console's own spread as the limit, a move of under 100
+microseconds never counted. Both ways count here: `faster` is as far from the console as `slower`, and is where a
+game's races show. Until a console's file exists, compare a machine with itself: `baseline=<name>` on one build,
+`compare=<name>` on the next.
 
 Under `make run` the family needs a longer launch than the default: `make run MODE="quick pace" TIMEOUT=600`.
 
@@ -207,8 +208,57 @@ the blender's read of the target; the last two are what the graphics unit moves 
 
 ## Under ScarletNX
 
-No numbers are held here until three runs on one machine say how far apart they come: see the family's first runs in
-the pull request that added it.
+ScarletNX 75b49fb, built and recompiling the program at its second optimization level, in the hooks mode and with
+no window, on a Ryzen 5 7500F with an RX 6700 under RADV: three runs one after another with the machine to itself
+(`quick hooks pace`), every case passing in each. The Eden column is one run of Eden 6a9235c22d on the same
+machine, not alone on it, where every case passes too: a second machine's answer to the loops' sums, and a number
+to read ScarletNX's against, no more.
+
+| suite | case | us, the middle of three runs | runs apart | which is | Eden, one run, us |
+|---|---|---:|---:|---|---:|
+| pace-cpu | core 0 runs the integer loop | 98078 | 0.9% | 1019.6 million iterations a second | 235587 |
+| pace-cpu | core 0 runs the floating point loop | 162560 | 1.7% | 61.5 million iterations a second | 112604 |
+| pace-cpu | core 0 runs the vector loop | 81870 | 1.3% | 122.1 million iterations a second | 67890 |
+| pace-cpu | core 1 runs the integer loop | 97324 | 0.2% | 1027.5 million iterations a second | 235662 |
+| pace-cpu | core 1 runs the floating point loop | 161204 | 2.4% | 62.0 million iterations a second | 112280 |
+| pace-cpu | core 1 runs the vector loop | 81598 | 0.1% | 122.6 million iterations a second | 67857 |
+| pace-cpu | core 2 runs the integer loop | 97446 | 0.0% | 1026.2 million iterations a second | 234896 |
+| pace-cpu | core 2 runs the floating point loop | 163569 | 2.1% | 61.1 million iterations a second | 112289 |
+| pace-cpu | core 2 runs the vector loop | 81755 | 0.1% | 122.3 million iterations a second | 67853 |
+| pace-mem | a walk through 64 MiB reads a slot at a time | 20172 | 5.4% | 77.0 ns a read | 19796 |
+| pace-mem | 32 MiB are filled with one word, eight times | 4377 | 1.1% | 57.1 GiB a second | 9814 |
+| pace-mem | 32 MiB are read and added up, eight times | 4171 | 1.8% | 59.9 GiB a second | 11650 |
+| pace-mem | 32 MiB are copied, eight times | 11789 | 4.7% | 21.2 GiB a second | 17312 |
+| pace-thread | a thread asleep on an event wakes at a signal from its own core | 3020 | 0.0% | 3.02 us a handoff | 937 |
+| pace-thread | a thread asleep on an event wakes at a signal from another core | 2968 | 1.8% | 2.97 us a handoff | 3958 |
+| pace-thread | a mutex passes to a thread waiting for it on the same core | 2968 | 0.0% | 2.97 us a handoff | 833 |
+| pace-thread | a mutex passes to a thread waiting for it on another core | 2968 | 1.8% | 2.97 us a handoff | 3906 |
+| pace-timer | the system counter is read a million times | 23829 | 0.6% | 23.8 ns a read | 23374 |
+| pace-timer | sleeps of 100 us, by how much each runs over | 52604 | 0.0% | 52.6 us | 56510 |
+| pace-timer | sleeps of 100 us, how far apart the longest and the shortest of 200 are | 37136 | 47.0% | 37.1 us | 58802 |
+| pace-timer | sleeps of 1 ms, by how much each runs over | 52552 | 0.1% | 52.6 us | 57291 |
+| pace-timer | sleeps of 1 ms, how far apart the longest and the shortest of 100 are | 10938 | 554.5% | 10.9 us | 49791 |
+| pace-timer | sleeps of 16 ms, by how much each runs over | 68854 | 58.8% | 68.9 us | 68958 |
+| pace-timer | sleeps of 16 ms, how far apart the longest and the shortest of 10 are | 98542 | 979.9% | 98.5 us | 14583 |
+| pace-fs | a 4 MiB file is made and written 64 KiB at a time | 488 | 0.4% | 8.0 GiB a second | 1101 |
+| pace-fs | the 4 MiB file is opened and read 64 KiB at a time | 223 | 0.9% | 17.5 GiB a second | 1014 |
+| pace-fs | 64 files of 4 KiB are made, written, read back and removed | 3833 | 0.4% | 59.9 us a file | 13168 |
+| pace-gpu | 200 quads cover a 1024 by 1024 target, each over the last | 2953 | 5.2% | 71.0 thousand million pixels a second | 6987 |
+| pace-gpu | 200 quads are added to a 1024 by 1024 target by the blender | 7752 | 7.4% | 27.1 thousand million pixels a second | 10407 |
+| pace-gpu | a 1024 by 1024 texture is uploaded through the copy engine | 789 | 2.4% | 4.95 GiB a second | 228 |
+| pace-gpu | the 1024 by 1024 target is copied to memory the processor reads | 5381 | 0.4% | 0.73 GiB a second | 5109 |
+
+- Two runs of a case are within 2.5 percent of each other for the loops, 8 percent for memory and the graphics
+  unit, 2 percent for the handoffs, the counter and the card. A sleep's overrun is the same to the microsecond for
+  100 us and 1 ms, and 59 percent apart for 16 ms. The sleeps' spread is what no two runs agree on: the 1 ms one
+  came to 11.3, 10.9 and 1.7 ms for 1000, the 16 ms one to 100.7, 98.5 and 9.3. A baseline's limit follows that
+  spread case by case, so those cases are held loosely, as they should be.
+- A sleep ends 52.6 us after its time whatever its length: the 50 us of slack Linux gives a thread's timers by
+  default, which the runtime leaves as it is. None ended before its time.
+- The floating point loop is the slow one: 61.5 million iterations a second against the integer loop's 1020, and
+  Eden's 88.8.
+- The submit of the 200 quads alone comes back in 0.2 ms: the work is put off until the corner is read, which is
+  why a sample ends there.
 
 ## What it does not measure
 
