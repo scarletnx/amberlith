@@ -60,9 +60,10 @@ tag. The scripts are in
 
 Every count of cases in the docs is a block between `<!-- counts: ... -->` and `<!-- /counts -->`, written by
 `tools/case-counts.py` from [the catalogue](cases.tsv), `docs/cases.tsv`: a line a case, its suite, its family, its
-judge and the builds that ran it. The CI fails when a block is not what the catalogue gives, and when the host build
-ran a case the catalogue does not give it, so a judge, libc or music case added shows at once; the cases only a
-machine runs are counted again before each release, on the commit to be released:
+judge, where its expected answer comes from ([the report](Report.md)) and the builds that ran it. The CI fails when a
+block is not what the catalogue gives, when `source/origin.c` has no row for a suite that judges a machine, and when
+the host build ran a case the catalogue does not give it or said another source, so a judge, libc or music case added
+shows at once; the cases only a machine runs are counted again before each release, on the commit to be released:
 
 ```sh
 make run EMULATOR=/path/to/emulator TIMEOUT=3600 MODE="quick hooks all pad nvn demo music pace game stress level=0 level=1 level=2 level=3 level=4"
@@ -76,4 +77,5 @@ cases' names carry the number of frames, and a demo's judged frames need 600. Th
 stopped at the default minute skips the case it was in, and the pace family alone takes two. Pad waits for a person,
 and its cases skipped unanswered keep the judge the catalogue had for them. A build given alone updates only its own
 cases (`ounce=` the Switch 2 build's report, for nvn2; `apk=` Android's); `python3 tools/case-counts.py unjudged
-[FAMILY]` lists the cases with no judge, or none known yet.
+[FAMILY]` lists the cases with no judge, or none known yet, and `unsaid [FAMILY]` the cases with a judge whose lines
+said no source.

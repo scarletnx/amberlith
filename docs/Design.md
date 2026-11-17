@@ -1,5 +1,11 @@
 # Design
 
+## Index
+
+* [No screenshots compared](#no-screenshots-compared)
+* [The tiers](#the-tiers)
+* [Where an answer comes from](#where-an-answer-comes-from)
+
 ## No screenshots compared
 
 Two correct implementations may disagree, and the specification allows it: division within 2.5 units in the last
@@ -25,3 +31,10 @@ A case's tier is a claim about the hardware, and the case states it.
   bcnimage suite's BC1 to BC5 textures on a host GPU whose interpolants are not the console's, the bound the span
   of the decodes known GPUs and decoders give. A case that came back exact says exact, so this tier on a pass says the texels
   moved, and by how much is in its detail.
+
+## Where an answer comes from
+
+A tier says how close a machine has to come; `expected_from` says to what. Each line names the strongest source of
+its expected answer: a console run, the console's driver, an independent reference program, an emulator's code, or
+this program's reading of the specification ([The report](Report.md)). Until a console has run a case, its answer
+is a claim about the console, and a failure is where to look, not a verdict.

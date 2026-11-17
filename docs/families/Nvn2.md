@@ -20,6 +20,10 @@ family, after the `nvn` suite.
 
 Every shader program is assembled by hand from its instructions ([Switch 2 shader programs](../Sm86.md)), and
 every answer is worked out on the processor with integers alone, so a case has one right answer on every machine.
+Its lines say `spec`, but for four whose answer an Ounce game's driver gives (`driver`, [Where an answer comes
+from](../Report.md)): a uniform buffer's handle as the driver makes it and the device's two builders, the DLSS
+builder's and its parameters' defaults, and the two pictures whose sameness rests on the driver's full rate where a
+program sets no shading rate image or leaves a palette's entries out.
 What a pass says, and what it cannot, is in [The probe as a Switch 2 program](../Ounce.md#what-a-pass-says).
 
 ## The cases

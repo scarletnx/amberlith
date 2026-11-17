@@ -12,15 +12,27 @@ same tolerance: `exact`, `ulp`, `position`, `level`, or `none` for a line that c
 produced (the judge's own arithmetic, a precondition such as the device opening, a drawing case stopped before it
 compared, which gives the reason in its detail).
 
-A case whose expected value has a source worth knowing says it in `expected_from`, after the tier: `console` when a
-console run gave it, `astcenc` when ARM's reference ASTC codec gives it, `spec` when only this program's reading of the
-specification does. A failure against anything but `console` is a question about the machine, not a settled bug. The
-astc and astcimage suites say it today ([Graphics](families/Graphics.md#astc)); a line with nothing to compare, and a
-case that does not say, has no field:
+Every line that compares carries `expected_from` after its tier: where the answer it held the machine to comes from,
+the strongest source that gives it. A failure against anything but `console` is a question about the machine, not a
+settled bug.
+
+| word | the expected answer comes from |
+|---|---|
+| `console` | a console run |
+| `driver` | the console's own driver, read from a game's copy: what a builder holds when new, what it answers for a part a program lacks ([nvn](families/Nvn.md), [nvn2](families/Nvn2.md)) |
+| `astcenc` | ARM's reference ASTC codec, which the reference suite holds this program's decoder to ([Graphics](families/Graphics.md#astc)) |
+| `reference` | another program, independent of this one, that gives the same answer: Unicorn's AArch64 for the processor, Mesa's ETC2 and EAC decoders, Pillow's and bcdec's BCn decodes and an NVIDIA card's interpolants, libvpx's hash lists, Atmosphere's mesosphere for the kernel's results; each family's page says which |
+| `emulator` | an emulator's code, read at the commit the family's page names: the services' and the display's answers, and the audio renderer's resampling tables, are reden's |
+| `spec` | the specification alone: this program's reading of it, which nothing independent gives |
 
 ```json
 {"type":"case","suite":"astc","name":"an HDR partition is the error colour and the LDR one after it decodes","tier":"exact","expected_from":"astcenc","result":"fail","detail":"..."}
 ```
+
+A case says its source when it differs from its suite's; every other line takes its suite's, from `source/origin.c`.
+A line that compares nothing (tier `none`) has no field, and neither do the judge's own suites, which hold this
+program's code to its references rather than judge a machine. The docs' counts give each family's cases by source,
+and `tools/case-counts.py unsaid [FAMILY]` lists the cases with a judge whose lines said none.
 
 A case that could not ask its question is a `skip`, tier `none`, with a one-word `reason` and a sentence in
 `detail`, counted apart:

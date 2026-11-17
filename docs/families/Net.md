@@ -99,7 +99,9 @@ socket when the program closes its own descriptor (POSIX `dup` semantics); that 
 request is accepted by itself within three seconds (the three seconds are this program's); the
 descriptor `sslConnectionSetSocketDescriptor` hands back (libnx's reading of it, which switchbrew
 shares: the one passed in); and nsd expanding the placeholder with no session (the contract's
-statement about the real service). Each case's detail says the same.
+statement about the real service). Each case's detail says the same. Their lines say `spec`, the
+documentation's reading, but the unknown profile's, whose id is the fork's code and says `emulator`
+([Where an answer comes from](../Report.md)).
 
 ## The net file
 

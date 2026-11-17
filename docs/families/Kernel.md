@@ -186,7 +186,9 @@ memory rather than take pages from under the program. The source pages are never
 are mapped, since the console gives them no permission.
 
 Eden 6a9235c22d and ScarletNX fa431b5 pass all twenty two, one run each: what is left to say is the
-console's own answer, which every expectation here already is in mesosphere.
+console's own answer, which every expectation here already is in mesosphere. Their lines say `reference`, a kernel
+written to the console's and independent of every emulator; the sched cases' rules, R1 to R3, are the
+specification's reading and say `spec` ([Where an answer comes from](../Report.md)).
 
 In an emulator a failure points at the supervisor call's checks (Eden's `hle/kernel/svc/`:
 `svc_synchronization.cpp`, `svc_event.cpp`, `svc_memory.cpp`, `svc_query_memory.cpp`), the

@@ -47,7 +47,8 @@ finished its first submit, and the suite closes one.
 
 ## How a case passes
 
-Two layouts are known, both reden's (see below): the status alone, a word of nought (layout A), and
+Two layouts are known, both reden's (see below), so every judged line says `emulator` ([Where an answer comes
+from](../Report.md)): the status alone, a word of nought (layout A), and
 the history: the status, a count n, n entries of 32 bytes (a frame number, a queue time and a
 presentation time of 64 bits, a state of 32 and four bytes of padding) newest first, and the status
 again (layout B). A request of nought or less is refused under B with BadValue (-22) and a count of

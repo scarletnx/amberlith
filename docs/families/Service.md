@@ -146,8 +146,9 @@ In [hooks mode](../Hooks.md) the hwopus, fsp, time, pl, auddev, fsdir, time-snap
 time-zone, time-perm, audout, audin, pctl and fs-file suites ask the SDK's functions instead of the
 services, with the same expectations; that page says how each one's asking differs.
 
-Every expectation is reden's, at 75c12299a6, with the commit that set it; the line of every case
-says what it expected and what came back, passed or not. A case whose question needs one before it
+Every expectation is reden's, at 75c12299a6, with the commit that set it, and every judged line says `emulator`
+([Where an answer comes from](../Report.md)) but sdk's, which judges this program's own exports (`spec`); the line of
+every case says what it expected and what came back, passed or not. A case whose question needs one before it
 is skipped as `depends` when that one did not leave what it needs. The tier is exact wherever a
 value is compared and none on the line that only says a service opened.
 

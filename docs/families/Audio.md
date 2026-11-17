@@ -86,7 +86,9 @@ All six are at 0.5 of full scale. The model steps the phase as the renderer does
 fraction whose top 7 bits pick the phase (rEden 75c12299a6,
 `audio_core/renderer/command/resample/resample.cpp:293` and `:843`; the table by ratio at
 `:281-286` and `:831-836`). Under Eden all six came out at their table's level to the fourth
-decimal, which is the model checked against a renderer that holds those tables.
+decimal, which is the model checked against a renderer that holds those tables. Since the tables are
+fitted to reden's, those six lines say `emulator`; every other line of the family says `spec`, the
+mixer's arithmetic ([Where an answer comes from](../Report.md)).
 
 What rests on reasoning rather than on a console run: that the console's mode 1 follows the rule
 to 2% (Eden's mode 1 is a reciprocal estimate; Ryujinx divides), and that the console honours the
