@@ -49,7 +49,12 @@
 * [What a console run settles](#what-a-console-run-settles)
 * [Where reden falls short](#where-reden-falls-short)
 
-The drawing suites, clear to copy, in the order they run, and tex8k after them.
+The drawing suites, clear to copy, in the order they run, and tex8k after them. Each case's answer is this program's
+reference in `source/*ref.c`, worked out from the specifications its section names (`spec`), but where an
+independent program gives it too: Mesa's decoders for eac and etc2, Pillow's and bcdec's decodes and an NVIDIA card's
+interpolants for bcn and bcnimage (`reference`), astcenc for astc and astcimage's linear pictures (`astcenc`), and
+tex8k's compressed textures as their formats' suites say; bcn's arrays, which judge where the blocks lie, say `spec`
+([Where an answer comes from](../Report.md)).
 
 <!-- counts: family graphics -->
 | Suite | Cases | With a judge | Without one | Not yet known |

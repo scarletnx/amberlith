@@ -18,7 +18,8 @@
 
 The second suite of [the video family](Video.md): the video decode engine, NVDEC, given VP9 jobs
 built ready from six of libvpx's test vectors, one job per frame, and every image it decodes read
-back off its surface and hashed against the MD5 list libvpx publishes for the vector. Only the word
+back off its surface and hashed against the MD5 list libvpx publishes for the vector, so every judged line says
+`reference` ([Where an answer comes from](../Report.md)). Only the word
 `video` runs it, with the vic suite (see [The mode file](../ModeFile.md)), since no console has yet
 shown that its jobs never hang.
 

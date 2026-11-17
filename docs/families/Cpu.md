@@ -117,3 +117,8 @@
   it started before its instruction, so such a machine loses that case alone: the next launch
   skips it as crashed and goes on with the one after ([When the program ends in the
   middle](../Crashes.md)). Console build only, since its cases are AArch64 instructions.
+
+  A line whose answer Unicorn's AArch64 agreed with says `reference`: the six the fuzzer found, the 48 blocks, the seven
+  floating point rules and the shifts, CRCs, roundings, fused rows, compares and lanes. The count leading zeros, the
+  three gap cases, the stores of a NaN, the exclusive pair, the counter's frequency and the two system registers,
+  whose answers only the Arm ARM gives here, say `spec` ([Where an answer comes from](../Report.md)).

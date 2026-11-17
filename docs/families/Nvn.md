@@ -73,6 +73,12 @@ The reference is the graphics unit running what the layer recorded, never the of
 - A choice NVN makes and the layer does not have yet (a format, a target, a flag, a view) is refused with its value
   in `NvnLayerError`, which the failing case's line carries; on ScarletNX that text is always empty.
 
+Where NVN defines the answer, a line says `spec`. The cases whose answer only an Ounce game's driver gives, as
+ScarletNX read it there, say `driver` ([Where an answer comes from](../Report.md)): a program's subroutine linkage
+maps, what the Ounce's program builder holds of its linkage, its debug data hashes and its ray tracing modules when
+new, a program's ray tracing scratch and group handles with no ray tracing part, a queue builder's ray tracing memory
+and its count after a reset, and a new window builder's HDR metadata, with the window's put back to it.
+
 ## The cases
 
 - **the program's NVN functions resolve** (none tier): the lookup gives every function the layer has, five hundred
