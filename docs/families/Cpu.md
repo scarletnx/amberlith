@@ -1,10 +1,10 @@
 # The processor
 
 <!-- counts: family cpu -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| cpu | 38 | 36 | 0 | 2 |
-| **All** | **38** | **36** | **0** | **2** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| cpu | 38 | 36 | 0 | 0 | 25 | 0 | 11 | 0 | 2 |
+| **All** | **38** | **36** | **0** | **0** | **25** | **0** | **11** | **0** | **2** |
 <!-- /counts -->
 
 - **cpu**, on the processor and in every mode, since it needs no device. Three count

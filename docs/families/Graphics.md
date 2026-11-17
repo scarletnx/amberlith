@@ -57,59 +57,59 @@ tex8k's compressed textures as their formats' suites say; bcn's arrays, which ju
 ([Where an answer comes from](../Report.md)).
 
 <!-- counts: family graphics -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| clear | 7 | 6 | 1 | 0 |
-| format | 64 | 60 | 4 | 0 |
-| raster | 10 | 8 | 2 | 0 |
-| intmath | 49 | 46 | 3 | 0 |
-| blend | 13 | 11 | 2 | 0 |
-| depth | 31 | 28 | 3 | 0 |
-| fixed | 36 | 33 | 3 | 0 |
-| stencil | 56 | 54 | 2 | 0 |
-| lod | 14 | 11 | 3 | 0 |
-| sampling | 21 | 19 | 2 | 0 |
-| coverage | 23 | 21 | 2 | 0 |
-| msaa | 7 | 5 | 2 | 0 |
-| texture | 12 | 5 | 7 | 0 |
-| coherence | 25 | 19 | 6 | 0 |
-| fmath | 31 | 27 | 4 | 0 |
-| order | 23 | 19 | 4 | 0 |
-| queue | 5 | 4 | 1 | 0 |
-| storage | 18 | 16 | 2 | 0 |
-| index | 8 | 6 | 2 | 0 |
-| topology | 28 | 27 | 1 | 0 |
-| vertex | 12 | 11 | 1 | 0 |
-| instance | 5 | 3 | 2 | 0 |
-| bindless | 6 | 3 | 3 | 0 |
-| astc | 28 | 26 | 2 | 0 |
-| astcimage | 11 | 9 | 2 | 0 |
-| eac | 4 | 2 | 2 | 0 |
-| etc2 | 20 | 18 | 2 | 0 |
-| bcn | 72 | 68 | 4 | 0 |
-| bcnimage | 18 | 16 | 2 | 0 |
-| zeta | 17 | 15 | 2 | 0 |
-| swizzle | 14 | 12 | 2 | 0 |
-| texel | 7 | 5 | 2 | 0 |
-| stream | 5 | 3 | 2 | 0 |
-| fill | 5 | 3 | 2 | 0 |
-| ring | 4 | 1 | 3 | 0 |
-| occlusion | 6 | 3 | 3 | 0 |
-| drawtex | 11 | 8 | 3 | 0 |
-| geometry | 18 | 15 | 3 | 0 |
-| xfb | 4 | 2 | 2 | 0 |
-| query | 26 | 24 | 2 | 0 |
-| dma | 5 | 3 | 2 | 0 |
-| blit2d | 5 | 4 | 1 | 0 |
-| copy | 19 | 18 | 1 | 0 |
-| tex8k | 56 | 46 | 10 | 0 |
-| **All** | **859** | **743** | **116** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| clear | 7 | 6 | 0 | 0 | 0 | 0 | 6 | 1 | 0 |
+| format | 64 | 60 | 0 | 0 | 0 | 0 | 60 | 4 | 0 |
+| raster | 10 | 8 | 0 | 0 | 0 | 0 | 8 | 2 | 0 |
+| intmath | 49 | 46 | 0 | 0 | 0 | 0 | 46 | 3 | 0 |
+| blend | 13 | 11 | 0 | 0 | 0 | 0 | 11 | 2 | 0 |
+| depth | 31 | 28 | 0 | 0 | 0 | 0 | 28 | 3 | 0 |
+| fixed | 36 | 33 | 0 | 0 | 0 | 0 | 33 | 3 | 0 |
+| stencil | 56 | 54 | 0 | 0 | 0 | 0 | 54 | 2 | 0 |
+| lod | 14 | 11 | 0 | 0 | 0 | 0 | 11 | 3 | 0 |
+| sampling | 21 | 19 | 0 | 0 | 0 | 0 | 19 | 2 | 0 |
+| coverage | 23 | 21 | 0 | 0 | 0 | 0 | 21 | 2 | 0 |
+| msaa | 7 | 5 | 0 | 0 | 0 | 0 | 5 | 2 | 0 |
+| texture | 12 | 5 | 0 | 0 | 0 | 0 | 5 | 7 | 0 |
+| coherence | 25 | 19 | 0 | 0 | 0 | 0 | 19 | 6 | 0 |
+| fmath | 31 | 27 | 0 | 0 | 0 | 0 | 27 | 4 | 0 |
+| order | 23 | 19 | 0 | 0 | 0 | 0 | 19 | 4 | 0 |
+| queue | 5 | 4 | 0 | 0 | 0 | 0 | 4 | 1 | 0 |
+| storage | 18 | 16 | 0 | 0 | 0 | 0 | 16 | 2 | 0 |
+| index | 8 | 6 | 0 | 0 | 0 | 0 | 6 | 2 | 0 |
+| topology | 28 | 27 | 0 | 0 | 0 | 0 | 27 | 1 | 0 |
+| vertex | 12 | 11 | 0 | 0 | 0 | 0 | 11 | 1 | 0 |
+| instance | 5 | 3 | 0 | 0 | 0 | 0 | 3 | 2 | 0 |
+| bindless | 6 | 3 | 0 | 0 | 0 | 0 | 3 | 3 | 0 |
+| astc | 28 | 26 | 0 | 0 | 26 | 0 | 0 | 2 | 0 |
+| astcimage | 11 | 9 | 0 | 0 | 7 | 0 | 2 | 2 | 0 |
+| eac | 4 | 2 | 0 | 0 | 2 | 0 | 0 | 2 | 0 |
+| etc2 | 20 | 18 | 0 | 0 | 18 | 0 | 0 | 2 | 0 |
+| bcn | 72 | 68 | 0 | 0 | 65 | 0 | 3 | 4 | 0 |
+| bcnimage | 18 | 16 | 0 | 0 | 16 | 0 | 0 | 2 | 0 |
+| zeta | 17 | 15 | 0 | 0 | 0 | 0 | 15 | 2 | 0 |
+| swizzle | 14 | 12 | 0 | 0 | 0 | 0 | 12 | 2 | 0 |
+| texel | 7 | 5 | 0 | 0 | 0 | 0 | 5 | 2 | 0 |
+| stream | 5 | 3 | 0 | 0 | 0 | 0 | 3 | 2 | 0 |
+| fill | 5 | 3 | 0 | 0 | 0 | 0 | 3 | 2 | 0 |
+| ring | 4 | 1 | 0 | 0 | 0 | 0 | 1 | 3 | 0 |
+| occlusion | 6 | 3 | 0 | 0 | 0 | 0 | 3 | 3 | 0 |
+| drawtex | 11 | 8 | 0 | 0 | 0 | 0 | 8 | 3 | 0 |
+| geometry | 18 | 15 | 0 | 0 | 0 | 0 | 15 | 3 | 0 |
+| xfb | 4 | 2 | 0 | 0 | 0 | 0 | 2 | 2 | 0 |
+| query | 26 | 24 | 0 | 0 | 0 | 0 | 24 | 2 | 0 |
+| dma | 5 | 3 | 0 | 0 | 0 | 0 | 3 | 2 | 0 |
+| blit2d | 5 | 4 | 0 | 0 | 0 | 0 | 4 | 1 | 0 |
+| copy | 19 | 18 | 0 | 0 | 0 | 0 | 18 | 1 | 0 |
+| tex8k | 56 | 46 | 0 | 0 | 24 | 0 | 22 | 10 | 0 |
+| **All** | **859** | **743** | **0** | **0** | **158** | **0** | **585** | **116** | **0** |
 <!-- /counts -->
 
 ## clear
 
 <!-- counts: suite clear -->
-**7 cases**: 6 with a judge (exact 6), 1 without one.
+**7 cases**: 6 with a judge (exact 6; expected from the specification 6), 1 without one.
 <!-- /counts -->
 
 On the graphics unit: whether the device came up (no tier, it compares
@@ -129,7 +129,7 @@ to the scissor whatever the flags say, or at the enable left unread.
 ## format
 
 <!-- counts: suite format -->
-**64 cases**: 60 with a judge (exact 51, ulp 9), 4 without one.
+**64 cases**: 60 with a judge (exact 51, ulp 9; expected from the specification 60), 4 without one.
 <!-- /counts -->
 
 Every colour format the graphics library can render to, sixty of
@@ -171,7 +171,7 @@ seen for every integer format rather than R32_Uint alone.
 ## raster
 
 <!-- counts: suite raster -->
-**10 cases**: 8 with a judge (exact 5, position 3), 2 without one.
+**10 cases**: 8 with a judge (exact 5, position 3; expected from the specification 8), 2 without one.
 <!-- /counts -->
 
 A triangle or a quad in one flat colour through a vertex and a fragment
@@ -184,7 +184,7 @@ or not at all shows it there.
 ## intmath
 
 <!-- counts: suite intmath -->
-**49 cases**: 46 with a judge (exact 46), 3 without one.
+**49 cases**: 46 with a judge (exact 46; expected from the specification 46), 3 without one.
 <!-- /counts -->
 
 Fragment shaders doing integer arithmetic on their own coordinate
@@ -227,7 +227,7 @@ its operands and its instructions out of.
 ## blend
 
 <!-- counts: suite blend -->
-**13 cases**: 11 with a judge (exact 11), 2 without one.
+**13 cases**: 11 with a judge (exact 11; expected from the specification 11), 2 without one.
 <!-- /counts -->
 
 The fixed function blend unit: adding, subtracting both ways round, the
@@ -257,7 +257,7 @@ blend arithmetic.
 ## depth
 
 <!-- counts: suite depth -->
-**31 cases**: 28 with a judge (exact 28), 3 without one.
+**31 cases**: 28 with a judge (exact 28; expected from the specification 28), 3 without one.
 <!-- /counts -->
 
 One quad at a known depth and a second one challenging it: each of
@@ -272,7 +272,7 @@ equality. Three cases are about the write rather than the test, the half a colou
 ## fixed
 
 <!-- counts: suite fixed -->
-**36 cases**: 33 with a judge (exact 33), 3 without one.
+**36 cases**: 33 with a judge (exact 33; expected from the specification 33), 3 without one.
 <!-- /counts -->
 
 With a note. The fixed function state a game's driver sets and Vulkan lacks
@@ -357,7 +357,7 @@ VK_EXT_depth_clamp_control).
 ## stencil
 
 <!-- counts: suite stencil -->
-**56 cases**: 54 with a judge (exact 54), 2 without one.
+**56 cases**: 54 with a judge (exact 54; expected from the specification 54), 2 without one.
 <!-- /counts -->
 
 On the two depth formats that carry stencil, Z24S8 and ZF32_X24S8 (a 32-bit float
@@ -392,7 +392,7 @@ blending does.
 ## texture
 
 <!-- counts: suite texture -->
-**12 cases**: 5 with a judge (exact 5), 7 without one.
+**12 cases**: 5 with a judge (exact 5; expected from the specification 5), 7 without one.
 <!-- /counts -->
 
 A 4 by 4 texture over the whole target, so sixteen by sixteen pixels
@@ -406,7 +406,7 @@ wrong by one part in 96 before any byte moved.
 ## lod
 
 <!-- counts: suite lod -->
-**14 cases**: 11 with a judge (exact 10, ulp 1), 3 without one.
+**14 cases**: 11 with a judge (exact 10, ulp 1; expected from the specification 11), 3 without one.
 <!-- /counts -->
 
 The level of detail a lookup picks and the texel it then reads, on an R32_Float
@@ -428,7 +428,7 @@ own minimum) is out of reach: the shader compiler refuses ARB_sparse_texture_cla
 ## coverage
 
 <!-- counts: suite coverage -->
-**23 cases**: 21 with a judge (exact 21), 2 without one.
+**23 cases**: 21 with a judge (exact 21; expected from the specification 21), 2 without one.
 <!-- /counts -->
 
 Multisample coverage, read through coverage to color
@@ -482,7 +482,7 @@ would be the coverage before it.
 ## msaa
 
 <!-- counts: suite msaa -->
-**7 cases**: 5 with a judge (exact 5), 2 without one.
+**7 cases**: 5 with a judge (exact 5; expected from the specification 5), 2 without one.
 <!-- /counts -->
 
 Multisampled targets as memory holds them, where a game finds them when it copies
@@ -506,7 +506,7 @@ on.
 ## sampling
 
 <!-- counts: suite sampling -->
-**21 cases**: 19 with a judge (exact 19), 2 without one.
+**21 cases**: 19 with a judge (exact 19; expected from the specification 19), 2 without one.
 <!-- /counts -->
 
 What the sampler hands a shader, onto a 4x4 target of 32-bit floats so it
@@ -529,7 +529,7 @@ conversion lands on. In an emulator a failure points at its format table (`textu
 ## coherence
 
 <!-- counts: suite coherence -->
-**25 cases**: 19 with a judge (exact 19), 6 without one.
+**25 cases**: 19 with a judge (exact 19; expected from the specification 19), 6 without one.
 <!-- /counts -->
 
 The none tier says the device, the shaders, the images and their starting texels came up, and
@@ -570,7 +570,7 @@ that serves the second draw what the first one read.
 ## fmath
 
 <!-- counts: suite fmath -->
-**31 cases**: 27 with a judge (exact 3, ulp 24), 4 without one.
+**31 cases**: 27 with a judge (exact 3, ulp 24; expected from the specification 27), 4 without one.
 <!-- /counts -->
 
 Addition, multiplication, a fused multiply and add, division, the
@@ -650,7 +650,7 @@ clamp gives.
 ## order
 
 <!-- counts: suite order -->
-**23 cases**: 19 with a judge (exact 19), 4 without one.
+**23 cases**: 19 with a judge (exact 19; expected from the specification 19), 4 without one.
 <!-- /counts -->
 
 On the graphics unit with a compute queue. A dispatch writes a buffer,
@@ -695,7 +695,7 @@ shared memory a host gives a block less of, and a barrier form its translator re
 ## queue
 
 <!-- counts: suite queue -->
-**5 cases**: 4 with a judge (exact 4), 1 without one.
+**5 cases**: 4 with a judge (exact 4; expected from the specification 4), 1 without one.
 <!-- /counts -->
 
 A list that waits on a word in memory until another queue, or the processor, writes
@@ -725,7 +725,7 @@ queues run: one after the other, a wait cannot be released by the queue behind i
 ## storage
 
 <!-- counts: suite storage -->
-**18 cases**: 16 with a judge (exact 16), 2 without one.
+**18 cases**: 16 with a judge (exact 16; expected from the specification 16), 2 without one.
 <!-- /counts -->
 
 Compute programs that store into and load from images, as a game's programs make
@@ -748,7 +748,7 @@ back.
 ## index
 
 <!-- counts: suite index -->
-**8 cases**: 6 with a judge (exact 6), 2 without one.
+**8 cases**: 6 with a judge (exact 6; expected from the specification 6), 2 without one.
 <!-- /counts -->
 
 Indexed draws whose index limit register holds the last byte of the
@@ -764,7 +764,7 @@ with (`buffer_cache/buffer_cache.h`, `UpdateIndexBuffer`).
 ## topology
 
 <!-- counts: suite topology -->
-**28 cases**: 27 with a judge (exact 27), 1 without one.
+**28 cases**: 27 with a judge (exact 27; expected from the specification 27), 1 without one.
 <!-- /counts -->
 
 With two notes. The primitive types the 3D class draws and Vulkan does not
@@ -835,7 +835,7 @@ provoking vertex mode (`VK_EXT_provoking_vertex`), and the polygon mode (`fillMo
 ## vertex
 
 <!-- counts: suite vertex -->
-**12 cases**: 11 with a judge (exact 11), 1 without one.
+**12 cases**: 11 with a judge (exact 11; expected from the specification 11), 1 without one.
 <!-- /counts -->
 
 With a note. How the 3D class fetches a vertex attribute where Vulkan asks more of the
@@ -872,7 +872,7 @@ instance divisor (`VK_EXT_vertex_attribute_divisor`).
 ## instance
 
 <!-- counts: suite instance -->
-**5 cases**: 3 with a judge (exact 3), 2 without one.
+**5 cases**: 3 with a judge (exact 3; expected from the specification 3), 2 without one.
 <!-- /counts -->
 
 The 3D class's instanced vertex array draws, VERTEX_ARRAY_INSTANCE_FIRST
@@ -886,7 +886,7 @@ one region along, so the target says which instances ran. In an emulator a failu
 ## geometry
 
 <!-- counts: suite geometry -->
-**18 cases**: 15 with a judge (exact 15), 3 without one.
+**18 cases**: 15 with a judge (exact 15; expected from the specification 15), 3 without one.
 <!-- /counts -->
 
 The two optional stages every other suite leaves out. A geometry shader
@@ -935,7 +935,7 @@ draw, refusing a vertex program that reads a storage buffer (scarletnx/ScarletNX
 ## xfb
 
 <!-- counts: suite xfb -->
-**4 cases**: 2 with a judge (exact 2), 2 without one.
+**4 cases**: 2 with a judge (exact 2; expected from the specification 2), 2 without one.
 <!-- /counts -->
 
 Transform feedback, which a game's driver turns on through the 3D class's registers
@@ -954,7 +954,7 @@ layout) or at the counter.
 ## bindless
 
 <!-- counts: suite bindless -->
-**6 cases**: 3 with a judge (exact 3), 3 without one.
+**6 cases**: 3 with a judge (exact 3; expected from the specification 3), 3 without one.
 <!-- /counts -->
 
 A fragment shader picks one of 256 one-texel textures through a handle
@@ -1040,7 +1040,7 @@ sRGB transfer function, which no decoder here gives.
 ## eac
 
 <!-- counts: suite eac -->
-**4 cases**: 2 with a judge (exact 2), 2 without one.
+**4 cases**: 2 with a judge (exact 2; expected from another reference 2), 2 without one.
 <!-- /counts -->
 
 The one- and two-channel 11-bit EAC formats of ETC2 (the library's
@@ -1056,7 +1056,7 @@ host.
 ## etc2
 
 <!-- counts: suite etc2 -->
-**20 cases**: 18 with a judge (exact 18), 2 without one.
+**20 cases**: 18 with a judge (exact 18; expected from another reference 18), 2 without one.
 <!-- /counts -->
 
 The ETC2 colour formats (the library's RGB_ETC2, RGB_PTA_ETC2 and
@@ -1084,7 +1084,7 @@ that every block's bytes read that way and that no block's colours do.
 ## bcn
 
 <!-- counts: suite bcn -->
-**72 cases**: 68 with a judge (exact 68), 4 without one.
+**72 cases**: 68 with a judge (exact 68; expected from another reference 65, the specification 3), 4 without one.
 <!-- /counts -->
 
 BC4 arrays whose levels or layers do not end on a block boundary: six
@@ -1133,7 +1133,7 @@ reads the signed blocks unsigned.
 ## bcnimage
 
 <!-- counts: suite bcnimage -->
-**18 cases**: 16 with a judge (exact 6, bound 10), 2 without one.
+**18 cases**: 16 with a judge (exact 6, bound 10; expected from another reference 16), 2 without one.
 <!-- /counts -->
 
 Whole BCn textures, as a game's are: the astcimage suite's question asked of the
@@ -1196,7 +1196,7 @@ shader first.
 ## zeta
 
 <!-- counts: suite zeta -->
-**17 cases**: 15 with a judge (exact 15), 2 without one.
+**17 cases**: 15 with a judge (exact 15; expected from the specification 15), 2 without one.
 <!-- /counts -->
 
 Depth textures the processor writes, sampled texel by texel: Z16 and ZF32
@@ -1227,7 +1227,7 @@ host's layout, and at a layered depth target cleared or kept as one layer.
 ## swizzle
 
 <!-- counts: suite swizzle -->
-**14 cases**: 12 with a judge (exact 12), 2 without one.
+**14 cases**: 12 with a judge (exact 12; expected from the specification 12), 2 without one.
 <!-- /counts -->
 
 Block linear textures the processor writes texel by texel at the
@@ -1243,7 +1243,7 @@ in a compute pass (`host_shaders/block_linear_unswizzle_2d.comp`, `vk_compute_pa
 ## texel
 
 <!-- counts: suite texel -->
-**7 cases**: 5 with a judge (exact 5), 2 without one.
+**7 cases**: 5 with a judge (exact 5; expected from the specification 5), 2 without one.
 <!-- /counts -->
 
 RGBA8_Uint buffer textures 0, 4, 20, 36 and 68 bytes past a 256 byte
@@ -1256,7 +1256,7 @@ buffer view is made (`renderer_vulkan/vk_buffer_cache.cpp`, `Buffer::View`).
 ## stream
 
 <!-- counts: suite stream -->
-**5 cases**: 3 with a judge (exact 3), 2 without one.
+**5 cases**: 3 with a judge (exact 3; expected from the specification 3), 2 without one.
 <!-- /counts -->
 
 With `stress`, one case more. One list of draws, each covering one pixel with the
@@ -1272,7 +1272,7 @@ it. In an emulator a failure points at the staging ring (`renderer_vulkan/vk_sta
 ## fill
 
 <!-- counts: suite fill -->
-**5 cases**: 3 with a judge (exact 3), 2 without one.
+**5 cases**: 3 with a judge (exact 3; expected from the specification 3), 2 without one.
 <!-- /counts -->
 
 128 quads over a 512 by 512 target in one list, first with colour alone
@@ -1288,7 +1288,7 @@ about 11 ms against 2 on RADV, in either order. There, colour alone takes about 
 ## ring
 
 <!-- counts: suite ring -->
-**4 cases**: 1 with a judge (exact 1), 3 without one.
+**4 cases**: 1 with a judge (exact 1; expected from the specification 1), 3 without one.
 <!-- /counts -->
 
 One list of 4096 indexed draws, each covering one pixel with the word of
@@ -1306,7 +1306,7 @@ masquerade layer (see [Making the driver look older](../OlderDriver.md)).
 ## occlusion
 
 <!-- counts: suite occlusion -->
-**6 cases**: 3 with a judge (exact 3), 3 without one.
+**6 cases**: 3 with a judge (exact 3; expected from the specification 3), 3 without one.
 <!-- /counts -->
 
 The samples counter, which the library leaves enabled, reported
@@ -1321,7 +1321,7 @@ which the masquerade layer gives on any driver.
 ## drawtex
 
 <!-- counts: suite drawtex -->
-**11 cases**: 8 with a judge (exact 8), 3 without one.
+**11 cases**: 8 with a judge (exact 8; expected from the specification 8), 3 without one.
 <!-- /counts -->
 
 DRAW_TEXTURE, the call the console's graphics API names DrawTexture:
@@ -1347,7 +1347,7 @@ origin is signed, as the emulators read it (`maxwell_3d.h`, `DrawTexture`).
 ## query
 
 <!-- counts: suite query -->
-**26 cases**: 24 with a judge (exact 23, level 1; expected from the specification 1), 2 without one.
+**26 cases**: 24 with a judge (exact 23, level 1; expected from the specification 24), 2 without one.
 <!-- /counts -->
 
 With three notes. The samples passed counter over quads of whole
@@ -1377,7 +1377,7 @@ address, gets three notes rather than cases (the value one, the value two to the
 ## dma
 
 <!-- counts: suite dma -->
-**5 cases**: 3 with a judge (exact 3), 2 without one.
+**5 cases**: 3 with a judge (exact 3; expected from the specification 3), 2 without one.
 <!-- /counts -->
 
 The copy engine copies a 64 KiB buffer 32 times in one list, first from
@@ -1390,7 +1390,7 @@ times in the second case. A single judged copy goes first and takes the first us
 ## blit2d
 
 <!-- counts: suite blit2d -->
-**5 cases**: 4 with a judge (exact 4), 1 without one.
+**5 cases**: 4 with a judge (exact 4; expected from the specification 4), 1 without one.
 <!-- /counts -->
 
 The 2D engine, by raw methods, copies a block linear source at half and
@@ -1402,7 +1402,7 @@ questions gives. See [The blit2d suite](Blit2d.md).
 ## copy
 
 <!-- counts: suite copy -->
-**19 cases**: 18 with a judge (exact 18), 1 without one.
+**19 cases**: 18 with a judge (exact 18; expected from the specification 18), 1 without one.
 <!-- /counts -->
 
 With three notes. The copies a game's driver makes between images and buffers,
@@ -1458,7 +1458,7 @@ blit (`vk_texture_cache.cpp`, `BlitImage`).
 ## tex8k
 
 <!-- counts: suite tex8k -->
-**56 cases**: 46 with a judge (exact 46), 10 without one.
+**56 cases**: 46 with a judge (exact 46; expected from astcenc 10, another reference 14, the specification 22), 10 without one.
 <!-- /counts -->
 
 On textures as large as a game's largest: 8192x8192, which the texture unit

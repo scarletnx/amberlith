@@ -13,13 +13,13 @@
 * [fluid and fluid-alias](#fluid-and-fluid-alias)
 
 <!-- counts: family demo -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| mandelbrot | 14 | 7 | 7 | 0 |
-| julia | 14 | 7 | 7 | 0 |
-| fluid | 19 | 13 | 6 | 0 |
-| fluid-alias | 20 | 14 | 6 | 0 |
-| **All** | **67** | **41** | **26** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| mandelbrot | 14 | 7 | 0 | 0 | 0 | 0 | 7 | 7 | 0 |
+| julia | 14 | 7 | 0 | 0 | 0 | 0 | 7 | 7 | 0 |
+| fluid | 19 | 13 | 0 | 0 | 0 | 0 | 13 | 6 | 0 |
+| fluid-alias | 20 | 14 | 0 | 0 | 0 | 0 | 14 | 6 | 0 |
+| **All** | **67** | **41** | **0** | **0** | **0** | **0** | **41** | **26** | **0** |
 <!-- /counts -->
 
 ## The family

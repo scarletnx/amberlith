@@ -4,10 +4,10 @@ The fs family reads the memory card through FsFile, as a game reads its files: o
 with an offset each time, which is the command an emulator serves and where it does its seek.
 
 <!-- counts: family fs -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| fs | 15 | 13 | 2 | 0 |
-| **All** | **15** | **13** | **2** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| fs | 15 | 13 | 0 | 0 | 0 | 0 | 13 | 2 | 0 |
+| **All** | **15** | **13** | **0** | **0** | **0** | **0** | **13** | **2** | **0** |
 <!-- /counts -->
 
 - **fs**: a 64 MiB file and 256 small ones are written on the first pass; then

@@ -9,11 +9,11 @@
 * [What rests on reasoning](#what-rests-on-reasoning)
 
 <!-- counts: family game -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| game | 14 | 6 | 8 | 0 |
-| wimsy | 73 | 28 | 45 | 0 |
-| **All** | **87** | **34** | **53** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| game | 14 | 6 | 0 | 0 | 0 | 0 | 6 | 8 | 0 |
+| wimsy | 73 | 28 | 0 | 0 | 0 | 0 | 28 | 45 | 0 |
+| **All** | **87** | **34** | **0** | **0** | **0** | **0** | **34** | **53** | **0** |
 <!-- /counts -->
 
 Every other family asks the machine one thing at a time. A game asks everything at once: it draws,

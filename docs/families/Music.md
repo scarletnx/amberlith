@@ -10,10 +10,10 @@
 * [Listening to it](#listening-to-it)
 
 <!-- counts: family music -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| music | 12 | 12 | 0 | 0 |
-| **All** | **12** | **12** | **0** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| music | 12 | 12 | 0 | 0 | 0 | 0 | 12 | 0 | 0 |
+| **All** | **12** | **12** | **0** | **0** | **0** | **0** | **12** | **0** | **0** |
 <!-- /counts -->
 
 The demos' music: AdLib tracker songs, composed afresh from a seed out of material each track's

@@ -7,10 +7,10 @@
 * [The matrix instruction](#the-matrix-instruction)
 
 <!-- counts: family nvn2 -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| nvn2 | 34 | 31 | 3 | 0 |
-| **All** | **34** | **31** | **3** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| nvn2 | 34 | 31 | 0 | 5 | 0 | 0 | 26 | 3 | 0 |
+| **All** | **34** | **31** | **0** | **5** | **0** | **0** | **26** | **3** | **0** |
 <!-- /counts -->
 
 What a Switch 2 program asks of NVN that a Switch's does not: programs made through the builder, of the Switch

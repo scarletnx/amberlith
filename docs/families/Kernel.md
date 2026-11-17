@@ -10,11 +10,11 @@
 * [svc](#svc)
 
 <!-- counts: family kernel -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| sched | 7 | 6 | 1 | 0 |
-| svc | 22 | 21 | 1 | 0 |
-| **All** | **29** | **27** | **2** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| sched | 7 | 6 | 0 | 0 | 0 | 0 | 6 | 1 | 0 |
+| svc | 22 | 21 | 0 | 0 | 21 | 0 | 0 | 1 | 0 |
+| **All** | **29** | **27** | **0** | **0** | **21** | **0** | **6** | **2** | **0** |
 <!-- /counts -->
 
 Two suites. The first, sched, is the kernel's scheduler as a program sees it: threads of chosen
@@ -143,7 +143,7 @@ it.
 ## svc
 
 <!-- counts: suite svc -->
-**22 cases**: 21 with a judge (exact 21), 1 without one.
+**22 cases**: 21 with a judge (exact 21; expected from another reference 21), 1 without one.
 <!-- /counts -->
 
 After sched, in the same family and under the same word. The kernel's answers to

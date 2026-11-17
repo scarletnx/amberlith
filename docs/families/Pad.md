@@ -15,11 +15,11 @@ file](../ModeFile.md)), or its row on the start screen, since it waits for a per
 after the processor, so nobody waits for the families that need no one.
 
 <!-- counts: family pad -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| pad | 26 | 0 | 0 | 26 |
-| touch | 9 | 0 | 0 | 9 |
-| **All** | **35** | **0** | **0** | **35** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| pad | 26 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 26 |
+| touch | 9 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 9 |
+| **All** | **35** | **0** | **0** | **0** | **0** | **0** | **0** | **0** | **35** |
 <!-- /counts -->
 
 - **pad**: the first is the controller answering; the sixteen buttons; the

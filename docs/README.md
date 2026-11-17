@@ -50,7 +50,7 @@ one without compares nothing: a device that opens, a shader that loads, a time i
 ### CPU and kernel
 
 <!-- counts: category cpu -->
-_2 families, 3 suites, 67 cases: 63 with a judge (exact 56, position 7), 2 without one, 2 not yet seen judged._
+_2 families, 3 suites, 67 cases: 63 with a judge (exact 56, position 7; expected from another reference 46, the specification 17), 2 without one, 2 not yet seen judged._
 <!-- /counts -->
 
 - **[The processor](./families/Cpu.md)** - cpu, the processor's instructions held to the architecture's answers
@@ -60,7 +60,7 @@ _2 families, 3 suites, 67 cases: 63 with a judge (exact 56, position 7), 2 witho
 ### GPU and NVN
 
 <!-- counts: category gpu -->
-_5 families, 52 suites, 1262 cases: 1049 with a judge (exact 957, ulp 56, position 23, level 2, bound 11; expected from astcenc 33, the specification 3), 207 without one, 6 not yet seen judged._
+_5 families, 52 suites, 1262 cases: 1049 with a judge (exact 957, ulp 56, position 23, level 2, bound 11; expected from the driver 16, astcenc 43, another reference 115, the specification 875), 207 without one, 6 not yet seen judged._
 <!-- /counts -->
 
 - **[Graphics](./families/Graphics.md)** - the drawing suites, clear to tex8k, and
@@ -75,7 +75,7 @@ _5 families, 52 suites, 1262 cases: 1049 with a judge (exact 957, ulp 56, positi
 ### Video and audio
 
 <!-- counts: category media -->
-_3 families, 4 suites, 51 cases: 49 with a judge (exact 37, level 12), 2 without one._
+_3 families, 4 suites, 51 cases: 49 with a judge (exact 37, level 12; expected from another reference 6, an emulator 6, the specification 37), 2 without one._
 <!-- /counts -->
 
 - **[Video](./families/Video.md)** - the VIC, and **[nvdec](./families/Nvdec.md)**, VP9 through the decode engine
@@ -86,7 +86,7 @@ _3 families, 4 suites, 51 cases: 49 with a judge (exact 37, level 12), 2 without
 ### System and services
 
 <!-- counts: category system -->
-_5 families, 51 suites, 211 cases: 157 with a judge (exact 155, ulp 1, position 1), 22 without one, 32 not yet seen judged._
+_5 families, 51 suites, 211 cases: 157 with a judge (exact 155, ulp 1, position 1; expected from an emulator 110, the specification 46, not said 1), 22 without one, 32 not yet seen judged._
 <!-- /counts -->
 
 - **[fs](./families/Fs.md)** - reads through the file system service
