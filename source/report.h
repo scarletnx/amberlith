@@ -157,9 +157,11 @@ typedef enum {
 
 /// Where the value a case's verdict holds the machine to comes from, which its line carries as
 /// `expected_from`: the strongest source that gives it, so a failure against one no console has
-/// shown is read as a question about the machine, not a settled bug.
+/// shown is read as a question about the machine, not a settled bug. The values keep their
+/// numbers; a new source goes before REPORT_FROM_COUNT.
 typedef enum {
-    /// Not said, and the line has no field: every case but the ones that say one.
+    /// Not said, and the line has no field: a line that compares nothing, or a suite
+    /// source/origin.c has no row for.
     REPORT_FROM_UNSAID,
     /// The specification alone: this program's reading of it, which nothing independent gives.
     REPORT_FROM_SPEC,
@@ -168,11 +170,31 @@ typedef enum {
     REPORT_FROM_ASTCENC,
     /// A console run gave it.
     REPORT_FROM_CONSOLE,
+    /// The console's own driver gives it, as read from a game's copy: what a builder holds when
+    /// new, what it answers for a part a program lacks.
+    REPORT_FROM_DRIVER,
+    /// Another program, independent of this one, gives the same answer: a processor model, a
+    /// reference decoder, a published hash list, a kernel written to the console's. The family's
+    /// page names which.
+    REPORT_FROM_REFERENCE,
+    /// An emulator's code gives it, read at a commit the family's page names: nothing
+    /// independent of the machines under test has yet.
+    REPORT_FROM_EMULATOR,
     REPORT_FROM_COUNT,
 } ReportFrom;
 
 /// The word a source goes onto the line as, or NULL for REPORT_FROM_UNSAID.
 const char *ReportFromWord(ReportFrom from);
+
+/// The source a line of @p suite at @p tier carries when its case said @p said: none for a line
+/// that compares nothing, what the case said when it said one, else its suite's
+/// (ReportSuiteFrom). Every case line takes its field from here.
+ReportFrom ReportOriginOf(const char *suite, CheckTier tier, ReportFrom said);
+
+/// The source source/origin.c gives the machine-judging lines of @p suite that say none
+/// themselves; REPORT_FROM_UNSAID for a suite it has no row for, which only the judge's are,
+/// whose cases hold this program's own code to its references.
+ReportFrom ReportSuiteFrom(const char *suite);
 
 /// One finished case. @p detail is free text explaining a failure, and is ignored when passing.
 ///
@@ -191,6 +213,11 @@ void ReportCaseFrom(const char *suite, const char *name, CheckTier tier, ReportF
 /// cases; a `notime` run calls ReportCase.
 void ReportCaseTime(const char *suite, const char *name, CheckTier tier, bool passed,
                     const char *detail, uint32_t us);
+
+/// ReportCaseTime for a case whose line says where its expected value comes from, as
+/// ReportCaseFrom does.
+void ReportCaseTimeFrom(const char *suite, const char *name, CheckTier tier, ReportFrom from,
+                        bool passed, const char *detail, uint32_t us);
 
 /// Why a case was skipped, which its line carries as `reason`, one of a few words, beside the
 /// sentence in `detail`.

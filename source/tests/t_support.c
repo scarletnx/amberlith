@@ -733,6 +733,60 @@ static void CheckReportLine(void) {
                             "\"astcenc\",\"result\":\"fail\",\"detail\":\"one wrong\"}") == 0,
                "%.480s", from);
 
+    // Every source has its word, the unsaid one none, so a word a reader does not know cannot
+    // reach a line. A line takes what its case said, else its suite's row of source/origin.c, and
+    // nothing when it compares nothing: a cpu case Unicorn agreed with and one it did not, a
+    // service's reden and a judge suite, which has no row.
+    static const char *const WORDS[REPORT_FROM_COUNT] = {
+        NULL, "spec", "astcenc", "console", "driver", "reference", "emulator",
+    };
+    unsigned words_right = 0;
+    for (unsigned i = 0; i < REPORT_FROM_COUNT; ++i) {
+        const char *word = ReportFromWord((ReportFrom)i);
+        words_right += (word == NULL && WORDS[i] == NULL) ||
+                               (word != NULL && WORDS[i] != NULL && strcmp(word, WORDS[i]) == 0)
+                           ? 1u
+                           : 0u;
+    }
+    const struct {
+        const char *suite;
+        CheckTier tier;
+        ReportFrom said;
+        ReportFrom want;
+    } ORIGINS[] = {
+        { "cpu", CHECK_EXACT, REPORT_FROM_UNSAID, REPORT_FROM_REFERENCE },
+        { "cpu", CHECK_EXACT, REPORT_FROM_SPEC, REPORT_FROM_SPEC },
+        { "cpu", CHECK_NONE, REPORT_FROM_SPEC, REPORT_FROM_UNSAID },
+        { "hwopus", CHECK_EXACT, REPORT_FROM_UNSAID, REPORT_FROM_EMULATOR },
+        { "nvn", CHECK_EXACT, REPORT_FROM_DRIVER, REPORT_FROM_DRIVER },
+        { "clear", CHECK_EXACT, REPORT_FROM_UNSAID, REPORT_FROM_SPEC },
+        { "reference", CHECK_EXACT, REPORT_FROM_UNSAID, REPORT_FROM_UNSAID },
+        { "no such suite", CHECK_EXACT, REPORT_FROM_UNSAID, REPORT_FROM_UNSAID },
+    };
+    char origin_wrong[160] = "";
+    unsigned origins_right = 0;
+    for (size_t i = 0; i < sizeof(ORIGINS) / sizeof(ORIGINS[0]); ++i) {
+        const ReportFrom got = ReportOriginOf(ORIGINS[i].suite, ORIGINS[i].tier, ORIGINS[i].said);
+        if (got == ORIGINS[i].want) {
+            ++origins_right;
+        } else if (origin_wrong[0] == '\0') {
+            const char *gave = ReportFromWord(got);
+            const char *want = ReportFromWord(ORIGINS[i].want);
+            snprintf(origin_wrong, sizeof(origin_wrong), "; row %u (%s) gave %s, not %s",
+                     (unsigned)i, ORIGINS[i].suite, gave != NULL ? gave : "none",
+                     want != NULL ? want : "none");
+        }
+    }
+    CHECK_TRUE(SUITE,
+               "a line says what its case said its expected value comes from, else its suite's "
+               "source, and nothing when it compares nothing",
+               CHECK_NONE,
+               words_right == REPORT_FROM_COUNT &&
+                   origins_right == sizeof(ORIGINS) / sizeof(ORIGINS[0]),
+               "%u of %u words right; %u of %u lines right%s", words_right,
+               (unsigned)REPORT_FROM_COUNT, origins_right,
+               (unsigned)(sizeof(ORIGINS) / sizeof(ORIGINS[0])), origin_wrong);
+
     // A case that could not ask is a result of its own and a count of its own: a skip read as
     // a pass would make a run where nothing was asked look green. Its reason is one word of a
     // few, beside the sentence; a crash is counted apart from every other skip.

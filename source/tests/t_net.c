@@ -52,16 +52,32 @@ static const char *const NO_SESSION =
 static const char *const NO_SERVER = "needs a game server: sdmc:/edenprobe/net names none";
 
 /// A case whose line carries its expectation and its answer whether it passed or not.
+static void CaseWith(const char *suite, const char *name, CheckTier tier, ReportFrom from,
+                     bool passed, const char *fmt, va_list args) {
+    char detail[480];
+    vsnprintf(detail, sizeof(detail), fmt, args);
+    ReportCaseFrom(suite, name, tier, from, passed, detail);
+}
+
 static void Case(const char *suite, const char *name, CheckTier tier, bool passed,
                  const char *fmt, ...) __attribute__((format(printf, 5, 6)));
 static void Case(const char *suite, const char *name, CheckTier tier, bool passed,
                  const char *fmt, ...) {
-    char detail[480];
     va_list args;
     va_start(args, fmt);
-    vsnprintf(detail, sizeof(detail), fmt, args);
+    CaseWith(suite, name, tier, REPORT_FROM_UNSAID, passed, fmt, args);
     va_end(args);
-    ReportCase(suite, name, tier, passed, detail);
+}
+
+/// Case for one whose expected answer comes from @p from rather than the suite's.
+static void CaseFrom(const char *suite, const char *name, CheckTier tier, ReportFrom from,
+                     bool passed, const char *fmt, ...) __attribute__((format(printf, 6, 7)));
+static void CaseFrom(const char *suite, const char *name, CheckTier tier, ReportFrom from,
+                     bool passed, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    CaseWith(suite, name, tier, from, passed, fmt, args);
+    va_end(args);
 }
 
 /// A case that could not ask, with the reason in one word and why in a sentence.
@@ -2279,12 +2295,12 @@ static void RunFriend(void) {
              (unsigned long long)first.account, (unsigned)first.valid, Visible(first.name, 32),
              Visible(first.url, 100), session_late);
         if (ReportStart(S, UNKNOWN)) {
-            Case(S, UNKNOWN, CHECK_EXACT,
-                 R_SUCCEEDED(rc) && NetProfileIsUnknown(ids[1], &second),
-                 "expected slot two to answer for %016llx (the id asked: the fork's reading, "
-                 "unverified on a console), invalid; got %s, %016llx valid %u%s",
-                 (unsigned long long)ids[1], ResultText(rc), (unsigned long long)second.account,
-                 (unsigned)second.valid, session_late);
+            CaseFrom(S, UNKNOWN, CHECK_EXACT, REPORT_FROM_EMULATOR,
+                     R_SUCCEEDED(rc) && NetProfileIsUnknown(ids[1], &second),
+                     "expected slot two to answer for %016llx (the id asked: the fork's reading, "
+                     "unverified on a console), invalid; got %s, %016llx valid %u%s",
+                     (unsigned long long)ids[1], ResultText(rc), (unsigned long long)second.account,
+                     (unsigned)second.valid, session_late);
         }
     }
 

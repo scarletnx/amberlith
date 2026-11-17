@@ -37,21 +37,16 @@ static void CheckExpectedFrom(void) {
         right_images += from == (ASTC_IMAGE[i].srgb ? REPORT_FROM_SPEC : REPORT_FROM_ASTCENC) ? 1u
                                                                                                : 0u;
     }
-    const bool words = ReportFromWord(REPORT_FROM_UNSAID) == NULL &&
-                       strcmp(ReportFromWord(REPORT_FROM_SPEC), "spec") == 0 &&
-                       strcmp(ReportFromWord(REPORT_FROM_ASTCENC), "astcenc") == 0 &&
-                       strcmp(ReportFromWord(REPORT_FROM_CONSOLE), "console") == 0 &&
-                       ReportFromWord(REPORT_FROM_COUNT) == NULL;
     CHECK_TRUE(SUITE, "each astc block and astcimage picture says its texels are astcenc's where a "
                       "hash pins them, the specification's otherwise",
                CHECK_NONE,
                astcenc_blocks == ASTC_TEST_BLOCKS &&
                    AstcBlockExpectedFrom(&unpinned) == REPORT_FROM_SPEC &&
-                   right_images == ASTC_IMAGES && words,
-               "%u of %u blocks astcenc's, an unpinned one %s; %u of %u pictures right; words %s",
+                   right_images == ASTC_IMAGES,
+               "%u of %u blocks astcenc's, an unpinned one %s; %u of %u pictures right",
                (unsigned)astcenc_blocks, (unsigned)ASTC_TEST_BLOCKS,
                ReportFromWord(AstcBlockExpectedFrom(&unpinned)), (unsigned)right_images,
-               (unsigned)ASTC_IMAGES, words ? "right" : "wrong");
+               (unsigned)ASTC_IMAGES);
 }
 
 void RunReferenceAstc(void) {

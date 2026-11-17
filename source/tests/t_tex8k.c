@@ -194,14 +194,20 @@ static uint32_t Microseconds(uint64_t nanoseconds) {
     return us == 0u ? 1u : us > UINT32_MAX ? UINT32_MAX : (uint32_t)us;
 }
 
-/// The end of a case whose own work on the graphics unit was @p work nanoseconds: its line carries
-/// that time when the run times.
-static void End(const char *name, CheckTier tier, bool passed, const char *detail, uint64_t work) {
+/// The end of a case whose own work on the graphics unit was @p work nanoseconds, its expected
+/// value from @p from: its line carries that time when the run times.
+static void EndFrom(const char *name, CheckTier tier, ReportFrom from, bool passed,
+                    const char *detail, uint64_t work) {
     if (timing) {
-        ReportCaseTime(SUITE, name, tier, passed, detail, Microseconds(work));
+        ReportCaseTimeFrom(SUITE, name, tier, from, passed, detail, Microseconds(work));
     } else {
-        ReportCase(SUITE, name, tier, passed, detail);
+        ReportCaseFrom(SUITE, name, tier, from, passed, detail);
     }
+}
+
+/// EndFrom for a case whose expected value is where its bytes lie, the suite's spec.
+static void End(const char *name, CheckTier tier, bool passed, const char *detail, uint64_t work) {
+    EndFrom(name, tier, REPORT_FROM_UNSAID, passed, detail, work);
 }
 
 static uint64_t TickNs(uint64_t since) {
@@ -424,6 +430,22 @@ static CheckTier TierOf(const Run *r, const Judged *j) {
                                                                             : CHECK_EXACT;
 }
 
+/// Where a fetched texel's value comes from: its place for RGBA8; for a compressed texture, the
+/// decoder the reference suite holds tex8kref.c's to (Pillow's for BC1 and BC7, astcenc's or the
+/// specification's for the astcimage picture's blocks).
+static ReportFrom FromOf(const Run *r) {
+    switch (r->e->ref.kind) {
+    case TEX8K_BC1:
+    case TEX8K_BC7:
+        return REPORT_FROM_REFERENCE;
+    case TEX8K_ASTC:
+        return AstcImageExpectedFrom(r->e->ref.astc);
+    case TEX8K_RGBA8:
+        break;
+    }
+    return REPORT_FROM_SPEC;
+}
+
 /// The detail of a judged target: the wrong pixels and the first, those within BC7's bound, and
 /// @p times after them.
 static void Describe(char *out, size_t size, const Judged *j, const char *times) {
@@ -507,7 +529,7 @@ static void FetchAndJudge(Run *r, const char *name, const Window *windows, uint3
     }
     char detail[512];
     Describe(detail, sizeof(detail), &j, times);
-    End(name, TierOf(r, &j), j.wrong == 0u, detail, work);
+    EndFrom(name, TierOf(r, &j), FromOf(r), j.wrong == 0u, detail, work);
 }
 
 /// Skips every case of the texture after the one that could not leave what they need.
@@ -708,7 +730,7 @@ static bool Upload(Run *r, const char *name) {
     }
     char detail[512];
     Describe(detail, sizeof(detail), &j, times);
-    End(name, TierOf(r, &j), j.wrong == 0u, detail, work);
+    EndFrom(name, TierOf(r, &j), FromOf(r), j.wrong == 0u, detail, work);
     return true;
 }
 
@@ -814,7 +836,7 @@ static void Frames(Run *r, const char *name) {
     }
     char detail[512];
     Describe(detail, sizeof(detail), &j, times);
-    End(name, TierOf(r, &j), j.wrong == 0u, detail, median);
+    EndFrom(name, TierOf(r, &j), FromOf(r), j.wrong == 0u, detail, median);
 }
 
 /// A 256x256 region of level 0, a quarter in frame 3's region, copied out to a buffer and held to

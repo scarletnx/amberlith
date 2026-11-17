@@ -31,6 +31,18 @@ UI = """static const struct { const char *suite; UiFamily family; } FAMILIES[] =
 };
 """
 
+ORIGIN = """static const struct { const char *suite; ReportFrom from; } ORIGINS[] = {
+    { "clear", REPORT_FROM_SPEC },
+    { "depth", REPORT_FROM_REFERENCE },
+    { "fs", REPORT_FROM_SPEC },
+    { "nvn2", REPORT_FROM_SPEC },
+    { "jni", REPORT_FROM_SPEC },
+    { "framework", REPORT_FROM_SPEC },
+    { "bionic", REPORT_FROM_SPEC },
+    { "mod", REPORT_FROM_SPEC },
+};
+"""
+
 
 def report(path, cases, host=False):
     with open(path, "w", encoding="utf-8") as file:
@@ -59,6 +71,11 @@ class Tree:
         os.makedirs(os.path.join(self.root, "docs", "families"))
         with open(os.path.join(self.root, "source", "ui.c"), "w", encoding="utf-8") as file:
             file.write(UI)
+        self.origins(ORIGIN)
+
+    def origins(self, text):
+        with open(os.path.join(self.root, "source", "origin.c"), "w", encoding="utf-8") as file:
+            file.write(text)
 
     def path(self, *parts):
         return os.path.join(self.root, *parts)
@@ -172,11 +189,11 @@ class Blocks(unittest.TestCase):
         nro = [
             ("selfcheck", "integer arithmetic", "none", "pass"),
             ("clear", "graphics device opens", "none", "pass"),
-            ("clear", "whole target red", "exact", "pass"),
+            ("clear", "whole target red", "exact", "pass", "spec"),
             ("clear", "whole target green", "exact", "pass", "console"),
             ("clear", "a rectangle", "none", "fail"),
-            ("depth", "less at a half", "ulp", "pass"),
-            ("fs", "a read", "exact", "pass"),
+            ("depth", "less at a half", "ulp", "pass", "reference"),
+            ("fs", "a read", "exact", "pass", "spec"),
         ]
         self.tree.catalogue({"nro": [report(self.tree.path("nro.jsonl"), nro)]})
         self.rows = list(tool.read_catalogue(self.tree.root)[0].values())
@@ -188,10 +205,13 @@ class Blocks(unittest.TestCase):
     def test_a_suite_s_line(self):
         self.assertEqual(
             self.render("suite", "clear"),
-            "**4 cases**: 2 with a judge (exact 2; expected from the console 1), 1 without one, "
-            "1 not yet seen judged.\n",
+            "**4 cases**: 2 with a judge (exact 2; expected from the console 1, the specification 1), 1 without"
+            " one, 1 not yet seen judged.\n",
         )
-        self.assertEqual(self.render("suite", "depth"), "**1 case**: 1 with a judge (ulp 1), 0 without one.\n")
+        self.assertEqual(
+            self.render("suite", "depth"),
+            "**1 case**: 1 with a judge (ulp 1; expected from another reference 1), 0 without one.\n",
+        )
 
     def test_the_judge_s_suites_are_the_probe_s_own(self):
         self.assertEqual(
@@ -219,20 +239,72 @@ class Blocks(unittest.TestCase):
     def test_a_family_s_table(self):
         self.assertEqual(
             self.render("family", "graphics"),
-            "| Suite | Cases | With a judge | Without one | Not yet known |\n|---|--:|--:|--:|--:|\n"
-            "| clear | 4 | 2 | 1 | 1 |\n| depth | 1 | 1 | 0 | 0 |\n| **All** | **5** | **3** | **1** | **1** |\n",
+            "| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one |"
+            " Not yet known |\n|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n"
+            "| clear | 4 | 2 | 1 | 0 | 0 | 0 | 1 | 1 | 1 |\n| depth | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |\n"
+            "| **All** | **5** | **3** | **1** | **0** | **1** | **0** | **1** | **1** | **1** |\n",
         )
+
+    def test_a_judged_case_that_says_no_source_is_counted_apart(self):
+        nro = [("clear", "whole target blue", "exact", "pass"), ("depth", "less at a half", "ulp", "pass", "astcenc")]
+        self.tree.catalogue({"nro": [report(self.tree.path("nro2.jsonl"), nro)]})
+        rows = list(tool.read_catalogue(self.tree.root)[0].values())
+        self.assertEqual(
+            tool.render("suite", "clear", rows, self.families),
+            "**1 case**: 1 with a judge (exact 1; expected from not said 1), 0 without one.\n",
+        )
+        self.assertEqual(
+            tool.render("family", "graphics", rows, self.families),
+            "| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Not said | Without one |"
+            " Not yet known |\n|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n"
+            "| clear | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |\n| depth | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |\n"
+            "| **All** | **2** | **2** | **0** | **0** | **1** | **0** | **0** | **1** | **0** | **0** |\n",
+        )
+        self.assertEqual([c.name for c in tool.unsaid(self.tree.root, None)], ["whole target blue"])
+        self.assertEqual(tool.unsaid(self.tree.root, "fs"), [])
+
+    def test_a_case_with_two_sources_counts_at_the_strongest(self):
+        self.assertEqual(tool.strongest("spec,console"), "console")
+        self.assertEqual(tool.strongest("emulator,reference"), "reference")
+        self.assertEqual(tool.strongest("astcenc,spec"), "astcenc")
+        self.assertEqual(tool.strongest("-"), None)
+
+    def test_origin_c_has_a_row_for_every_machine_suite_and_none_for_the_judge(self):
+        for text, words in (
+            (ORIGIN.replace('    { "fs", REPORT_FROM_SPEC },\n', ""), "no row for fs"),
+            (ORIGIN.replace("};", '    { "warp", REPORT_FROM_SPEC },\n};'), "rows for warp, which no family takes"),
+            (ORIGIN.replace("};", '    { "selfcheck", REPORT_FROM_SPEC },\n};'), "rows for selfcheck, the judge's"),
+            (ORIGIN.replace("REFERENCE", "HEARSAY"), "depth's source REPORT_FROM_HEARSAY is not one"),
+            (ORIGIN.replace("};", '    { "fs", REPORT_FROM_CONSOLE },\n};'), "fs has two rows"),
+            ("static const int nothing;\n", "no ORIGINS[] table"),
+        ):
+            with self.subTest(words=words):
+                self.tree.origins(text)
+                with self.assertRaises(tool.Refused) as caught:
+                    tool.write(self.tree.root, check=True)
+                self.assertIn(words, str(caught.exception))
+                self.assertIn("source/origin.c", str(caught.exception))
 
     def test_a_category_s_line_and_the_families_table(self):
         self.assertEqual(
             self.render("category", "gpu"),
-            "_1 family, 2 suites, 5 cases: 3 with a judge (exact 2, ulp 1; expected from the console 1), 1 without"
-            " one, 1 not yet seen judged._\n",
+            "_1 family, 2 suites, 5 cases: 3 with a judge (exact 2, ulp 1; expected from the console 1, another"
+            " reference 1, the specification 1), 1 without one, 1 not yet seen judged._\n",
         )
         table = self.render("families")
-        self.assertIn("| GPU and NVN | [Graphics](Graphics.md) | 2 | 5 | 3 | 1 | 1 |", table)
-        self.assertIn("| The judge and the tools | [The judge](Judge.md) | 1 | 1 | - | - | - |", table)
-        self.assertIn("| **On a machine** | | **3** | **6** | **4** | **1** | **1** |", table)
+        self.assertIn(
+            "| Category | Family | Suites | Cases | With a judge | Console | Driver | Reference | Emulator | Spec |"
+            " Without one | Not yet known |\n|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n",
+            table,
+        )
+        self.assertIn("| GPU and NVN | [Graphics](Graphics.md) | 2 | 5 | 3 | 1 | 0 | 1 | 0 | 1 | 1 | 1 |", table)
+        self.assertIn(
+            "| The judge and the tools | [The judge](Judge.md) | 1 | 1 | - | - | - | - | - | - | - | - |", table
+        )
+        self.assertIn(
+            "| **On a machine** | | **3** | **6** | **4** | **1** | **0** | **1** | **0** | **2** | **1** | **1** |",
+            table,
+        )
 
     def test_plurals(self):
         self.assertEqual(
@@ -296,6 +368,7 @@ class Blocks(unittest.TestCase):
             self.assertEqual(tool.main(["--root", self.tree.root, "write", "--check"]), 0)
             self.assertEqual(tool.main(["--root", self.tree.root, "unjudged", "graphics"]), 0)
             self.assertEqual(tool.main(["--root", self.tree.root, "unjudged", "warp"]), 2)
+            self.assertEqual(tool.main(["--root", self.tree.root, "unsaid"]), 0)
         self.assertIn("docs/Fs.md:1: counts: suite fs: not what docs/cases.tsv gives", out.getvalue())
         self.assertIn("graphics\tclear\tnone\tgraphics device opens", out.getvalue())
         self.assertIn("graphics\tclear\tunknown\ta rectangle", out.getvalue())
@@ -337,6 +410,22 @@ class ThisTree(unittest.TestCase):
                     "%s: %s the host ran that docs/cases.tsv does not give it, %s it gives the host and the host did "
                     "not run; run tools/case-counts.py catalogue host=edenprobe-host-report.jsonl, then write"
                     % (suite, tool.plural(len(gained), "case"), tool.plural(len(lost), "case")),
+                )
+
+    def test_the_host_build_s_lines_say_the_sources_the_catalogue_gives(self):
+        if not os.path.exists(HOST_REPORT):
+            self.fail("%s is missing: run make -f host.mk host-run" % HOST_REPORT)
+        catalogue = tool.read_catalogue(ROOT)[0]
+        for suite, name, tier, _, source in tool.read_report(HOST_REPORT, "host"):
+            case = catalogue.get((suite, name))
+            if case is None or tier not in tool.TIERS:
+                continue
+            with self.subTest(suite=suite, name=name):
+                self.assertEqual(
+                    tool.strongest(case.source),
+                    source,
+                    "the host's line says %s, docs/cases.tsv %s; run tools/case-counts.py catalogue "
+                    "host=edenprobe-host-report.jsonl, then write" % (source, case.source),
                 )
 
 

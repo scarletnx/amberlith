@@ -1110,8 +1110,9 @@ static void DeviceBuffersCase(const char *name) {
     n->nvnDeviceGetInteger(&n2.device, NVN_DEVICE_INFO_API_MAJOR_VERSION, &version);
     Same(why, sizeof(why), "the device's API version after the two builders were filled",
          version, NVN_LAYER_API);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 /// A network builder keeps each number it is given. Its defaults keep the device and take one
@@ -1164,8 +1165,9 @@ static void DlssBuilderCase(const char *name) {
          (long long)(uintptr_t)&pool);
     Same(why, sizeof(why), "whether the 128 bytes of texture IDs came back",
          memcmp(ids, ids_back, sizeof(ids)) == 0, 1);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 /// An evaluation's parameters keep each number they are given, and start as the driver's do:
@@ -1238,8 +1240,9 @@ static void DlssParametersCase(const char *name) {
     Same(why, sizeof(why), "the bias mask's corner, a hundred times x plus y", a * 100 + b, 708);
     n->nvnDlssParametersGetOutputSubrectangleBase(&p, &a, &b);
     Same(why, sizeof(why), "the output's corner, a hundred times x plus y", a * 100 + b, 910);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 /// A builder for an output of @p side by @p side.
@@ -1690,13 +1693,17 @@ static void MandelPictureCase(const char *name, MeshKind kind) {
             }
         }
     }
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, wrong == 0u,
-               "%u of %u pixels wrong; the first, (%u,%u), holds %02x%02x%02x%02x, expected "
-               "%02x%02x%02x%02x; %u pixels hold the clear colour, where the picture has 7328 "
-               "(all 65536 when no mesh draw ran: ScarletNX draws them with mesh_draws=1)",
-               (unsigned)wrong, (unsigned)(MANDEL_SIZE * MANDEL_SIZE), (unsigned)first_x,
-               (unsigned)first_y, first[0], first[1], first[2], first[3], first_want[0],
-               first_want[1], first_want[2], first_want[3], (unsigned)clear);
+    // With no shading rate image, or a palette left out, a fragment a pixel is what an Ounce
+    // game's driver gives: the picture's sameness rests on the driver.
+    const ReportFrom from = kind == MESH_NO_RATE || kind == MESH_PALETTE ? REPORT_FROM_DRIVER
+                                                                          : REPORT_FROM_UNSAID;
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, from, wrong == 0u,
+                    "%u of %u pixels wrong; the first, (%u,%u), holds %02x%02x%02x%02x, expected "
+                    "%02x%02x%02x%02x; %u pixels hold the clear colour, where the picture has 7328 "
+                    "(all 65536 when no mesh draw ran: ScarletNX draws them with mesh_draws=1)",
+                    (unsigned)wrong, (unsigned)(MANDEL_SIZE * MANDEL_SIZE), (unsigned)first_x,
+                    (unsigned)first_y, first[0], first[1], first[2], first[3], first_want[0],
+                    first_want[1], first_want[2], first_want[3], (unsigned)clear);
 }
 
 void RunNvn2(void) {

@@ -2792,8 +2792,9 @@ static void SubroutineLinkageCase(const char *name) {
     Gives(why, sizeof(why), "whether it took one linkage map of no array",
           nvn.nvn.nvnProgramSetSubroutineLinkage(&program, 1, NULL), 0);
     nvn.nvn.nvnProgramFinalize(&program);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 #if NVN_LAYER_API >= 231
@@ -2869,7 +2870,7 @@ static void ProgramBuilderLinkageCase(const char *name) {
           (long long)(uintptr_t)named);
     Gives(why, sizeof(why), "the builder's number of linkage maps",
           nvn.nvn.nvnProgramBuilderGetSubroutineLinkageCount(&builder), 3);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 
 /// The Ounce's program builder keeps the hashes of its shaders' debug data it is given, by
@@ -2891,7 +2892,7 @@ static void ProgramBuilderHashesCase(const char *name) {
     Gives(why, sizeof(why), "the builder's debug data hashes",
           (long long)(uintptr_t)nvn.nvn.nvnProgramBuilderGetDebugDataHashes(&builder),
           (long long)(uintptr_t)named);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 
 /// The scratch memory a warp of a program's ray tracing needs is a number of its ray tracing
@@ -2911,7 +2912,7 @@ static void ProgramScratchCase(const char *name) {
     Gives(why, sizeof(why), "the scratch bytes per warp of a program with no ray tracing",
           (long long)nvn.nvn.nvnProgramGetScratchBytesPerWarp(&program), 0);
     nvn.nvn.nvnProgramFinalize(&program);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 
 /// A shader group's handle is 32 bytes a ray tracing program writes for one of its groups. An
@@ -2943,7 +2944,7 @@ static void ProgramGroupCase(const char *name) {
                             "program with no ray tracing,",
           changed, 0);
     nvn.nvn.nvnProgramFinalize(&program);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 
 /// The ray tracing modules a builder is given, an array by its address and their number, have
@@ -2982,7 +2983,7 @@ static void ProgramBuilderModulesCase(const char *name) {
           nvn.nvn.nvnProgramBuilderGetMaxTraceRecursionDepth(&builder), 5);
     Gives(why, sizeof(why), "the builder's ray tracing flags, after the modules,",
           nvn.nvn.nvnProgramBuilderGetProgramRayTracingFlags(&builder), 6);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 
 /// A queue builder's ray tracing memory size is one more of its sizes: unset on a new builder,
@@ -3005,8 +3006,9 @@ static void QueueRayBuilderCase(const char *name) {
     Gives(why, sizeof(why), "whether a ray tracing memory size that was set is said to be",
           nvn.nvn.nvnQueueBuilderGetRayTracingMemorySize(&builder, &size), 1);
     Gives(why, sizeof(why), "the builder's ray tracing memory size", size, 0x300000);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 /// The ray tracing memory a queue has used is one of the counts nvnQueueResetMemoryUsageCounts
@@ -3021,8 +3023,9 @@ static void QueueRayUsedCase(const char *name) {
     nvn.nvn.nvnQueueResetMemoryUsageCounts(&nvn.queue);
     Gives(why, sizeof(why), "the ray tracing memory the queue used since its counts were reset",
           (long long)nvn.nvn.nvnQueueGetTotalRayTracingMemoryUsed(&nvn.queue), 0);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 /// A clear recorded inside the Ounce's debug groups, between its markers, is the clear: the
@@ -3382,7 +3385,7 @@ static void WindowHdrBuilderCase(const char *name) {
                                                   &got[9]);
     nvn.nvn.nvnWindowBuilderGetHdrContentMetadata(&builder, &got[10], &got[11]);
     HdrGives(why, sizeof(why), "the builder's", got, set, HDR_DISPLAY + 2);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 
 /// The window's own metadata, set on it and read back, and put back to what a new builder has.
@@ -3417,7 +3420,7 @@ static void WindowHdrCase(const char *name) {
                                            initial[3], initial[4], initial[5], initial[6],
                                            initial[7], initial[8], initial[9]);
     nvn.nvn.nvnWindowSetHdrContentMetadata(&win.window, initial[10], initial[11]);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0', "%s", why);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
 }
 #endif
 
