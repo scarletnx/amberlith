@@ -2,7 +2,7 @@
 # at, none when it passed comparing nothing, unknown when it only failed or skipped with no tier), where its
 # expected answer comes from when a line says, and the builds whose reports had it.
 # Written by tools/case-counts.py catalogue from these reports; the docs' counts by case-counts.py write.
-# host: edenprobe host build
+# host: Amberlith host build
 # nro: edenprobe 0.18.1 (v0.18.1-5-gafd862f), machine scarletnx 75b49fb
 # nro: edenprobe 0.18.1 (v0.18.1-5-gafd862f), machine scarletnx 75b49fb
 # ounce: edenprobe 0.18.1 (v0.18.1-5-gafd862f)
@@ -270,6 +270,8 @@ support	a case that times itself goes out with its own time, here 4321 us	judge	
 support	a case that timed itself carries its time, counts, and rehearses mute	judge	none	-	host
 support	all runs every family but pad, nvn, demo, music and pace, which named beside it add theirs	judge	none	-	nro,ounce,host
 support	a line says what its case said its expected value comes from, else its suite's source, and nothing when it compares nothing	judge	none	-	nro,ounce,host
+support	a card an edenprobe build left runs from its folder whole until an Amberlith build has run on it	judge	none	-	host
+support	the start screen draws Wimsy as Amberlith under its rows, clear of them and of the tip	judge	none	-	host
 reference	clip space origin is the middle of the target	judge	none	-	nro,ounce,host
 reference	clip space plus y is the top of the target	judge	none	-	nro,ounce,host
 reference	clip space minus y is the bottom of the target	judge	none	-	nro,ounce,host
