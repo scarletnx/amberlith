@@ -32,6 +32,10 @@ native library for `arm64-v8a` (phones, the layer) and `x86_64` (the emulator). 
 runtime, no library. The build names itself from `VERSION` and git as the NRO's does ([Versions](Versions.md)), so a
 report's folder is the commit's.
 
+A name the native code binds by (a class `FindClass` asks for, a function's JNI name) builds whether the Java side has
+it or not, and ART refuses the library at its load or the call at run time; `tools/test_android_jni.py`, which the host
+run runs, holds each one to a class and a native method of `android/src/main/java`.
+
 ### Run it on a device or the emulator
 
 ```sh

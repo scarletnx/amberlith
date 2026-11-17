@@ -21,7 +21,7 @@ static void* find_from_attached(void* arg) {
         snprintf(out, 256, "attach failed");
         return NULL;
     }
-    jclass c = (*env)->FindClass(env, "org/scarletnx/edenprobe/NativeLib");
+    jclass c = (*env)->FindClass(env, "org/scarletnx/amberlith/NativeLib");
     if (c) {
         snprintf(out, 256, "found");
         (*env)->DeleteLocalRef(env, c);
@@ -37,7 +37,7 @@ static void* find_from_attached(void* arg) {
 
 JNIEXPORT jstring JNICALL PROBE_FN(findClass)(JNIEnv* env, jclass cls) {
     (void)cls;
-    jclass c = (*env)->FindClass(env, "org/scarletnx/edenprobe/NativeLib");
+    jclass c = (*env)->FindClass(env, "org/scarletnx/amberlith/NativeLib");
     const char* here = c ? "found" : "not found";
     if (!c) (*env)->ExceptionClear(env);
     char there[256] = "";
