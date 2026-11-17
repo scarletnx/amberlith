@@ -1162,6 +1162,64 @@ static void CheckWatcher(void) {
                (unsigned)watched_starts, (unsigned)watched_ends, watched_last);
 }
 
+// What the frontend's answer below was asked, and what it says.
+static uint32_t unasked_calls;
+static char unasked_last[64];
+static bool unasked_passed;
+static bool unasked_answer;
+
+static bool Unasked(const char *suite, const char *name, bool passed, char *why,
+                    size_t why_size) {
+    ++unasked_calls;
+    unasked_passed = passed;
+    snprintf(unasked_last, sizeof(unasked_last), "%s/%s", suite, name);
+    snprintf(why, why_size, "the machine has no such function");
+    return unasked_answer;
+}
+
+/// A frontend that says a case could not be asked ends it as a skip, whatever its verdict: asked
+/// once for each verdict and for no skip, and a case it takes ends as a skip does, which no
+/// start is required of.
+static void CheckUnasked(void) {
+    const size_t before = ReportBookkeepingProblems();
+    const bool required = ReportStartsRequired();
+    ReportRehearse(SUITE);
+    ReportRequireStarts(true);
+    unasked_calls = 0u;
+    unasked_last[0] = '\0';
+    unasked_answer = false;
+    const ReportUnasked set = ReportSetUnasked(Unasked);
+    // Left to its verdict, a case that never said it started is a problem, which is how this
+    // case tells a verdict from a skip without a line in the report.
+    ReportCase(SUITE, "a verdict that stands", CHECK_NONE, false, NULL);
+    const bool stood = unasked_calls == 1u && !unasked_passed &&
+                       strcmp(unasked_last, "support/a verdict that stands") == 0 &&
+                       ReportBookkeepingProblems() == before + 1u;
+    unasked_answer = true;
+    ReportCase(SUITE, "a case nobody could ask", CHECK_NONE, true, NULL);
+    ReportCaseFrom(SUITE, "another, with its source", CHECK_EXACT, REPORT_FROM_CONSOLE, true,
+                   NULL);
+    ReportCaseTime(SUITE, "a third, with its time", CHECK_NONE, false, NULL, 7u);
+    const bool taken = unasked_calls == 4u && !unasked_passed &&
+                       strcmp(unasked_last, "support/a third, with its time") == 0 &&
+                       ReportBookkeepingProblems() == before + 1u;
+    ReportSkip(SUITE, "a skip of its own", REPORT_REASON_DEPENDS, "nothing");
+    const bool skips_unasked = unasked_calls == 4u;
+    const bool handed_back = ReportSetUnasked(set) == Unasked;
+    ReportCase(SUITE, "a verdict with nobody to ask", CHECK_NONE, true, NULL);
+    const bool quiet = unasked_calls == 4u && ReportBookkeepingProblems() == before + 2u;
+    ReportRequireStarts(required);
+    ReportRehearse(NULL);
+    CHECK_TRUE(SUITE,
+               "a case its frontend says could not be asked ends as a skip, whatever its verdict",
+               CHECK_NONE, stood && taken && skips_unasked && handed_back && quiet,
+               "a verdict left alone stood %d; three taken ended as skips %d; a skip was not "
+               "asked %d; the one before handed back %d; nothing asked after %d (%u asked, last "
+               "%s)",
+               (int)stood, (int)taken, (int)skips_unasked, (int)handed_back, (int)quiet,
+               (unsigned)unasked_calls, unasked_last);
+}
+
 static void CheckPrecedence(void) {
     // No word stands between a case and its run but the hang table's: SM4, which ends the
     // program on the console and on a translator that cannot compile it, runs with no word at
@@ -2104,6 +2162,7 @@ void RunSupportJournal(const char *scratch) {
     CheckDecisions();
     CheckBookkeeping();
     CheckWatcher();
+    CheckUnasked();
     CheckPrecedence();
     CheckHang();
     CheckBans();
