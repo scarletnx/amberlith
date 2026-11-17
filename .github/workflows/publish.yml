@@ -41,7 +41,9 @@ jobs:
       - name: Find the build to publish
         id: plan
         run: python3 .github/scripts/publish-builds.py plan --repo "$GITHUB_REPOSITORY"
-      # By its name, as the build job uploaded it, into a folder of its own
+      # By its name, as the build job uploaded it, into a folder of its own, and as it was uploaded: build.yml uploads
+      # each file itself (archive: false), and download-artifact unpacks one that is a zip unless told not to, which
+      # leaves an ExeFS zip's files where the zip should be
       - name: Download the NRO
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
@@ -50,6 +52,7 @@ jobs:
           path: artifacts/edenprobe-${{ steps.plan.outputs.stem }}.nro
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-decompress: true
       - name: Download the APK
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
@@ -58,6 +61,7 @@ jobs:
           path: artifacts/edenprobe-${{ steps.plan.outputs.stem }}.apk
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-decompress: true
       - name: Download the Switch 2 program
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
@@ -66,6 +70,7 @@ jobs:
           path: artifacts/edenprobe-ounce-${{ steps.plan.outputs.stem }}.zip
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-decompress: true
       - name: Download the mod of a game
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
@@ -74,6 +79,7 @@ jobs:
           path: artifacts/edenprobe-mod-${{ steps.plan.outputs.stem }}.zip
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-decompress: true
       - name: Publish it
         if: steps.plan.outputs.run
         env:

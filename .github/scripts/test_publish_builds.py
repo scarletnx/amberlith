@@ -12,14 +12,17 @@ import hashlib
 import io
 import json
 import os
+import re
 import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 
 from fake_github import Discord, World, python, serve
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "publish-builds.py")
+WORKFLOWS = Path(HERE).parent / "workflows"
 REPO = "owner/repo"
 NRO = b"\0" * 16 + b"NRO0" + b"\0" * 12 + b"the program"
 APK = b"PK\x03\x04" + b"\0" * 26 + b"the app"
@@ -145,7 +148,8 @@ class Publish(unittest.TestCase):
 
     def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK, ounce=OUNCE, mod=MOD, version="0.2.0"):
         """the folder the workflow downloads into: the NRO, the APK and the two zips, named after the version and the
-        commit, each in a folder named after its artifact, or at its path"""
+        commit, each in a folder named after its artifact, or at its path; a dict for a file is the files a download
+        that unpacked it leaves in that folder"""
         artifact = named(f"{version}-{commit[:7]}")
         for file, content in (
             (artifact["nro"], data),
@@ -154,7 +158,11 @@ class Publish(unittest.TestCase):
             (artifact["mod"], mod),
         ):
             path = self.world.root / name / file
-            if as_file:
+            if isinstance(content, dict):
+                for member, data in content.items():
+                    (path / member).parent.mkdir(parents=True, exist_ok=True)
+                    (path / member).write_bytes(data)
+            elif as_file:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(content)
             elif content is not None:
@@ -375,6 +383,17 @@ class Publish(unittest.TestCase):
                 self.assertIn(said, done.stderr)
                 self.assertIsNone(self.find(self.tag))
 
+    def test_a_zip_the_download_unpacked_stops(self):
+        # what actions/download-artifact leaves of a zip uploaded as itself when it is not told skip-decompress
+        done = self.publish("nightly", self.sha, ounce={"exefs/main": MODULE, "exefs/main.npdm": DESCRIPTOR})
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(
+            f"edenprobe-ounce-{self.stem}.zip is a folder of 2 files (exefs/main, exefs/main.npdm), not the one Switch "
+            "2 program: a download that unpacked the zip leaves its files there",
+            done.stderr,
+        )
+        self.assertIsNone(self.find(self.tag))
+
     def test_a_zip_with_a_file_of_another_kind_stops(self):
         done = self.publish(
             "nightly", self.sha, mod=exefs({"exefs/subsdk9": b"NRO0 a homebrew", "exefs/main.npdm": DESCRIPTOR})
@@ -504,6 +523,28 @@ class Publish(unittest.TestCase):
     def test_a_release_takes_a_version_tag(self):
         done = self.publish("release", self.sha, "--tag", "main")
         self.assertEqual(done.returncode, 2, done.stderr)
+
+
+def steps(workflow):
+    """a workflow's steps, each the text from its "- name:" or "- uses:" to the next one's"""
+    return re.split(r"\n(?=\s+- (?:name|uses):)", workflow)
+
+
+class Workflows(unittest.TestCase):
+    """the files go from build.yml to publish-builds.py as they were built"""
+
+    def test_every_file_is_downloaded_as_it_was_uploaded(self):
+        uploads = [step for step in steps((WORKFLOWS / "build.yml").read_text()) if "actions/upload-artifact@" in step]
+        downloads = [
+            step for step in steps((WORKFLOWS / "publish.yml").read_text()) if "actions/download-artifact@" in step
+        ]
+        # the four files of a release (publish-builds.py's FILES)
+        self.assertEqual((len(uploads), len(downloads)), (4, 4))
+        for step in uploads:
+            self.assertRegex(step, r"(?m)^\s+archive: false$", "build.yml uploads each file itself")
+        for step in downloads:
+            # download-artifact unpacks a file that is a zip unless told not to
+            self.assertRegex(step, r"(?m)^\s+skip-decompress: true$", "publish.yml takes each file as it was uploaded")
 
 
 if __name__ == "__main__":

@@ -229,13 +229,18 @@ class Publisher(Hub):
     # ---- a run's files
     def built(self, run, artifact, name, kind, label, magic, at, members):
         """the artifact as a release holds it under name, and its checksum file: each name to its path, and the file
-        (notes.Built). actions/download-artifact puts a file it does not unpack at the artifact's path, or in a folder
-        of that name. members: for a zip, every file it holds, each to the magic it starts with"""
+        (notes.Built). actions/download-artifact puts the file at the artifact's path, or in a folder of that name;
+        a zip it unpacked (publish.yml downloads with skip-decompress) is the zip's files there, refused. members: for
+        a zip, every file it holds, each to the magic it starts with"""
         found = self.artifacts / artifact
         if found.is_dir():
             inside = sorted(path for path in found.rglob("*") if path.is_file())
             if len(inside) != 1:
-                raise RuntimeError(f"{artifact} holds {len(inside)} files, not the one {label}")
+                held = ", ".join(path.relative_to(found).as_posix() for path in inside) or "nothing"
+                raise RuntimeError(
+                    f"{artifact} is a folder of {len(inside)} files ({held}), not the one {label}: a download that "
+                    "unpacked the zip leaves its files there (publish.yml downloads each with skip-decompress)"
+                )
             found = inside[0]
         if not found.is_file():
             raise RuntimeError(f"run {run} built, yet has no {artifact}")
