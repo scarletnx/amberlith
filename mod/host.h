@@ -37,6 +37,18 @@ bool HostBuildId(const uint8_t *bytes, size_t size, char out[HOST_BUILD_ID_TEXT]
 /// as the kernel's memory query gives the two. False when the address is in no code.
 bool HostModuleData(uintptr_t function, const uint8_t **bytes, size_t *size);
 
+/// A function the mod asks of the game by its SDK name, and whether the game has it: a weak
+/// import whose address is not nought.
+typedef struct {
+    const char *name;
+    bool present;
+} HostName;
+
+/// The names of @p names the game has not, ", " between them, into @p out ("" when it has every
+/// one), whole names only: one that does not fit ends the list with "..." when there is room.
+/// Returns how many it has not.
+size_t HostLacks(char *out, size_t size, const HostName *names, size_t count);
+
 #ifdef __cplusplus
 }
 #endif

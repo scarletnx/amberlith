@@ -44,6 +44,9 @@ extern "C" {
 ///             leaves and says so.
 ///   noprogress no running screen while the suites run: the window keeps the screen before it,
 ///             as before there was one. For a machine whose window misbehaves while it draws.
+///   nowindow  the mod opens no window of its own in the game's process (docs/Mod.md), and the
+///             nvn suite's window cases are skipped as unavailable: the game keeps the screen. The
+///             other frontends have their window whatever it says.
 ///   hooks     the console's services that a machine may answer in a game's own code (nn::fs,
 ///             nn::time, nn::pl, nn::ngc, nn::nsd) asked through the SDK's functions the program
 ///             exports, and not by IPC: the program opens neither fsp-srv nor time:u (hooks.h).
@@ -296,6 +299,8 @@ typedef struct {
     bool no_journal;
     /// The word `noprogress`: no running screen.
     bool no_progress;
+    /// The word `nowindow`: the mod opens no window of its own.
+    bool no_window;
     /// The word `browse`: the browser instead of the start screen, in a detailed run.
     bool browse;
     /// The word `hooks`: the services asked through the SDK's functions (hooks.h).

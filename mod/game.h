@@ -42,6 +42,22 @@ void GameSetGraphicsAllocator(GameAllocate allocate, GameFree free, GameRealloca
 void GameInitializeGraphics(void *memory, size_t size)
     GAME_OPTIONAL("_ZN2nv18InitializeGraphicsEPvm");
 
+/// nn::vi, which gives the mod a window of its own (NvnGameWindow): the default display, a layer
+/// on it and the layer's native window, which an NVN window is made on as a game makes its own.
+/// The display and the layer are the SDK's objects, only ever held by their address.
+typedef struct GameViDisplay GameViDisplay;
+typedef struct GameViLayer GameViLayer;
+void GameViInitialize(void) GAME_OPTIONAL("_ZN2nn2vi10InitializeEv");
+uint32_t GameViOpenDefaultDisplay(GameViDisplay **display)
+    GAME_OPTIONAL("_ZN2nn2vi18OpenDefaultDisplayEPPNS0_7DisplayE");
+uint32_t GameViCreateLayer(GameViLayer **layer, GameViDisplay *display)
+    GAME_OPTIONAL("_ZN2nn2vi11CreateLayerEPPNS0_5LayerEPNS0_7DisplayE");
+uint32_t GameViGetNativeWindow(void **window, GameViLayer *layer)
+    GAME_OPTIONAL("_ZN2nn2vi15GetNativeWindowEPPvPNS0_5LayerE");
+void GameViDestroyLayer(GameViLayer *layer) GAME_OPTIONAL("_ZN2nn2vi12DestroyLayerEPNS0_5LayerE");
+void GameViCloseDisplay(GameViDisplay *display) GAME_OPTIONAL("_ZN2nn2vi12CloseDisplayEPNS0_7DisplayE");
+void GameViFinalize(void) GAME_OPTIONAL("_ZN2nn2vi8FinalizeEv");
+
 /// The mod's frontend (mod/frontend.c): the run, from the mode file to the closed report, with
 /// what the start saw of the card for its first case. Returns the process's exit status.
 typedef struct {

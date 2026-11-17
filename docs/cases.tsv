@@ -272,6 +272,7 @@ support	all runs every family but pad, nvn, demo, music and pace, which named be
 support	a line says what its case said its expected value comes from, else its suite's source, and nothing when it compares nothing	judge	none	-	nro,ounce,host
 support	a card an edenprobe build left runs from its folder whole until an Amberlith build has run on it	judge	none	-	host
 support	the start screen draws Wimsy as Amberlith under its rows, clear of them and of the tip	judge	none	-	host
+support	the word nowindow keeps the mod's window closed and nothing else	judge	none	-	host
 reference	clip space origin is the middle of the target	judge	none	-	nro,ounce,host
 reference	clip space plus y is the top of the target	judge	none	-	nro,ounce,host
 reference	clip space minus y is the bottom of the target	judge	none	-	nro,ounce,host

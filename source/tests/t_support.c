@@ -1035,6 +1035,34 @@ static void CheckLaunchAndMode(void) {
                    key_plain, key_still, saved, said);
     }
 
+    // The nowindow word keeps the mod's window closed, and only it: no word a launch compares, and
+    // a file saved keeps it.
+    {
+        const RunMode plain = ModeFromText("quick nvn");
+        const RunMode closed = ModeFromText("quick nvn NOWINDOW");
+        char said[REPORT_NOTE_MAX + 1] = "";
+        ModeDescribe(said, sizeof(said), &closed, MODE_FAMILIES_PRESENT);
+        char key_plain[JOURNAL_MODE_MAX];
+        char key_closed[JOURNAL_MODE_MAX];
+        ModeKey(key_plain, sizeof(key_plain), &plain);
+        ModeKey(key_closed, sizeof(key_closed), &closed);
+        char saved[128];
+        ModeFormat(saved, sizeof(saved), &closed);
+        const size_t length = strlen(said);
+        const char *const tail = "; no window of the mod's own";
+        CHECK_TRUE(SUITE, "the word nowindow keeps the mod's window closed and nothing else",
+                   CHECK_NONE,
+                   !plain.no_window && closed.no_window && closed.unknown_count == 0u &&
+                       strcmp(key_plain, key_closed) == 0 &&
+                       strcmp(saved, "quick nvn nowindow") == 0 && length > strlen(tail) &&
+                       strcmp(said + length - strlen(tail), tail) == 0 &&
+                       ModeFromText("nowindows").unknown_count == 1u,
+                   "plain %d, nowindow %d, unknown %u, keys \"%.60s\" \"%.60s\", saved \"%.40s\", "
+                   "said \"%.200s\"",
+                   (int)plain.no_window, (int)closed.no_window, (unsigned)closed.unknown_count,
+                   key_plain, key_closed, saved, said);
+    }
+
     // Every word, alone and together, any case, in a file that is missing, empty, or has words
     // nobody knows. What the run does is the first two columns; the rest is what it reports.
     // With no family named every family runs but audio, which only a word brings.

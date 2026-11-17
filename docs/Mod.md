@@ -57,9 +57,11 @@ that exports it:
 - nn::fs's file functions and one of its two mounts of the memory card, as [the hooks mode](Hooks.md) asks them,
   here answered by the game's SDK;
 - nn::oe::Initialize, nv::SetGraphicsAllocator and nv::InitializeGraphics, what a game's start calls before its
-  first NVN device.
+  first NVN device;
+- nn::vi's Initialize, OpenDefaultDisplay, CreateLayer, GetNativeWindow, DestroyLayer, CloseDisplay and Finalize,
+  for the mod's own window.
 
-The mounts and the last three are weak imports: in a game whose SDK has none of a name the address is nought, the
+The mounts and all after them are weak imports: in a game whose SDK has none of a name the address is nought, the
 mod does not call it, and the report says which it went without. `tools/mod-imports.py` holds the built module to
 the list, to exporting nothing (a name a game's module exports is found before the SDK's own, and the module's C
 library has the SDK's names), to plain relocations and to nothing of libnx's start; `make -f host.mk host-run` runs
@@ -74,6 +76,11 @@ own start and before the game's constructors and its main. From there:
 - the card is mounted as `sdmc` through the game's nn::fs and becomes the C library's `sdmc:` device;
 - the run goes as on every frontend ([Frontends](Frontends.md)): the mode file, the journal, the steps, the
   report;
+- the first of the nvn suite's window cases opens the mod's window, as the plain program has its own: nn::vi is
+  initialized, a layer of the mod's own is made on the default display, and the NVN window is made on its native
+  window as a game makes its own. It closes as the run ends. The mode file's `nowindow` keeps it closed and the
+  window cases unavailable, the game keeping its screen; a game whose SDK lacks one of the names, or a call that
+  fails, leaves them unavailable too, the line naming the name or the result;
 - the process ends (`svcExitProcess`). The game never reaches its main: no memory of its own is in use, no device
   or queue of its own exists, and nothing has to be paused.
 
@@ -92,8 +99,10 @@ under ScarletNX with the game recompiled unoptimized it alone took over ten minu
   version with no device, and it is one whose objects this build has (53 to 55: `nvn/nvn.h`'s types were taken
   from a 53.105 driver); the driver was given its allocator and 32 MiB of the module's data before the first
   device;
-- the `nvn` suite's looked up way. Its window cases are skipped as unavailable: a native window is the game's to
-  make, and the mod makes none.
+- the `nvn` suite's looked up way, its window cases on the mod's own window (above).
+
+The demo family is the plain program's alone: its frames are deko3d's and its programs uam's, and the mod has
+neither, only the game's NVN.
 
 A driver of another API major fails the second case with both numbers, and the nvn suite is not run: its objects
 would be made in storage of another size.

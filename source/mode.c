@@ -105,6 +105,10 @@ static void Take(RunMode *mode, const char *word, bool cut) {
             mode->no_progress = true;
             return;
         }
+        if (strcmp(word, "nowindow") == 0) {
+            mode->no_window = true;
+            return;
+        }
         if (strcmp(word, "browse") == 0) {
             mode->browse = true;
             return;
@@ -734,6 +738,10 @@ static void Describe(char *out, size_t out_size, const RunMode *mode, uint32_t p
         const size_t used = strlen(out);
         snprintf(out + used, out_size - used, "; no running screen");
     }
+    if (mode->no_window) {
+        const size_t used = strlen(out);
+        snprintf(out + used, out_size - used, "; no window of the mod's own");
+    }
     if (mode->browse) {
         const size_t used = strlen(out);
         snprintf(out + used, out_size - used, "%s",
@@ -1001,7 +1009,8 @@ size_t ModeFormat(char *out, size_t out_size, const RunMode *mode) {
     bool fits = (mode->detailed || AppendWord(out, out_size, "quick")) &&
                 (key[0] == '\0' || AppendWord(out, out_size, key)) &&
                 (!mode->no_journal || AppendWord(out, out_size, "nojournal")) &&
-                (!mode->no_progress || AppendWord(out, out_size, "noprogress"));
+                (!mode->no_progress || AppendWord(out, out_size, "noprogress")) &&
+                (!mode->no_window || AppendWord(out, out_size, "nowindow"));
     if (fits && ModeLabelValid(mode->label)) {
         char label[MODE_LABEL_MAX + 8u];
         snprintf(label, sizeof(label), "label=%s", mode->label);
