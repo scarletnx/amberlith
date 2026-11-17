@@ -1325,6 +1325,32 @@ static void CheckHang(void) {
     ReportSetHang(false);
     const bool sm4_runs = ReportWouldRun("cpu", CPU_SM4_CASE, NULL, NULL, 0);
 
+    // On a machine a run showed it return on it runs with no word; on another it is skipped, the
+    // detail naming where it returns. A machine whose name begins the same is another machine.
+    ReportSetMachine("scarletnx", "2f46296");
+    ReportReason returned_reason = REPORT_REASON_CRASHED;
+    const bool returns_runs = ReportWouldRun("bsd", HANG_BSD_TIMEOUT, &returned_reason, NULL, 0);
+    ReportSetMachine("scarletnx-android", NULL);
+    const bool longer_skips = !ReportWouldRun("bsd", HANG_BSD_TIMEOUT, NULL, NULL, 0);
+    ReportSetMachine("ryujinx", "1.3.351");
+    char elsewhere[REPORT_KEPT_DETAIL];
+    const bool other_skips =
+        !ReportWouldRun("bsd", HANG_BSD_TIMEOUT, &reason, elsewhere, sizeof(elsewhere)) &&
+        reason == REPORT_REASON_HANG && strstr(elsewhere, "as does a run on scarletnx") != NULL;
+    const Hang *const bsd = HangFind("bsd", HANG_BSD_TIMEOUT);
+    bool words = HangReturnsOn(bsd, "scarletnx") && !HangReturnsOn(bsd, "scarlet") &&
+                 !HangReturnsOn(bsd, "") && !HangReturnsOn(bsd, NULL) &&
+                 !HangReturnsOn(NULL, "scarletnx");
+    // every machine a line names is one the ban list knows, so a misspelt one cannot pass unseen
+    for (size_t i = 0; i < HangCount(); ++i) {
+        char names[64];
+        snprintf(names, sizeof(names), "%s", HangAt(i)->returns_on);
+        for (char *word = strtok(names, " "); word != NULL; word = strtok(NULL, " ")) {
+            words = words && BanMachineKnown(word);
+        }
+    }
+    ReportSetMachine(NULL, NULL);
+
     // Last, and taken back below: kept, it skipped the real bsd case as crashed for the rest of
     // the run.
     JournalRecord crash = Record(JOURNAL_CRASH, "bsd", HANG_BSD_TIMEOUT, 1);
@@ -1352,6 +1378,13 @@ static void CheckHang(void) {
                (int)skipped, ReportReasonWord(reason), (int)retry_skips,
                ReportReasonWord(retry_reason), (int)asked_runs, (int)sm4_runs, (int)crash_wins,
                ReportReasonWord(crash_reason), handed_back ? "handed back" : "lost");
+    CHECK_TRUE(SUITE, "a case known to hang runs on a machine a run showed it return on",
+               CHECK_NONE, returns_runs && longer_skips && other_skips && words,
+               "on scarletnx %s (%s), on scarletnx-android %s, on ryujinx %s (\"%.160s\"), "
+               "the machine words %s",
+               returns_runs ? "runs" : "skipped", ReportReasonWord(returned_reason),
+               longer_skips ? "skipped" : "runs", other_skips ? "skipped" : "runs", elsewhere,
+               words ? "matched whole" : "matched wrong");
 }
 
 /// The decision and hang checks each record a crash for this run, to see it win over everything
@@ -1364,8 +1397,13 @@ static void CheckCrashesHandedBack(uint32_t before) {
     snprintf(saved_path, sizeof(saved_path), "%s", ReportCrashListPath());
     const bool saved_retry = ReportRetrying();
     const bool saved_hang = ReportHangAsked();
+    char saved_machine[BAN_MACHINE_MAX + 1u];
+    char saved_version[BAN_VERSION_MAX + 1u];
+    snprintf(saved_machine, sizeof(saved_machine), "%s", ReportMachine());
+    snprintf(saved_version, sizeof(saved_version), "%s", ReportMachineVersion());
     ReportSetCrashList(NULL, NULL, false);
     ReportSetHang(false);
+    ReportSetMachine(NULL, NULL); // a machine the bsd case returns on runs it
 
     const uint32_t after = ReportCrashedMark();
     ReportReason bsd_reason = REPORT_REASON_CRASHED;
@@ -1377,6 +1415,7 @@ static void CheckCrashesHandedBack(uint32_t before) {
 
     ReportSetCrashList(&saved, saved_path, saved_retry);
     ReportSetHang(saved_hang);
+    ReportSetMachine(saved_machine, saved_version);
     CHECK_TRUE(SUITE, "the checks that record a crash for this run take it back", CHECK_NONE,
                after == before && bsd_hangs && decision_runs,
                "crashes this run %u before them, %u after; bsd %s; the decision check's case %s",

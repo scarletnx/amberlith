@@ -640,10 +640,11 @@ bool ReportWouldRun(const char *suite, const char *name, ReportReason *reason, c
     const int asked = SkipAsked(suite);
     bool runs = true;
     // A crash or a timeout in this run first, whatever retry or hang says. Then a suite the
-    // person left out: their word, whatever the words that run more ask. Then a known hang: retry
-    // would run it again and it would not return, so the launch would never mark it. Then a ban
-    // on this machine, unless unban; then the crash list, which is this machine's own evidence.
-    // Every other case runs: one that ends the program is the next launch's to skip.
+    // person left out: their word, whatever the words that run more ask. Then a known hang, but
+    // on a machine a run showed it return on: retry would run it again and it would not return,
+    // so the launch would never mark it. Then a ban on this machine, unless unban; then the crash
+    // list, which is this machine's own evidence. Every other case runs: one that ends the
+    // program is the next launch's to skip.
     if (ended != NULL && ended->kind == JOURNAL_TIMED_OUT) {
         // The runner's doing, not the case's: the limit is a launch's, and the quiet seconds
         // say how much of it this case had.
@@ -667,10 +668,12 @@ bool ReportWouldRun(const char *suite, const char *name, ReportReason *reason, c
                  "the mode file's skip=%s leaves the %s suite out; without the word it runs",
                  skip_suites[asked], skip_suites[asked]);
         runs = false;
-    } else if (hang != NULL && !hang_asked) {
+    } else if (hang != NULL && !hang_asked && !HangReturnsOn(hang, ban_machine)) {
         why = REPORT_REASON_HANG;
         snprintf(detail, detail_size,
-                 "known to hang the program: %s; the mode word hang runs it", hang->why);
+                 "known to hang the program: %s; the mode word hang runs it%s%s%s", hang->why,
+                 hang->returns_on[0] != '\0' ? ", as does a run on " : "", hang->returns_on,
+                 hang->returns_on[0] != '\0' ? ", where a run showed it return" : "");
         runs = false;
     } else if (ban != NULL && !unban_asked) {
         why = REPORT_REASON_BANNED;
