@@ -238,7 +238,14 @@ $body1
 $SIGNED"
 SUBJECT_HISTORY=$(sed -n "s/^SUBJECT_HISTORY_EXAMPLE='\(.*\)'\$/\1/p" "$hook")
 [ -n "$SUBJECT_HISTORY" ] || { echo "no SUBJECT_HISTORY_EXAMPLE in $hook" >&2; exit 2; }
-try ok      "the prefix from before the rename, for history" "$SUBJECT_HISTORY
+try ok      "the prefix from before the first rename, for history" "$SUBJECT_HISTORY
+
+$body1
+
+$SIGNED"
+SUBJECT_HISTORY2=$(sed -n "s/^SUBJECT_HISTORY_EXAMPLE2='\(.*\)'\$/\1/p" "$hook")
+[ -n "$SUBJECT_HISTORY2" ] || { echo "no SUBJECT_HISTORY_EXAMPLE2 in $hook" >&2; exit 2; }
+try ok      "the prefix from before the second rename, for history" "$SUBJECT_HISTORY2
 
 $body1
 
