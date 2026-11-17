@@ -85,7 +85,7 @@ The program's `__appInit` (`source/hooks.c`) is libnx's, step for step, up to th
 the memory card through nn::fs::MountSdCard as `sdmc`, and reads `sdmc:/edenprobe/mode` through nn::fs, as the runner
 reads it later (the first 4096 bytes, a folder as no file). Without `hooks` it unmounts the card and goes on as
 libnx: time:u, the C library's time zone, fsp-srv, its `sdmc:` device. With `hooks` the card stays mounted and becomes
-the C library's `sdmc:` device, every file the program writes going through nn::fs (each write flushed, as a journal
+the C library's `sdmc:` device (`source/sdk_card.c`), every file the program writes going through nn::fs (each write flushed, as a journal
 line must be on the card before the next case may end the program), and nn::time::Initialize is called, as a game's
 start calls it. Neither fsp-srv nor time:u is opened.
 
