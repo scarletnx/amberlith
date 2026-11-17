@@ -54,7 +54,7 @@ run whenever a case of the suite does. The judge's suites have no mark: they run
 
 Plus, A on a case or a demo, and Y on the results first ask whether the judge runs before what was picked, in a box over the tab
 with the answers on the foot: A the judge, then the run; B the run alone; Minus back to the browser, nothing run. The
-judge holds the probe itself to its references, some 700 cases and half a minute or more, so a person checking one
+judge holds the probe itself to its references, hundreds of cases ([the judge](families/Judge.md) counts them) and half a minute or more, so a person checking one
 case again can leave it out. The start tab's run is a whole run and has the judge as every run from the mode file
 does, with no question.
 

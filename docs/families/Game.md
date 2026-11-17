@@ -8,6 +8,14 @@
 * [The levels](#the-levels)
 * [What rests on reasoning](#what-rests-on-reasoning)
 
+<!-- counts: family game -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| game | 14 | 6 | 8 | 0 |
+| wimsy | 73 | 28 | 45 | 0 |
+| **All** | **87** | **34** | **53** | **0** |
+<!-- /counts -->
+
 Every other family asks the machine one thing at a time. A game asks everything at once: it draws,
 plays sound, reads its files, calls services and computes on several threads in the same frame,
 and presents the frame when the display is ready for it. The game family is one scene that does
@@ -19,7 +27,7 @@ seconds at 60 a second. The family's second suite, `wimsy`, is the same question
 game comes in, a level a scene, each run only when a `level=<n>` word names it: see [The
 levels](#the-levels).
 
-- **game**, fourteen cases, seven with `notime`. One says the scene came up (none tier): a graphics
+- **game**, seven of its cases left out by `notime`, the ones that carry times. One says the scene came up (none tier): a graphics
   device, a way to the display (a swapchain, or the program's screen), the audio renderer and the fs
   family's big file, which the scene writes the first time as the fs suite does. Then the frames
   run, inside the case that judges their images; the four after it judge the sound, the reads, the

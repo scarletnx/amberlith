@@ -9,13 +9,21 @@
 * [The judge, pinned](#the-judge-pinned)
 * [svc](#svc)
 
+<!-- counts: family kernel -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| sched | 7 | 6 | 1 | 0 |
+| svc | 22 | 21 | 1 | 0 |
+| **All** | **29** | **27** | **2** | **0** |
+<!-- /counts -->
+
 Two suites. The first, sched, is the kernel's scheduler as a program sees it: threads of chosen
 priorities on one core, a mutex of the kernel's between them, and a thread in a loop with no
 supervisor call holding the core. Only the word `kernel` runs it (see [The mode
 file](../ModeFile.md)), since no console has yet shown that its cases never hang; the start screen
 has no row for it, and a file that names it keeps it whatever the screen changes.
 
-- **sched**, seven cases. One says threads start on the core and at the priority asked (none
+- **sched**: one says threads start on the core and at the priority asked (none
   tier); the six after it each run a handful of threads and judge the order they ran in
   (position tier: which came first is the verdict, the time it took is not). If the first fails,
   the six are skipped as `depends`.
@@ -134,7 +142,11 @@ it.
 
 ## svc
 
-Twenty two cases, after sched, in the same family and under the same word. The kernel's answers to
+<!-- counts: suite svc -->
+**22 cases**: 21 with a judge (exact 21), 1 without one.
+<!-- /counts -->
+
+After sched, in the same family and under the same word. The kernel's answers to
 the supervisor calls a game makes around its handles, its events and its memory, where the console's
 kernel decides each result and an emulator's kernel can return another. Every case compares the
 result code, and where there is one the index or the memory state, with the console kernel's answer,

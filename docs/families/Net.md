@@ -6,6 +6,18 @@
 * [The net file](#the-net-file)
 * [The fixture](#the-fixture)
 
+<!-- counts: family net -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| nifm | 7 | 1 | 1 | 5 |
+| dns | 11 | 6 | 0 | 5 |
+| bsd | 8 | 5 | 0 | 3 |
+| ssl | 16 | 6 | 1 | 9 |
+| acc | 6 | 0 | 2 | 4 |
+| friend | 5 | 0 | 1 | 4 |
+| **All** | **53** | **18** | **5** | **30** |
+<!-- /counts -->
+
 The net family asks the services a program reaches the network through, the way a game asks them,
 and judges each answer against its protocol or against what `sdmc:/edenprobe/net` says the backend
 publishes (see [The net file](#the-net-file) below). Every line says what was expected and what came
@@ -16,11 +28,11 @@ three seconds, every read is polled first, and every handshake, write and read o
 non-blocking against five or three seconds, so a server that drops the attempt or accepts and never
 speaks costs a failed case, never the run.
 
-- **nifm**, seven cases. The service opens; a request nobody submitted says so; and, when the file
+- **nifm**: the service opens; a request nobody submitted says so; and, when the file
   names a backend, the connection is reported connected, the machine has an address of its own, a
   submitted request is accepted without being asked for its result and again when it is, and while
   one stands the service says an internet request is accepted.
-- **dns**, eleven cases, sfdnsres and nsd. A dotted address resolves to itself through both of
+- **dns**, sfdnsres and nsd. A dotted address resolves to itself through both of
   sfdnsres's serialisations, read by this program's own parsers; a name under `.invalid` does not
   resolve (RFC 6761); nsd names its environment, replaces the `%` placeholder with it, and leaves a
   plain name alone. With a session, once it answers: nsd hands back the destination the backend
@@ -30,14 +42,14 @@ speaks costs a failed case, never the run.
   in in the background when the program loads, so the suite asks nsd until it gives the session's
   answer, for at most the fork's fifteen second sign-in budget, and a note says how long it took.
   In [hooks mode](../Hooks.md) nsd is asked through nn::nsd::Resolve and GetEnvironmentIdentifier.
-- **bsd**, eight cases. Two datagram sockets on loopback send a datagram one way and back, whole
+- **bsd**: two datagram sockets on loopback send a datagram one way and back, whole
   both ways and each time from the socket that sent it; an empty socket has nothing to read; a
   stream to a listener the suite opens carries bytes both ways; a port nothing listens on refuses; a
   receive timeout set with `SO_RCVTIMEO` gives up with `EAGAIN` in its time (bounded by a datagram
   another thread sends two seconds in, so a machine that ignores the option fails the case rather
   than hanging). With a server: a stream connects to it, and a connect that does not block
   completes, polls writable and reports no pending error, as a game does.
-- **ssl**, sixteen cases. A context; a new connection's default verification (the peer and the name,
+- **ssl**: a context; a new connection's default verification (the peer and the name,
   as libnx documents); the name and an option set on a connection reading back (SetOption carries
   the flag before the option, as the console lays raw input out by alignment); a connection taking a
   socket and blocking mode, and saying so; a descriptor handed back by default and none with
@@ -50,11 +62,11 @@ speaks costs a failed case, never the run.
   rewrites, and under the address the service sends a game to, succeeds with nothing imported,
   because the backend publishes the certificate that server presents (`game_server` in reden's
   `docs/OnlineService.md`; the fixture publishes its own).
-- **acc**, six cases. acc:u0 and a user, the network account manager, and with a session: the
+- **acc**: acc:u0 and a user, the network account manager, and with a session: the
   account id is the one the backend publishes, the id token refresh completes, succeeds and leaves a
   token in the cache, the token is a bearer token (RFC 6750's alphabet) terminated inside its
   buffer, and the cache hands back the same token again.
-- **friend**, five cases. The service opens, and with a session: the blocked user list is the
+- **friend**: the service opens, and with a session: the blocked user list is the
   backend's, a profile the backend knows comes back valid with its name and picture, one it does not
   comes back invalid in its own slot with the id that was asked, and a picture url comes back with
   every `{size}` replaced by the size asked for.

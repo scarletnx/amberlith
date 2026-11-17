@@ -7,7 +7,14 @@ reaches the speakers at a gain of nought records the resampler and the limiter, 
 buffer sink records the final mix. Only a word runs it, `audio` or `listen`, since it makes sound;
 see below.
 
-- **audio**, twelve cases. An 11 kHz voice at the output rate keeps its level at high quality, and
+<!-- counts: family audio -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| audio | 12 | 12 | 0 | 0 |
+| **All** | **12** | **12** | **0** | **0** |
+<!-- /counts -->
+
+- **audio**: an 11 kHz voice at the output rate keeps its level at high quality, and
   at default quality; a voice at half, 1.25 times and twice the output rate keeps the level its
   quality's conversion table gives, three ratios at each of the two qualities; a stereo circular
   buffer sink comes into use and records the final mix, the left channel first and the right second;

@@ -12,13 +12,17 @@
 * [What Eden does](#what-eden-does)
 * [The judge, pinned](#the-judge-pinned)
 
+<!-- counts: suite nvdec -->
+**7 cases**: 6 with a judge (exact 6), 1 without one.
+<!-- /counts -->
+
 The second suite of [the video family](Video.md): the video decode engine, NVDEC, given VP9 jobs
 built ready from six of libvpx's test vectors, one job per frame, and every image it decodes read
 back off its surface and hashed against the MD5 list libvpx publishes for the vector. Only the word
 `video` runs it, with the vic suite (see [The mode file](../ModeFile.md)), since no console has yet
 shown that its jobs never hang.
 
-- **nvdec**, seven cases. One says the channel opened, the buffer was mapped and what clock the
+- **nvdec**: one says the channel opened, the buffer was mapped and what clock the
   engine got (none tier); the six after it each decode a whole vector and judge every image exactly.
   If the channel does not open, the six are skipped as `depends`.
 

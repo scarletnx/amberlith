@@ -52,5 +52,27 @@ named as a nightly's, `edenprobe-<version>-<commit>.nro`, `.apk`, `edenprobe-oun
 - A version's release also gets a message on Discord, on the channel of the secret `DISCORD_WEBHOOK_RELEASES`;
   without it, nothing is posted there and the run says so.
 
-To release a version: change `VERSION` on `main`, tag that commit `v<VERSION>` and push the tag. The scripts are in
+To release a version: count the cases (below), change `VERSION` on `main`, tag that commit `v<VERSION>` and push the
+tag. The scripts are in
 `.github/scripts`; `make -f host.mk host-run` runs their tests against a fake GitHub and a fake Discord.
+
+## Counting the cases
+
+Every count of cases in the docs is a block between `<!-- counts: ... -->` and `<!-- /counts -->`, written by
+`tools/case-counts.py` from [the catalogue](cases.tsv), `docs/cases.tsv`: a line a case, its suite, its family, its
+judge and the builds that ran it. The CI fails when a block is not what the catalogue gives, and when the host build
+ran a case the catalogue does not give it, so a judge, libc or music case added shows at once; the cases only a
+machine runs are counted again before each release, on the commit to be released:
+
+```sh
+make run EMULATOR=/path/to/emulator MODE="quick hooks all pad nvn demo music game stress level=0 level=1 level=2 level=3 level=4"
+make -f host.mk host-run
+python3 tools/case-counts.py catalogue nro=<that run's report.jsonl> host=edenprobe-host-report.jsonl
+python3 tools/case-counts.py write
+```
+
+and commit `docs/cases.tsv` with the blocks. Those words run every family at the default frames: the game and demo
+cases' names carry the number of frames, and a demo's judged frames need 600. Pad waits for a person, and its
+cases skipped unanswered keep the judge the catalogue had for them. A build given alone updates only its own cases
+(`ounce=` the Switch 2 build's report, for nvn2; `apk=` Android's); `python3 tools/case-counts.py unjudged [FAMILY]`
+lists the cases with no judge, or none known yet.

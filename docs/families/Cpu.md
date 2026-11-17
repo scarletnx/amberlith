@@ -1,6 +1,13 @@
 # The processor
 
-- **cpu**, thirty eight cases, on the processor and in every mode, since it needs no device. Three count
+<!-- counts: family cpu -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| cpu | 38 | 36 | 0 | 2 |
+| **All** | **38** | **36** | **0** | **2** |
+<!-- /counts -->
+
+- **cpu**, on the processor and in every mode, since it needs no device. Three count
   leading zeros over the sixteen 8-bit, eight 16-bit and four 32-bit lanes of one vector register,
   loaded from memory so a translator cannot fold the answer away, and compared exactly with the
   reference. The 16-bit case is there because a translator that widened the lanes to count them

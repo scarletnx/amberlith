@@ -46,6 +46,52 @@
 * [The open questions](#the-open-questions)
 * [The judge, pinned](#the-judge-pinned)
 
+<!-- counts: family service -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| hwopus | 4 | 3 | 1 | 0 |
+| am | 2 | 1 | 1 | 0 |
+| fsp | 2 | 1 | 1 | 0 |
+| account | 2 | 1 | 1 | 0 |
+| ldn | 10 | 9 | 1 | 0 |
+| set | 4 | 3 | 1 | 0 |
+| csrng | 2 | 1 | 1 | 0 |
+| apm | 3 | 2 | 1 | 0 |
+| nfp | 2 | 1 | 1 | 0 |
+| aoc | 6 | 5 | 1 | 0 |
+| time | 6 | 5 | 1 | 0 |
+| pl | 3 | 2 | 1 | 0 |
+| profile | 4 | 3 | 1 | 0 |
+| am-state | 5 | 5 | 0 | 0 |
+| am-self | 2 | 2 | 0 | 0 |
+| am-functions | 3 | 3 | 0 | 0 |
+| auddev | 3 | 2 | 1 | 0 |
+| fsdir | 3 | 3 | 0 | 0 |
+| am-audio | 2 | 2 | 0 | 0 |
+| am-channel | 3 | 3 | 0 | 0 |
+| am-storage | 3 | 3 | 0 | 0 |
+| mii | 4 | 4 | 0 | 0 |
+| am-mode | 2 | 2 | 0 | 0 |
+| bsd-local | 4 | 4 | 0 | 0 |
+| ipc | 5 | 5 | 0 | 0 |
+| hid | 1 | 1 | 0 | 0 |
+| time-snap | 2 | 2 | 0 | 0 |
+| vi | 3 | 3 | 0 | 0 |
+| renderer | 4 | 4 | 0 | 0 |
+| ngc | 3 | 2 | 0 | 1 |
+| am-lock | 2 | 2 | 0 | 0 |
+| set-sys | 3 | 3 | 0 | 0 |
+| time-zone | 3 | 3 | 0 | 0 |
+| time-perm | 2 | 1 | 0 | 1 |
+| audout | 3 | 3 | 0 | 0 |
+| audin | 1 | 1 | 0 | 0 |
+| pctl | 1 | 1 | 0 | 0 |
+| fs-file | 5 | 5 | 0 | 0 |
+| acc-app | 2 | 2 | 0 | 0 |
+| sdk | 1 | 1 | 0 | 0 |
+| **All** | **125** | **109** | **14** | **2** |
+<!-- /counts -->
+
 Commands a game sends to the system's services, asked the way a game asks them, each answer held to
 the one reden gives. Only the word `service` runs it (see [The mode file](../ModeFile.md)), since no
 console has yet shown what it answers; the start screen has no row for it, and a file that names it

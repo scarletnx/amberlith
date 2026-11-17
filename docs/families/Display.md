@@ -1,12 +1,28 @@
 # The display family
 
+## Index
+
+* [How a case runs](#how-a-case-runs)
+* [How a case passes](#how-a-case-passes)
+* [The cases](#the-cases)
+* [The open question](#the-open-question)
+* [What Eden does](#what-eden-does)
+* [The judge, pinned](#the-judge-pinned)
+
 The display service's buffer producer, the binder object behind a layer that a game queues its
 frames to, asked for its buffer history: transaction 17 of `IGraphicBufferProducer`
 (`GetBufferHistory`), which a game was seen to send once a frame. Only the word `display` runs it
 (see [The mode file](../ModeFile.md)), since no console has yet shown what it answers; the start
 screen has no row for it, and a file that names it keeps it whatever the screen changes.
 
-- **binder**, four cases. One says a layer of the suite's own opened and took a window (none tier);
+<!-- counts: family display -->
+| Suite | Cases | With a judge | Without one | Not yet known |
+|---|--:|--:|--:|--:|
+| binder | 4 | 3 | 1 | 0 |
+| **All** | **4** | **3** | **1** | **0** |
+<!-- /counts -->
+
+- **binder**: one says a layer of the suite's own opened and took a window (none tier);
   the three after it queue frames to that layer and judge the raw reply to the transaction. If the
   layer does not open, the three are skipped as `depends`.
 

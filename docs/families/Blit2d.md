@@ -9,12 +9,16 @@
 * [What Eden does](#what-eden-does)
 * [The judge, pinned](#the-judge-pinned)
 
+<!-- counts: suite blit2d -->
+**5 cases**: 4 with a judge (exact 4), 1 without one.
+<!-- /counts -->
+
 The 2D engine, class 0x902D, copying a block linear surface into a window of another at half and
 at two thirds size, from each sample origin. Part of the graphics family, after dma, so it runs by
 default and is timed like the drawing suites: a warm-up and eight rehearsals before the verdict
 pass, each opening a device and surfaces of its own.
 
-- **blit2d**, five cases. One says the device came up with both surfaces laid out as the methods
+- **blit2d**: one says the device came up with both surfaces laid out as the methods
   describe them (none tier); the four after it make one copy each and judge every pixel of the
   destination twice (exact tier). If the first fails, the four are skipped as `depends`.
 
