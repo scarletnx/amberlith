@@ -10,9 +10,9 @@ builds of one emulator. No case needs a person to look at the screen.
 
 ## Quick start
 
-The newest nightly is
-[edenprobe.nro](https://github.com/scarletnx/edenprobe/releases/download/nightly/edenprobe.nro), and each version has
-a [release](https://github.com/scarletnx/edenprobe/releases).
+The newest version is on [its release](https://github.com/scarletnx/edenprobe/releases/latest), as
+`edenprobe-<version>.nro`, and the newest nightly on
+[nightly](https://github.com/scarletnx/edenprobe/releases/tag/nightly) ([Releases](docs/Releases.md)).
 
 - On a console: put it in the SD card's `switch/` folder and open it from the homebrew menu.
 - In an emulator: open the NRO.

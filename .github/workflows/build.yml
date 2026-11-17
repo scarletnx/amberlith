@@ -38,9 +38,6 @@ jobs:
       # the commit built: a pull request's head, else the commit pushed
       SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Name the commit
-        id: commit
-        run: echo "short=${SHA::7}" >> "$GITHUB_OUTPUT"
       # The commit itself, not a pull request's merge with main: the NRO names the commit it was built from (git
       # describe, docs/Versions.md), and a report from it names that commit. Its whole history, for the version tags
       - uses: actions/checkout@v7
@@ -51,6 +48,14 @@ jobs:
       # "unknown"
       - name: Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # Every file is named after the commit's VERSION and the commit, 0.18.0-0123abc (docs/Releases.md); a VERSION
+      # that is no version would name them wrong, and stops here as it stops the publish
+      - name: Name the builds
+        id: name
+        run: |
+          version=$(cat VERSION)
+          [[ $version =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "::error::VERSION holds \"$version\", not a version"; exit 1; }
+          echo "stem=$version-${SHA::7}" >> "$GITHUB_OUTPUT"
       # A version's tag names the VERSION it is built with: the NRO says that version, the release the tag's
       - name: Check the tag against VERSION
         if: startsWith(github.ref, 'refs/tags/v')
@@ -119,35 +124,35 @@ jobs:
           for made in build-ounce/version.h build-mod/version.h; do
             cmp -s build/version.h "$made" || { echo "::error::$made is not build/version.h"; diff build/version.h "$made"; exit 1; }
           done
-      - name: Name the NRO after its commit
-        run: cp edenprobe.nro "edenprobe-${{ steps.commit.outputs.short }}.nro"
+      - name: Name the NRO after its version and commit
+        run: cp edenprobe.nro "edenprobe-${{ steps.name.outputs.stem }}.nro"
       # Each ExeFS folder zipped as exefs/ and its files, which go whole into a program's or a game's mod's folder
-      - name: Zip the Switch 2 program and the mod, named after the commit
+      - name: Zip the Switch 2 program and the mod, named after the version and the commit
         run: |
           for made in ounce mod; do
-            (cd "edenprobe-$made" && python3 -m zipfile -c "../edenprobe-$made-${{ steps.commit.outputs.short }}.zip" exefs)
-            python3 -m zipfile -l "edenprobe-$made-${{ steps.commit.outputs.short }}.zip"
+            (cd "edenprobe-$made" && python3 -m zipfile -c "../edenprobe-$made-${{ steps.name.outputs.stem }}.zip" exefs)
+            python3 -m zipfile -l "edenprobe-$made-${{ steps.name.outputs.stem }}.zip"
           done
-      # Not zipped: the artifact is the NRO itself, named after it, and each ExeFS its zip
+      # Not zipped: the artifact is the NRO itself, named after its version and commit, and each ExeFS its zip
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-${{ steps.commit.outputs.short }}.nro
+          path: edenprobe-${{ steps.name.outputs.stem }}.nro
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-ounce-${{ steps.commit.outputs.short }}.zip
+          path: edenprobe-ounce-${{ steps.name.outputs.stem }}.zip
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-mod-${{ steps.commit.outputs.short }}.zip
+          path: edenprobe-mod-${{ steps.name.outputs.stem }}.zip
           archive: false
           if-no-files-found: error
 
   # The APK (docs/Android.md) with the runner's Gradle, JDK 21 and SDK, and the NDK and CMake it names, which the
   # runner's image may not carry (sdkmanager's download sometimes ends early: tried 3 times, 5 s apart). Named, as the
-  # NRO, after the commit it was built from
+  # NRO, after the version and the commit it was built from
   apk:
     name: APK (Android)
     runs-on: ubuntu-26.04
@@ -155,14 +160,19 @@ jobs:
     env:
       SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Name the commit
-        id: commit
-        run: echo "short=${SHA::7}" >> "$GITHUB_OUTPUT"
       # The commit itself and its whole history, for the version tags the build describes itself from, as the NRO's
       - uses: actions/checkout@v7
         with:
           ref: ${{ env.SHA }}
           fetch-depth: 0
+      # Every file is named after the commit's VERSION and the commit, 0.18.0-0123abc (docs/Releases.md); a VERSION
+      # that is no version would name them wrong, and stops here as it stops the publish
+      - name: Name the builds
+        id: name
+        run: |
+          version=$(cat VERSION)
+          [[ $version =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "::error::VERSION holds \"$version\", not a version"; exit 1; }
+          echo "stem=$version-${SHA::7}" >> "$GITHUB_OUTPUT"
       - name: Install the NDK and CMake
         run: |
           for try in 1 2 3; do
@@ -183,11 +193,11 @@ jobs:
           case $hash in ''|*-dirty) echo "::error::the build names its commit \"$hash\""; exit 1 ;; esac
           unzip -p "$apk" lib/arm64-v8a/libedenprobe.so | grep -aq "$hash" ||
             { echo "::error::libedenprobe.so does not name $hash"; exit 1; }
-          cp "$apk" "edenprobe-${{ steps.commit.outputs.short }}.apk"
+          cp "$apk" "edenprobe-${{ steps.name.outputs.stem }}.apk"
       # Not zipped: the artifact is the APK itself, named after it
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-${{ steps.commit.outputs.short }}.apk
+          path: edenprobe-${{ steps.name.outputs.stem }}.apk
           archive: false
           if-no-files-found: error
 

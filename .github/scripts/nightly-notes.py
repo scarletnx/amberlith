@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""A release's title and notes: the NRO, the APK and the two ExeFS folders with their sizes and SHA-256, where to read
-how to run them, what changed since the previous release, and where the source is, which the GPL asks for beside the
-binary. publish-builds.py beside it takes them for each nightly and each version.
+"""A release's file names, title and notes: the NRO, the APK and the two ExeFS folders, named after the version (and a
+nightly's after its commit too), with their sizes and SHA-256, where to read how to run them, what changed since the
+previous release, and where the source is, which the GPL asks for beside the binary. publish-builds.py beside it takes
+them for each nightly and each version.
 
 The changes are the checkout's history from the commit the previous release was built from to the one built, left out
 without it or when it is not an ancestor. The notes link the built commit first, which is where the next nightly finds
@@ -14,18 +15,23 @@ import re
 import subprocess
 
 SERVER = "https://github.com"
-# What a release holds: the NRO, the APK and two ExeFS folders zipped, each with its checksum in the form sha256sum -c
-# reads
-NRO, SUM = "edenprobe.nro", "edenprobe.nro.sha256"
-APK, APK_SUM = "edenprobe.apk", "edenprobe.apk.sha256"
-OUNCE, OUNCE_SUM = "edenprobe-ounce.zip", "edenprobe-ounce.zip.sha256"
-MOD, MOD_SUM = "edenprobe-mod.zip", "edenprobe-mod.zip.sha256"
-# what runs each ExeFS, after its name in the notes
+# What a release holds, in this order: the NRO, the APK and two ExeFS folders zipped, each with its checksum beside it
+# in the form sha256sum -c reads; each kind's name before the version, its ending after it
+KINDS = {
+    "nro": ("edenprobe", ".nro"),
+    "apk": ("edenprobe", ".apk"),
+    "ounce": ("edenprobe-ounce", ".zip"),
+    "mod": ("edenprobe-mod", ".zip"),
+}
+SUM = ".sha256"
+# what each file is, after its name in the notes
 RUNS = {
-    OUNCE: "the probe as a Switch 2 program, which ScarletNX runs",
-    MOD: (
-        "the probe as a mod of a game, in the game's mods folder on a console with Atmosphere, in an emulator or in "
-        "ScarletNX"
+    "nro": "runs on the console and under an emulator",
+    "apk": "runs on Android and on ScarletNX's Android layer",
+    "ounce": "holds an ExeFS folder, the probe as a Switch 2 program, which ScarletNX runs",
+    "mod": (
+        "holds an ExeFS folder, the probe as a mod of a game, in the game's mods folder on a console with Atmosphere, "
+        "in an emulator or in ScarletNX"
     ),
 }
 MERGE = re.compile(r"Merge pull request #(\d+) from \S+")
@@ -33,8 +39,8 @@ MERGE = re.compile(r"Merge pull request #(\d+) from \S+")
 MARKDOWN = re.compile(r"([\\`*_\[\]<>|~])")
 MOST_CHANGES = 30
 
-# An ExeFS folder as the release holds it: its zip's name, its checksum file's, its bytes and its SHA-256
-Packed = collections.namedtuple("Packed", "name sum count digest")
+# A file as the release holds it: its kind (a key of KINDS), its name, its bytes and its SHA-256
+Built = collections.namedtuple("Built", "kind name count digest")
 
 # A change of main: its subject or its pull request's title, the pull request's number (None for a commit pushed or
 # rebased onto main), and the commit
@@ -91,28 +97,33 @@ def size(count):
     return f"{count / 1e6:.1f} MB"
 
 
-def download(url, sha, where, count, digest, apk, exefs=()):
-    """the NRO, the APK (apk: its bytes and SHA-256, or None for a release without one) and the ExeFS folders (exefs:
-    Packed), linked from the release they are in, with their sizes and SHA-256; their checksum files; the documents"""
-    rows = [f"| [{NRO}]({where}/{NRO}) | {size(count)} | `{digest}` |"]
-    sums = [SUM]
-    if apk:
-        rows.append(f"| [{APK}]({where}/{APK}) | {size(apk[0])} | `{apk[1]}` |")
-        sums.append(APK_SUM)
-    for packed in exefs:
-        rows.append(f"| [{packed.name}]({where}/{packed.name}) | {size(packed.count)} | `{packed.digest}` |")
-        sums.append(packed.sum)
-    runs = "The same NRO runs on the console and under an emulator"
-    if apk:
-        runs += ", the APK on Android and on ScarletNX's Android layer"
-    for packed in exefs:
-        runs += f"; {packed.name} holds an ExeFS folder, {RUNS[packed.name]}"
+def names(version, commit=""):
+    """each kind's file name: edenprobe-<version>.nro in a version's release, edenprobe-<version>-<commit>.nro in a
+    nightly and as a run's artifact"""
+    stem = f"{version}-{commit}" if commit else version
+    return {kind: f"{before}-{stem}{ending}" for kind, (before, ending) in KINDS.items()}
+
+
+def download(url, sha, where, built):
+    """the files (Built, the NRO first), linked from the release they are in, with their sizes and SHA-256; their
+    checksum files; the documents"""
+    rows = [f"| [{made.name}]({where}/{made.name}) | {size(made.count)} | `{made.digest}` |" for made in built]
+    sums = [made.name + SUM for made in built]
+    runs = "; ".join(f"{made.name} {RUNS[made.kind]}" for made in built)
     linked = [f"[{name}]({where}/{name})" for name in sums]
     if len(sums) == 1:
-        said = f"{runs}. {linked[0]} holds its checksum: `sha256sum -c {SUM}` beside the NRO checks it."
+        said = f"{runs}. {linked[0]} holds its checksum: `sha256sum -c {sums[0]}` beside it checks it."
     else:
         listing = ", ".join(linked[:-1]) + f" and {linked[-1]}"
         said = f"{runs}. {listing} hold their checksums: `sha256sum -c {' '.join(sums)}` beside them checks them all."
+    kinds = {made.kind for made in built}
+    documents = [
+        "Emulator",
+        "Console",
+        "Android",
+        *(name for kind, name in (("ounce", "Ounce"), ("mod", "Mod")) if kind in kinds),
+    ]
+    linked_documents = [f"[{name}.md]({url}/blob/{sha}/docs/{name}.md)" for name in documents]
     return [
         "## Download",
         "",
@@ -123,20 +134,16 @@ def download(url, sha, where, count, digest, apk, exefs=()):
         said,
         "",
         (
-            f"How to run it: [Emulator.md]({url}/blob/{sha}/docs/Emulator.md), "
-            f"[Console.md]({url}/blob/{sha}/docs/Console.md) and [Android.md]({url}/blob/{sha}/docs/Android.md)"
-            + (
-                f", [Ounce.md]({url}/blob/{sha}/docs/Ounce.md) and [Mod.md]({url}/blob/{sha}/docs/Mod.md)"
-                if exefs
-                else ""
-            )
-            + f"; how the releases are made: [Releases.md]({url}/blob/{sha}/docs/Releases.md)."
+            f"How to run it: {', '.join(linked_documents[:-1])} and {linked_documents[-1]}; how the releases are "
+            f"made: [Releases.md]({url}/blob/{sha}/docs/Releases.md)."
         ),
     ]
 
 
-def source(tree, apk, exefs=()):
+def source(tree, built):
     """Where a build's source is, which the GPL asks for beside the binary, and what it links, folded"""
+    kinds = {made.kind: made.name for made in built}
+    packed = [kinds[kind] for kind in ("ounce", "mod") if kind in kinds]
     return [
         "<details>",
         "<summary>Source and licences</summary>",
@@ -152,15 +159,15 @@ def source(tree, apk, exefs=()):
                 "- The APK was built with the Android SDK and NDK .github/workflows/build.yml names, and links only "
                 "the libraries every Android device has."
             ]
-            if apk
+            if "apk" in kinds
             else []
         ),
         *(
             [
-                f"- {' and '.join(packed.name for packed in exefs)} were built in the same container as the NRO, and "
-                "link libnx (ISC) from it."
+                f"- {' and '.join(packed)} {'were' if len(packed) > 1 else 'was'} built in the same container as "
+                f"the NRO, and {'link' if len(packed) > 1 else 'links'} libnx (ISC) from it."
             ]
-            if exefs
+            if packed
             else []
         ),
         "- What else comes from elsewhere, and under which licence, is in docs/Credits.md.",
@@ -175,21 +182,17 @@ def notes(
     previous,
     repo,
     where,
-    count,
-    digest,
+    built,
     kept,
     since="the previous nightly",
     lead="Built from main at",
-    apk=None,
-    exefs=(),
 ):
-    """where: the release the files are in; count and digest: the NRO's bytes and SHA-256; kept: what becomes of the
-    release; since: what previous was; lead: what the first line calls the build; apk: the APK's bytes and SHA-256;
-    exefs: the ExeFS folders, Packed"""
+    """where: the release the files are in; built: its files (Built), the NRO first; kept: what becomes of the
+    release; since: what previous was; lead: what the first line calls the build"""
     url = f"{SERVER}/{repo}"
     date = git(checkout, "log", "-1", "--format=%cs", sha).strip()
     lines = [f"{lead} [`{sha[:7]}`]({url}/commit/{sha}), committed {date}." + (f" {kept}" if kept else ""), ""]
-    lines += download(url, sha, where, count, digest, apk, exefs)
+    lines += download(url, sha, where, built)
     items = changes(checkout, previous, sha)
     if items is not None:
         compare = f"{url}/compare/{previous}...{sha}"
@@ -200,5 +203,5 @@ def notes(
         ]
         if len(items) > MOST_CHANGES:
             lines.append(f"- and [{len(items) - MOST_CHANGES} more]({compare})")
-    lines += ["", *source(f"{url}/tree/{sha}", apk, exefs)]
+    lines += ["", *source(f"{url}/tree/{sha}", built)]
     return "\n".join(lines) + "\n"

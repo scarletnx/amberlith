@@ -1,48 +1,52 @@
 # Releases
 
 Every push to `main` that builds becomes a nightly, and every version tag a release, each with these files and a
-`.sha256` beside each. Only the CI uploads them.
+`.sha256` beside each, named after the version, the commit's `VERSION`, which the report's first line names too. A
+nightly's carry the commit after it, `edenprobe-0.18.0-0123abc.nro`. Only the CI uploads them.
 
-| File | What it is |
+| File, in version 0.18.0 | What it is |
 |---|---|
-| `edenprobe.nro` | the probe, for a console's homebrew menu and an emulator |
-| `edenprobe.apk` | the probe on Android ([On Android](Android.md)) |
-| `edenprobe-ounce.zip` | the probe as a Switch 2 program, which ScarletNX runs ([Ounce](Ounce.md)) |
-| `edenprobe-mod.zip` | the probe as a mod of a game, the nvn suite on the game's own driver ([Mod](Mod.md)) |
+| `edenprobe-0.18.0.nro` | the probe, for a console's homebrew menu and an emulator |
+| `edenprobe-0.18.0.apk` | the probe on Android ([On Android](Android.md)) |
+| `edenprobe-ounce-0.18.0.zip` | the probe as a Switch 2 program, which ScarletNX runs ([Ounce](Ounce.md)) |
+| `edenprobe-mod-0.18.0.zip` | the probe as a mod of a game, the nvn suite on the game's own driver ([Mod](Mod.md)) |
 
-Each zip holds an ExeFS folder, `exefs/` and its files, which goes whole where its program is read from. The tables
-and commands below name the NRO; every other file is the same with its own name.
+Each zip holds an ExeFS folder, `exefs/` and its files, which goes whole where its program is read from.
 
 | What | Where |
 |---|---|
-| The newest nightly | `https://github.com/scarletnx/edenprobe/releases/download/nightly/edenprobe.nro` |
-| One nightly (the newest 30 are kept) | `.../releases/download/nightly-<date>-<commit>/edenprobe.nro` |
-| The newest version | `https://github.com/scarletnx/edenprobe/releases/latest/download/edenprobe.nro` |
-| One version | `.../releases/download/v<version>/edenprobe.nro` |
+| The newest version | https://github.com/scarletnx/edenprobe/releases/latest |
+| One version | `https://github.com/scarletnx/edenprobe/releases/tag/v<version>` |
+| The newest nightly | https://github.com/scarletnx/edenprobe/releases/tag/nightly |
+| One nightly (the newest 30 are kept) | `https://github.com/scarletnx/edenprobe/releases/tag/nightly-<date>-<commit>` |
+
+A file's own link is `.../releases/download/<tag>/<name>`, `.../download/v0.18.0/edenprobe-0.18.0.nro`. The newest
+version's NRO and its checksum without knowing its number, with GitHub's CLI (`gh release download nightly ...` takes
+the newest nightly's):
 
 ```sh
-base=https://github.com/scarletnx/edenprobe/releases/download/nightly
-curl -fL -O "$base/edenprobe.nro" -O "$base/edenprobe.nro.sha256"
-sha256sum -c edenprobe.nro.sha256
+gh release download -R scarletnx/edenprobe -p 'edenprobe-*.nro' -p 'edenprobe-*.nro.sha256'
+sha256sum -c edenprobe-*.nro.sha256
 ```
 
 `nightly`'s files are replaced one after the other, so a check that fails while a nightly lands passes when they are
 fetched again; a dated nightly and a version never change. A pull request's builds are its Build run's artifacts,
-`edenprobe-<commit>.nro`, `edenprobe-<commit>.apk`, `edenprobe-ounce-<commit>.zip` and `edenprobe-mod-<commit>.zip`,
-linked from a comment on the pull request (a fork's on the run's page).
+named as a nightly's, `edenprobe-<version>-<commit>.nro`, `.apk`, `edenprobe-ounce-<version>-<commit>.zip` and
+`edenprobe-mod-<version>-<commit>.zip`, linked from a comment on the pull request (a fork's on the run's page).
 
 ## The CI
 
 - **`build.yml`**, on each push to `main`, each `v*` tag and each pull request: the NRO in devkitPro's container,
   pinned by tag and digest, checked to name its own commit, clean, and uploaded as the run's artifact, and in the same
   job the Switch 2 program and the mod, each checked to name the NRO's build and uploaded as its ExeFS folder
-  zipped; the APK with the
-  runner's Gradle, JDK 21 and Android SDK, its native library checked to name the same commit, and uploaded the same
-  way; then `make -f host.mk host-run`. A tag must be `v` and `VERSION`, or the build stops. A newer push to a pull request
-  cancels its older build.
+  zipped; the APK with the runner's Gradle, JDK 21 and Android SDK, its native library checked to name the same
+  commit, and uploaded the same way; then `make -f host.mk host-run`. Each artifact is named after `VERSION` and the
+  commit, and a `VERSION` that is no version stops the build. A tag must be `v` and `VERSION`, or the build stops. A
+  newer push to a pull request cancels its older build.
 - **`publish.yml`**, after a Build run of a push passes: for `main`, the prerelease `nightly-<date>-<commit>` (never
-  the latest) and the prerelease `nightly`, whose tag and files follow the newest; for a tag, its release, the
-  latest (a tag with a `-` is a prerelease). Each zip is checked to hold exactly its folder's files (`exefs/main` or
+  the latest) and the prerelease `nightly`, whose tag and files follow the newest, its files named as the build's
+  artifacts; for a tag, its release, the latest (a tag with a `-` is a prerelease), its files named after the version
+  alone. Each zip is checked to hold exactly its folder's files (`exefs/main` or
   `exefs/subsdk9`, and `exefs/main.npdm`), each starting as an NSO or an NPDM does. Each release lists the changes
   since the one before.
 - A version's release also gets a message on Discord, on the channel of the secret `DISCORD_WEBHOOK_RELEASES`;
