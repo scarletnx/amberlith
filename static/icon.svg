@@ -20,7 +20,7 @@
   <circle cx="128" cy="112" r="90" fill="url(#sun)" mask="url(#bands)"/>
   <g fill="none" transform="translate(24,2) scale(0.4)">
   <defs>
-    <!-- amber: the hair from light amber down to amber, the leaves below from pale amber to burnt, amber eyes, a white front with gold trim, a dark arm, a test probe toward the empty corner -->
+    <!-- Amberlith: amber, the hair from light amber down to amber, the leaves below from pale amber to burnt, amber eyes, a white front with gold trim, a dark arm, a test probe toward the empty corner -->
     <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFD84D"/>
       <stop offset="1" stop-color="#FF9F0A"/>
@@ -86,7 +86,7 @@
   <path fill="none" stroke="#FFC93C" stroke-width="6" stroke-linecap="round"
         d="M 279,40 C 246,92 226,170 224,300"/>
 
-  <!-- the two leaves below, in amber -->
+  <!-- the two leaves below, in the hair's amber -->
   <path fill="url(#amber)" stroke="#FFFFFF" stroke-width="3.64433"
         d="M 3.1326032,310.41929 A 220.1792,220.1792 0 0 0 98.555722,350.50134 220.1792,220.1792 0 0 0 217.7827,336.65055 162.47705,162.47705 0 0 0 121.7011,283.52647 162.47705,162.47705 0 0 0 3.1326032,310.41929 Z"/>
   <path fill="url(#amber)" stroke="#FFFFFF" stroke-width="3.64433"
