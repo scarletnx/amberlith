@@ -152,7 +152,7 @@ The runner's own files are never edited for it: `make run MODE="quick skip=tex8k
 
 ## What a crash costs
 
-Every case of the cpu, graphics, fs, kernel, display, video, audio and net families says it starts before any of its
+Every case of the cpu, graphics, fs, kernel, pace, display, video, audio and net families says it starts before any of its
 work, so a launch can skip it. A case judged from another's work is skipped as `depends` when that one does not run.
 What runs between two cases (a device reopened, a service opened, the listening sequence) belongs to no case: a crash
 there costs the rest of that step, and a note says so. A case that reports without having said it started is a bug

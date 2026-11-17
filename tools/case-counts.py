@@ -74,6 +74,7 @@ FAMILY_PAGES = collections.OrderedDict(
         ("jni", ("jni", "../Android.md")),
         ("framework", ("framework", "../Android.md")),
         ("pad", ("Pad", "Pad.md")),
+        ("pace", ("Pace", "Pace.md")),
     ]
 )
 # The categories docs/README.md groups the families by. The judge holds the probe's own code to its references,
@@ -85,6 +86,7 @@ CATEGORIES = collections.OrderedDict(
         ("media", ("Video and audio", ("video", "audio", "music"))),
         ("system", ("System and services", ("fs", "display", "service", "net", "libc", "jni", "framework"))),
         ("input", ("Input", ("pad",))),
+        ("speed", ("Speed", ("pace",))),
         ("tools", ("The judge and the tools", ("judge",))),
     ]
 )

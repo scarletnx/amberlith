@@ -21,7 +21,7 @@ The newest version is on [its release](https://github.com/scarletnx/edenprobe/re
 
 Without a mode file the start screen asks what to run, and its L and R open the browser, where a person runs a suite,
 a single case or a demo at a time ([The browser](docs/UI.md)); `sdmc:/edenprobe/mode` chooses instead
-([Mode file](docs/ModeFile.md)): `quick all` runs every family that needs nobody, all but pad, nvn and music. Naming a family
+([Mode file](docs/ModeFile.md)): `quick all` runs every family that needs nobody, all but pad, nvn, demo, music and pace. Naming a family
 runs that family alone. nvn's window case runs only in a quick run from the mode file, never in one begun on the start
 screen, `noprogress` or not. The report goes to `sdmc:/edenprobe/runs/<build>/report.jsonl`
 ([Report](docs/Report.md)).

@@ -65,14 +65,15 @@ ran a case the catalogue does not give it, so a judge, libc or music case added 
 machine runs are counted again before each release, on the commit to be released:
 
 ```sh
-make run EMULATOR=/path/to/emulator MODE="quick hooks all pad nvn demo music game stress level=0 level=1 level=2 level=3 level=4"
+make run EMULATOR=/path/to/emulator TIMEOUT=3600 MODE="quick hooks all pad nvn demo music pace game stress level=0 level=1 level=2 level=3 level=4"
 make -f host.mk host-run
 python3 tools/case-counts.py catalogue nro=<that run's report.jsonl> host=edenprobe-host-report.jsonl
 python3 tools/case-counts.py write
 ```
 
 and commit `docs/cases.tsv` with the blocks. Those words run every family at the default frames: the game and demo
-cases' names carry the number of frames, and a demo's judged frames need 600. Pad waits for a person, and its
-cases skipped unanswered keep the judge the catalogue had for them. A build given alone updates only its own cases
-(`ounce=` the Switch 2 build's report, for nvn2; `apk=` Android's); `python3 tools/case-counts.py unjudged [FAMILY]`
-lists the cases with no judge, or none known yet.
+cases' names carry the number of frames, and a demo's judged frames need 600. The launch's limit is an hour: a launch
+stopped at the default minute skips the case it was in, and the pace family alone takes two. Pad waits for a person,
+and its cases skipped unanswered keep the judge the catalogue had for them. A build given alone updates only its own
+cases (`ounce=` the Switch 2 build's report, for nvn2; `apk=` Android's); `python3 tools/case-counts.py unjudged
+[FAMILY]` lists the cases with no judge, or none known yet.

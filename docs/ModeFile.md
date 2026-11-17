@@ -18,7 +18,7 @@
 | `noprogress` | no running screen while the suites run; for a machine whose window misbehaves while the suites draw |
 | `browse` | the browser instead of the start screen, on its suites tab: a person runs a family, a suite, a case or a demo at a time, each in a report of its own ([The browser](UI.md)). Only in a detailed run: beside `quick` the mode line says `browse refused: the run is quick, a script's, and the browser opens only in a detailed one`. Nothing pressed on its first screen for a minute, counted down on its foot, the program leaves and says so |
 | `hooks` | the console's services a machine may answer in a game's own code, nn::fs, nn::time, nn::pl, nn::ngc, nn::nsd, nn::pctl, nn::audio and nn::codec, asked through the SDK's functions the program exports, and not by IPC: the program opens neither fsp-srv nor time:u, its card is nn::fs's, and the audio, service and game families open no audio service but through those functions. For a recompiler that runs a game's SDK functions itself and serves none of those services; read at the program's start, with no row on the start screen; see [The hooks mode](Hooks.md) |
-| `all` | every family the build has but pad, which waits for a person, nvn, demo and music: one word for a run that needs nobody. `pad`, `nvn`, `demo` or `music` beside it adds that family; the mode line lists the families that run |
+| `all` | every family the build has but pad, which waits for a person, nvn, demo, music and pace: one word for a run that needs nobody. `pad`, `nvn`, `demo`, `music` or `pace` beside it adds that family; the mode line lists the families that run |
 | `cpu` | the processor family. It runs in every mode, so naming it alone leaves the graphics, fs and net families out: a few seconds, nothing drawn |
 | `graphics` | the graphics family: the drawing suites, clear to copy, and tex8k; selfcheck, support, reference and cpu always run, whatever family is named |
 | `nvn` | the nvn family: the clear suite's question asked through the program's NVN, a layer on deko3d that a runtime running a game's NVN itself (ScarletNX) takes as a game's driver; only when named, with no row on the start screen; its window case runs only in a quick run from the mode file, since a run begun on the start screen keeps the program's screen up to its end, `noprogress` or not, and the start screen says so; see [nvn](families/Nvn.md) |
@@ -27,6 +27,7 @@
 | `listen` | the listening sequence before the audio family's cases, and the audio family with it: about 40 seconds of sound meant to be heard; see [The audio family](families/Audio.md) |
 | `pad` | the pad family: a person presses each button the screen names, the sticks and a vibration, then taps targets on the touch screen; only when named; see [pad](families/Pad.md) and [touch](families/Touch.md) |
 | `kernel` | the kernel family: the scheduler's priority inheritance, preemption and migration, and the kernel's answers to waits, events, handles and memory calls; only when named, with no row on the start screen; see [kernel](families/Kernel.md) |
+| `pace` | the pace family: how fast the machine goes, the processor's loops on each core, memory, a thread woken and a mutex passed, the counter and sleeps, the card and the graphics unit, each timed several times over and none judged yet; only when named, and `all` leaves it out, since its numbers want a machine doing nothing else and it takes about two minutes; with `notime` every case of it is a skip that was asked for; no row on the start screen; see [pace](families/Pace.md) |
 | `display` | the display family: the buffer history of a layer of its own (transaction 17); only when named, with no row on the start screen; see [display](families/Display.md) |
 | `video` | the video family: the video image compositor, a job per case, and the decoder on VP9 jobs from libvpx's test vectors, a job per frame; only when named, with no row on the start screen; see [video](families/Video.md) and [nvdec](families/Nvdec.md) |
 | `service` | the service family: commands a game sends to the system's services, each answer held to reden's; only when named, with no row on the start screen; see [service](families/Service.md) |
@@ -46,10 +47,10 @@
 | `skip=<suite>` | the suite's cases are skipped as `asked`, whatever `hang`, `unban` or `retry` ask: a suite that harms this machine left out of every run ([Leaving a suite out](Crashes.md#leaving-a-suite-out)). The name its lines carry, 1 to 16 letters, digits and dashes, in any case; up to four, one word each. Anything else, or a fifth, is refused in the mode line with the suites in effect: `skip=te_x is not a suite name, 1 to 16 letters, digits and dashes, the first a letter: the run leaves out tex8k` |
 | `compare=<name>` | once the suites end, this run's times are held to that file's samples: a line for each case held to them, `same`, `slower` or `faster`, and one that sums them up, no verdict changed; see [Baselines](Baseline.md) |
 
-The judge and the cpu suite always run. With no family named, every family runs but audio, pad, kernel, display,
+The judge and the cpu suite always run. With no family named, every family runs but audio, pad, kernel, pace, display,
 service, video, game, demo, nvn, libc and music; on Android every family it has ([Frontends](Frontends.md)). Naming a
-family runs that family alone, so `quick audio kernel` runs no graphics; `all` is every family but pad, nvn, demo and
-music. A family this
+family runs that family alone, so `quick audio kernel` runs no graphics; `all` is every family but pad, nvn, demo,
+music and pace. A family this
 build lacks is listed in the mode line and skipped. Any other word is quoted and counted in the mode line and has no
 effect: a typo costs a line, never the run.
 
@@ -66,10 +67,12 @@ for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android]
 | `quick fs` | the judge, cpu and the fs suite, then exit |
 | `quick video` | the judge, cpu, the vic suite and the nvdec suite, then exit: what a console run of the video family wants |
 | `quick pad` | the judge, cpu and the pad suite with a person in front of it, then exit |
-| `quick all` | the judge, cpu and every family that needs nobody: all but pad, nvn, demo and music, then exit |
+| `quick all` | the judge, cpu and every family that needs nobody: all but pad, nvn, demo, music and pace, then exit |
 | `quick all skip=tex8k` | the same, the tex8k suite's cases each a skip asked for: a handheld's run |
 | `quick nvn` | the judge, cpu and the nvn suite, its window case too, then exit |
 | `quick kernel display` | the judge, cpu, the sched and svc suites and the binder suite, then exit |
+| `quick pace` | the judge, cpu and the pace family's six suites, about two minutes, then exit |
+| `quick pace baseline=console` | the same, the run's times added as a sample to the console's baseline: on a console, three times or more |
 | `quick service` | the judge, cpu and the service family's suites, then exit |
 | `quick hooks fs service` | the judge, cpu, the fs suite and the service family, the card, the clocks, the fonts, ngc, nsd, pctl, the audio services and the Opus decoder asked through the SDK's functions, then exit: a recompiler that answers them in a game's code |
 | `quick baseline=console` | the judge, cpu and the families a file naming none runs, then the run's times added as a sample to the console's baseline: on a console, a few times |

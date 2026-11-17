@@ -578,6 +578,9 @@ static const struct {
     { "tex8k", UI_FAMILY_GRAPHICS },
     { "fs", UI_FAMILY_FS },           { "sched", UI_FAMILY_KERNEL },
     { "svc", UI_FAMILY_KERNEL },
+    { "pace-cpu", UI_FAMILY_PACE },   { "pace-mem", UI_FAMILY_PACE },
+    { "pace-thread", UI_FAMILY_PACE }, { "pace-timer", UI_FAMILY_PACE },
+    { "pace-fs", UI_FAMILY_PACE },    { "pace-gpu", UI_FAMILY_PACE },
     { "binder", UI_FAMILY_DISPLAY },
     { "vic", UI_FAMILY_VIDEO },       { "nvdec", UI_FAMILY_VIDEO },
     { "audio", UI_FAMILY_AUDIO },
@@ -672,6 +675,8 @@ const char *UiFamilyName(UiFamily family) {
         return "demo";
     case UI_FAMILY_MUSIC:
         return "music";
+    case UI_FAMILY_PACE:
+        return "pace";
     case UI_FAMILY_OTHER:
     case UI_FAMILY_COUNT:
         break;
@@ -3970,6 +3975,9 @@ static const char *FamilyWords(UiFamily family) {
     case UI_FAMILY_MUSIC:
         return "The demos' music: each track rendered and held to the host's samples, then "
                "played through the audio renderer.";
+    case UI_FAMILY_PACE:
+        return "How fast the machine goes: the processor, memory, threads, the timer, the card "
+               "and the graphics unit, each timed several times over. No speed is judged yet.";
     case UI_FAMILY_OTHER:
     case UI_FAMILY_COUNT:
         break;

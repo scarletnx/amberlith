@@ -543,6 +543,9 @@ static void CheckFamilies(void) {
         { "tex8k", UI_FAMILY_GRAPHICS },
         { "fs", UI_FAMILY_FS },             { "sched", UI_FAMILY_KERNEL },
         { "svc", UI_FAMILY_KERNEL },
+        { "pace-cpu", UI_FAMILY_PACE },     { "pace-mem", UI_FAMILY_PACE },
+        { "pace-thread", UI_FAMILY_PACE },  { "pace-timer", UI_FAMILY_PACE },
+        { "pace-fs", UI_FAMILY_PACE },      { "pace-gpu", UI_FAMILY_PACE },
         { "binder", UI_FAMILY_DISPLAY },
         { "vic", UI_FAMILY_VIDEO },         { "nvdec", UI_FAMILY_VIDEO },
         { "audio", UI_FAMILY_AUDIO },       { "hwopus", UI_FAMILY_SERVICE },
@@ -603,7 +606,7 @@ static void CheckFamilies(void) {
     }
     // A run with every family has a group for each suite, so the index holds them all.
     CHECK_TRUE(SUITE, "every suite a run reports is shown under its own family", CHECK_NONE,
-               wrong == 0u && count == 114u && count <= UI_MAX_GROUPS &&
+               wrong == 0u && count == 120u && count <= UI_MAX_GROUPS &&
                    UiFamilyOf("weird") == UI_FAMILY_OTHER && UiFamilyOf(NULL) == UI_FAMILY_OTHER,
                "%u of %u suites under the wrong family, the first %s; the index holds %u groups",
                (unsigned)wrong, (unsigned)count, first, (unsigned)UI_MAX_GROUPS);

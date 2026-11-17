@@ -23,8 +23,8 @@ most 32, not starting with a dot.
 - A file with samples from more than one edenprobe build says how many builds and names the first two, since a newer
   edenprobe can time a case differently.
 
-These add nothing, each with a note: a `notime` run; a run whose families time no case (only the drawing suites and
-`fs` are timed); a launch that went on after the program ended inside the run, which has only the cases after the one
+These add nothing, each with a note: a `notime` run; a run whose families time no case (the drawing suites,
+`fs`, the game family's frames and the [pace](families/Pace.md) family are timed); a launch that went on after the program ended inside the run, which has only the cases after the one
 it ended in (it is still compared, and its note says how many cases it had).
 
 ## The file

@@ -119,6 +119,16 @@ static const RunnerStep STEPS[] = {
     { "sched", RunSched, MODE_FAMILY_KERNEL, false, true },
     // Untimed too: what a case judges is the kernel's answer, and one sleeps out a timeout.
     { "svc", RunSvc, MODE_FAMILY_KERNEL, false, true },
+    // The pace family: how fast the machine goes. Untimed by the passes: every case times its
+    // own work several times over and reports the middle one. Before the display family, since
+    // its last suite makes a graphics device, which under Eden never finished its first submit
+    // once a framebuffer had been closed.
+    { "pace-cpu", RunPaceCpu, MODE_FAMILY_PACE, false, true },
+    { "pace-mem", RunPaceMem, MODE_FAMILY_PACE, false, true },
+    { "pace-thread", RunPaceThread, MODE_FAMILY_PACE, false, true },
+    { "pace-timer", RunPaceTimer, MODE_FAMILY_PACE, false, true },
+    { "pace-fs", RunPaceFs, MODE_FAMILY_PACE, false, true },
+    { "pace-gpu", RunPaceGpu, MODE_FAMILY_PACE, false, true },
     // After every drawing suite: under Eden a graphics device made after a framebuffer was
     // closed never finished its first submit, and each case here closes one of its own.
     { "binder", RunBinder, MODE_FAMILY_DISPLAY, false, true },
@@ -478,6 +488,7 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
     WimsySetLevels(BrowseLevels(&picked, &browse_info, "wimsy", WIMSY_LEVELS));
     Tex8kSetTiming(timing);
     Tex8kSetVram(mode.vram);
+    PaceSetTiming(timing);
 
     uint32_t steps = 0;
     for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); ++i) {
@@ -802,6 +813,7 @@ int main(int argc, char **argv) {
     DemoSetTiming(timing);
     Tex8kSetTiming(timing);
     Tex8kSetVram(mode.vram);
+    PaceSetTiming(timing);
     // The running screen, for a run with a screen: a detailed one, or one the start screen made
     // quick. Counted over every step the run has, done ones included, so a launch that goes on
     // says how far the whole run is.

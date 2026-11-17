@@ -4,6 +4,7 @@
 # Written by tools/case-counts.py catalogue from these reports; the docs' counts by case-counts.py write.
 # host: edenprobe host build
 # nro: edenprobe 0.18.0 (v0.18.0), machine scarletnx 75b49fb
+# nro: edenprobe 0.18.0 (v0.18.0-2-ge228080), machine scarletnx 75b49fb
 # ounce: edenprobe 0.18.0 (v0.18.0)
 suite	case	family	judge	from	builds
 selfcheck	integer arithmetic	judge	none	-	nro,ounce,host
@@ -70,7 +71,7 @@ support	each level=<n> adds a level of the Wimsy scene, and a bad one says the l
 support	the word vram=<MiB> says the machine's graphics memory, and a bad number says the one it keeps	judge	none	-	nro,ounce,host
 support	machine= names the run's machine and its version, and a bad one says the machine in effect	judge	none	-	nro,ounce,host
 support	skip= names the suites a run leaves out, and a bad one says the suites in effect	judge	none	-	nro,ounce,host
-support	all runs every family but pad, nvn, demo and music, which named beside it add theirs	judge	none	-	nro,ounce,host
+support	all runs every family but pad, nvn, demo and music, which named beside it add theirs	judge	none	-	nro,ounce
 support	the word demo runs the demo family, only when named, and all leaves it out	judge	none	-	nro,ounce,host
 support	the word hooks asks the services through the SDK's functions, a word of the key	judge	none	-	nro,ounce,host
 support	the widest mode goes into the journal whole and a launch goes on in it	judge	none	-	nro,ounce,host
@@ -268,6 +269,7 @@ support	a launch a runner stopped at its limit costs the case as a timeout, and 
 support	baseline: a file that is there and cannot be read is said, not taken as none	judge	none	-	host
 support	a case that times itself goes out with its own time, here 4321 us	judge	none	-	host
 support	a case that timed itself carries its time, counts, and rehearses mute	judge	none	-	host
+support	all runs every family but pad, nvn, demo, music and pace, which named beside it add theirs	judge	none	-	nro,host
 reference	clip space origin is the middle of the target	judge	none	-	nro,ounce,host
 reference	clip space plus y is the top of the target	judge	none	-	nro,ounce,host
 reference	clip space minus y is the bottom of the target	judge	none	-	nro,ounce,host
@@ -811,13 +813,13 @@ reference	the mandelbrot zoom's judged frames come to their pinned hashes	judge	
 reference	the julia zoom's judged frames come to their pinned hashes	judge	none	-	host
 reference	the mandelbrot zoom in double precision and multiplied and added apart: the pixels that differ	judge	none	-	host
 reference	the julia zoom in double precision and multiplied and added apart: the pixels that differ	judge	none	-	host
-reference	pace: the middle, the ends, the hundredths and the scatter of a case's samples	judge	none	-	host
-reference	pace: a product past 64 bits divides whole, and a window's work gives its time and its rate	judge	none	-	host
-reference	pace: the number a line carries and the sentence beside it	judge	none	-	host
-reference	pace: the integer loop leaves the sums worked out apart	judge	none	-	host
-reference	pace: the floating point loop leaves the sums worked out apart	judge	none	-	host
-reference	pace: the vector loop leaves the sums worked out apart	judge	none	-	host
-reference	pace: the memory walk reads every slot once before it is back at its start	judge	none	-	host
+reference	pace: the middle, the ends, the hundredths and the scatter of a case's samples	judge	none	-	nro,host
+reference	pace: a product past 64 bits divides whole, and a window's work gives its time and its rate	judge	none	-	nro,host
+reference	pace: the number a line carries and the sentence beside it	judge	none	-	nro,host
+reference	pace: the integer loop leaves the sums worked out apart	judge	none	-	nro,host
+reference	pace: the floating point loop leaves the sums worked out apart	judge	none	-	nro,host
+reference	pace: the vector loop leaves the sums worked out apart	judge	none	-	nro,host
+reference	pace: the memory walk reads every slot once before it is back at its start	judge	none	-	nro,host
 cpu	clz counts each of sixteen 8-bit lanes	cpu	exact	-	nro
 cpu	clz counts each of eight 16-bit lanes	cpu	exact	-	nro
 cpu	clz counts each of four 32-bit lanes	cpu	exact	-	nro
@@ -1794,6 +1796,42 @@ svc	svcQueryMemory says the program's read-only data is to read only	kernel	exac
 svc	svcSetHeapSize of a size off the 2 MiB step answers InvalidSize	kernel	exact	-	nro
 svc	svcMapMemory locks its source with no permission and maps a stack view to read and write	kernel	exact	-	nro
 svc	what is written through svcMapMemory's view is in its source once unmapped	kernel	exact	-	nro
+pace-cpu	a thread starts on each of the three cores	pace	none	-	nro
+pace-cpu	core 0 runs the integer loop	pace	none	-	nro
+pace-cpu	core 0 runs the floating point loop	pace	none	-	nro
+pace-cpu	core 0 runs the vector loop	pace	none	-	nro
+pace-cpu	core 1 runs the integer loop	pace	none	-	nro
+pace-cpu	core 1 runs the floating point loop	pace	none	-	nro
+pace-cpu	core 1 runs the vector loop	pace	none	-	nro
+pace-cpu	core 2 runs the integer loop	pace	none	-	nro
+pace-cpu	core 2 runs the floating point loop	pace	none	-	nro
+pace-cpu	core 2 runs the vector loop	pace	none	-	nro
+pace-mem	a walk through 64 MiB reads a slot at a time	pace	none	-	nro
+pace-mem	32 MiB are filled with one word, eight times	pace	none	-	nro
+pace-mem	32 MiB are read and added up, eight times	pace	none	-	nro
+pace-mem	32 MiB are copied, eight times	pace	none	-	nro
+pace-thread	a thread starts on each of the three cores	pace	none	-	nro
+pace-thread	a thread asleep on an event wakes at a signal from its own core	pace	none	-	nro
+pace-thread	a thread asleep on an event wakes at a signal from another core	pace	none	-	nro
+pace-thread	a mutex passes to a thread waiting for it on the same core	pace	none	-	nro
+pace-thread	a mutex passes to a thread waiting for it on another core	pace	none	-	nro
+pace-timer	the system counter is read a million times	pace	none	-	nro
+pace-timer	sleeps of 100 us, by how much each runs over	pace	none	-	nro
+pace-timer	sleeps of 100 us, how far apart the longest and the shortest of 200 are	pace	none	-	nro
+pace-timer	sleeps of 1 ms, by how much each runs over	pace	none	-	nro
+pace-timer	sleeps of 1 ms, how far apart the longest and the shortest of 100 are	pace	none	-	nro
+pace-timer	sleeps of 16 ms, by how much each runs over	pace	none	-	nro
+pace-timer	sleeps of 16 ms, how far apart the longest and the shortest of 10 are	pace	none	-	nro
+pace-fs	the memory card opens as a file system	pace	none	-	nro
+pace-fs	a 4 MiB file is made and written 64 KiB at a time	pace	none	-	nro
+pace-fs	the 4 MiB file is opened and read 64 KiB at a time	pace	none	-	nro
+pace-fs	64 files of 4 KiB are made, written, read back and removed	pace	none	-	nro
+pace-gpu	graphics device opens with a 1024 by 1024 target	pace	none	-	nro
+pace-gpu	the flat shaders load	pace	none	-	nro
+pace-gpu	200 quads cover a 1024 by 1024 target, each over the last	pace	none	-	nro
+pace-gpu	200 quads are added to a 1024 by 1024 target by the blender	pace	none	-	nro
+pace-gpu	a 1024 by 1024 texture is uploaded through the copy engine	pace	none	-	nro
+pace-gpu	the 1024 by 1024 target is copied to memory the processor reads	pace	none	-	nro
 binder	a layer of its own opens and takes a window	display	none	-	nro
 binder	a request for nought, before any frame	display	exact	-	nro
 binder	the history after three frames, eight asked for	display	exact	-	nro
