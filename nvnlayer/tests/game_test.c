@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <nvnlayer.h>
 
+#include "../source/layer.h"
+
 // The build for a game's own driver (layer.mk's NVNLAYER_DRIVER := game), on the machine that
 // builds: the layer defines no nvnBootstrapLoader there, so the one below stands for the game's,
-// and the loader has to fill every field from it and from nothing else.
+// and the loader has to fill every field from it, or for a name it lacks with the body that
+// stops the program.
 
 static int failures;
 
@@ -30,10 +34,30 @@ static const char *const NAMES[] = {
 };
 #define NAME_COUNT (sizeof(NAMES) / sizeof(NAMES[0]))
 
+// ---- what stands in for the console
+
+// Where a stopped program lands: LayerStop does not come back, so the test jumps out of it.
+static jmp_buf stopped;
+static char stop_text[256];
+
+void LayerStop(const char *text) {
+    snprintf(stop_text, sizeof(stop_text), "%s", text);
+    longjmp(stopped, 1);
+}
+
+static int hook_calls;
+static char hook_name[64];
+
+static void Hook(const char *name) {
+    ++hook_calls;
+    snprintf(hook_name, sizeof(hook_name), "%s", name);
+}
+
 // ---- what stands in for the game's driver
 
-/// The name the driver answers NULL for, or NULL for none.
+/// The names the driver answers NULL for, NULL for none.
 static const char *driver_lacks;
+static const char *driver_lacks_too;
 static size_t bootstrap_calls;
 static size_t lookup_calls;
 static const NVNdevice *lookup_device;
@@ -54,7 +78,8 @@ static NvnGenericProc DriverProc(const char *name) {
 static NvnGenericProc DriverGetProcAddress(const NVNdevice *device, const char *name) {
     ++lookup_calls;
     lookup_device = device;
-    if (driver_lacks != NULL && strcmp(driver_lacks, name) == 0) {
+    if ((driver_lacks != NULL && strcmp(driver_lacks, name) == 0) ||
+        (driver_lacks_too != NULL && strcmp(driver_lacks_too, name) == 0)) {
         return NULL;
     }
     return DriverProc(name);
@@ -94,22 +119,73 @@ static void TestLoad(void) {
         EXPECT(fields[i + 2u] == DriverProc(NAMES[i]),
                "the field of %s holds another function than the driver's", NAMES[i]);
     }
+    EXPECT(NvnLayerLackedCount() == 0u && NvnLayerLackedName(0) == NULL,
+           "a driver with every name lacked %zu, the first %s", NvnLayerLackedCount(),
+           NvnLayerLackedName(0) != NULL ? NvnLayerLackedName(0) : "none");
 }
 
 static void TestLacking(void) {
-    // A driver without one name: the load says which, whichever of the three steps asks it.
-    static const char *const LACKED[] = { "nvnDeviceGetProcAddress", "nvnDeviceGetInteger",
-                                          "nvnQueueInitialize" };
-    for (size_t i = 0; i < sizeof(LACKED) / sizeof(LACKED[0]); ++i) {
+    // A driver without one of the two names the lookup is made of: no load, and which is said.
+    static const char *const NEEDED[] = { "nvnDeviceGetProcAddress", "nvnDeviceGetInteger" };
+    for (size_t i = 0; i < sizeof(NEEDED) / sizeof(NEEDED[0]); ++i) {
         NvnProcs procs;
         char missing[64] = "untouched";
-        driver_lacks = LACKED[i];
-        EXPECT(!NvnLoadProcs(&procs, missing, sizeof(missing)),
-               "a driver without %s loaded", LACKED[i]);
-        EXPECT(strcmp(missing, LACKED[i]) == 0, "a driver without %s: the load named \"%s\"",
-               LACKED[i], missing);
+        driver_lacks = NEEDED[i];
+        EXPECT(!NvnLoadProcs(&procs, missing, sizeof(missing)), "a driver without %s loaded",
+               NEEDED[i]);
+        EXPECT(strcmp(missing, NEEDED[i]) == 0, "a driver without %s: the load named \"%s\"",
+               NEEDED[i], missing);
+    }
+
+    // A driver without two other names, as a driver of another API version is: the load goes
+    // on, says which in the list's order, and each one's field stops the program with its name.
+    const size_t first = NAME_COUNT / 3u;
+    const size_t second = NAME_COUNT - 1u;
+    NvnProcs procs;
+    char missing[64] = "untouched";
+    driver_lacks = NAMES[second];
+    driver_lacks_too = NAMES[first];
+    EXPECT(NvnLoadProcs(&procs, missing, sizeof(missing)), "a driver without %s and %s: no load",
+           NAMES[first], NAMES[second]);
+    EXPECT(strcmp(missing, "untouched") == 0, "such a load wrote \"%s\"", missing);
+    EXPECT(NvnLayerLackedCount() == 2u, "%zu names lacked, not 2", NvnLayerLackedCount());
+    EXPECT(NvnLayerLackedCount() == 2u && strcmp(NvnLayerLackedName(0), NAMES[first]) == 0 &&
+               strcmp(NvnLayerLackedName(1), NAMES[second]) == 0 && NvnLayerLackedName(2) == NULL,
+           "the lacked names are not %s then %s", NAMES[first], NAMES[second]);
+    const NvnGenericProc *const fields = (const NvnGenericProc *)(const void *)&procs;
+    for (size_t i = 0; i < NAME_COUNT; ++i) {
+        if (i != first && i != second) {
+            EXPECT(fields[i + 2u] == DriverProc(NAMES[i]),
+                   "beside a lacked name, the field of %s holds another function than the driver's",
+                   NAMES[i]);
+            continue;
+        }
+        EXPECT(fields[i + 2u] != NULL && fields[i + 2u] != DriverProc(NAMES[i]),
+               "the field of the lacked %s is not a body of the layer's", NAMES[i]);
+        hook_calls = 0;
+        hook_name[0] = '\0';
+        stop_text[0] = '\0';
+        NvnLayerSetFatal(Hook);
+        if (fields[i + 2u] != NULL && setjmp(stopped) == 0) {
+            fields[i + 2u]();
+            EXPECT(false, "the body of the lacked %s came back", NAMES[i]);
+        }
+        char expected[192];
+        snprintf(expected, sizeof(expected),
+                 "nvnlayer: FATAL: %s was called, and the game's driver has no function of that "
+                 "name",
+                 NAMES[i]);
+        EXPECT(strcmp(stop_text, expected) == 0, "the lacked %s stopped with \"%s\"", NAMES[i],
+               stop_text);
+        EXPECT(hook_calls == 1 && strcmp(hook_name, NAMES[i]) == 0,
+               "the hook was called %d times, with \"%s\"", hook_calls, hook_name);
     }
     driver_lacks = NULL;
+    driver_lacks_too = NULL;
+
+    // The next load starts the count again.
+    EXPECT(NvnLoadProcs(&procs, missing, sizeof(missing)) && NvnLayerLackedCount() == 0u,
+           "a load from a driver with every name still says %zu lacked", NvnLayerLackedCount());
 }
 
 static void TestOwn(void) {
