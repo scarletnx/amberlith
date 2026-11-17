@@ -1,16 +1,18 @@
 # SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """publish-builds.py against fake_github.py's fake gh and fake Discord: which Build runs are published; a nightly
-prerelease with the NRO and its checksum, kept to the newest N, never one older than the newest, its files and notes
-copied to the "nightly" prerelease whose tag follows it, and nothing said on Discord; a version tag's release, the
-latest, and its Discord message, or a notice without the webhook; an artifact that is missing or is no NRO stopping the
-run. Offline."""
+prerelease with the NRO, the APK and the two ExeFS zips and their checksums, kept to the newest N, never one older than
+the newest, its files and notes copied to the "nightly" prerelease whose tag follows it, and nothing said on Discord; a
+version tag's release, the latest, and its Discord message, or a notice without the webhook; an artifact that is
+missing, is no NRO, or a zip that holds other files or a file of another kind, stopping the run. Offline."""
 
 import hashlib
+import io
 import json
 import os
 import tempfile
 import unittest
+import zipfile
 
 from fake_github import Discord, World, python, serve
 
@@ -19,7 +21,33 @@ SCRIPT = os.path.join(HERE, "publish-builds.py")
 REPO = "owner/repo"
 NRO = b"\0" * 16 + b"NRO0" + b"\0" * 12 + b"the program"
 APK = b"PK\x03\x04" + b"\0" * 26 + b"the app"
-FILES = ["edenprobe.apk", "edenprobe.apk.sha256", "edenprobe.nro", "edenprobe.nro.sha256"]
+MODULE = b"NSO0" + b"\0" * 12 + b"a module"
+DESCRIPTOR = b"META" + b"\0" * 12 + b"a descriptor"
+
+
+def exefs(files, folder=True):
+    """a zip of an ExeFS folder as build.yml makes it: the folder's own entry, then each file in it"""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as packed:
+        if folder:
+            packed.writestr("exefs/", b"")
+        for name, data in files.items():
+            packed.writestr(name, data)
+    return buffer.getvalue()
+
+
+OUNCE = exefs({"exefs/main": MODULE, "exefs/main.npdm": DESCRIPTOR})
+MOD = exefs({"exefs/subsdk9": MODULE, "exefs/main.npdm": DESCRIPTOR})
+FILES = [
+    "edenprobe-mod.zip",
+    "edenprobe-mod.zip.sha256",
+    "edenprobe-ounce.zip",
+    "edenprobe-ounce.zip.sha256",
+    "edenprobe.apk",
+    "edenprobe.apk.sha256",
+    "edenprobe.nro",
+    "edenprobe.nro.sha256",
+]
 server = HOOK = None
 
 
@@ -102,10 +130,15 @@ class Publish(unittest.TestCase):
     def find(self, tag):
         return next((r for r in self.world.state()["releases"] if r["tag_name"] == tag), None)
 
-    def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK):
-        """the folder the workflow downloads into: the NRO and the APK each in a folder named after its artifact, or
-        at its path"""
-        for file, content in ((f"edenprobe-{commit[:7]}.nro", data), (f"edenprobe-{commit[:7]}.apk", apk)):
+    def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK, ounce=OUNCE, mod=MOD):
+        """the folder the workflow downloads into: the NRO, the APK and the two zips each in a folder named after its
+        artifact, or at its path"""
+        for file, content in (
+            (f"edenprobe-{commit[:7]}.nro", data),
+            (f"edenprobe-{commit[:7]}.apk", apk),
+            (f"edenprobe-ounce-{commit[:7]}.zip", ounce),
+            (f"edenprobe-mod-{commit[:7]}.zip", mod),
+        ):
             path = self.world.root / name / file
             if as_file:
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,8 +161,10 @@ class Publish(unittest.TestCase):
         planned = dict(line.split("=", 1) for line in output.read_text().splitlines())
         return done, planned
 
-    def publish(self, kind, commit, *extra, run="41", data=NRO, as_file=False, hooks=True, apk=APK):
-        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk)
+    def publish(
+        self, kind, commit, *extra, run="41", data=NRO, as_file=False, hooks=True, apk=APK, ounce=OUNCE, mod=MOD
+    ):
+        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk, ounce, mod)
         args = [
             "--kind",
             kind,
@@ -201,6 +236,17 @@ class Publish(unittest.TestCase):
         body = made["body"]
         self.assertIn(f"| [edenprobe.nro]({where}/edenprobe.nro) | 0.0 MB | `{digest}` |", body)
         self.assertIn(f"| [edenprobe.apk]({where}/edenprobe.apk) | 0.0 MB | `{apk_digest}` |", body)
+        # each ExeFS zip as it was built, its checksum and its row
+        for name, packed in (("edenprobe-ounce.zip", OUNCE), ("edenprobe-mod.zip", MOD)):
+            self.assertEqual(data[name].encode("latin-1"), packed)
+            packed_digest = hashlib.sha256(packed).hexdigest()
+            self.assertEqual(data[f"{name}.sha256"], f"{packed_digest}  {name}\n")
+            self.assertIn(f"| [{name}]({where}/{name}) | 0.0 MB | `{packed_digest}` |", body)
+        self.assertIn(
+            "`sha256sum -c edenprobe.nro.sha256 edenprobe.apk.sha256 edenprobe-ounce.zip.sha256 "
+            "edenprobe-mod.zip.sha256`",
+            body,
+        )
         self.assertIn(f"- \\[ci\\] its title ([#5](https://github.com/{REPO}/pull/5))", body)
         self.assertIn(f"[`{self.previous[:7]}...{self.sha[:7]}`]", body)
         self.assertIn("The newest 2 nightlies are kept", body)
@@ -266,6 +312,63 @@ class Publish(unittest.TestCase):
         self.assertIn("is no APK: no PK\\x03\\x04 at byte 0", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
+    def test_a_missing_zip_stops(self):
+        done = self.publish("nightly", self.sha, mod=None)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(f"run 41 built, yet has no edenprobe-mod-{self.sha[:7]}.zip", done.stderr)
+        self.assertIsNone(self.find(self.tag))
+
+    def test_a_zip_without_its_files_stops(self):
+        short = self.sha[:7]
+        for ounce, mod, said in (
+            (
+                exefs({"exefs/main": MODULE}),
+                MOD,
+                f"edenprobe-ounce-{short}.zip of run 41 holds exefs/main, not the Switch 2 program's exefs/main, "
+                "exefs/main.npdm",
+            ),
+            (
+                OUNCE,
+                exefs({"exefs/subsdk9": MODULE, "exefs/main.npdm": DESCRIPTOR, "exefs/main": MODULE}),
+                f"edenprobe-mod-{short}.zip of run 41 holds exefs/main, exefs/main.npdm, exefs/subsdk9, not the mod of "
+                "a game's exefs/main.npdm, exefs/subsdk9",
+            ),
+            (
+                OUNCE,
+                exefs({"subsdk9": MODULE, "main.npdm": DESCRIPTOR}, folder=False),
+                f"edenprobe-mod-{short}.zip of run 41 holds main.npdm, subsdk9, not the mod of a game's "
+                "exefs/main.npdm, exefs/subsdk9",
+            ),
+        ):
+            with self.subTest(said):
+                done = self.publish("nightly", self.sha, ounce=ounce, mod=mod)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn(said, done.stderr)
+                self.assertIsNone(self.find(self.tag))
+
+    def test_a_zip_with_a_file_of_another_kind_stops(self):
+        done = self.publish(
+            "nightly", self.sha, mod=exefs({"exefs/subsdk9": b"NRO0 a homebrew", "exefs/main.npdm": DESCRIPTOR})
+        )
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(
+            f'exefs/subsdk9 in edenprobe-mod-{self.sha[:7]}.zip of run 41 starts with "NRO0", not the NSO0 a mod of a '
+            "game's subsdk9 starts with",
+            done.stderr,
+        )
+        self.assertIsNone(self.find(self.tag))
+
+    def test_a_file_that_is_no_zip_stops(self):
+        for ounce, said in (
+            (b"<html>Not Found</html>", "is no Switch 2 program: no PK\\x03\\x04 at byte 0"),
+            (b"PK\x03\x04 cut short", "is no zip of a Switch 2 program: File is not a zip file"),
+        ):
+            with self.subTest(said):
+                done = self.publish("nightly", self.sha, ounce=ounce)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn(f"edenprobe-ounce-{self.sha[:7]}.zip of run 41 {said}", done.stderr)
+                self.assertIsNone(self.find(self.tag))
+
     def test_dry_run_writes_nothing(self):
         done = self.publish("nightly", self.sha, "--dry-run")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
@@ -326,9 +429,11 @@ class Publish(unittest.TestCase):
         self.assertEqual(len(posts), 1)
         message = posts[0]["body"]["embeds"][0]
         self.assertEqual(message["title"], "edenprobe v0.2.0")
-        self.assertEqual([f["name"] for f in message["fields"]], ["NRO", "APK", "Source", "Since"])
+        self.assertEqual([f["name"] for f in message["fields"]], ["NRO", "APK", "Switch 2", "Mod", "Source", "Since"])
         self.assertIn("/releases/download/v0.2.0/edenprobe.apk", message["fields"][1]["value"])
-        self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][3]["value"])
+        self.assertIn("/releases/download/v0.2.0/edenprobe-ounce.zip", message["fields"][2]["value"])
+        self.assertIn("/releases/download/v0.2.0/edenprobe-mod.zip", message["fields"][3]["value"])
+        self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][5]["value"])
         self.assertIn(hashlib.sha256(NRO).hexdigest(), message["description"])
         self.assertEqual(posts[0]["body"]["allowed_mentions"], {"parse": []})
         # its build again: the files replaced, nothing said twice

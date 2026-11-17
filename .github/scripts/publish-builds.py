@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Publish a Build run's NRO and APK as a release, and say so on Discord.
+"""Publish a Build run's NRO, APK and ExeFS folders as a release, and say so on Discord.
 
     .github/scripts/publish-builds.py plan --repo OWNER/REPO
     .github/scripts/publish-builds.py publish --repo OWNER/REPO --kind nightly|release --run ID --sha SHA [--tag TAG]
@@ -15,9 +15,11 @@ the run whose NRO publish takes (kind, run, sha, short, tag), when there is one 
   nightlies staying; the prerelease "nightly" takes its files and notes, its tag moved to that commit, so
   .../releases/download/nightly/edenprobe.nro is always the newest nightly's NRO.
 A pull request's run is not published: its NRO is the run's artifact, which build.yml links from the pull request.
-Nothing is built: the NRO and the APK are the run's artifacts edenprobe-<commit>.nro and edenprobe-<commit>.apk, which
-the workflow downloads into DIR between the two, and every release holds them as edenprobe.nro and edenprobe.apk, each
-with its .sha256 beside it, which sha256sum -c reads.
+Nothing is built: the NRO, the APK and the two ExeFS folders are the run's artifacts edenprobe-<commit>.nro,
+edenprobe-<commit>.apk, edenprobe-ounce-<commit>.zip (the probe as a Switch 2 program) and edenprobe-mod-<commit>.zip
+(the probe as a mod of a game), which the workflow downloads into DIR between the two, and every release holds them as
+edenprobe.nro, edenprobe.apk, edenprobe-ounce.zip and edenprobe-mod.zip, each with its .sha256 beside it, which
+sha256sum -c reads. A zip holds its ExeFS folder, exefs/, with exactly the files that program's loader reads.
 
 Discord: a version's release gets a message on DISCORD_WEBHOOK_RELEASES's channel, the NRO linked with its size, and
 the changes since the version before; without the webhook nothing is posted, and the run says so. gh reads and writes
@@ -30,6 +32,7 @@ import argparse
 import datetime
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -40,6 +43,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("nightly_notes", Path(__file__).with_name("nightly-notes.py"))
@@ -47,9 +51,11 @@ notes = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(notes)
 
 SERVER = notes.SERVER
-# a run's NRO and APK, as build.yml uploads them: named after the commit's first 7 digits
+# a run's NRO, APK and zipped ExeFS folders, as build.yml uploads them: named after the commit's first 7 digits
 ARTIFACT = "edenprobe-{short}.nro"
 APK_ARTIFACT = "edenprobe-{short}.apk"
+OUNCE_ARTIFACT = "edenprobe-ounce-{short}.zip"
+MOD_ARTIFACT = "edenprobe-mod-{short}.zip"
 # a version's colour (the cover's sunset), and the cover beside its message, as the loader shows it
 SUNSET = 0xFF2E88
 COVER = "https://raw.githubusercontent.com/{repo}/main/icon.jpg"
@@ -60,6 +66,13 @@ ROLLING = "nightly"
 # Where every NRO says what it is: the header's magic, after the first 16 bytes; and an APK, a zip, at its start
 MAGIC, AT = b"NRO0", 16
 ZIP = b"PK\x03\x04"
+# Each ExeFS zip: what the release says it is, its artifact, its names in the release, and every file its folder holds
+# with the magic that file starts with: a module an NSO, a descriptor an NPDM
+NSO, NPDM = b"NSO0", b"META"
+EXEFS = (
+    ("Switch 2 program", OUNCE_ARTIFACT, notes.OUNCE, notes.OUNCE_SUM, {"exefs/main": NSO, "exefs/main.npdm": NPDM}),
+    ("mod of a game", MOD_ARTIFACT, notes.MOD, notes.MOD_SUM, {"exefs/subsdk9": NSO, "exefs/main.npdm": NPDM}),
+)
 
 
 def published(release):
@@ -200,11 +213,11 @@ class Publisher(Hub):
                 raise
             print(f"{release['tag_name']} had no tag left")
 
-    # ---- a run's NRO and APK
-    def built(self, run, sha, artifact, kind, magic, at, release_name, sum_name):
+    # ---- a run's NRO, APK and ExeFS folders
+    def built(self, run, sha, artifact, kind, magic, at, release_name, sum_name, members=None):
         """one of the run's files as a release holds it, and its checksum file: each name to its path, its size and
         SHA-256. actions/download-artifact puts a file it does not unpack at the artifact's path, or in a folder of
-        that name"""
+        that name. members: for a zip, every file it holds, each to the magic it starts with"""
         name = artifact.format(short=sha[:7])
         found = self.artifacts / name
         if found.is_dir():
@@ -218,18 +231,47 @@ class Publisher(Hub):
         if data[at : at + len(magic)] != magic:
             said = magic.decode("latin-1").encode("unicode_escape").decode()
             raise RuntimeError(f"{name} of run {run} is no {kind}: no {said} at byte {at}")
+        if members is not None:
+            self.holds(data, name, run, kind, members)
         path, check = self.work / release_name, self.work / sum_name
         path.write_bytes(data)
         digest = hashlib.sha256(data).hexdigest()
         check.write_text(f"{digest}  {release_name}\n")
         return {release_name: path, sum_name: check}, len(data), digest
 
+    @staticmethod
+    def holds(data, name, run, kind, members):
+        """the zip holds exactly members' files (a folder's own entry aside), each starting with its magic"""
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as packed:
+                found = {info.filename: packed.read(info) for info in packed.infolist() if not info.is_dir()}
+        except zipfile.BadZipFile as error:
+            raise RuntimeError(f"{name} of run {run} is no zip of a {kind}: {error}") from error
+        if sorted(found) != sorted(members):
+            raise RuntimeError(
+                f"{name} of run {run} holds {', '.join(sorted(found)) or 'nothing'}, not the "
+                f"{kind}'s {', '.join(sorted(members))}"
+            )
+        for member, magic in sorted(members.items()):
+            if found[member][: len(magic)] != magic:
+                head = found[member][: len(magic)].decode("latin-1").encode("unicode_escape").decode()
+                raise RuntimeError(
+                    f'{member} in {name} of run {run} starts with "{head}", not the {magic.decode()} a '
+                    f"{kind}'s {member.rsplit('/', 1)[-1]} starts with"
+                )
+
     def nro(self, run, sha):
-        """the run's NRO and APK as a release holds them: each name to its path, the NRO's SHA-256, and the APK's
-        size and SHA-256"""
+        """the run's files as a release holds them: each name to its path, the NRO's SHA-256, the APK's size and
+        SHA-256, and the ExeFS folders (notes.Packed)"""
         files, _, digest = self.built(run, sha, ARTIFACT, "NRO", MAGIC, AT, notes.NRO, notes.SUM)
         apk_files, apk_size, apk_digest = self.built(run, sha, APK_ARTIFACT, "APK", ZIP, 0, notes.APK, notes.APK_SUM)
-        return {**files, **apk_files}, digest, (apk_size, apk_digest)
+        files.update(apk_files)
+        exefs = []
+        for kind, artifact, release_name, sum_name, members in EXEFS:
+            made, count, made_digest = self.built(run, sha, artifact, kind, ZIP, 0, release_name, sum_name, members)
+            files.update(made)
+            exefs.append(notes.Packed(release_name, sum_name, count, made_digest))
+        return files, digest, (apk_size, apk_digest), exefs
 
     def older(self, sha, previous):
         """sha is an ancestor of previous, a newer commit already published"""
@@ -240,7 +282,7 @@ class Publisher(Hub):
 
     # ---- what each run publishes
     def nightly(self, run, sha):
-        files, digest, apk = self.nro(run, sha)
+        files, digest, apk, exefs = self.nro(run, sha)
         date = notes.git(self.checkout, "log", "-1", "--format=%cs", sha).strip()
         tag = f"nightly-{date}-{sha[:7]}"
         older = sorted(
@@ -256,7 +298,7 @@ class Publisher(Hub):
         newest = f"{SERVER}/{self.repo}/releases/tag/{ROLLING}"
         kept = f"The newest {self.keep} nightlies are kept; [{ROLLING}]({newest}) always holds the newest one's files."
         where = f"{SERVER}/{self.repo}/releases/download/{tag}"
-        body = notes.notes(self.checkout, sha, previous, self.repo, where, size, digest, kept, apk=apk)
+        body = notes.notes(self.checkout, sha, previous, self.repo, where, size, digest, kept, apk=apk, exefs=exefs)
         title = notes.title(self.checkout, sha)
         made, new = self.put_release(tag, title, body, True, files)
         for old in older[self.keep - 1 :]:
@@ -264,9 +306,9 @@ class Publisher(Hub):
             print(f"deleted {old['tag_name']}: past the newest {self.keep}")
         print(f"{'published' if new else 'replaced the files of'} {tag}")
         url = made.get("html_url", f"{SERVER}/{self.repo}/releases/tag/{tag}")
-        self.point_rolling(title, url, sha, previous, files, size, digest, apk)
+        self.point_rolling(title, url, sha, previous, files, size, digest, apk, exefs)
 
-    def point_rolling(self, title, url, sha, previous, files, size, digest, apk):
+    def point_rolling(self, title, url, sha, previous, files, size, digest, apk, exefs):
         """the prerelease ROLLING: the newest nightly's files and notes, its tag on that commit"""
         if self.release(ROLLING):
             self.write("PATCH", f"repos/{self.repo}/git/refs/tags/{ROLLING}", {"sha": sha, "force": True})
@@ -275,12 +317,14 @@ class Publisher(Hub):
             f"The newest nightly, [{title}]({url}), whose files this release holds under a name that stays; the "
             f"newest {self.keep} are kept as releases of their own. Built from main at"
         )
-        body = notes.notes(self.checkout, sha, previous, self.repo, where, size, digest, "", lead=lead, apk=apk)
+        body = notes.notes(
+            self.checkout, sha, previous, self.repo, where, size, digest, "", lead=lead, apk=apk, exefs=exefs
+        )
         self.put_release(ROLLING, f"{title}, the newest", body, True, files, sha)
         print(f'"{ROLLING}" holds {title}')
 
     def version(self, run, sha, tag):
-        files, digest, apk = self.nro(run, sha)
+        files, digest, apk, exefs = self.nro(run, sha)
         earlier = sorted(
             (
                 r
@@ -296,7 +340,18 @@ class Publisher(Hub):
         size = files[notes.NRO].stat().st_size
         title = f"edenprobe {tag}"
         body = notes.notes(
-            self.checkout, sha, previous, self.repo, where, size, digest, "", since, f"{title}, built from", apk=apk
+            self.checkout,
+            sha,
+            previous,
+            self.repo,
+            where,
+            size,
+            digest,
+            "",
+            since,
+            f"{title}, built from",
+            apk=apk,
+            exefs=exefs,
         )
         made, new = self.put_release(tag, title, body, "-" in tag, files, sha)
         print(f"{'published' if new else 'replaced the files of'} {tag}")
@@ -307,6 +362,14 @@ class Publisher(Hub):
         fields = [
             {"name": "NRO", "value": f"[{notes.NRO}]({where}/{notes.NRO})\n{notes.size(size)}", "inline": True},
             {"name": "APK", "value": f"[{notes.APK}]({where}/{notes.APK})\n{notes.size(apk[0])}", "inline": True},
+            *(
+                {
+                    "name": label,
+                    "value": f"[{packed.name}]({where}/{packed.name})\n{notes.size(packed.count)}",
+                    "inline": True,
+                }
+                for label, packed in zip(("Switch 2", "Mod"), exefs, strict=True)
+            ),
             {"name": "Source", "value": f"[`{sha[:7]}`]({commit})", "inline": True},
         ]
         compare = url
@@ -325,7 +388,7 @@ class Publisher(Hub):
 
     # ---- what a run that ended asks for
     def take(self, kind, run, tag=""):
-        """the run publish takes the NRO and the APK of, for the workflow to download them"""
+        """the run publish takes the files of, for the workflow to download them"""
         self.output = {
             "kind": kind,
             "run": str(run["id"]),

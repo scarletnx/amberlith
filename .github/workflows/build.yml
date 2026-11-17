@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 # Jobs only read the repository. A push to main that builds becomes a nightly, a version tag a release: publish.yml
-# does it once this workflow ends. A pull request's NRO stays its run's artifact, linked from it (links below)
+# does it once this workflow ends. A pull request's builds stay its run's artifacts, linked from it (links below)
 permissions:
   contents: read
 
@@ -113,12 +113,35 @@ jobs:
       # lists, exports nothing and holds nothing of libnx's start
       - name: Build the mod of a game and check what it asks of the game
         run: make -f mod.mk -j"$(nproc)" check
+      # A release holds the three (publish.yml): the Switch 2 program and the mod name the build the NRO names
+      - name: Check the Switch 2 program and the mod name the NRO's build
+        run: |
+          for made in build-ounce/version.h build-mod/version.h; do
+            cmp -s build/version.h "$made" || { echo "::error::$made is not build/version.h"; diff build/version.h "$made"; exit 1; }
+          done
       - name: Name the NRO after its commit
         run: cp edenprobe.nro "edenprobe-${{ steps.commit.outputs.short }}.nro"
-      # Not zipped: the artifact is the NRO itself, named after it
+      # Each ExeFS folder zipped as exefs/ and its files, which go whole into a program's or a game's mod's folder
+      - name: Zip the Switch 2 program and the mod, named after the commit
+        run: |
+          for made in ounce mod; do
+            (cd "edenprobe-$made" && python3 -m zipfile -c "../edenprobe-$made-${{ steps.commit.outputs.short }}.zip" exefs)
+            python3 -m zipfile -l "edenprobe-$made-${{ steps.commit.outputs.short }}.zip"
+          done
+      # Not zipped: the artifact is the NRO itself, named after it, and each ExeFS its zip
       - uses: actions/upload-artifact@v7
         with:
           path: edenprobe-${{ steps.commit.outputs.short }}.nro
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          path: edenprobe-ounce-${{ steps.commit.outputs.short }}.zip
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          path: edenprobe-mod-${{ steps.commit.outputs.short }}.zip
           archive: false
           if-no-files-found: error
 
