@@ -138,16 +138,106 @@ static void GraphicsCase(void) {
     }
 }
 
-/// A function the suite called that the game's driver has not: said in the report before the
-/// layer ends the program, so the launch's last line names it.
-static void LackedCalled(const char *name) {
-    ReportNote("nvnlayer: %s was called, and the game's driver has no function of that name: "
-               "the launch ends here, and the next goes on after this case",
-               name);
+// ---- a function the suite calls that the game's driver has not
+//
+// A driver has the names of its own API version, and the suite looks up every version's. A call
+// of a name the driver lacks does nothing and returns nought (nvnlayer.h, NvnLayerMissedName), so
+// the case goes on to its end and finalizes what it made; its verdict then judged no answer of
+// the driver's, and the case ends unavailable, naming the functions.
+
+/// The cases that ended so and the functions each called, for the notes the step ends on.
+#define TAKEN_CASES 96u
+#define TAKEN_CALLS 512u
+static char taken_case[TAKEN_CASES][JOURNAL_NAME_MAX];
+static size_t taken_cases;
+static struct {
+    const char *function;
+    size_t at;
+} taken[TAKEN_CALLS];
+static size_t taken_count;
+static bool taken_more;
+/// The lacked functions called with no case open, which no case is unavailable for.
+#define OUTSIDE_CALLS 32u
+static const char *outside[OUTSIDE_CALLS];
+static size_t outside_count;
+static bool case_open;
+
+/// The report's watcher while the suite runs: a case starts with nothing called yet.
+static void CaseWatch(const char *suite, const char *name, bool started) {
+    (void)suite;
+    (void)name;
+    if (started) {
+        NvnLayerMissedClear();
+    }
+    case_open = started;
 }
 
-/// The names this build looks up that the game's driver has no function for: a driver has the
-/// names of its own API version.
+/// The layer's hook: a lacked function was called for the first time since a case started. Said
+/// on the machine's log, where the report's own line comes only when the case ends.
+static void LackedCalled(const char *name) {
+    char said[160];
+    const int length = snprintf(said, sizeof(said),
+                                "edenprobe mod: %s was called, and the game's driver has no "
+                                "function of that name: it did nothing",
+                                name);
+    PlatformLog(said, (size_t)length);
+    if (!case_open && outside_count < OUTSIDE_CALLS) {
+        outside[outside_count++] = name;
+    }
+}
+
+/// The report's question as a case ends with a verdict: whether the case called a function the
+/// game's driver has not. It is then unavailable, with the functions' names.
+static bool CaseUnasked(const char *suite, const char *name, bool passed, char *why,
+                        size_t why_size) {
+    (void)suite;
+    const size_t count = NvnLayerMissedCount();
+    if (count == 0u) {
+        return false;
+    }
+    // The names first, as many as leave room for the sentence's end; the notes have them all.
+    static const char END[] = ", which the case called: nothing was done and nought came back, "
+                              "so the verdict the case came to judged no answer";
+    const size_t room = why_size > sizeof(END) + 64u ? why_size - sizeof(END) - 64u : 0u;
+    size_t length = (size_t)snprintf(why, why_size, "the game's driver has no ");
+    size_t named = 0;
+    for (; named < count; ++named) {
+        const char *const function = NvnLayerMissedName(named);
+        if (length + strlen(function) + 2u > room) {
+            break;
+        }
+        length += (size_t)snprintf(why + length, why_size - length, "%s%s",
+                                   named != 0u ? ", " : "", function);
+    }
+    if (named < count) {
+        length += (size_t)snprintf(why + length, why_size - length, ", and %zu more",
+                                   count - named);
+    }
+    snprintf(why + length, why_size - length, "%s (%s)", END, passed ? "pass" : "fail");
+
+    if (taken_cases == TAKEN_CASES) {
+        taken_more = true;
+        return true;
+    }
+    snprintf(taken_case[taken_cases], sizeof(taken_case[0]), "%s", name);
+    for (size_t i = 0; i < count; ++i) {
+        if (taken_count == TAKEN_CALLS) {
+            taken_more = true;
+            break;
+        }
+        taken[taken_count].function = NvnLayerMissedName(i);
+        taken[taken_count].at = taken_cases;
+        ++taken_count;
+    }
+    ++taken_cases;
+    return true;
+}
+
+/// A note's room for a list, after the words before it.
+#define LIST_ROOM ((size_t)REPORT_NOTE_MAX - 200u)
+
+/// The names this build looks up that the game's driver has no function for, every one, over as
+/// many notes as they take.
 static void NoteLacked(void) {
     static NvnProcs procs;
     char missing[64] = "";
@@ -155,24 +245,99 @@ static void NoteLacked(void) {
         return;    // the nvn suite's first case says which name
     }
     const size_t count = NvnLayerLackedCount();
+    const size_t all = sizeof(procs) / sizeof(NvnGenericProc) - 2u;
     if (count == 0u) {
-        ReportNote("host: the game's driver has a function for every name this build looks up");
+        ReportNote("host: the game's driver has a function for each of the %zu names this build "
+                   "looks up",
+                   all);
         return;
     }
-    char names[REPORT_NOTE_MAX - 256];
-    size_t length = 0;
-    size_t named = 0;
-    for (; named < count; ++named) {
-        const char *const name = NvnLayerLackedName(named);
-        if (length + strlen(name) + 2u >= sizeof(names)) {
-            break;
+    // Twice over the names: how many notes they take, then the notes.
+    size_t notes = 0;
+    for (int writing = 0; writing < 2; ++writing) {
+        char names[LIST_ROOM];
+        size_t length = 0;
+        size_t note = 0;
+        for (size_t i = 0; i <= count; ++i) {
+            const char *const name = i < count ? NvnLayerLackedName(i) : NULL;
+            if (name == NULL || length + strlen(name) + 2u >= sizeof(names)) {
+                ++note;
+                if (writing != 0) {
+                    ReportNote("host: the game's driver has no function for %zu of the %zu names "
+                               "this build looks up (%zu of %zu): %s",
+                               count, all, note, notes, names);
+                }
+                length = 0;
+            }
+            if (name != NULL) {
+                length += (size_t)snprintf(names + length, sizeof(names) - length, "%s%s",
+                                           length != 0u ? ", " : "", name);
+            }
         }
-        length += (size_t)snprintf(names + length, sizeof(names) - length, "%s%s",
-                                   named != 0u ? ", " : "", name);
+        notes = note;
     }
-    ReportNote("host: the game's driver has no function for %zu of the names this build looks "
-               "up, and a case that calls one ends its launch there: %s%s",
-               count, names, named < count ? ", and more" : "");
+}
+
+/// What the lacked functions took: for each one a case called, the cases it made unavailable.
+static void NoteTaken(void) {
+    for (size_t first = 0; first < taken_count; ++first) {
+        const char *const function = taken[first].function;
+        bool seen = false;
+        size_t cases = 0;
+        for (size_t i = 0; i < taken_count; ++i) {
+            if (strcmp(taken[i].function, function) == 0) {
+                seen = seen || i < first;
+                ++cases;
+            }
+        }
+        if (seen) {
+            continue;
+        }
+        char list[LIST_ROOM];
+        size_t length = 0;
+        bool began = false;
+        for (size_t i = first; i <= taken_count; ++i) {
+            const char *const name = i < taken_count && strcmp(taken[i].function, function) == 0
+                                         ? taken_case[taken[i].at]
+                                         : NULL;
+            if (i < taken_count && name == NULL) {
+                continue;
+            }
+            if (name == NULL || length + strlen(name) + 4u >= sizeof(list)) {
+                if (!began) {
+                    ReportNote("host: %s, which the game's driver has not, made %zu case%s "
+                               "unavailable: %s",
+                               function, cases, cases == 1u ? "" : "s", list);
+                } else if (length != 0u) {
+                    ReportNote("host: %s, more of the cases it made unavailable: %s", function,
+                               list);
+                }
+                began = true;
+                length = 0;
+            }
+            if (name != NULL) {
+                length += (size_t)snprintf(list + length, sizeof(list) - length, "%s\"%s\"",
+                                           length != 0u ? "; " : "", name);
+            }
+        }
+    }
+    if (taken_more) {
+        ReportNote("host: more cases were unavailable than these notes keep (%u cases, %u calls): "
+                   "each case's own line names its functions",
+                   (unsigned)TAKEN_CASES, (unsigned)TAKEN_CALLS);
+    }
+    if (outside_count != 0u) {
+        char list[LIST_ROOM];
+        size_t length = 0;
+        for (size_t i = 0; i < outside_count && length + strlen(outside[i]) + 2u < sizeof(list);
+             ++i) {
+            length += (size_t)snprintf(list + length, sizeof(list) - length, "%s%s",
+                                       i != 0u ? ", " : "", outside[i]);
+        }
+        ReportNote("host: called with no case open, and the game's driver has no function of the "
+                   "name: %s",
+                   list);
+    }
 }
 
 /// The mod's own suite, then the nvn family when the driver is of the API this build has the
@@ -184,9 +349,17 @@ static void RunInGame(void) {
         return;
     }
     GraphicsCase();
-    NvnLayerSetFatal(LackedCalled);
     NoteLacked();
+    taken_cases = taken_count = outside_count = 0u;
+    taken_more = false;
+    NvnLayerSetFatal(LackedCalled);
+    const ReportWatcher watching = ReportSetWatcher(CaseWatch);
+    const ReportUnasked asking = ReportSetUnasked(CaseUnasked);
     RunNvnInGame();
+    (void)ReportSetUnasked(asking);
+    (void)ReportSetWatcher(watching);
+    NvnLayerSetFatal(NULL);
+    NoteTaken();
 }
 
 /// The driver a report was made on: its API version, and the SDK and the build of the module

@@ -1,19 +1,17 @@
 // SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <setjmp.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <nvnlayer.h>
 
-#include "../source/layer.h"
-
 // The build for a game's own driver (layer.mk's NVNLAYER_DRIVER := game), on the machine that
 // builds: the layer defines no nvnBootstrapLoader there, so the one below stands for the game's,
 // and the loader has to fill every field from it, or for a name it lacks with the body that
-// stops the program.
+// keeps the name and returns nought.
 
 static int failures;
 
@@ -34,16 +32,15 @@ static const char *const NAMES[] = {
 };
 #define NAME_COUNT (sizeof(NAMES) / sizeof(NAMES[0]))
 
-// ---- what stands in for the console
+/// Whether each name's function returns a float, where nought comes back in another register.
+static const bool RETURNS_FLOAT[] = {
+#define NVN_LAYER_FLOAT(result, name, parameters)                                                 \
+    _Generic((result(*)(void))0, float (*)(void): true, default: false),
+    NVN_LAYER_PROCS(NVN_LAYER_FLOAT)
+#undef NVN_LAYER_FLOAT
+};
 
-// Where a stopped program lands: LayerStop does not come back, so the test jumps out of it.
-static jmp_buf stopped;
-static char stop_text[256];
-
-void LayerStop(const char *text) {
-    snprintf(stop_text, sizeof(stop_text), "%s", text);
-    longjmp(stopped, 1);
-}
+// ---- the program's hook
 
 static int hook_calls;
 static char hook_name[64];
@@ -55,9 +52,11 @@ static void Hook(const char *name) {
 
 // ---- what stands in for the game's driver
 
-/// The names the driver answers NULL for, NULL for none.
+/// The names the driver answers NULL for, NULL for none; or every name but the two the lookup
+/// is made of.
 static const char *driver_lacks;
 static const char *driver_lacks_too;
+static bool driver_lacks_all;
 static size_t bootstrap_calls;
 static size_t lookup_calls;
 static const NVNdevice *lookup_device;
@@ -79,7 +78,8 @@ static NvnGenericProc DriverGetProcAddress(const NVNdevice *device, const char *
     ++lookup_calls;
     lookup_device = device;
     if ((driver_lacks != NULL && strcmp(driver_lacks, name) == 0) ||
-        (driver_lacks_too != NULL && strcmp(driver_lacks_too, name) == 0)) {
+        (driver_lacks_too != NULL && strcmp(driver_lacks_too, name) == 0) ||
+        (driver_lacks_all && strcmp(name, "nvnDeviceGetInteger") != 0)) {
         return NULL;
     }
     return DriverProc(name);
@@ -138,7 +138,7 @@ static void TestLacking(void) {
     }
 
     // A driver without two other names, as a driver of another API version is: the load goes
-    // on, says which in the list's order, and each one's field stops the program with its name.
+    // on and says which, in the list's order, and every other field is the driver's.
     const size_t first = NAME_COUNT / 3u;
     const size_t second = NAME_COUNT - 1u;
     NvnProcs procs;
@@ -158,27 +158,10 @@ static void TestLacking(void) {
             EXPECT(fields[i + 2u] == DriverProc(NAMES[i]),
                    "beside a lacked name, the field of %s holds another function than the driver's",
                    NAMES[i]);
-            continue;
+        } else {
+            EXPECT(fields[i + 2u] != NULL && fields[i + 2u] != DriverProc(NAMES[i]),
+                   "the field of the lacked %s is not a body of the layer's", NAMES[i]);
         }
-        EXPECT(fields[i + 2u] != NULL && fields[i + 2u] != DriverProc(NAMES[i]),
-               "the field of the lacked %s is not a body of the layer's", NAMES[i]);
-        hook_calls = 0;
-        hook_name[0] = '\0';
-        stop_text[0] = '\0';
-        NvnLayerSetFatal(Hook);
-        if (fields[i + 2u] != NULL && setjmp(stopped) == 0) {
-            fields[i + 2u]();
-            EXPECT(false, "the body of the lacked %s came back", NAMES[i]);
-        }
-        char expected[192];
-        snprintf(expected, sizeof(expected),
-                 "nvnlayer: FATAL: %s was called, and the game's driver has no function of that "
-                 "name",
-                 NAMES[i]);
-        EXPECT(strcmp(stop_text, expected) == 0, "the lacked %s stopped with \"%s\"", NAMES[i],
-               stop_text);
-        EXPECT(hook_calls == 1 && strcmp(hook_name, NAMES[i]) == 0,
-               "the hook was called %d times, with \"%s\"", hook_calls, hook_name);
     }
     driver_lacks = NULL;
     driver_lacks_too = NULL;
@@ -186,6 +169,69 @@ static void TestLacking(void) {
     // The next load starts the count again.
     EXPECT(NvnLoadProcs(&procs, missing, sizeof(missing)) && NvnLayerLackedCount() == 0u,
            "a load from a driver with every name still says %zu lacked", NvnLayerLackedCount());
+}
+
+static void TestMissed(void) {
+    // A driver with none of the list's names: every field is then a body of the layer's, and a
+    // call of one comes back with nought, in the register its function's result has, the name
+    // kept and the hook told, each once however often it is called.
+    NvnProcs procs;
+    char missing[64] = "untouched";
+    driver_lacks_all = true;
+    EXPECT(NvnLoadProcs(&procs, missing, sizeof(missing)), "a driver with no name of the list: "
+                                                           "the load missed %s", missing);
+    driver_lacks_all = false;
+    EXPECT(NvnLayerLackedCount() == NAME_COUNT, "%zu names lacked of %zu", NvnLayerLackedCount(),
+           NAME_COUNT);
+    const NvnGenericProc *const fields = (const NvnGenericProc *)(const void *)&procs;
+    NvnLayerMissedClear();
+    NvnLayerSetFatal(Hook);
+    hook_calls = 0;
+    size_t floats = 0;
+    for (size_t i = 0; i < NAME_COUNT; ++i) {
+        for (int call = 0; call < 2; ++call) {
+            if (RETURNS_FLOAT[i]) {
+                const float result = ((float (*)(void))fields[i + 2u])();
+                EXPECT(result == 0.0f, "the lacked %s returned %f", NAMES[i], (double)result);
+            } else {
+                const uint64_t result = ((uint64_t (*)(void))fields[i + 2u])();
+                EXPECT(result == 0u, "the lacked %s returned 0x%llx", NAMES[i],
+                       (unsigned long long)result);
+            }
+        }
+        floats += RETURNS_FLOAT[i] ? 1u : 0u;
+        EXPECT(NvnLayerMissedCount() == i + 1u, "%zu names kept after %zu were called",
+               NvnLayerMissedCount(), i + 1u);
+        EXPECT(NvnLayerMissedName(i) != NULL && strcmp(NvnLayerMissedName(i), NAMES[i]) == 0,
+               "the name kept for the call of %s is %s", NAMES[i],
+               NvnLayerMissedName(i) != NULL ? NvnLayerMissedName(i) : "none");
+        EXPECT(hook_calls == (int)i + 1 && strcmp(hook_name, NAMES[i]) == 0,
+               "the hook was told %d times after %zu names, the last \"%s\"", hook_calls, i + 1u,
+               hook_name);
+    }
+    EXPECT(NvnLayerMissedName(NAME_COUNT) == NULL, "a name past the count");
+    EXPECT(floats != 0u && floats != NAME_COUNT, "%zu of the %zu functions return a float", floats,
+           NAME_COUNT);
+    EXPECT(NvnLayerError()[0] == '\0' && !NvnLayerLacks(),
+           "a lacked call left the layer's own error: \"%s\"", NvnLayerError());
+
+    // A clear forgets them, and a name called again is kept and told again.
+    NvnLayerMissedClear();
+    EXPECT(NvnLayerMissedCount() == 0u && NvnLayerMissedName(0) == NULL,
+           "%zu names kept after a clear", NvnLayerMissedCount());
+    (void)((uint64_t (*)(void))fields[2])();
+    EXPECT(NvnLayerMissedCount() == 1u && strcmp(NvnLayerMissedName(0), NAMES[0]) == 0 &&
+               hook_calls == (int)NAME_COUNT + 1,
+           "after a clear, a call of %s kept %zu names and told the hook %d times in all",
+           NAMES[0], NvnLayerMissedCount(), hook_calls);
+
+    // With no hook the name is kept all the same.
+    NvnLayerSetFatal(NULL);
+    NvnLayerMissedClear();
+    (void)((uint64_t (*)(void))fields[2])();
+    EXPECT(NvnLayerMissedCount() == 1u && hook_calls == (int)NAME_COUNT + 1,
+           "with no hook, %zu names kept and %d hook calls", NvnLayerMissedCount(), hook_calls);
+    NvnLayerMissedClear();
 }
 
 static void TestOwn(void) {
@@ -202,7 +248,7 @@ static void TestOwn(void) {
     EXPECT(!NvnLayerLacks(), "a refusal counted as a call deko3d cannot do");
     NvnLayerClearError();
     EXPECT(NvnLayerError()[0] == '\0', "the error stayed after a clear: \"%s\"", NvnLayerError());
-    // The two hooks are set and never called here: no body, no deko3d constructor.
+    // The two hooks are taken down again: no call here reaches either.
     NvnLayerSetGuard(NULL);
     NvnLayerSetFatal(NULL);
 }
@@ -210,6 +256,7 @@ static void TestOwn(void) {
 int main(void) {
     TestLoad();
     TestLacking();
+    TestMissed();
     TestOwn();
     if (failures != 0) {
         printf("nvnlayer game driver test (API %d): %d failed\n", NVN_LAYER_API, failures);

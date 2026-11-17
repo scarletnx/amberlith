@@ -17,9 +17,6 @@
 // the function's name, so the run ends on a line that says what is missing instead of going on
 // with nothing drawn.
 //
-// A build for a game's own driver (layer.c) compiles this file too, at either API version: there
-// the bodies stand under the names that game's driver has no function for.
-//
 // The bodies take no arguments: none is ever read, and one shape lets a test call every one of
 // them the same way. A program calls them through NvnProcs, which casts each to its NVN
 // prototype, as it would a driver's.

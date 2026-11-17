@@ -39,6 +39,11 @@ bool LayerGuarded(void (*call)(void), const char *what);
 /// (NvnLayerSetFatal), then LayerStop with the sentence.
 void LayerFatal(const char *name) __attribute__((noreturn));
 
+/// In a build for a game's own driver, a call of @p name, which that driver has no function
+/// for: kept for NvnLayerMissedName, once since the last clear, and the program's hook
+/// (NvnLayerSetFatal) told then. It comes back, and the body that called it returns nought.
+void LayerMissed(const char *name);
+
 /// The last step of LayerFatal, the version file's: @p text to the machine's debug output, then
 /// a break that does not come back.
 void LayerStop(const char *text) __attribute__((noreturn));
