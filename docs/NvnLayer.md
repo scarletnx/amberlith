@@ -137,7 +137,7 @@ as an item it cannot read from code and answers from its own table.
 
 ### What it takes
 
-Five hundred and thirty four functions, each recording the deko3d commands that do what NVN says it does:
+Five hundred and twenty seven functions, each recording the deko3d commands that do what NVN says it does:
 
 - **the device**, its two modes among them. `nvnDeviceSetWindowOriginMode` and `nvnDeviceSetDepthMode` are NVN's
   to set on a device that exists, and deko3d's only as it makes one: the layer makes deko3d's device again with the
