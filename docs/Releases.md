@@ -15,17 +15,17 @@ Each zip holds an ExeFS folder, `exefs/` and its files, which goes whole where i
 
 | What | Where |
 |---|---|
-| The newest version | https://github.com/scarletnx/edenprobe/releases/latest |
-| One version | `https://github.com/scarletnx/edenprobe/releases/tag/v<version>` |
-| The newest nightly | https://github.com/scarletnx/edenprobe/releases/tag/nightly |
-| One nightly (the newest 30 are kept) | `https://github.com/scarletnx/edenprobe/releases/tag/nightly-<date>-<commit>` |
+| The newest version | https://github.com/scarletnx/amberlith/releases/latest |
+| One version | `https://github.com/scarletnx/amberlith/releases/tag/v<version>` |
+| The newest nightly | https://github.com/scarletnx/amberlith/releases/tag/nightly |
+| One nightly (the newest 30 are kept) | `https://github.com/scarletnx/amberlith/releases/tag/nightly-<date>-<commit>` |
 
 A file's own link is `.../releases/download/<tag>/<name>`, `.../download/v0.18.0/amberlith-0.18.0.nro`. The newest
 version's NRO and its checksum without knowing its number, with GitHub's CLI (`gh release download nightly ...` takes
 the newest nightly's):
 
 ```sh
-gh release download -R scarletnx/edenprobe -p 'amberlith-*.nro' -p 'amberlith-*.nro.sha256'
+gh release download -R scarletnx/amberlith -p 'amberlith-*.nro' -p 'amberlith-*.nro.sha256'
 sha256sum -c amberlith-*.nro.sha256
 ```
 

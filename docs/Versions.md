@@ -32,5 +32,5 @@ Amberlith was edenprobe up to 0.18.1. What an edenprobe build or its tools left 
 What changed and is not read under its old name: the program's files (`amberlith.nro`, `amberlith-ounce/`,
 `amberlith-mod/`, the APK `org.scarletnx.amberlith`, a new app beside the old one), the debug channel's markers
 (`AMBERLITH DONE`, `AMBERLITH TIMING`), the masquerade layer's name (`VK_LAYER_AMBERLITH_masquerade`) and the net
-family's `.invalid` names (`*.amberlith.invalid`), which `tools/net-backend.py` publishes. The repository keeps its
-address, `github.com/scarletnx/edenprobe`, until it is renamed.
+family's `.invalid` names (`*.amberlith.invalid`), which `tools/net-backend.py` publishes, and the repository,
+`github.com/scarletnx/amberlith`, to which GitHub sends the old address.
