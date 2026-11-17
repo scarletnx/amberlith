@@ -23,10 +23,10 @@
 * [Where nvn/nvn.h comes from](#where-nvnnvnh-comes-from)
 
 <!-- counts: family nvn -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| nvn | 215 | 200 | 9 | 6 |
-| **All** | **215** | **200** | **9** | **6** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| nvn | 215 | 200 | 0 | 11 | 0 | 0 | 189 | 9 | 6 |
+| **All** | **215** | **200** | **0** | **11** | **0** | **0** | **189** | **9** | **6** |
 <!-- /counts -->
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls

@@ -8,10 +8,10 @@ buffer sink records the final mix. Only a word runs it, `audio` or `listen`, sin
 see below.
 
 <!-- counts: family audio -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| audio | 12 | 12 | 0 | 0 |
-| **All** | **12** | **12** | **0** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| audio | 12 | 12 | 0 | 0 | 0 | 6 | 6 | 0 | 0 |
+| **All** | **12** | **12** | **0** | **0** | **0** | **6** | **6** | **0** | **0** |
 <!-- /counts -->
 
 - **audio**: an 11 kHz voice at the output rate keeps its level at high quality, and

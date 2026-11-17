@@ -12,11 +12,11 @@
 * [What rests on reasoning](#what-rests-on-reasoning)
 
 <!-- counts: suite fluid -->
-**19 cases**: 13 with a judge (exact 2, ulp 11), 6 without one.
+**19 cases**: 13 with a judge (exact 2, ulp 11; expected from the specification 13), 6 without one.
 <!-- /counts -->
 
 <!-- counts: suite fluid-alias -->
-**20 cases**: 14 with a judge (exact 3, ulp 11), 6 without one.
+**20 cases**: 14 with a judge (exact 3, ulp 11; expected from the specification 14), 6 without one.
 <!-- /counts -->
 
 A 2D Navier-Stokes fluid made the way a game makes one: Stam's stable fluids ("Stable Fluids", SIGGRAPH 1999) on a

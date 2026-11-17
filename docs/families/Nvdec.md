@@ -13,7 +13,7 @@
 * [The judge, pinned](#the-judge-pinned)
 
 <!-- counts: suite nvdec -->
-**7 cases**: 6 with a judge (exact 6), 1 without one.
+**7 cases**: 6 with a judge (exact 6; expected from another reference 6), 1 without one.
 <!-- /counts -->
 
 The second suite of [the video family](Video.md): the video decode engine, NVDEC, given VP9 jobs

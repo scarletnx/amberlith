@@ -10,7 +10,7 @@
 * [The judge, pinned](#the-judge-pinned)
 
 <!-- counts: suite blit2d -->
-**5 cases**: 4 with a judge (exact 4), 1 without one.
+**5 cases**: 4 with a judge (exact 4; expected from the specification 4), 1 without one.
 <!-- /counts -->
 
 The 2D engine, class 0x902D, copying a block linear surface into a window of another at half and

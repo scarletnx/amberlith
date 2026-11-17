@@ -25,15 +25,15 @@ No case judges a speed yet. There is no reference: the console's own run is the 
 so.
 
 <!-- counts: family pace -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| pace-cpu | 10 | 0 | 10 | 0 |
-| pace-mem | 4 | 0 | 4 | 0 |
-| pace-thread | 5 | 0 | 5 | 0 |
-| pace-timer | 7 | 0 | 7 | 0 |
-| pace-fs | 4 | 0 | 4 | 0 |
-| pace-gpu | 6 | 0 | 6 | 0 |
-| **All** | **36** | **0** | **36** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| pace-cpu | 10 | 0 | 0 | 0 | 0 | 0 | 0 | 10 | 0 |
+| pace-mem | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 4 | 0 |
+| pace-thread | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 | 0 |
+| pace-timer | 7 | 0 | 0 | 0 | 0 | 0 | 0 | 7 | 0 |
+| pace-fs | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 4 | 0 |
+| pace-gpu | 6 | 0 | 0 | 0 | 0 | 0 | 0 | 6 | 0 |
+| **All** | **36** | **0** | **0** | **0** | **0** | **0** | **0** | **36** | **0** |
 <!-- /counts -->
 
 ## How a case measures

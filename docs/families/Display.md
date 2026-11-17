@@ -16,10 +16,10 @@ frames to, asked for its buffer history: transaction 17 of `IGraphicBufferProduc
 screen has no row for it, and a file that names it keeps it whatever the screen changes.
 
 <!-- counts: family display -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| binder | 4 | 3 | 1 | 0 |
-| **All** | **4** | **3** | **1** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| binder | 4 | 3 | 0 | 0 | 0 | 3 | 0 | 1 | 0 |
+| **All** | **4** | **3** | **0** | **0** | **0** | **3** | **0** | **1** | **0** |
 <!-- /counts -->
 
 - **binder**: one says a layer of the suite's own opened and took a window (none tier);

@@ -11,11 +11,11 @@
 * [The judge, pinned](#the-judge-pinned)
 
 <!-- counts: family video -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| vic | 20 | 19 | 1 | 0 |
-| nvdec | 7 | 6 | 1 | 0 |
-| **All** | **27** | **25** | **2** | **0** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| vic | 20 | 19 | 0 | 0 | 0 | 0 | 19 | 1 | 0 |
+| nvdec | 7 | 6 | 0 | 0 | 6 | 0 | 0 | 1 | 0 |
+| **All** | **27** | **25** | **0** | **0** | **6** | **0** | **19** | **2** | **0** |
 <!-- /counts -->
 
 The video image compositor, the VIC, is the engine that converts, scales and composites video

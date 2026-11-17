@@ -7,15 +7,15 @@
 * [The fixture](#the-fixture)
 
 <!-- counts: family net -->
-| Suite | Cases | With a judge | Without one | Not yet known |
-|---|--:|--:|--:|--:|
-| nifm | 7 | 1 | 1 | 5 |
-| dns | 11 | 6 | 0 | 5 |
-| bsd | 8 | 5 | 0 | 3 |
-| ssl | 16 | 6 | 1 | 9 |
-| acc | 6 | 0 | 2 | 4 |
-| friend | 5 | 0 | 1 | 4 |
-| **All** | **53** | **18** | **5** | **30** |
+| Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| nifm | 7 | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 5 |
+| dns | 11 | 6 | 0 | 0 | 0 | 0 | 6 | 0 | 5 |
+| bsd | 8 | 5 | 0 | 0 | 0 | 0 | 5 | 0 | 3 |
+| ssl | 16 | 6 | 0 | 0 | 0 | 0 | 6 | 1 | 9 |
+| acc | 6 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 4 |
+| friend | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 4 |
+| **All** | **53** | **18** | **0** | **0** | **0** | **0** | **18** | **5** | **30** |
 <!-- /counts -->
 
 The net family asks the services a program reaches the network through, the way a game asks them,
