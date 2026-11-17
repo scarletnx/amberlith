@@ -91,3 +91,10 @@ else is refused in the mode line and the run goes in the folder with no label. E
 run one build left in the middle waits while another build runs. The crash list is shared by every build. Every
 launch rewrites `last-run` before it opens the report, which is how `make run` finds it. The last three are the
 runner's, not the program's ([Under an emulator](Emulator.md)).
+
+A card where only an edenprobe build has run keeps running from `sdmc:/edenprobe`, the folder Amberlith had before
+1.0.0, whole, and a note after the folder's says so ([Before 1.0.0](Versions.md#before-100)):
+
+```json
+{"type":"note","text":"card: sdmc:/edenprobe, edenprobe's, holds a mode file or runs and sdmc:/amberlith neither, so this launch runs from sdmc:/edenprobe whole; renamed sdmc:/amberlith, it is read from there"}
+```
