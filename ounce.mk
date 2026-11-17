@@ -44,7 +44,8 @@ LIBS     := -L$(LIBNX)/lib -lnx -lm
 # functions (a runtime that answers them itself refuses a program that opens the services), the
 # nvn suite, this frontend and the layer.
 CFILES   := $(shell grep -v '^\#' source/portable.txt) source/platform_switch.c source/hooks.c \
-            source/sdk_fs.c source/sdk_time.c source/sdk_other.c source/sdk_audio.c \
+            source/sdk_card.c source/sdk_fs.c source/sdk_time.c source/sdk_other.c \
+            source/sdk_audio.c \
             source/tests/t_nvn.c ounce/frontend.c ounce/t_nvn2.c $(NVNLAYER_SOURCES)
 
 # The shader programs, of the Switch 2's own code: each source assembled into its code and its
