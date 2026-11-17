@@ -9,6 +9,7 @@
 * [What it runs](#what-it-runs)
 * [The report](#the-report)
 * [On a console](#on-a-console)
+* [Under an emulator](#under-an-emulator)
 * [Under ScarletNX](#under-scarletnx)
 
 The same engine and the nvn family's cases, built as one more module of a game's program: a `subsdk9` the console's
@@ -20,6 +21,9 @@ its cases through it before the game's own code starts.
 
 - **On a console**, the answers are the console's own NVN on its graphics unit, of the SDK that game was built
   with. A case that fails there expects something the driver does not do: the expectation is the wrong one.
+- **Under an emulator** that runs the game's own code and emulates the graphics unit, as Eden does, the answers are
+  the game's driver's, on the emulator's graphics unit: a case that passes on a console and fails there is the
+  emulator's to answer.
 - **Under ScarletNX**, which runs a game's NVN calls itself, the answers are ScarletNX's at the game's API version:
   the same cases as the NRO's, which reach ScarletNX's NVN through [the layer](NvnLayer.md).
 
@@ -159,6 +163,14 @@ reads from the card. It is there for the memory card, which a game's own descrip
 Not run on a console yet. What only a console can say: whether the driver makes a device before the game's main
 (the mod calls nn::oe::Initialize and gives the driver its memory first, as a game's start does), and what the menu
 shows when a game's process ends this way.
+
+## Under an emulator
+
+Eden takes a game's mods from `load/<program id>/<mod name>/exefs/` in its data folder: copy `subsdk9` and
+`main.npdm` to `load/<program id>/edenprobe/exefs/`, write the mode file in its card, `sdmc/edenprobe/mode`, and
+start the game. Its loader reads the module beside the game's own and takes the mod's `main.npdm` for the game's, so
+the process runs under the descriptor's program ID; the run ends by itself, the report in `sdmc/edenprobe/runs/`.
+A case that never returns there is ended by closing the emulator, and the next launch goes on after it.
 
 ## Under ScarletNX
 
