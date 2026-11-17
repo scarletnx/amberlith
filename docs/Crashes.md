@@ -99,7 +99,10 @@ mode line says so once a run.
 
 `source/hang.c` names the cases that never return on a machine that gets them wrong (the bsd receive with a timeout);
 they are skipped as `hangs` unless `hang` asks, and `retry` never runs them, since a hang does not end the program and
-the journal cannot mark it. A case on the crash list stays `crashed` whatever `hang` says, until `retry`.
+the journal cannot mark it. A case on the crash list stays `crashed` whatever `hang` says, until `retry`. Each line also
+names the machines a run showed its case return on, by the ban list's names: on those, as the mode file's `machine=`
+says, it runs with no word, as any case does (the bsd receive on `scarletnx`, which gives EAGAIN after its 300 ms). A
+run with no machine word, or on any other machine, skips it.
 
 ## The ban list
 

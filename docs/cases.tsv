@@ -180,6 +180,7 @@ support	the report tells its watcher each case's start and end, and no one else	
 support	a case its frontend says could not be asked ends as a skip, whatever its verdict	judge	none	-	nro,ounce,host
 support	a case that ends the program runs with no word, and only a crash skips it	judge	none	-	nro,ounce,host
 support	a case known to hang is skipped until hang asks, and retry does not run it	judge	none	-	nro,ounce,host
+support	a case known to hang runs on a machine a run showed it return on	judge	none	-	nro,ounce,host
 support	a case banned on this machine is skipped as banned, its line said, until unban	judge	none	-	nro,ounce,host
 support	a ban comes after a crash in this run and before the crash list	judge	none	-	nro,ounce,host
 support	a suite skip= names is skipped as asked, after a crash in this run and before hang, unban and the crash list	judge	none	-	nro,ounce,host

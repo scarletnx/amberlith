@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -23,6 +24,10 @@ typedef struct {
     const char *name;
     /// Why it hangs, and where that was seen.
     const char *why;
+    /// The machines a run showed the case return on, by the ban list's names, a space between:
+    /// there it runs without `hang`, as any case does. A run with no machine word, or another
+    /// machine, skips it.
+    const char *returns_on;
 } Hang;
 
 size_t HangCount(void);
@@ -30,6 +35,9 @@ const Hang *HangAt(size_t index);
 
 /// The entry for a case, or NULL when the table does not name it.
 const Hang *HangFind(const char *suite, const char *name);
+
+/// Whether a run showed @p hang's case return on @p machine (empty or NULL: no machine).
+bool HangReturnsOn(const Hang *hang, const char *machine);
 
 #ifdef __cplusplus
 }
