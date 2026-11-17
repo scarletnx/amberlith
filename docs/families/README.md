@@ -16,27 +16,27 @@ tier, in the reports the catalogue was made from. The judge's cases hold the pro
 judge no machine, so the last line leaves them out.
 
 <!-- counts: families -->
-| Category | Family | Suites | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Not said | Without one | Not yet known |
-|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| CPU and kernel | [The processor](Cpu.md) | 1 | 38 | 36 | 0 | 0 | 25 | 0 | 11 | 0 | 0 | 2 |
-| CPU and kernel | [Kernel](Kernel.md) | 2 | 29 | 27 | 0 | 0 | 21 | 0 | 6 | 0 | 2 | 0 |
-| GPU and NVN | [Graphics](Graphics.md) | 44 | 859 | 743 | 0 | 0 | 158 | 0 | 585 | 0 | 116 | 0 |
-| GPU and NVN | [nvn](Nvn.md) | 1 | 215 | 200 | 0 | 11 | 0 | 0 | 189 | 0 | 9 | 6 |
-| GPU and NVN | [nvn2](Nvn2.md) | 1 | 34 | 31 | 0 | 5 | 0 | 0 | 26 | 0 | 3 | 0 |
-| GPU and NVN | [Game](Game.md) | 2 | 87 | 34 | 0 | 0 | 0 | 0 | 34 | 0 | 53 | 0 |
-| GPU and NVN | [Demo](Demo.md) | 4 | 67 | 41 | 0 | 0 | 0 | 0 | 41 | 0 | 26 | 0 |
-| Video and audio | [Video](Video.md) | 2 | 27 | 25 | 0 | 0 | 6 | 0 | 19 | 0 | 2 | 0 |
-| Video and audio | [Audio](Audio.md) | 1 | 12 | 12 | 0 | 0 | 0 | 6 | 6 | 0 | 0 | 0 |
-| Video and audio | [Music](Music.md) | 1 | 12 | 12 | 0 | 0 | 0 | 0 | 12 | 0 | 0 | 0 |
-| System and services | [fs](Fs.md) | 1 | 15 | 13 | 0 | 0 | 0 | 0 | 13 | 0 | 2 | 0 |
-| System and services | [Display](Display.md) | 1 | 4 | 3 | 0 | 0 | 0 | 3 | 0 | 0 | 1 | 0 |
-| System and services | [Service](Service.md) | 40 | 125 | 109 | 0 | 0 | 0 | 107 | 1 | 1 | 14 | 2 |
-| System and services | [Net](Net.md) | 6 | 53 | 18 | 0 | 0 | 0 | 0 | 18 | 0 | 5 | 30 |
-| System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 | 0 | 0 | 14 | 0 | 0 | 0 |
-| Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 35 |
-| Speed | [Pace](Pace.md) | 6 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 |
-| The judge and the tools | [The judge](Judge.md) | 3 | 813 | - | - | - | - | - | - | - | - | - |
-| **On a machine** | | **118** | **1662** | **1318** | **0** | **16** | **210** | **116** | **975** | **1** | **269** | **75** |
+| Category | Family | Suites | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| CPU and kernel | [The processor](Cpu.md) | 1 | 38 | 36 | 0 | 0 | 25 | 0 | 11 | 0 | 2 |
+| CPU and kernel | [Kernel](Kernel.md) | 2 | 29 | 27 | 0 | 0 | 21 | 0 | 6 | 2 | 0 |
+| GPU and NVN | [Graphics](Graphics.md) | 44 | 859 | 743 | 0 | 0 | 158 | 0 | 585 | 116 | 0 |
+| GPU and NVN | [nvn](Nvn.md) | 1 | 215 | 200 | 0 | 11 | 0 | 0 | 189 | 9 | 6 |
+| GPU and NVN | [nvn2](Nvn2.md) | 1 | 34 | 31 | 0 | 5 | 0 | 0 | 26 | 3 | 0 |
+| GPU and NVN | [Game](Game.md) | 2 | 87 | 34 | 0 | 0 | 0 | 0 | 34 | 53 | 0 |
+| GPU and NVN | [Demo](Demo.md) | 4 | 67 | 41 | 0 | 0 | 0 | 0 | 41 | 26 | 0 |
+| Video and audio | [Video](Video.md) | 2 | 27 | 25 | 0 | 0 | 6 | 0 | 19 | 2 | 0 |
+| Video and audio | [Audio](Audio.md) | 1 | 12 | 12 | 0 | 0 | 0 | 6 | 6 | 0 | 0 |
+| Video and audio | [Music](Music.md) | 1 | 12 | 12 | 0 | 0 | 0 | 0 | 12 | 0 | 0 |
+| System and services | [fs](Fs.md) | 1 | 15 | 13 | 0 | 0 | 0 | 0 | 13 | 2 | 0 |
+| System and services | [Display](Display.md) | 1 | 4 | 3 | 0 | 0 | 0 | 3 | 0 | 1 | 0 |
+| System and services | [Service](Service.md) | 40 | 125 | 109 | 0 | 0 | 0 | 108 | 1 | 14 | 2 |
+| System and services | [Net](Net.md) | 6 | 53 | 18 | 0 | 0 | 0 | 0 | 18 | 5 | 30 |
+| System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 | 0 | 0 | 14 | 0 | 0 |
+| Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 35 |
+| Speed | [Pace](Pace.md) | 6 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 |
+| The judge and the tools | [The judge](Judge.md) | 3 | 813 | - | - | - | - | - | - | - | - |
+| **On a machine** | | **118** | **1662** | **1318** | **0** | **16** | **210** | **117** | **975** | **269** | **75** |
 <!-- /counts -->
 
 - **[The judge](./Judge.md)** - selfcheck, support and reference, no hardware involved

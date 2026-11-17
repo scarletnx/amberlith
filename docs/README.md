@@ -86,7 +86,7 @@ _3 families, 4 suites, 51 cases: 49 with a judge (exact 37, level 12; expected f
 ### System and services
 
 <!-- counts: category system -->
-_5 families, 51 suites, 211 cases: 157 with a judge (exact 155, ulp 1, position 1; expected from an emulator 110, the specification 46, not said 1), 22 without one, 32 not yet seen judged._
+_5 families, 51 suites, 211 cases: 157 with a judge (exact 155, ulp 1, position 1; expected from an emulator 111, the specification 46), 22 without one, 32 not yet seen judged._
 <!-- /counts -->
 
 - **[fs](./families/Fs.md)** - reads through the file system service
