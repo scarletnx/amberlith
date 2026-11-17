@@ -13,9 +13,10 @@
 // program's own tests run.
 //
 // A build for a game's own driver (NVN_LAYER_GAME_DRIVER, layer.mk's NVNLAYER_DRIVER := game) is
-// this file alone, less the lookup: nvnBootstrapLoader is then no function of the program's, and
-// the one the loader calls is the driver's of the game the program is loaded in, bound by the
-// game's own dynamic linker.
+// this file less the lookup: nvnBootstrapLoader is then no function of the program's, and the
+// one the loader calls is the driver's of the game the program is loaded in, bound by the game's
+// own dynamic linker. Its table is the bodies that stop the program (api231_surface.c), which
+// the loader gives the names that driver lacks.
 
 // ---- the failure a program reports
 
@@ -64,18 +65,11 @@ void NvnLayerSetGuard(NvnLayerGuard guard) {
     layer_guard = guard;
 }
 
-#ifdef NVN_LAYER_GAME_DRIVER
-void NvnLayerSetFatal(NvnLayerFatalHook hook) {
-    // No body of the layer's is in this build to be reached.
-    (void)hook;
-}
-#else
 static NvnLayerFatalHook layer_fatal;
 
 void NvnLayerSetFatal(NvnLayerFatalHook hook) {
     layer_fatal = hook;
 }
-#endif
 
 bool LayerGuarded(void (*call)(void), const char *what) {
     if (layer_guard == NULL) {
@@ -90,7 +84,6 @@ bool LayerGuarded(void (*call)(void), const char *what) {
     return false;
 }
 
-#ifndef NVN_LAYER_GAME_DRIVER
 void LayerFatal(const char *name) {
     // The hook is taken down first: a hook that itself reaches a body must not come back here.
     const NvnLayerFatalHook hook = layer_fatal;
@@ -99,10 +92,18 @@ void LayerFatal(const char *name) {
         hook(name);
     }
     char text[192];
+#ifdef NVN_LAYER_GAME_DRIVER
+    snprintf(text, sizeof(text),
+             "nvnlayer: FATAL: %s was called, and the game's driver has no function of that name",
+             name);
+#else
     snprintf(text, sizeof(text),
              "nvnlayer: FATAL: %s was reached: no NVN implementation took it", name);
+#endif
     LayerStop(text);
 }
+
+#ifndef NVN_LAYER_GAME_DRIVER
 
 // ---- nvnDeviceGetInteger
 
@@ -206,6 +207,18 @@ bool NvnLayerOwnProcs(NvnProcs *procs) {
                   "of its own there, and nvnBootstrapLoader is the game's");
     return false;
 }
+
+/// The names the game's driver answered NULL for at the last load, as places in the list.
+static uint16_t lacked[sizeof(NvnProcs) / sizeof(NvnGenericProc)];
+static size_t lacked_count;
+
+size_t NvnLayerLackedCount(void) {
+    return lacked_count;
+}
+
+const char *NvnLayerLackedName(size_t index) {
+    return index < lacked_count ? LAYER_ENTRIES[lacked[index]].name : NULL;
+}
 #else
 /// Whether NvnLoadProcs has looked the functions up: from then on a runtime may hold them.
 static bool looked_up;
@@ -254,12 +267,27 @@ bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size) {
         snprintf(missing, missing_size, "nvnDeviceGetInteger");
         return false;
     }
+#ifdef NVN_LAYER_GAME_DRIVER
+    // A game's driver has the names of its own API version, and the list has every version's: a
+    // name it lacks gets the body that ends the program saying which function was called, in the
+    // list's order as the table is, and the load goes on.
+    size_t next = 0;
+    lacked_count = 0;
+#define NVN_LAYER_LOAD(result, name, parameters)                                                  \
+    procs->name = (result(*) parameters)get(NULL, #name);                                         \
+    if (procs->name == NULL) {                                                                    \
+        procs->name = (result(*) parameters)LAYER_ENTRIES[next].proc;                             \
+        lacked[lacked_count++] = (uint16_t)next;                                                  \
+    }                                                                                             \
+    ++next;
+#else
 #define NVN_LAYER_LOAD(result, name, parameters)                                                  \
     procs->name = (result(*) parameters)get(NULL, #name);                                         \
     if (procs->name == NULL) {                                                                    \
         snprintf(missing, missing_size, "%s", #name);                                             \
         return false;                                                                             \
     }
+#endif
     NVN_LAYER_PROCS(NVN_LAYER_LOAD)
 #undef NVN_LAYER_LOAD
     return true;

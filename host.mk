@@ -46,9 +46,10 @@ build-host/nvnlayer-test-231: nvnlayer/tests/layer_test.c nvnlayer/source/layer.
 	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=231 $(filter %.c,$^) -o $@
 
 # And the build for a game's own driver (NVNLAYER_DRIVER := game), which is the shared part with
-# no lookup of its own: the test's nvnBootstrapLoader stands for the game's.
+# no lookup of its own and the bodies that stop the program: the test's nvnBootstrapLoader stands
+# for the game's.
 build-host/nvnlayer-test-game-%: nvnlayer/tests/game_test.c nvnlayer/source/layer.c \
-                                 $(wildcard nvnlayer/source/*.h) \
+                                 nvnlayer/source/api231_surface.c $(wildcard nvnlayer/source/*.h) \
                                  $(wildcard nvnlayer/include/*.h nvnlayer/include/nvn/*.h)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=$* -DNVN_LAYER_GAME_DRIVER $(filter %.c,$^) -o $@

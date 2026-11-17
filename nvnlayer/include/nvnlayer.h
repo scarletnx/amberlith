@@ -54,6 +54,17 @@ typedef void (*NvnGenericProc)(void);
 #define NVN_LAYER_API_MINOR 8
 #endif
 
+/// In a build for a game's own driver, the oldest API major version of a driver whose objects are
+/// nvn/nvn.h's, NVN_LAYER_API_MAJOR being the newest: the Switch's types there were taken from a
+/// 53.105 driver, and its 55 drivers are held to the same ones.
+#ifdef NVN_LAYER_GAME_DRIVER
+#if NVN_LAYER_API >= 231
+#define NVN_LAYER_GAME_API_MAJOR_OLDEST NVN_LAYER_API_MAJOR
+#else
+#define NVN_LAYER_GAME_API_MAJOR_OLDEST 53
+#endif
+#endif
+
 /// The prototypes of the two functions NVN_LAYER_PROCS leaves out.
 typedef void (*NvnDeviceGetIntegerProc)(const NVNdevice *device, NVNdeviceInfo item, int *value);
 typedef NvnGenericProc (*NvnDeviceGetProcAddressProc)(const NVNdevice *device, const char *name);
@@ -78,6 +89,17 @@ NvnGenericProc nvnBootstrapLoader(const char *name);
 /// where a direct branch would be compiled as one. False with the first name that came back
 /// NULL in @p missing.
 bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size);
+
+#ifdef NVN_LAYER_GAME_DRIVER
+/// In a build for a game's own driver, a name that driver answers NULL for fails no load, but
+/// for the two the lookup itself is made of: a game's driver has the names of its own API
+/// version, and the list every version's. The field of such a name holds a body of the layer's
+/// that ends the program saying which function was called (NvnLayerSetFatal's hook first), and
+/// these say which names those were at the last NvnLoadProcs, in the list's order: how many, and
+/// the name at @p index, NULL from the count on.
+size_t NvnLayerLackedCount(void);
+const char *NvnLayerLackedName(size_t index);
+#endif
 
 /// Fills @p procs with the layer's own functions, through no lookup: what NvnLoadProcs gives on
 /// a machine that takes nothing over. For a program that wants the layer's bodies themselves
@@ -119,7 +141,8 @@ void NvnLayerSetGuard(NvnLayerGuard guard);
 /// name: the program's chance to put the line in its own log or report. The layer then writes
 /// "nvnlayer: FATAL: <name> was reached: no NVN implementation took it" to the debug output and
 /// breaks (svcBreak), so the run ends there instead of drawing nothing. NULL, the default, for
-/// no call. The API 55 build has every body and never calls it.
+/// no call. The API 55 build has every body and never calls it. A build for a game's own driver
+/// calls it for a function that driver lacks, and its line says so.
 typedef void (*NvnLayerFatalHook)(const char *name);
 void NvnLayerSetFatal(NvnLayerFatalHook hook);
 
