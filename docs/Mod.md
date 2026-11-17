@@ -40,7 +40,7 @@ make -f mod.mk check    # the same, then tools/mod-imports.py on the module
 ```
 
 It leaves `edenprobe-mod/exefs/subsdk9` and `main.npdm`, and `edenprobe-mod.elf` beside them. A release's
-`edenprobe-mod.zip` ([Releases](Releases.md)) holds the same two files in `exefs/`. The sources are the
+`edenprobe-mod-<version>.zip` ([Releases](Releases.md)) holds the same two files in `exefs/`. The sources are the
 engine's (`source/portable.txt`, less the libc family), the card's device over nn::fs (`source/sdk_card.c`), the
 nvn suite, `mod/` and the layer built for [a game's own driver](NvnLayer.md#a-games-own-driver). The toolchain is
 the NRO's: devkitA64 and its C library, libnx's headers and of its code the kernel's calls alone, `elf2nso` and
@@ -143,7 +143,7 @@ row a name and case. It refuses a report whose notes and case lines do not agree
 With Atmosphere, whose loader takes a program's modules and its `main.npdm` from the card before the game's own
 (`atmosphere/contents/<program id>/exefs/`):
 
-1. `make -f mod.mk`, or unzip a release's `edenprobe-mod.zip`.
+1. `make -f mod.mk`, or unzip a release's `edenprobe-mod-<version>.zip`.
 2. Copy `edenprobe-mod/exefs/subsdk9` and `edenprobe-mod/exefs/main.npdm` to
    `atmosphere/contents/<program id>/exefs/` on the card, `<program id>` the game's sixteen hexadecimal digits.
    A game that has a `subsdk9` of its own, or a folder that holds another mod's, takes the module under another

@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """publish-builds.py against fake_github.py's fake gh and fake Discord: which Build runs are published; a nightly
-prerelease with the NRO, the APK and the two ExeFS zips and their checksums, kept to the newest N, never one older than
-the newest, its files and notes copied to the "nightly" prerelease whose tag follows it, and nothing said on Discord; a
-version tag's release, the latest, and its Discord message, or a notice without the webhook; an artifact that is
-missing, is no NRO, or a zip that holds other files or a file of another kind, stopping the run. Offline."""
+prerelease with the NRO, the APK and the two ExeFS zips and their checksums, named after the commit's VERSION and the
+commit, kept to the newest N, never one older than the newest, its files and notes copied to the "nightly" prerelease
+whose tag follows it, and nothing said on Discord; a version tag's release named after its version alone, the latest,
+and its Discord message, or a notice without the webhook; an artifact that is missing, is no NRO, or a zip that holds
+other files or a file of another kind, a VERSION that is no version and a tag that is not its VERSION's, stopping the
+run. Offline."""
 
 import hashlib
 import io
@@ -38,16 +40,24 @@ def exefs(files, folder=True):
 
 OUNCE = exefs({"exefs/main": MODULE, "exefs/main.npdm": DESCRIPTOR})
 MOD = exefs({"exefs/subsdk9": MODULE, "exefs/main.npdm": DESCRIPTOR})
-FILES = [
-    "edenprobe-mod.zip",
-    "edenprobe-mod.zip.sha256",
-    "edenprobe-ounce.zip",
-    "edenprobe-ounce.zip.sha256",
-    "edenprobe.apk",
-    "edenprobe.apk.sha256",
-    "edenprobe.nro",
-    "edenprobe.nro.sha256",
-]
+
+
+def named(stem):
+    """the four files of a release or a run named after stem (a version, or a version and a commit), as build.yml and
+    publish-builds.py name them"""
+    return {
+        "nro": f"edenprobe-{stem}.nro",
+        "apk": f"edenprobe-{stem}.apk",
+        "ounce": f"edenprobe-ounce-{stem}.zip",
+        "mod": f"edenprobe-mod-{stem}.zip",
+    }
+
+
+def files(stem):
+    """every asset of a release named after stem: the four files and their checksums, sorted"""
+    return sorted(name + more for name in named(stem).values() for more in ("", ".sha256"))
+
+
 server = HOOK = None
 
 
@@ -71,6 +81,8 @@ class Publish(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         world = self.world = World(self.temporary.name, REPO)
+        (world.checkout / "VERSION").write_text("0.2.0\n")
+        world.git("add", "VERSION")
         self.oldest = world.commit("the older nightly")
         self.previous = world.commit("the previous nightly")
         world.git("tag", "v0.1.0")
@@ -83,6 +95,7 @@ class Publish(unittest.TestCase):
         self.sha = world.git("rev-parse", "HEAD")
         world.git("tag", "v0.2.0")
         self.tag = f"nightly-2026-10-15-{self.sha[:7]}"
+        self.stem = f"0.2.0-{self.sha[:7]}"
         self.rolling = {
             "id": 9,
             "tag_name": "nightly",
@@ -130,14 +143,15 @@ class Publish(unittest.TestCase):
     def find(self, tag):
         return next((r for r in self.world.state()["releases"] if r["tag_name"] == tag), None)
 
-    def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK, ounce=OUNCE, mod=MOD):
-        """the folder the workflow downloads into: the NRO, the APK and the two zips each in a folder named after its
-        artifact, or at its path"""
+    def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK, ounce=OUNCE, mod=MOD, version="0.2.0"):
+        """the folder the workflow downloads into: the NRO, the APK and the two zips, named after the version and the
+        commit, each in a folder named after its artifact, or at its path"""
+        artifact = named(f"{version}-{commit[:7]}")
         for file, content in (
-            (f"edenprobe-{commit[:7]}.nro", data),
-            (f"edenprobe-{commit[:7]}.apk", apk),
-            (f"edenprobe-ounce-{commit[:7]}.zip", ounce),
-            (f"edenprobe-mod-{commit[:7]}.zip", mod),
+            (artifact["nro"], data),
+            (artifact["apk"], apk),
+            (artifact["ounce"], ounce),
+            (artifact["mod"], mod),
         ):
             path = self.world.root / name / file
             if as_file:
@@ -157,14 +171,26 @@ class Publish(unittest.TestCase):
         env = {"GITHUB_EVENT_NAME": name, "GITHUB_EVENT_PATH": str(event_file), "GITHUB_OUTPUT": str(output)}
         if hooks:
             env.update(DISCORD_WEBHOOK_RELEASES=f"{HOOK}-releases")
-        done = self.world.run(python(SCRIPT, step, "--repo", REPO, *extra), **env)
+        checkout = ["--checkout", str(self.world.checkout)] if step == "plan" else []
+        done = self.world.run(python(SCRIPT, step, "--repo", REPO, *checkout, *extra), **env)
         planned = dict(line.split("=", 1) for line in output.read_text().splitlines())
         return done, planned
 
     def publish(
-        self, kind, commit, *extra, run="41", data=NRO, as_file=False, hooks=True, apk=APK, ounce=OUNCE, mod=MOD
+        self,
+        kind,
+        commit,
+        *extra,
+        run="41",
+        data=NRO,
+        as_file=False,
+        hooks=True,
+        apk=APK,
+        ounce=OUNCE,
+        mod=MOD,
+        version="0.2.0",
     ):
-        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk, ounce, mod)
+        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk, ounce, mod, version)
         args = [
             "--kind",
             kind,
@@ -195,11 +221,19 @@ class Publish(unittest.TestCase):
     # ---- what plan publishes
     def test_a_green_push_to_main_is_planned_as_a_nightly(self):
         done, planned = self.run_script("plan", event=self.push_run(self.sha))
-        self.assertEqual(planned, {"kind": "nightly", "run": "41", "sha": self.sha, "short": self.sha[:7], "tag": ""})
+        self.assertEqual(
+            planned,
+            {"kind": "nightly", "run": "41", "sha": self.sha, "short": self.sha[:7], "tag": "", "stem": self.stem},
+            done.stdout + done.stderr,
+        )
 
     def test_a_version_tag_pushed_is_planned_as_a_release(self):
         done, planned = self.run_script("plan", event=self.push_run(self.sha, branch="v0.2.0"))
-        self.assertEqual((planned.get("kind"), planned.get("tag")), ("release", "v0.2.0"), done.stdout + done.stderr)
+        self.assertEqual(
+            (planned.get("kind"), planned.get("tag"), planned.get("stem")),
+            ("release", "v0.2.0", self.stem),
+            done.stdout + done.stderr,
+        )
 
     def test_what_is_not_planned(self):
         for event, why in (
@@ -225,26 +259,19 @@ class Publish(unittest.TestCase):
         self.assertTrue(made["prerelease"])
         self.assertEqual(made["make_latest"], "false")  # the latest is a version's
         data = {a["name"]: a["data"] for a in made["assets"]}
-        self.assertEqual(sorted(data), FILES)
-        self.assertEqual(data["edenprobe.nro"].encode("latin-1"), NRO)
-        digest = hashlib.sha256(NRO).hexdigest()
-        self.assertEqual(data["edenprobe.nro.sha256"], f"{digest}  edenprobe.nro\n")
-        self.assertEqual(data["edenprobe.apk"].encode("latin-1"), APK)
-        apk_digest = hashlib.sha256(APK).hexdigest()
-        self.assertEqual(data["edenprobe.apk.sha256"], f"{apk_digest}  edenprobe.apk\n")
+        # named after the commit's VERSION and the commit
+        self.assertEqual(sorted(data), files(self.stem))
         where = f"https://github.com/{REPO}/releases/download/{self.tag}"
         body = made["body"]
-        self.assertIn(f"| [edenprobe.nro]({where}/edenprobe.nro) | 0.0 MB | `{digest}` |", body)
-        self.assertIn(f"| [edenprobe.apk]({where}/edenprobe.apk) | 0.0 MB | `{apk_digest}` |", body)
-        # each ExeFS zip as it was built, its checksum and its row
-        for name, packed in (("edenprobe-ounce.zip", OUNCE), ("edenprobe-mod.zip", MOD)):
-            self.assertEqual(data[name].encode("latin-1"), packed)
-            packed_digest = hashlib.sha256(packed).hexdigest()
-            self.assertEqual(data[f"{name}.sha256"], f"{packed_digest}  {name}\n")
-            self.assertIn(f"| [{name}]({where}/{name}) | 0.0 MB | `{packed_digest}` |", body)
+        name = named(self.stem)
+        # each file as it was built, its checksum and its row
+        for kind, built in (("nro", NRO), ("apk", APK), ("ounce", OUNCE), ("mod", MOD)):
+            self.assertEqual(data[name[kind]].encode("latin-1"), built)
+            built_digest = hashlib.sha256(built).hexdigest()
+            self.assertEqual(data[f"{name[kind]}.sha256"], f"{built_digest}  {name[kind]}\n")
+            self.assertIn(f"| [{name[kind]}]({where}/{name[kind]}) | 0.0 MB | `{built_digest}` |", body)
         self.assertIn(
-            "`sha256sum -c edenprobe.nro.sha256 edenprobe.apk.sha256 edenprobe-ounce.zip.sha256 "
-            "edenprobe-mod.zip.sha256`",
+            f"`sha256sum -c {name['nro']}.sha256 {name['apk']}.sha256 {name['ounce']}.sha256 {name['mod']}.sha256`",
             body,
         )
         self.assertIn(f"- \\[ci\\] its title ([#5](https://github.com/{REPO}/pull/5))", body)
@@ -261,7 +288,9 @@ class Publish(unittest.TestCase):
         self.assertEqual({a["name"]: a["data"] for a in rolling["assets"]}, data)
         self.assertEqual(state["tags"]["nightly"], self.sha)
         self.assertIn(f"https://github.com/{REPO}/releases/tag/{self.tag}", rolling["body"])
-        self.assertIn(f"https://github.com/{REPO}/releases/download/nightly/edenprobe.nro", rolling["body"])
+        self.assertIn(f"https://github.com/{REPO}/releases/download/nightly/{name['nro']}", rolling["body"])
+        # the files of the nightly before, under other names, are gone from it (edenprobe.nro, gone.txt)
+        self.assertNotIn("edenprobe.nro", {a["name"] for a in rolling["assets"]})
         self.assertEqual(rolling["name"], f"edenprobe nightly 2026-10-15 ({self.sha[:7]}), the newest")
         # every write is the repository's, with its token
         writes = [c for c in self.world.calls() if "-X" in c["args"] or c["args"][0] == "release"]
@@ -286,12 +315,12 @@ class Publish(unittest.TestCase):
     def test_the_artifact_at_its_own_path(self):
         done = self.publish("nightly", self.sha, as_file=True)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual(sorted(a["name"] for a in self.find(self.tag)["assets"]), FILES)
+        self.assertEqual(sorted(a["name"] for a in self.find(self.tag)["assets"]), files(self.stem))
 
     def test_a_missing_artifact_stops(self):
         done = self.publish("nightly", self.sha, data=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn(f"run 41 built, yet has no edenprobe-{self.sha[:7]}.nro", done.stderr)
+        self.assertIn(f"run 41 built, yet has no edenprobe-{self.stem}.nro", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_file_that_is_no_nro_stops(self):
@@ -303,7 +332,7 @@ class Publish(unittest.TestCase):
     def test_a_missing_apk_stops(self):
         done = self.publish("nightly", self.sha, apk=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn(f"run 41 built, yet has no edenprobe-{self.sha[:7]}.apk", done.stderr)
+        self.assertIn(f"run 41 built, yet has no edenprobe-{self.stem}.apk", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_file_that_is_no_apk_stops(self):
@@ -315,11 +344,11 @@ class Publish(unittest.TestCase):
     def test_a_missing_zip_stops(self):
         done = self.publish("nightly", self.sha, mod=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn(f"run 41 built, yet has no edenprobe-mod-{self.sha[:7]}.zip", done.stderr)
+        self.assertIn(f"run 41 built, yet has no edenprobe-mod-{self.stem}.zip", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_zip_without_its_files_stops(self):
-        short = self.sha[:7]
+        short = self.stem
         for ounce, mod, said in (
             (
                 exefs({"exefs/main": MODULE}),
@@ -352,7 +381,7 @@ class Publish(unittest.TestCase):
         )
         self.assertNotEqual(done.returncode, 0)
         self.assertIn(
-            f'exefs/subsdk9 in edenprobe-mod-{self.sha[:7]}.zip of run 41 starts with "NRO0", not the NSO0 a mod of a '
+            f'exefs/subsdk9 in edenprobe-mod-{self.stem}.zip of run 41 starts with "NRO0", not the NSO0 a mod of a '
             "game's subsdk9 starts with",
             done.stderr,
         )
@@ -366,7 +395,7 @@ class Publish(unittest.TestCase):
             with self.subTest(said):
                 done = self.publish("nightly", self.sha, ounce=ounce)
                 self.assertNotEqual(done.returncode, 0)
-                self.assertIn(f"edenprobe-ounce-{self.sha[:7]}.zip of run 41 {said}", done.stderr)
+                self.assertIn(f"edenprobe-ounce-{self.stem}.zip of run 41 {said}", done.stderr)
                 self.assertIsNone(self.find(self.tag))
 
     def test_dry_run_writes_nothing(self):
@@ -384,7 +413,7 @@ class Publish(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         rolling = self.find("nightly")
         self.assertEqual((rolling["target_commitish"], rolling["prerelease"]), (self.sha, True))
-        self.assertEqual(sorted(a["name"] for a in rolling["assets"]), FILES)
+        self.assertEqual(sorted(a["name"] for a in rolling["assets"]), files(self.stem))
         self.assertEqual(self.world.state()["tags"]["nightly"], self.sha)
 
     def test_without_a_webhook_published_and_said(self):
@@ -421,18 +450,20 @@ class Publish(unittest.TestCase):
         self.assertEqual(
             (version["make_latest"], version["prerelease"], version["target_commitish"]), ("true", False, self.sha)
         )
-        self.assertEqual(sorted(a["name"] for a in version["assets"]), FILES)
+        # named after the version alone
+        self.assertEqual(sorted(a["name"] for a in version["assets"]), files("0.2.0"))
         self.assertTrue(version["body"].startswith("edenprobe v0.2.0, built from [`"), version["body"])
         self.assertIn("## Changes since v0.1.0", version["body"])
-        self.assertIn(f"https://github.com/{REPO}/releases/download/v0.2.0/edenprobe.nro", version["body"])
+        self.assertIn(f"https://github.com/{REPO}/releases/download/v0.2.0/edenprobe-0.2.0.nro", version["body"])
         posts = sent("releases", mark)
         self.assertEqual(len(posts), 1)
         message = posts[0]["body"]["embeds"][0]
         self.assertEqual(message["title"], "edenprobe v0.2.0")
         self.assertEqual([f["name"] for f in message["fields"]], ["NRO", "APK", "Switch 2", "Mod", "Source", "Since"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe.apk", message["fields"][1]["value"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe-ounce.zip", message["fields"][2]["value"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe-mod.zip", message["fields"][3]["value"])
+        self.assertIn("/releases/download/v0.2.0/edenprobe-0.2.0.nro", message["fields"][0]["value"])
+        self.assertIn("/releases/download/v0.2.0/edenprobe-0.2.0.apk", message["fields"][1]["value"])
+        self.assertIn("/releases/download/v0.2.0/edenprobe-ounce-0.2.0.zip", message["fields"][2]["value"])
+        self.assertIn("/releases/download/v0.2.0/edenprobe-mod-0.2.0.zip", message["fields"][3]["value"])
         self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][5]["value"])
         self.assertIn(hashlib.sha256(NRO).hexdigest(), message["description"])
         self.assertEqual(posts[0]["body"]["allowed_mentions"], {"parse": []})
@@ -441,10 +472,34 @@ class Publish(unittest.TestCase):
         self.assertEqual((done.returncode, len(sent("releases", mark))), (0, 1), done.stdout + done.stderr)
 
     def test_a_tag_with_a_dash_is_a_prerelease(self):
+        (self.world.checkout / "VERSION").write_text("0.3.0-rc1\n")
+        self.world.git("add", "VERSION")
+        candidate_sha = self.world.commit("edenprobe: version 0.3.0-rc1")
         self.world.git("tag", "v0.3.0-rc1")
-        done = self.publish("release", self.sha, "--tag", "v0.3.0-rc1")
+        done = self.publish("release", candidate_sha, "--tag", "v0.3.0-rc1", version="0.3.0-rc1")
         candidate = self.find("v0.3.0-rc1")
         self.assertEqual((candidate["prerelease"], candidate["make_latest"]), (True, "false"), done.stderr)
+        self.assertEqual(sorted(a["name"] for a in candidate["assets"]), files("0.3.0-rc1"))
+
+    def test_a_tag_that_is_not_its_version_stops(self):
+        self.world.git("tag", "v0.3.0")
+        done = self.publish("release", self.sha, "--tag", "v0.3.0")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(f"v0.3.0 is tagged on {self.sha[:7]}, whose VERSION says 0.2.0", done.stderr)
+        self.assertIsNone(self.find("v0.3.0"))
+
+    def test_a_version_that_is_no_version_stops(self):
+        (self.world.checkout / "VERSION").write_text("next\n")
+        self.world.git("add", "VERSION")
+        odd = self.world.commit("VERSION says no version")
+        said = f'{odd[:7]}\'s VERSION holds "next", not a version'
+        done, planned = self.run_script("plan", event=self.push_run(odd))
+        self.assertEqual((done.returncode != 0, planned), (True, {}), done.stdout + done.stderr)
+        self.assertIn(said, done.stderr)
+        done = self.publish("nightly", odd, version="next")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(said, done.stderr)
+        self.assertIsNone(self.find(f"nightly-2026-10-15-{odd[:7]}"))
 
     def test_a_release_takes_a_version_tag(self):
         done = self.publish("release", self.sha, "--tag", "main")
