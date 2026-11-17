@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // texelFetch of every step-th texel from an offset: pixel (x, y) shows texel

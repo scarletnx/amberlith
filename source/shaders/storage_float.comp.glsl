@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Stores p.value at p.at through an image with no format qualifier: the store converts by the

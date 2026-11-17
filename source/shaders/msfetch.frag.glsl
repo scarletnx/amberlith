@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Sample s of pixel (x, y) of a four sample integer texture onto pixel (4 x + s, y), so a one

@@ -39,5 +39,5 @@ verdicts itself (`PictureBeginOwn`): such a picture is written whole and never k
 screens. The game family's [levels](families/Game.md#the-levels) do, for their 1280 by 720 frames: 3.6 MiB a
 picture, 2.7 the diff.
 
-The support suite writes a few 8x4 fixtures to `sdmc:/edenprobe/support-check/` while it runs and takes them away;
+The support suite writes a few 8x4 fixtures to `sdmc:/amberlith/support-check/` while it runs and takes them away;
 a run that leaves the folder has failed that case.

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // dup and dup2, for the host case below that reads back what the debug channel printed.
@@ -342,11 +342,11 @@ static void CheckBreadcrumbs(void) {
     ReportBuildBreadcrumb(first, sizeof(first), "depth", 1, 0, NULL, NULL);
     CHECK_TRUE(SUITE, "the log line before a rehearsed case names the suite, pass and case",
                CHECK_NONE,
-               strcmp(named, "EDENPROBE TIMING depth pass 4 case a fragment nearer passes") == 0 &&
+               strcmp(named, "AMBERLITH TIMING depth pass 4 case a fragment nearer passes") == 0 &&
                    strcmp(numbered,
-                          "EDENPROBE TIMING depth pass 1 case number 3 after a depth clear") ==
+                          "AMBERLITH TIMING depth pass 1 case number 3 after a depth clear") ==
                        0 &&
-                   strcmp(first, "EDENPROBE TIMING depth pass 1 case number 1") == 0,
+                   strcmp(first, "AMBERLITH TIMING depth pass 1 case number 1") == 0,
                "%.160s / %.160s / %.160s", named, numbered, first);
 
     const RunMode timed = ModeFromText("quick");

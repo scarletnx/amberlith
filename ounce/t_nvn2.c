@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // The nvn2 suite (docs/families/Nvn2.md): what a Switch 2 program asks of NVN that a Switch's

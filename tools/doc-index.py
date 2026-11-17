@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Puts an "## Index" of a Markdown document's sections right under its title, as ScarletNX's docs have one.
 

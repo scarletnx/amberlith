@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <malloc.h>
@@ -900,7 +900,7 @@ void RunPaceTimer(void) {
 
 // ---- pace-fs: a file written and read back, and small files made and removed
 
-#define FS_PACE_DIRECTORY "/edenprobe/pace"
+#define FS_PACE_DIRECTORY "/amberlith/pace"
 #define FS_PACE_BIG FS_PACE_DIRECTORY "/big.bin"
 #define FS_PACE_SIZE (4u * 1024u * 1024u)
 #define FS_PACE_BLOCK (64u * 1024u)
@@ -1083,7 +1083,7 @@ void RunPaceFs(void) {
         return;
     }
     Volume fs;
-    const Result opened = VolumeOpenCard(&fs, "edenprobe-pace");
+    const Result opened = VolumeOpenCard(&fs, "amberlith-pace");
     CHECK_TRUE(FS, FS_OPENS, CHECK_NONE, R_SUCCEEDED(opened), "result 0x%x%s", (unsigned)opened,
                HooksOn() ? ", nn::fs::MountSdCard" : "");
     if (R_FAILED(opened)) {
@@ -1092,7 +1092,7 @@ void RunPaceFs(void) {
         }
         return;
     }
-    VolumeCreateDirectory(&fs, "/edenprobe");
+    VolumeCreateDirectory(&fs, "/amberlith");
     VolumeCreateDirectory(&fs, FS_PACE_DIRECTORY);
 
     // The file the last write sample leaves is the one the read case reads.

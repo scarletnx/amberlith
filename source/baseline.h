@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -13,7 +13,7 @@ extern "C" {
 
 /// A machine's times kept on its memory card, and a run held to them.
 ///
-/// A baseline is a file, sdmc:/edenprobe/baseline/<name>.jsonl, of samples: each sample is the
+/// A baseline is a file, sdmc:/amberlith/baseline/<name>.jsonl, of samples: each sample is the
 /// time every timed case of one run took (the `us` its line carries, the smallest of nine), so a
 /// file of five samples is five runs of a machine. `baseline=<name>` in the mode file adds this
 /// run as a sample once the suites end; `compare=<name>` holds this run's times to that file's

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -10,11 +10,11 @@
 // the ones that check this program's own judgement and what it writes around a verdict, so a
 // change to any of them can be proven wrong in a second with no emulator in the loop.
 int main(void) {
-    ReportOpen("edenprobe-host-report.jsonl");
+    ReportOpen("amberlith-host-report.jsonl");
     // Kept as a detailed run keeps them, so the support suite can check the store the screens
     // read against the cases this very run reported.
     ReportRetain(true);
-    ReportNote("edenprobe host build");
+    ReportNote("Amberlith host build");
 
     RunSelfcheck();
     RunSupport();

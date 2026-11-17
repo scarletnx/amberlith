@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Builds the four hand-made ASTC blocks of source/astcblocks.c from their fields.
 

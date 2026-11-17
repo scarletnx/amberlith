@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The demos' scores: source/musicscore.c is what tools/music-score.py makes of source/musicscore.txt, and the
 generator refuses a score that breaks a rule, saying where and with what."""

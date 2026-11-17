@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // quad_color.tese.glsl that also stores 0xa0, 0xa1 and 0xa2 into texels 0, 1 and 2 of a storage

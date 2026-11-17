@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 import android.app.Activity;
 import android.os.Build;
@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * The launcher activity: it runs the probe once per process and finishes when the run ends. The report is in the
- * app's external files, edenprobe/runs/BUILD/report.jsonl, which adb pulls on a device (docs/Android.md); every line
- * also goes to logcat under the tag edenprobe, the last one EDENPROBE DONE with the counts. A launch with the string
+ * app's external files, amberlith/runs/BUILD/report.jsonl, which adb pulls on a device (docs/Android.md); every line
+ * also goes to logcat under the tag amberlith, the last one AMBERLITH DONE with the counts. A launch with the string
  * extra "mode" writes those words to the mode file first, the one way a script sets them on a device whose shell
  * cannot write the app's folder.
  */
@@ -38,11 +38,11 @@ public final class ProbeActivity extends Activity {
         File files = getExternalFilesDir(null);
         if (files == null) {
             // the one folder adb and the layer both read: without it a report would go where nobody looks for it
-            Log.e("edenprobe", "the run did not start: getExternalFilesDir(null) is null, no external storage");
+            Log.e("amberlith", "the run did not start: getExternalFilesDir(null) is null, no external storage");
             status.setText(R.string.no_storage);
             return;
         }
-        File folder = new File(files, "edenprobe");
+        File folder = new File(files, "amberlith");
         String probe = folder.getPath();
         String words = getIntent().getStringExtra("mode");
         if (words != null) {
@@ -54,7 +54,7 @@ public final class ProbeActivity extends Activity {
                 }
             } catch (IOException e) {
                 // the words asked for are not the ones a run would read: no run rather than another one
-                Log.e("edenprobe", "the run did not start: the mode \"" + words + "\" was not written to " + mode + ": "
+                Log.e("amberlith", "the run did not start: the mode \"" + words + "\" was not written to " + mode + ": "
                     + Outcome.describe(e));
                 status.setText(R.string.no_mode);
                 return;
@@ -67,10 +67,10 @@ public final class ProbeActivity extends Activity {
                 int failed = Engine.run(env, probe, getCacheDir().getPath(), device);
                 runOnUiThread(() -> status.setText(getString(R.string.done, failed)));
             } catch (Throwable t) {
-                Log.e("edenprobe", "the run stopped: " + Outcome.describe(t), t);
+                Log.e("amberlith", "the run stopped: " + Outcome.describe(t), t);
             } finally {
                 runOnUiThread(this::finish);
             }
-        }, "edenprobe").start();
+        }, "amberlith").start();
     }
 }

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The NVN layer for a program's makefile (docs/NvnLayer.md): include this file, compile

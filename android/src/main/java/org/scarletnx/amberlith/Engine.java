@@ -1,9 +1,9 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 /**
- * edenprobe's engine in libedenprobe.so, the same C the console's NRO runs (docs/Frontends.md): it reads the mode
+ * Amberlith's engine in libamberlith.so, the same C the console's NRO runs (docs/Frontends.md): it reads the mode
  * file, keeps the journal, runs every step in its order and writes the report. The Java suites are steps too: the
  * engine calls {@link #suite} for each, and each case says through {@link #start} that it begins and through
  * {@link #result} or {@link #skip} how it ended, so a case that ends the process is the one the next launch skips.
@@ -12,7 +12,7 @@ final class Engine {
     private Engine() {}
 
     static {
-        System.loadLibrary("edenprobe");
+        System.loadLibrary("amberlith");
     }
 
     private static Env env;

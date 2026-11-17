@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // The mod's frontend (docs/Frontends.md, docs/Mod.md): the engine as one more module of a game,
@@ -100,7 +100,7 @@ static void VersionCase(void) {
 /// ends the process, or never returns, is then the last line a debugger or a runtime's log has.
 static void Calling(const char *function) {
     char said[96];
-    const int length = snprintf(said, sizeof(said), "edenprobe mod: calling %s", function);
+    const int length = snprintf(said, sizeof(said), "amberlith mod: calling %s", function);
     PlatformLog(said, (size_t)length);
 }
 
@@ -177,7 +177,7 @@ static void CaseWatch(const char *suite, const char *name, bool started) {
 static void LackedCalled(const char *name) {
     char said[160];
     const int length = snprintf(said, sizeof(said),
-                                "edenprobe mod: %s was called, and the game's driver has no "
+                                "amberlith mod: %s was called, and the game's driver has no "
                                 "function of that name: it did nothing",
                                 name);
     PlatformLog(said, (size_t)length);
@@ -406,9 +406,9 @@ static const RunnerStep STEPS[] = {
 
 static const RunnerFrontend FRONTEND = {
     .root = PROBE_DIRECTORY,
-    .version = EDENPROBE_VERSION,
-    .build = EDENPROBE_BUILD,
-    .hash = EDENPROBE_HASH,
+    .version = AMBERLITH_VERSION,
+    .build = AMBERLITH_BUILD,
+    .hash = AMBERLITH_HASH,
     .steps = STEPS,
     .step_count = sizeof(STEPS) / sizeof(STEPS[0]),
     .present = MODE_FAMILY_NVN,

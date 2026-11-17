@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The table source/tests/t_vicref.c holds is the one tools/vic-expect.py prints."""
 

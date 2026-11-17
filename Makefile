@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Deliberately not the toolchain's template makefile: this builds one flat binary from a handful
@@ -8,7 +8,7 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error Set DEVKITPRO first, e.g. export DEVKITPRO=/opt/devkitpro)
 endif
 
-TARGET   := edenprobe
+TARGET   := amberlith
 BUILD    := build
 SOURCES  := source source/tests
 
@@ -24,7 +24,7 @@ TOOLS    := $(DEVKITPRO)/tools/bin
 # What a loader reads out of the .nro's asset section before it will start the program. Without
 # one, at least one emulator refuses the file rather than running it, so the section is not
 # optional even though nothing in this suite looks at what is in it.
-APP_TITLE   := edenprobe
+APP_TITLE   := Amberlith
 APP_AUTHOR  := reden
 # The version is the one line of VERSION (semantic: a tag v<VERSION> on main marks each one);
 # the build id is what git says about the tree, so a report names the exact source it came
@@ -55,12 +55,12 @@ CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
 # (ScarletNX) finds the program's NVN, as it finds a game's driver (nvnlayer/layer.mk); the SDK's
 # functions under nn:: (and its const methods, _ZNK)
 # are how a machine that answers a game's SDK functions itself takes the program's, or calls it
-# back (sdk.h, the hooks mode), and edenprobe_sdk_label
+# back (sdk.h, the hooks mode), and amberlith_sdk_label
 # is the SDK version such a machine reads for them, which nothing in the program reads.
 LDFLAGS  := $(ARCH) -specs=$(LIBNX)/switch.specs -Wl,--gc-sections -g \
             -Wl,--wrap=diagAbortWithResult $(NVNLAYER_LDFLAGS) \
             -Wl,--export-dynamic-symbol='_ZN2nn*' -Wl,--export-dynamic-symbol='_ZNK2nn*' \
-            -Wl,--undefined=edenprobe_sdk_label
+            -Wl,--undefined=amberlith_sdk_label
 # Order matters: the graphics library leans on the C runtime and on the maths library after it.
 # The maths one is not decoration, since building a sampler descriptor calls powf.
 LIBS     := -L$(LIBNX)/lib -ldeko3d -lnx -lm
@@ -70,7 +70,7 @@ SHADER_DIR  := source/shaders
 SHADER_SRC  := $(sort $(wildcard $(SHADER_DIR)/*.glsl))
 SHADER_DKSH := $(patsubst $(SHADER_DIR)/%.glsl,$(BUILD)/shaders/%.dksh,$(SHADER_SRC))
 SHADER_ASM  := $(BUILD)/shaders/blobs.s
-SHADER_HDR  := $(BUILD)/shaders/edenprobe_shaders.h
+SHADER_HDR  := $(BUILD)/shaders/amberlith_shaders.h
 SHADER_OBJ  := $(BUILD)/shaders/blobs.o
 
 # host_main.c is the other build's entry point, and both define main, so sweeping the directory
@@ -149,7 +149,7 @@ $(BUILD)/source/shaders.o: $(SHADER_HDR)
 # build.
 $(BUILD)/version.h: FORCE
 	@mkdir -p $(dir $@)
-	@printf '#define EDENPROBE_VERSION "%s"\n#define EDENPROBE_BUILD "%s"\n#define EDENPROBE_HASH "%s"\n' "$(APP_VERSION)" "$(APP_BUILD)" "$(APP_HASH)" > $@.tmp; \
+	@printf '#define AMBERLITH_VERSION "%s"\n#define AMBERLITH_BUILD "%s"\n#define AMBERLITH_HASH "%s"\n' "$(APP_VERSION)" "$(APP_BUILD)" "$(APP_HASH)" > $@.tmp; \
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 FORCE:
 .PHONY: FORCE

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdbool.h>
@@ -525,7 +525,7 @@ static void CheckLdnNetwork(void) {
                      "GetNetworkInfo 0x0; intent 1000000000ed000 scene 5a, session 1234, type 2, "
                      "SSID 18 \"YuzuFakeSsidForLdn\", channel 6") == said &&
         strstr(said, "node 0 255.255.255.255 02:00:ff:ff:ff:ff (02:00 and its address) id 0 "
-                     "connected 1 \"edenprobe\" version 3, BSSID the same; free nodes") != NULL;
+                     "connected 1 \"amberlith\" version 3, BSSID the same; free nodes") != NULL;
     char reden_said[480];
     memcpy(reden_said, said, sizeof(said));
     // A console's: a radio's MAC, channel 11, 32 characters of SSID.

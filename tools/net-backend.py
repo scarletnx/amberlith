@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """The online backend the net fixture signs the emulator in to.
@@ -43,10 +43,10 @@ def main() -> None:
     # A name no resolver anywhere answers (RFC 6761 puts .invalid out of reach), rewritten onto one
     # every machine does: only the rewrite can make it resolve.
     backend.REWRITES.clear()
-    backend.REWRITES["game.edenprobe.invalid"] = "localhost"
+    backend.REWRITES["game.amberlith.invalid"] = "localhost"
     backend.PROFILES.clear()
     backend.PROFILES[account] = {
-        "username": "edenprobe",
+        "username": "amberlith",
         "avatar_url": f"http://127.0.0.1:{args.port}/avatar/{{size}}.png",
     }
     backend.BLOCKED[:] = ["bb00000100000009", "bb0000010000000a"]

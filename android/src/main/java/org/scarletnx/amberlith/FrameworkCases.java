@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -88,7 +88,7 @@ final class FrameworkCases {
             paint.setColor(Color.RED);
             c.drawRect(20, 20, 180, 80, paint);
             paint.setTextSize(24);
-            c.drawText("edenprobe", 20, 140, paint);
+            c.drawText("amberlith", 20, 140, paint);
             doc.finishPage(page);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.writeTo(out);
@@ -191,7 +191,7 @@ final class FrameworkCases {
     /** A Handler runs the message at the front first, then by time: an immediate one before a delayed one. */
     static final class HandlerOrder implements Case {
         @Override public Outcome run(Env env) throws Exception {
-            HandlerThread t = new HandlerThread("edenprobe-order");
+            HandlerThread t = new HandlerThread("amberlith-order");
             t.start();
             try {
                 Handler h = new Handler(t.getLooper());
@@ -248,9 +248,9 @@ final class FrameworkCases {
     /** commit writes the file shared_prefs/NAME.xml in the app's data folder, in Android's XML. */
     static final class SharedPreferencesFile implements Case {
         @Override public Outcome run(Env env) throws Exception {
-            SharedPreferences sp = env.activity.getSharedPreferences("edenprobe", Context.MODE_PRIVATE);
+            SharedPreferences sp = env.activity.getSharedPreferences("amberlith", Context.MODE_PRIVATE);
             boolean ok = sp.edit().putInt("i", 7).putString("s", "x\"<y").commit();
-            File f = new File(env.activity.getFilesDir().getParentFile(), "shared_prefs/edenprobe.xml");
+            File f = new File(env.activity.getFilesDir().getParentFile(), "shared_prefs/amberlith.xml");
             String xml = f.exists() ? new String(java.nio.file.Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8) : "";
             String got = "commit " + ok + ", file " + f.exists() + ", int " + xml.contains("<int name=\"i\" value=\"7\" />")
                 + ", string " + xml.contains("<string name=\"s\">x&quot;&lt;y</string>") + ", read " + sp.getInt("i", 0) + " " + sp.getString("s", null);
@@ -291,8 +291,8 @@ final class FrameworkCases {
     /** With no log.tag property, Log.isLoggable is true from INFO up and false for DEBUG. */
     static final class LogIsLoggable implements Case {
         @Override public Outcome run(Env env) {
-            return Outcome.check("debug false, info true", "debug " + Log.isLoggable("edenprobe", Log.DEBUG) + ", info "
-                + Log.isLoggable("edenprobe", Log.INFO));
+            return Outcome.check("debug false, info true", "debug " + Log.isLoggable("amberlith", Log.DEBUG) + ", info "
+                + Log.isLoggable("amberlith", Log.INFO));
         }
     }
 

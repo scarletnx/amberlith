@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -361,7 +361,7 @@ size_t ReportBuildTimedCaseLine(char *out, size_t out_size, const char *suite, c
 void ReportRehearse(const char *suite);
 
 /// Builds the line that says which case of a rehearsal is about to run:
-/// `EDENPROBE TIMING <suite> pass <n> case <name>`, with the name the case had in the pass before.
+/// `AMBERLITH TIMING <suite> pass <n> case <name>`, with the name the case had in the pass before.
 /// The warm-up, which has no pass before it, says `case number <k>` instead, and the name of the
 /// case before it when there is one: `case number 3 after <name>`.
 size_t ReportBuildBreadcrumb(char *out, size_t out_size, const char *suite, uint32_t pass,

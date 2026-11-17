@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // mkdtemp, for the host build's scratch directory below.
@@ -49,15 +49,15 @@ static const char *Scratch(void) {
     static char path[FULL_PATH_MAX];
     if (path[0] == '\0') {
 #ifdef __SWITCH__
-        snprintf(path, sizeof(path), "sdmc:/edenprobe/support-check");
+        snprintf(path, sizeof(path), "sdmc:/amberlith/support-check");
 #else
         const char *const base = getenv("TMPDIR");
-        snprintf(path, sizeof(path), "%.200s/edenprobe-support-check-XXXXXX",
+        snprintf(path, sizeof(path), "%.200s/amberlith-support-check-XXXXXX",
                  base != NULL && base[0] != '\0' ? base : "/tmp");
         if (mkdtemp(path) == NULL) {
             // Unique enough to keep two runs apart, and the cases below say so if it is not
             // somewhere they can write.
-            snprintf(path, sizeof(path), "%.200s/edenprobe-support-check-%ld",
+            snprintf(path, sizeof(path), "%.200s/amberlith-support-check-%ld",
                      base != NULL && base[0] != '\0' ? base : "/tmp", (long)getpid());
         }
 #endif

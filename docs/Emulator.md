@@ -4,10 +4,10 @@
 make run EMULATOR=/path/to/emulator
 ```
 
-The report and its pictures go in the run's folder under `sdmc:/edenprobe/runs` ([the report](Report.md#where-a-run-leaves-its-report)).
+The report and its pictures go in the run's folder under `sdmc:/amberlith/runs` ([the report](Report.md#where-a-run-leaves-its-report)).
 `make run` points the emulator's `XDG_DATA_HOME`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` at `build/xdg/` in this tree,
 so it never reads or rewrites your settings; the report is then at
-`build/xdg/data/eden/sdmc/edenprobe/runs/<hash>/report.jsonl`, which the target's last line prints, and `make clean`
+`build/xdg/data/eden/sdmc/amberlith/runs/<hash>/report.jsonl`, which the target's last line prints, and `make clean`
 removes it all. `XDG=/elsewhere` moves the tree.
 
 **The settings are per emulator binary**, in `build/xdg/settings/<binary>/`, its `XDG_CONFIG_HOME`. A frontend writes

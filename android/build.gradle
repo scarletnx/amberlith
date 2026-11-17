@@ -1,13 +1,13 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-// edenprobe's Android frontend (docs/Android.md): one APK, the engine and the shared cases in its native library, as
-// the NRO has them, with Android's own cases. -Pedenprobe.out=DIR puts everything the build writes under DIR
+// Amberlith's Android frontend (docs/Android.md): one APK, the engine and the shared cases in its native library, as
+// the NRO has them, with Android's own cases. -Pamberlith.out=DIR puts everything the build writes under DIR
 // (build/ here without it).
 plugins {
     id 'com.android.application' version '9.4.0'
 }
 
-def out = file(providers.gradleProperty('edenprobe.out').orElse(layout.projectDirectory.dir('build').asFile.path).get())
+def out = file(providers.gradleProperty('amberlith.out').orElse(layout.projectDirectory.dir('build').asFile.path).get())
 layout.buildDirectory = new File(out, 'gradle')
 
 // The build's names, as the Makefile gives the NRO them (docs/Versions.md): VERSION, the build described from the
@@ -23,26 +23,26 @@ def build = describe('--tags', '--match', 'v[0-9]*', '--always', '--dirty')
 def hash = describe('--always', '--dirty', '--abbrev=7', '--exclude=*')
 
 android {
-    namespace = 'org.scarletnx.edenprobe'
+    namespace = 'org.scarletnx.amberlith'
     compileSdk = 36
     ndkVersion = '28.2.13676358'
     defaultConfig {
-        applicationId = 'org.scarletnx.edenprobe'
+        applicationId = 'org.scarletnx.amberlith'
         minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = version
         // arm64-v8a for phones and ScarletNX's layer, x86_64 for the emulator's own bionic
         ndk { abiFilters += ['arm64-v8a', 'x86_64'] }
-        externalNativeBuild.cmake.arguments += ["-DEDENPROBE_VERSION=${version}", "-DEDENPROBE_BUILD=${build}",
-                                                "-DEDENPROBE_HASH=${hash}"]
+        externalNativeBuild.cmake.arguments += ["-DAMBERLITH_VERSION=${version}", "-DAMBERLITH_BUILD=${build}",
+                                                "-DAMBERLITH_HASH=${hash}"]
     }
     externalNativeBuild.cmake {
         path = file('src/main/cpp/CMakeLists.txt')
         version = '3.31.6'
         buildStagingDirectory = new File(out, 'cxx')
     }
-    // the libraries extracted at install, as the layer always does: /proc/self/maps then names libedenprobe.so
+    // the libraries extracted at install, as the layer always does: /proc/self/maps then names libamberlith.so
     packaging.jniLibs.useLegacyPackaging = true
     // debuggable, so run-as reads its files; signed with the machine's debug key
     buildTypes.debug.debuggable = true

@@ -1,7 +1,7 @@
-# edenprobe
+# Amberlith
 <p align="center">
-  <img src="./static/icon.svg" alt="Wimsy as edenprobe, with a test probe" width="200"><br>
-  <b>Wimsy as edenprobe</b>
+  <img src="./static/icon.svg" alt="Wimsy as Amberlith, with a test probe" width="200"><br>
+  <b>Wimsy as amberlith</b>
 </p>
 
 A test program for the console and its emulators. Every case works out the answer it expects, checks the one it
@@ -11,7 +11,7 @@ builds of one emulator. No case needs a person to look at the screen.
 ## Quick start
 
 The newest version is on [its release](https://github.com/scarletnx/edenprobe/releases/latest), as
-`edenprobe-<version>.nro`, and the newest nightly on
+`amberlith-<version>.nro`, and the newest nightly on
 [nightly](https://github.com/scarletnx/edenprobe/releases/tag/nightly) ([Releases](docs/Releases.md)).
 
 - On a console: put it in the SD card's `switch/` folder and open it from the homebrew menu.
@@ -20,10 +20,10 @@ The newest version is on [its release](https://github.com/scarletnx/edenprobe/re
   with Android's own cases beside the ones every machine runs.
 
 Without a mode file the start screen asks what to run, and its L and R open the browser, where a person runs a suite,
-a single case or a demo at a time ([The browser](docs/UI.md)); `sdmc:/edenprobe/mode` chooses instead
+a single case or a demo at a time ([The browser](docs/UI.md)); `sdmc:/amberlith/mode` chooses instead
 ([Mode file](docs/ModeFile.md)): `quick all` runs every family that needs nobody, all but pad, nvn, demo, music and pace. Naming a family
 runs that family alone. nvn's window case runs only in a quick run from the mode file, never in one begun on the start
-screen, `noprogress` or not. The report goes to `sdmc:/edenprobe/runs/<build>/report.jsonl`
+screen, `noprogress` or not. The report goes to `sdmc:/amberlith/runs/<build>/report.jsonl`
 ([Report](docs/Report.md)).
 
 ## Build
@@ -32,7 +32,7 @@ With devkitPro in `/opt/devkitpro`:
 
 ```sh
 export DEVKITPRO=/opt/devkitpro
-make                                  # edenprobe.nro
+make                                  # amberlith.nro
 make -f host.mk host-run              # the judge and the tools' tests, on this machine
 gradle -p android assembleDebug       # the APK, with ANDROID_HOME and a JDK 17 or newer
 make run EMULATOR=/path/to/emulator   # a quick run, started again after a crash
@@ -43,7 +43,7 @@ See [Build](docs/Build.md), [Running it under an emulator](docs/Emulator.md),
 
 ## Credits
 
-edenprobe follows switch-examples and builds on libnx and deko3d; what comes from each, and from the other
+Amberlith follows switch-examples and builds on libnx and deko3d; what comes from each, and from the other
 projects it uses, is in [Credits](docs/Credits.md). Wimsy, ScarletNX's mascot, was drawn by Liz.
 
 ## Licence

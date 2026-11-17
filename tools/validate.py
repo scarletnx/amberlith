@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""What the Vulkan validation layer says about an emulator while it runs edenprobe.
+"""What the Vulkan validation layer says about an emulator while it runs Amberlith.
 
     tools/validate.py run EMULATOR [LOG]   run the graphics family once under the Khronos
                                             validation layer, synchronisation validation on,
@@ -79,7 +79,7 @@ def run(emulator, log):
         "VK_KHRONOS_VALIDATION_VALIDATE_SYNC": "true",
         "VK_KHRONOS_VALIDATION_DUPLICATE_MESSAGE_LIMIT": "1000",
     })
-    nro = os.path.join(ROOT, "edenprobe.nro")
+    nro = os.path.join(ROOT, "amberlith.nro")
     return runner.run(emulator, nro, xdg, mode="quick notime graphics", timeout=600,
                       log_path=log, who="validate.py", echo=False)
 

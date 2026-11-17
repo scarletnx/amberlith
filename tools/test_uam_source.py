@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/uam-source.sh leaves the uam build's source a clone of the pinned repository at the pinned commit, whatever
 was there before: nothing, the same clone, or a clone of the toolchain's uam made before the pin moved to the fork,
@@ -19,10 +19,10 @@ ENV = dict(
     GIT_CONFIG_GLOBAL=os.devnull,
     GIT_CONFIG_NOSYSTEM="1",
     GIT_TERMINAL_PROMPT="0",
-    GIT_AUTHOR_NAME="edenprobe test",
-    GIT_AUTHOR_EMAIL="test@edenprobe.invalid",
-    GIT_COMMITTER_NAME="edenprobe test",
-    GIT_COMMITTER_EMAIL="test@edenprobe.invalid",
+    GIT_AUTHOR_NAME="amberlith test",
+    GIT_AUTHOR_EMAIL="test@amberlith.invalid",
+    GIT_COMMITTER_NAME="amberlith test",
+    GIT_COMMITTER_EMAIL="test@amberlith.invalid",
 )
 
 
@@ -42,7 +42,7 @@ def commit(repo, name, text):
 
 class UamSource(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="edenprobe-uam-test-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="amberlith-uam-test-")
         root = self.tmp.name
         self.toolchain = os.path.join(root, "devkitpro-uam")
         git("init", "--quiet", "--initial-branch=master", self.toolchain)

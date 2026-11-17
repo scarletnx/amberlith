@@ -7,7 +7,7 @@ export DEVKITPRO=/opt/devkitpro
 make
 ```
 
-`edenprobe.nro` runs unchanged on a console and in an emulator; two reports compare only when the NRO is the same.
+`amberlith.nro` runs unchanged on a console and in an emulator; two reports compare only when the NRO is the same.
 
 One shader, the bindless suite's four sample fetch, is built by uam with Mesa's f9d385d77716 on it: the toolchain's uam
 1.1.0 puts a multisample fetch's sample in the register the console reads the handle from. `tools/uam.sh` builds that
@@ -21,20 +21,20 @@ build/shaders/*.dksh` says where each multisample fetch reads its handle; the CI
 ## The Switch 2 ExeFS
 
 `make -f ounce.mk`, with `DEVKITPRO` set as for the NRO, builds the probe as a Switch 2 program:
-`edenprobe-ounce/exefs/main` and `main.npdm` ([The probe as a Switch 2 program](Ounce.md)). It needs no uam: its
+`amberlith-ounce/exefs/main` and `main.npdm` ([The probe as a Switch 2 program](Ounce.md)). It needs no uam: its
 shader programs are assembled by `tools/sm86asm.py`. No release carries it.
 
 ## The mod of a game
 
 `make -f mod.mk`, with `DEVKITPRO` set as for the NRO, builds the probe as one more module of a game's program:
-`edenprobe-mod/exefs/subsdk9` and `main.npdm` ([The probe as a mod of a game](Mod.md)). `make -f mod.mk check` then
+`amberlith-mod/exefs/subsdk9` and `main.npdm` ([The probe as a mod of a game](Mod.md)). `make -f mod.mk check` then
 holds the module to `mod/imports.txt` (`tools/mod-imports.py`). It needs no uam, having no shader. No release
 carries it.
 
 ## The APK
 
 ```sh
-gradle -p android assembleDebug -Pedenprobe.out=/tmp/edenprobe-apk
+gradle -p android assembleDebug -Pamberlith.out=/tmp/amberlith-apk
 ```
 
 With the Android SDK in `ANDROID_HOME` and a JDK 17 or newer in `JAVA_HOME`; what it needs and where the APK lands is
@@ -62,7 +62,7 @@ suite's jobs again needs FFmpeg and libvpx's vectors: see [nvdec](families/Nvdec
 To see the screens without a console, name an existing folder:
 
 ```sh
-EDENPROBE_FRAMES=/tmp/frames make -f host.mk host-run
+AMBERLITH_FRAMES=/tmp/frames make -f host.mk host-run
 ```
 
 The screen cases then write each frame they walk through there as a PAM file (`magick 1-overview.pam
@@ -70,6 +70,6 @@ The screen cases then write each frame they walk through there as a PAM file (`m
 
 ## Commit messages
 
-`edenprobe: what changed`, one to three lines of intent, a `Change-Id` (the hook writes one), one Signed-off-by
+`amberlith: what changed`, one to three lines of intent, a `Change-Id` (the hook writes one), one Signed-off-by
 that is also the author and the committer, ASCII, no merges. `git config core.hooksPath hooks` turns the check on;
 `sh hooks/test-commit-msg.sh` shows what it accepts, and `--history <range>` checks existing commits.

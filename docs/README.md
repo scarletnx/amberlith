@@ -1,4 +1,4 @@
-# edenprobe documentation
+# Amberlith documentation
 
 ## Index
 
@@ -19,7 +19,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[Build](./Build.md)** - the NRO, the host build and the commit hook
   - **[Releases](./Releases.md)** - the nightly, the versions and the CI
   - **[Under an emulator](./Emulator.md)** - `make run`
-  - **[On Android](./Android.md)** - edenprobe's APK, and the NRO in an emulator's Android build
+  - **[On Android](./Android.md)** - Amberlith's APK, and the NRO in an emulator's Android build
   - **[Frontends](./Frontends.md)** - one engine for the console, Android and a PC, and how another fits
   - **[On the console](./Console.md)** - the two modes, the screens and the buttons
   - **[The browser](./UI.md)** - a family, a suite, a case or a demo at a time, and the demos' HUD

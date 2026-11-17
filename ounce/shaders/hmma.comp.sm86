@@ -1,4 +1,4 @@
-; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
 ; One warp multiplies a 16 by 16 matrix of halves by a 16 by 8 one with the matrix instruction, sums in floats. A

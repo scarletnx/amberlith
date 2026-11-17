@@ -1,10 +1,10 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
 #include <pthread.h>
 #endif
 
@@ -255,8 +255,8 @@ static void BuildRun(Fixture *f) {
             if (skipped) {
                 Fill(&f->records[at], SHAPE[s].suite, name, tier, REPORT_SKIP,
                      family == UI_FAMILY_NET && strcmp(SHAPE[s].suite, "ssl") == 0
-                         ? "needs a game server: sdmc:/edenprobe/net names none"
-                         : "nothing says this machine should be online: sdmc:/edenprobe/net "
+                         ? "needs a game server: sdmc:/amberlith/net names none"
+                         : "nothing says this machine should be online: sdmc:/amberlith/net "
                            "names no session and no server",
                      -1);
             } else if (strcmp(name, FAILS_BEFORE_DRAWING) == 0) {
@@ -269,7 +269,7 @@ static void BuildRun(Fixture *f) {
                      0);
             } else if (strcmp(name, FAILS_IN_SSL) == 0) {
                 Fill(&f->records[at], SHAPE[s].suite, name, tier, REPORT_FAIL,
-                     "expected \"edenprobe.invalid\" back after SetHostName; SetHostName "
+                     "expected \"amberlith.invalid\" back after SetHostName; SetHostName "
                      "2000-0000 (0x0), GetHostName 2000-0000 (0x0), \"\" (0 bytes)",
                      -1);
             } else {
@@ -300,11 +300,11 @@ static uint32_t CaseNamed(const UiRun *run, uint32_t group, const char *name) {
     return UINT32_MAX;
 }
 
-/// Writes a composed frame where a person can look at it, when EDENPROBE_FRAMES names a
+/// Writes a composed frame where a person can look at it, when AMBERLITH_FRAMES names a
 /// directory. Host only, and never a case: a frame nobody asked for is not a result.
 static void DumpFrame(const UiFrame *frame, const char *name) {
 #ifndef __SWITCH__
-    const char *const directory = getenv("EDENPROBE_FRAMES");
+    const char *const directory = getenv("AMBERLITH_FRAMES");
     if (directory == NULL || directory[0] == '\0') {
         return;
     }
@@ -312,7 +312,7 @@ static void DumpFrame(const UiFrame *frame, const char *name) {
     snprintf(path, sizeof(path), "%.400s/%s.pam", directory, name);
     FILE *const file = fopen(path, "wb");
     if (file == NULL) {
-        fprintf(stderr, "edenprobe: cannot write the frame %s\n", path);
+        fprintf(stderr, "amberlith: cannot write the frame %s\n", path);
         return;
     }
     fprintf(file, "P7\nWIDTH %u\nHEIGHT %u\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n",
@@ -324,7 +324,7 @@ static void DumpFrame(const UiFrame *frame, const char *name) {
                       frame->width;
     }
     if (fclose(file) != 0 || !written) {
-        fprintf(stderr, "edenprobe: the frame %s is incomplete\n", path);
+        fprintf(stderr, "amberlith: the frame %s is incomplete\n", path);
     }
 #else
     (void)frame;
@@ -493,7 +493,7 @@ static void CheckStore(void) {
                           strcmp(last->name, INDEX_CASE) == 0 &&
                           strcmp(last->tier, "none") == 0 && last->picture == -1 &&
                           (last->result == REPORT_PASS) == (last->detail[0] == '\0');
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     const bool kept_none = false;
 #else
     const bool kept_none = !ReportIsRetaining() && count == 0u && records == NULL;
@@ -1391,7 +1391,7 @@ static bool SameStart(UiStartState a, UiStartState b) {
 static void CheckStartNvn(Fixture *f) {
     UiStartInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe 0.2.0 (test)";
+    info.heading = "Amberlith 0.2.0 (test)";
     info.families_present = MODE_FAMILIES_PRESENT;
     const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
     const UiRect box = UiStartNvnBox(FRAME_WIDTH);
@@ -1432,7 +1432,7 @@ static void CheckStartNvn(Fixture *f) {
 static void CheckStartScreen(Fixture *f) {
     UiStartInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe 0.2.0 (test)";
+    info.heading = "Amberlith 0.2.0 (test)";
     const bool nothing = !UiStartShown(&info) && !UiStartShown(NULL);
     info.listed_count = 1u;
     info.listed_suite[0] = "cpu";
@@ -1554,7 +1554,7 @@ static UiStartState StartChoose(UiStartState state, uint32_t row, const UiStartI
 static void CheckStartMenu(Fixture *f) {
     UiStartInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe 0.3.0 (test)";
+    info.heading = "Amberlith 0.3.0 (test)";
     info.families_present = MODE_FAMILIES_PRESENT;
     const bool shown = UiStartShown(&info);
     // The same build with a case on the crash list, for the choice that needs one.
@@ -1873,10 +1873,10 @@ static void CheckResumeScreen(Fixture *f) {
 
     UiResumeInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe 0.3.0 (test)";
+    info.heading = "Amberlith 0.3.0 (test)";
     info.where = "the program ended inside bcn case \"every layer of a six-layer BC4 array keeps "
                  "its own 2x2 and 1x1 levels\" in its warm-up";
-    info.folder = "sdmc:/edenprobe/runs/b7172fc";
+    info.folder = "sdmc:/amberlith/runs/b7172fc";
     info.launch = 2u;
     info.steps = 34u;
     info.steps_done = 21u;
@@ -1926,7 +1926,7 @@ static void CheckResumeScreen(Fixture *f) {
                (unsigned)small_lit);
 }
 
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
 /// A frame's bytes as one number.
 static uint64_t FrameHash(const uint8_t *pixels) {
     uint64_t hash = 1469598103934665603ull;
@@ -1965,9 +1965,9 @@ static void CheckKeeperSide(Fixture *f, const UiProgress *progress) {
                                "thread's screens as they were, and they it";
     UiResumeInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe 0.3.0 (test)";
+    info.heading = "Amberlith 0.3.0 (test)";
     info.where = "the program ended inside a case";
-    info.folder = "sdmc:/edenprobe/runs/b7172fc";
+    info.folder = "sdmc:/amberlith/runs/b7172fc";
     KeeperSide side = { progress, (uint8_t *)malloc(sizeof(f->pixels)), 0u, 24u, 0u, false };
     if (side.pixels == NULL) {
         ReportCase(SUITE, NAME, CHECK_NONE, false, "no memory for the second frame");
@@ -2129,8 +2129,8 @@ static void CheckProgress(Fixture *f) {
 
     UiProgress progress;
     memset(&progress, 0, sizeof(progress));
-    progress.heading = "edenprobe 0.3.0 (test)";
-    progress.folder = "sdmc:/edenprobe/runs/b7172fc";
+    progress.heading = "Amberlith 0.3.0 (test)";
+    progress.folder = "sdmc:/amberlith/runs/b7172fc";
     progress.step = 17u;
     progress.steps = 34u;
     progress.step_name = "net";
@@ -2167,7 +2167,7 @@ static void CheckProgress(Fixture *f) {
     DumpFrame(&frame, "13-running-cancelling");
     progress.cancelling = false;
     UiComposeProgress(&frame, &progress);
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     CheckKeeperSide(f, &progress);
     UiComposeProgress(&frame, &progress);
 #endif
@@ -2464,7 +2464,7 @@ static void CheckPad(Fixture *f) {
     const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
     UiPadScreen screen;
     memset(&screen, 0, sizeof(screen));
-    screen.heading = "edenprobe 0.3.0 (test)";
+    screen.heading = "Amberlith 0.3.0 (test)";
     screen.prompt = 1u;
     screen.prompts = (uint32_t)PadPromptCount();
     screen.big = PadPromptAt(0)->big;
@@ -2651,7 +2651,7 @@ static void CheckTouch(Fixture *f) {
     // The start screen: a row, the same row again to choose it, the box to begin.
     UiStartInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe 0.3.0 (test)";
+    info.heading = "Amberlith 0.3.0 (test)";
     info.families_present = MODE_FAMILIES_PRESENT;
     const uint32_t row_y = UiStartRowTop(UI_START_ROW_GRAPHICS) + UI_ROW_HEIGHT / 2u;
     UiKey start_keys[UI_FOOT_KEYS];
@@ -2783,7 +2783,7 @@ static void CheckTouch(Fixture *f) {
     // The pad screen: yes and no on the bar while a question waits, and nothing otherwise.
     UiPadScreen pad;
     memset(&pad, 0, sizeof(pad));
-    pad.heading = "edenprobe 0.3.0 (test)";
+    pad.heading = "Amberlith 0.3.0 (test)";
     pad.prompt = 1u;
     pad.prompts = 2u;
     pad.big = "felt?";
@@ -2813,7 +2813,7 @@ static void CheckTouchScreen(Fixture *f) {
     const uint8_t *const AMBER = RUN_SKIPPED;
     UiTouchScreen screen;
     memset(&screen, 0, sizeof(screen));
-    screen.heading = "edenprobe 0.3.0 (test)";
+    screen.heading = "Amberlith 0.3.0 (test)";
     screen.prompts = (uint32_t)TouchPromptCount();
     screen.state = "waiting: 9 s left";
     screen.now =

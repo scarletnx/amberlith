@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/sm86-roundtrip.py tells a round trip that holds from one that does not, a stand-in as ScarletNX's tool."""
 

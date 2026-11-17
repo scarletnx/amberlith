@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // The Switch 2's frontend (docs/Frontends.md, docs/Ounce.md): the engine built as a Switch 2
@@ -68,9 +68,9 @@ static const RunnerStep STEPS[] = {
 
 static const RunnerFrontend FRONTEND = {
     .root = PROBE_DIRECTORY,
-    .version = EDENPROBE_VERSION,
-    .build = EDENPROBE_BUILD,
-    .hash = EDENPROBE_HASH,
+    .version = AMBERLITH_VERSION,
+    .build = AMBERLITH_BUILD,
+    .hash = AMBERLITH_HASH,
     .steps = STEPS,
     .step_count = sizeof(STEPS) / sizeof(STEPS[0]),
     .present = MODE_FAMILY_NVN,

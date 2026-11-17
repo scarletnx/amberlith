@@ -41,7 +41,7 @@ right while the question waits; the line then says `yes, tapped` or `no, tapped`
 button takes nothing from the touch screen.
 
 The screen decides nothing: every verdict is taken from the bits the suite read, and a machine with
-no screen runs the prompts with only the log, where `EDENPROBE PAD prompt n of 26: ...` names each.
+no screen runs the prompts with only the log, where `AMBERLITH PAD prompt n of 26: ...` names each.
 
 ## The cases
 

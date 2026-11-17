@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """nightly-notes.py on a history of its own: merged pull requests, direct commits, a branch never merged; the files'
 names after the version, the NRO, the APK and the ExeFS zips with their sizes and SHA-256, and text that would be
@@ -34,13 +34,13 @@ class NightlyNotes(unittest.TestCase):
         # written on the 1st, landed on main on the 15th: the title dates the landing
         cls.previous = world.commit("the previous nightly")
         world.git("switch", "-q", "-c", "feature")
-        world.commit("edenprobe: a commit of the pull request", date="2026-10-01T12:00:00Z")
+        world.commit("amberlith: a commit of the pull request", date="2026-10-01T12:00:00Z")
         world.git("switch", "-q", "main")
         world.git(
             "merge", "-q", "--no-ff", "feature", "-m", "Merge pull request #5 from someone/feature\n\n[ci] its title"
         )
         cls.merge = world.git("rev-parse", "HEAD")
-        cls.sha = world.commit("edenprobe: a commit rebased onto main")
+        cls.sha = world.commit("amberlith: a commit rebased onto main")
         world.git("switch", "-q", "-c", "elsewhere", cls.previous)
         cls.unmerged = world.commit("never merged")
         world.git("switch", "-q", "main")
@@ -54,7 +54,7 @@ class NightlyNotes(unittest.TestCase):
     def test_changes_newest_first(self):
         self.assertEqual(
             nightly.changes(self.checkout, self.previous, self.sha),
-            [("edenprobe: a commit rebased onto main", None, self.sha), ("[ci] its title", 5, self.merge)],
+            [("amberlith: a commit rebased onto main", None, self.sha), ("[ci] its title", 5, self.merge)],
         )
 
     def test_change_lines_link_the_repository(self):
@@ -78,7 +78,7 @@ class NightlyNotes(unittest.TestCase):
         self.assertIsNone(nightly.changes(self.checkout, self.unmerged, self.sha))
 
     def test_title_dates_the_landing(self):
-        self.assertEqual(nightly.title(self.checkout, self.sha), f"edenprobe nightly 2026-10-15 ({self.sha[:7]})")
+        self.assertEqual(nightly.title(self.checkout, self.sha), f"Amberlith nightly 2026-10-15 ({self.sha[:7]})")
 
     def test_the_built_commit_is_named_first(self):
         # where the next nightly looks for the commit this one was built from
@@ -88,19 +88,19 @@ class NightlyNotes(unittest.TestCase):
         self.assertEqual(
             nightly.names("0.18.0"),
             {
-                "nro": "edenprobe-0.18.0.nro",
-                "apk": "edenprobe-0.18.0.apk",
-                "ounce": "edenprobe-ounce-0.18.0.zip",
-                "mod": "edenprobe-mod-0.18.0.zip",
+                "nro": "amberlith-0.18.0.nro",
+                "apk": "amberlith-0.18.0.apk",
+                "ounce": "amberlith-ounce-0.18.0.zip",
+                "mod": "amberlith-mod-0.18.0.zip",
             },
         )
         self.assertEqual(
             nightly.names("0.18.0", "0123abc"),
             {
-                "nro": "edenprobe-0.18.0-0123abc.nro",
-                "apk": "edenprobe-0.18.0-0123abc.apk",
-                "ounce": "edenprobe-ounce-0.18.0-0123abc.zip",
-                "mod": "edenprobe-mod-0.18.0-0123abc.zip",
+                "nro": "amberlith-0.18.0-0123abc.nro",
+                "apk": "amberlith-0.18.0-0123abc.apk",
+                "ounce": "amberlith-ounce-0.18.0-0123abc.zip",
+                "mod": "amberlith-mod-0.18.0-0123abc.zip",
             },
         )
 
@@ -135,7 +135,7 @@ class NightlyNotes(unittest.TestCase):
         self.assertIn(f"- {ounce} and {mod} were built in the same container as the NRO, and link libnx", text)
         # a release with the NRO alone names no other document nor licence
         self.assertNotIn("Mod.md", self.text)
-        self.assertNotIn("edenprobe-mod", self.text)
+        self.assertNotIn("amberlith-mod", self.text)
 
     def test_changes_counted_and_linked(self):
         self.assertIn(f"- \\[ci\\] its title ([#5]({URL}/pull/5))", self.text)
@@ -153,9 +153,9 @@ class NightlyNotes(unittest.TestCase):
     def test_what_becomes_of_it_and_the_lead(self):
         self.assertIn("committed 2026-10-15. Kept.", self.text)
         lead = nightly.notes(
-            self.checkout, self.sha, "", "owner/repo", WHERE, ALONE, "", lead="edenprobe v1, built from"
+            self.checkout, self.sha, "", "owner/repo", WHERE, ALONE, "", lead="Amberlith v1, built from"
         )
-        self.assertTrue(lead.startswith(f"edenprobe v1, built from [`{self.sha[:7]}`]"))
+        self.assertTrue(lead.startswith(f"Amberlith v1, built from [`{self.sha[:7]}`]"))
         self.assertNotIn("## Changes", lead)
 
     def test_the_same_commit_again(self):

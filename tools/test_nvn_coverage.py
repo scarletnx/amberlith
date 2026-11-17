@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/nvn-coverage.py reads the hook, the layer's lists and the cases, and docs/NvnCoverage.md is what it gives."""
 

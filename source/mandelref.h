@@ -1,8 +1,8 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#ifndef EDENPROBE_MANDELREF_H
-#define EDENPROBE_MANDELREF_H
+#ifndef AMBERLITH_MANDELREF_H
+#define AMBERLITH_MANDELREF_H
 
 #include <stdint.h>
 

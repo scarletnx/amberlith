@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -60,7 +60,7 @@ static void Fill(u8 *data, u64 offset, u64 size) {
 /// Makes the big file and the small ones unless they are already there with the right size,
 /// so only the first pass of a timed run writes.
 static bool Prepare(Volume *fs, char *why, size_t why_size) {
-    VolumeCreateDirectory(fs, "/edenprobe");
+    VolumeCreateDirectory(fs, "/amberlith");
     VolumeCreateDirectory(fs, DIRECTORY);
     VolumeCreateDirectory(fs, SMALL_DIRECTORY);
     VolumeFile file;
@@ -310,7 +310,7 @@ void RunFs(void) {
         return;
     }
     Volume fs;
-    const Result opened = buffer != NULL ? VolumeOpenCard(&fs, "edenprobe-fs")
+    const Result opened = buffer != NULL ? VolumeOpenCard(&fs, "amberlith-fs")
                                          : MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
     CHECK_TRUE(SUITE, OPENS, CHECK_NONE, R_SUCCEEDED(opened), "result 0x%x%s", (unsigned)opened,
                HooksOn() ? ", nn::fs::MountSdCard" : "");

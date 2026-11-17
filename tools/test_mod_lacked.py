@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/mod-lacked.py reads a driver, the names it lacks and the cases each took from the notes of the mod's
 report, and refuses a report whose notes and lines do not agree."""

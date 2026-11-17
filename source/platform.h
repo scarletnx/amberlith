@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -20,7 +20,7 @@ extern "C" {
 /// Writes one line to the machine's log: the debug string service on the console, which an
 /// emulator logs; logcat on Android; standard output on a PC. @p line is @p length bytes, with no
 /// newline. Every report line goes here as well as to the file, and so does the program's last
-/// word, `EDENPROBE DONE ...`.
+/// word, `AMBERLITH DONE ...`.
 void PlatformLog(const char *line, size_t length);
 
 /// Whether PlatformLog writes to standard output, where a case can read its own line back: the

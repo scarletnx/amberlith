@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # tools/uam-source.sh SRC REPO COMMIT: SRC as a clone of REPO checked out at COMMIT, for tools/uam.sh. A clone already

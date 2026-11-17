@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Written by tools/wimsy-mesh.py from static/wimsy.svg; run it again rather than editing this file.
@@ -12,7 +12,7 @@ _Static_assert(WIMSY_MESH_VARIANTS == 5u, "the header's drawings are the table's
 _Static_assert(WIMSY_MESH_PARTS == 9u, "the header's part count is the table's");
 
 const char *const WIMSY_MESH_VARIANT[WIMSY_MESH_VARIANTS] = {
-    "wimsy", "fuddles", "edenprobe", "accord", "default",
+    "wimsy", "fuddles", "sunset", "accord", "default",
 };
 
 const uint8_t WIMSY_MESH_PALETTE[WIMSY_MESH_VARIANTS][WIMSY_MESH_COLOURS][3] = {

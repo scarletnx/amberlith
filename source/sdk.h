@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -38,7 +38,7 @@ extern "C" {
 /// these functions' arguments and objects follow. A machine that takes a function only for some
 /// SDK versions reads a module's version from this label, and takes none of a module without one.
 #define SDK_LABEL "SDK MW+Nintendo+NintendoSdk_nnSdk-20_5_0"
-extern const char edenprobe_sdk_label[];
+extern const char amberlith_sdk_label[];
 
 /// What the own code answers when it has no request to send for the call: a libnx result, so it
 /// can be told from any service's.

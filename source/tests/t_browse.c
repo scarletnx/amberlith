@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -249,11 +249,11 @@ static void CheckWalk(void) {
     };
     UiStartInfo start;
     memset(&start, 0, sizeof(start));
-    start.heading = "edenprobe";
+    start.heading = "Amberlith";
     start.families_present = MODE_FAMILIES_PRESENT;
     UiBrowseInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe";
+    info.heading = "Amberlith";
     info.catalogue = catalog.records;
     info.catalogue_count = catalog.count;
     info.demos = DEMOS;
@@ -404,11 +404,11 @@ static void CheckFeet(void) {
     static const UiDemoRow DEMOS[1] = { { "Game scene", "game", "the scene", NULL } };
     UiStartInfo start;
     memset(&start, 0, sizeof(start));
-    start.heading = "edenprobe";
+    start.heading = "Amberlith";
     start.families_present = MODE_FAMILIES_PRESENT;
     UiBrowseInfo info;
     memset(&info, 0, sizeof(info));
-    info.heading = "edenprobe";
+    info.heading = "Amberlith";
     info.catalogue = catalog.records;
     info.catalogue_count = catalog.count;
     info.demos = DEMOS;
@@ -710,7 +710,7 @@ static void CheckWait(uint8_t *pixels) {
                         left[3] == 0u && left[4] == 0u;
     UiStartInfo start;
     memset(&start, 0, sizeof(start));
-    start.heading = "edenprobe 0.17.0 (test)";
+    start.heading = "Amberlith 0.17.0 (test)";
     start.families_present = MODE_FAMILIES_PRESENT;
     UiBrowseInfo info;
     memset(&info, 0, sizeof(info));
@@ -768,7 +768,7 @@ static void CheckJudgeMargin(uint8_t *pixels) {
     Catalogue(&catalog);
     UiStartInfo start;
     memset(&start, 0, sizeof(start));
-    start.heading = "edenprobe 0.17.0 (test)";
+    start.heading = "Amberlith 0.17.0 (test)";
     start.families_present = MODE_FAMILIES_PRESENT;
     UiBrowseInfo info;
     memset(&info, 0, sizeof(info));
@@ -776,7 +776,7 @@ static void CheckJudgeMargin(uint8_t *pixels) {
     info.machine = info.heading;
     info.catalogue = catalog.records;
     info.catalogue_count = catalog.count;
-    info.catalogue_from = "sdmc:/edenprobe/runs/test";
+    info.catalogue_from = "sdmc:/amberlith/runs/test";
     info.start = &start;
     const RunMode mode = ModeFromText("");
     const UiStartState opened = UiStartOpen(&mode, MODE_FAMILIES_PRESENT);
@@ -811,11 +811,11 @@ static void CheckJudgeMargin(uint8_t *pixels) {
                (unsigned)inside);
 }
 
-/// The browser's screens written where a person can look at them, when EDENPROBE_FRAMES names a
+/// The browser's screens written where a person can look at them, when AMBERLITH_FRAMES names a
 /// directory: host only, and never a case, as the screens' own frames are.
 static void DumpBrowser(uint8_t *pixels) {
 #ifndef __SWITCH__
-    const char *const directory = getenv("EDENPROBE_FRAMES");
+    const char *const directory = getenv("AMBERLITH_FRAMES");
     if (directory == NULL || directory[0] == '\0' || pixels == NULL) {
         return;
     }
@@ -836,7 +836,7 @@ static void DumpBrowser(uint8_t *pixels) {
     };
     UiStartInfo start;
     memset(&start, 0, sizeof(start));
-    start.heading = "edenprobe 0.17.0 (test)";
+    start.heading = "Amberlith 0.17.0 (test)";
     start.families_present = MODE_FAMILIES_PRESENT;
     UiBrowseInfo info;
     memset(&info, 0, sizeof(info));
@@ -844,7 +844,7 @@ static void DumpBrowser(uint8_t *pixels) {
     info.machine = info.heading;
     info.catalogue = catalog.records;
     info.catalogue_count = catalog.count;
-    info.catalogue_from = "sdmc:/edenprobe/runs/test";
+    info.catalogue_from = "sdmc:/amberlith/runs/test";
     info.demos = DEMOS;
     info.demo_count = 6u;
     info.start = &start;

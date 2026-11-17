@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -164,9 +164,9 @@ static const RunnerStep STEPS[] = {
 // The console's frontend for the runner: its folder, its build and its steps.
 static const RunnerFrontend FRONTEND = {
     .root = PROBE_DIRECTORY,
-    .version = EDENPROBE_VERSION,
-    .build = EDENPROBE_BUILD,
-    .hash = EDENPROBE_HASH,
+    .version = AMBERLITH_VERSION,
+    .build = AMBERLITH_BUILD,
+    .hash = AMBERLITH_HASH,
     .steps = STEPS,
     .step_count = sizeof(STEPS) / sizeof(STEPS[0]),
     .present = MODE_FAMILIES_PRESENT,
@@ -206,7 +206,7 @@ static void FillStartInfo(const RunMode *from_file) {
     UiStartInfo *const info = &start_info;
     memset(info, 0, sizeof(*info));
     static char heading[96];
-    snprintf(heading, sizeof(heading), "edenprobe %s (%s)", EDENPROBE_VERSION, EDENPROBE_BUILD);
+    snprintf(heading, sizeof(heading), "Amberlith %s (%s)", AMBERLITH_VERSION, AMBERLITH_BUILD);
     info->heading = heading;
     info->families_present = MODE_FAMILIES_PRESENT;
     info->nvn_named = (ModeFamiliesNamed(from_file, MODE_FAMILIES_PRESENT) & MODE_FAMILY_NVN) != 0u;
@@ -236,7 +236,7 @@ static void AskToGoOn(const RunMode *mode) {
     static UiResumeInfo info;
     memset(&info, 0, sizeof(info));
     static char heading[96];
-    snprintf(heading, sizeof(heading), "edenprobe %s (%s)", EDENPROBE_VERSION, EDENPROBE_BUILD);
+    snprintf(heading, sizeof(heading), "Amberlith %s (%s)", AMBERLITH_VERSION, AMBERLITH_BUILD);
     static char where[JOURNAL_SUITE_MAX + JOURNAL_NAME_MAX + 96u];
     JournalDescribeStop(where, sizeof(where), &runner.plan, &runner.journal);
     info.heading = heading;
@@ -458,7 +458,7 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
     if (number == 0u) {
         char said[RUNNER_ROOT_MAX + 160u];
         snprintf(said, sizeof(said),
-                 "EDENPROBE BROWSER: no folder is left under %s for a run, the %u there are taken",
+                 "AMBERLITH BROWSER: no folder is left under %s for a run, the %u there are taken",
                  runner.runs_directory, (unsigned)RUNNER_BROWSER_RUNS_MAX);
         PlatformLog(said, strlen(said));
         return;
@@ -502,8 +502,8 @@ static void BrowserRun(const RunMode *from_file, UiOptions *options, const UiSta
     // from the mode file has them.
     MusicTo(NULL);
     static char running[96];
-    snprintf(running, sizeof(running), "edenprobe %s (%s), browser run %u", EDENPROBE_VERSION,
-             EDENPROBE_BUILD, (unsigned)number);
+    snprintf(running, sizeof(running), "Amberlith %s (%s), browser run %u", AMBERLITH_VERSION,
+             AMBERLITH_BUILD, (unsigned)number);
     ViewerProgressBegin(running, runner.run_directory, steps + demos, false, false);
     ReportSetPicked(Picked);
     RunnerStepsWhere(&runner, StepPicked, timing, ViewerProgressStep);
@@ -611,7 +611,7 @@ static ViewerEnd BrowserSession(const RunMode *from_file, UiTab tab, const UiSta
         demo_rows[i] = row;
     }
     static char heading[96];
-    snprintf(heading, sizeof(heading), "%s%s%s", EDENPROBE_VERSION,
+    snprintf(heading, sizeof(heading), "%s%s%s", AMBERLITH_VERSION,
              from_file->machine[0] != '\0' ? " on " : "", from_file->machine);
     browse_info.heading = heading;
     browse_info.machine = heading;
@@ -822,7 +822,7 @@ int main(int argc, char **argv) {
         steps += STEPS[i].family == 0u || (families & STEPS[i].family) != 0u ? 1u : 0u;
     }
     static char running[96];
-    snprintf(running, sizeof(running), "edenprobe %s (%s)", EDENPROBE_VERSION, EDENPROBE_BUILD);
+    snprintf(running, sizeof(running), "Amberlith %s (%s)", AMBERLITH_VERSION, AMBERLITH_BUILD);
     PadSetHeading(running);
     TouchSetHeading(running);
     if (!mode.no_progress) {

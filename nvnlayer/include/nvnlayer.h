@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -138,7 +138,7 @@ bool NvnLayerLacks(void);
 
 /// What runs one of deko3d's constructors, which end the program on a failure: @p call, with
 /// false and the abort's result in @p result when it aborted. A program that can turn deko3d's
-/// abort into a return (a linker wrap of diagAbortWithResult and a longjmp, as edenprobe's
+/// abort into a return (a linker wrap of diagAbortWithResult and a longjmp, as Amberlith's
 /// gpu.c has) gives it here, and a failed bring-up then reads as a false NVN result with its
 /// reason in NvnLayerError. Without one, NULL, the constructors run bare and a failure ends the
 /// program, as it does for any deko3d program.

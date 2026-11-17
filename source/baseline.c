@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "baseline.h"
@@ -397,7 +397,7 @@ typedef struct {
     /// The samples left out, and the first few of them.
     uint32_t left_out;
     LeftOut first_left_out[BASELINE_LEFT_OUT_NOTED];
-    /// The edenprobe builds the whole samples came from, by a hash of each, and the first two.
+    /// The Amberlith builds the whole samples came from, by a hash of each, and the first two.
     uint32_t builds;
     bool builds_past_known;
     uint64_t build_hashes[BASELINE_BUILDS_KNOWN];
@@ -651,7 +651,7 @@ BaselineRead BaselineCompareFile(const char *path, const char *name, const Basel
     NoteLeftOut(sink, &totals->notes, "compare", name, &read);
     if (read.builds > 1u) {
         SinkNote(sink, &totals->notes,
-                 "compare=%s: the file's %u samples come from %s%u edenprobe builds, %s first and "
+                 "compare=%s: the file's %u samples come from %s%u Amberlith builds, %s first and "
                  "%s second: a case's time moves with the probe's own code as well as with the "
                  "machine",
                  name, (unsigned)read.samples, read.builds_past_known ? "at least " : "",

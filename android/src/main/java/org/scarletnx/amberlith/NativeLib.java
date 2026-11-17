@@ -1,9 +1,9 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 /**
- * The native side of Android's own cases, in libedenprobe.so beside the engine, which Engine loaded: each returns
+ * The native side of Android's own cases, in libamberlith.so beside the engine, which Engine loaded: each returns
  * what it measured as text, and the case compares it with what Android gives.
  */
 final class NativeLib {

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 name: Publish builds
 
@@ -48,8 +48,8 @@ jobs:
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
         with:
-          name: edenprobe-${{ steps.plan.outputs.stem }}.nro
-          path: artifacts/edenprobe-${{ steps.plan.outputs.stem }}.nro
+          name: amberlith-${{ steps.plan.outputs.stem }}.nro
+          path: artifacts/amberlith-${{ steps.plan.outputs.stem }}.nro
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-decompress: true
@@ -57,8 +57,8 @@ jobs:
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
         with:
-          name: edenprobe-${{ steps.plan.outputs.stem }}.apk
-          path: artifacts/edenprobe-${{ steps.plan.outputs.stem }}.apk
+          name: amberlith-${{ steps.plan.outputs.stem }}.apk
+          path: artifacts/amberlith-${{ steps.plan.outputs.stem }}.apk
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-decompress: true
@@ -66,8 +66,8 @@ jobs:
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
         with:
-          name: edenprobe-ounce-${{ steps.plan.outputs.stem }}.zip
-          path: artifacts/edenprobe-ounce-${{ steps.plan.outputs.stem }}.zip
+          name: amberlith-ounce-${{ steps.plan.outputs.stem }}.zip
+          path: artifacts/amberlith-ounce-${{ steps.plan.outputs.stem }}.zip
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-decompress: true
@@ -75,8 +75,8 @@ jobs:
         if: steps.plan.outputs.run
         uses: actions/download-artifact@v8
         with:
-          name: edenprobe-mod-${{ steps.plan.outputs.stem }}.zip
-          path: artifacts/edenprobe-mod-${{ steps.plan.outputs.stem }}.zip
+          name: amberlith-mod-${{ steps.plan.outputs.stem }}.zip
+          path: artifacts/amberlith-mod-${{ steps.plan.outputs.stem }}.zip
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-decompress: true

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Links a pull request's NRO from one comment, which each run of .github/workflows/build.yml rewrites, so it can be had
 # from the pull request itself. A run of a commit that is no longer the branch's head leaves the comment alone.
@@ -16,7 +16,7 @@ if [ $# -lt 4 ] || [ $# -gt 5 ] || { [ $# -eq 5 ] && [ "$5" != --print ]; }; the
     exit 2
 fi
 repo=$1 pr=$2 run=$3 sha=$4 print=${5:-}
-mark='<!-- edenprobe-builds -->'
+mark='<!-- amberlith-builds -->'
 
 if [ -z "$print" ] && [ "$(gh api "repos/$repo/pulls/$pr" --jq .head.sha)" != "$sha" ]; then
     echo "$sha is no longer the head of #$pr: its comment stays"

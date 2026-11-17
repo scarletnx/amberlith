@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <arpa/inet.h>
@@ -27,7 +27,7 @@
 #include "tests.h"
 
 // The net family: the services a program reaches the network through, asked the way a game asks
-// them, and judged against what the protocol says and what sdmc:/edenprobe/net says the backend
+// them, and judged against what the protocol says and what sdmc:/amberlith/net says the backend
 // publishes. Nothing here is compared to a previous run. Every case works its expectation out
 // before it asks, and says both on its line, pass or fail.
 //
@@ -44,12 +44,12 @@ static NetConfig config;
 
 // The skip reasons, one sentence each, so a report reads the same way wherever it skipped.
 static const char *const NO_ONLINE =
-    "nothing says this machine should be online: sdmc:/edenprobe/net names no session and no "
+    "nothing says this machine should be online: sdmc:/amberlith/net names no session and no "
     "server";
 static const char *const NO_SESSION =
-    "needs an online session: sdmc:/edenprobe/net names none (tools/net-fixture.sh writes one; "
+    "needs an online session: sdmc:/amberlith/net names none (tools/net-fixture.sh writes one; "
     "on a console this would ask the platform's own servers)";
-static const char *const NO_SERVER = "needs a game server: sdmc:/edenprobe/net names none";
+static const char *const NO_SERVER = "needs a game server: sdmc:/amberlith/net names none";
 
 /// A case whose line carries its expectation and its answer whether it passed or not.
 static void CaseWith(const char *suite, const char *name, CheckTier tier, ReportFrom from,
@@ -341,7 +341,7 @@ static void RunNifm(void) {
 // dns: sfdnsres and nsd
 
 static const char *const PLACEHOLDER_NAME = NET_PLACEHOLDER_NAME;
-static const char *const PLAIN_NAME = "plain.edenprobe.invalid";
+static const char *const PLAIN_NAME = "plain.amberlith.invalid";
 
 /// The fork's sign-in budget (SIGN_IN_TIMEOUT_SECONDS), which the wait below never exceeds.
 #define SIGN_IN_WAIT_MS 15000u
@@ -458,7 +458,7 @@ static void RunDns(const char *sockets_why) {
         if (ReportStart(S, INVALID)) {
             uint8_t address[4] = { 0 };
             int error = 0;
-            const bool resolved = LibcAddress("nothing.edenprobe.invalid", address, &error);
+            const bool resolved = LibcAddress("nothing.amberlith.invalid", address, &error);
             Case(S, INVALID, CHECK_EXACT, !resolved,
                  "expected getaddrinfo to fail; it %s (error %d%s%s)",
                  resolved ? "resolved" : "failed", error, resolved ? ", to " : "",
@@ -1473,7 +1473,7 @@ static void RunSsl(const char *sockets_why, const char *streams_why) {
                  (unsigned)option);
         }
 
-        static const char NAME[] = "edenprobe.invalid";
+        static const char NAME[] = "amberlith.invalid";
         if (!made) {
             Skip(S, HOST_NAME, REPORT_REASON_DEPENDS, "%s: there is no connection to ask",
                  DID_NOT_RUN);
@@ -1669,7 +1669,7 @@ static void RunSsl(const char *sockets_why, const char *streams_why) {
         snprintf(cert_why, sizeof(cert_why), "the net file names no server-cert");
     } else {
         char path[NET_NAME_MAX + 32];
-        snprintf(path, sizeof(path), "sdmc:/edenprobe/%s", config.server_cert);
+        snprintf(path, sizeof(path), "sdmc:/amberlith/%s", config.server_cert);
         FILE *file = fopen(path, "rb");
         const size_t length = file != NULL ? fread(pem, 1, sizeof(pem) - 1u, file) : 0u;
         if (file != NULL) {
@@ -2310,7 +2310,7 @@ static void RunFriend(void) {
     if (session_why != NULL) {
         Skip(S, PICTURE, session_reason, "%s", session_why);
     } else if (ReportStart(S, PICTURE)) {
-        static const char URL[] = "http://edenprobe.invalid/{size}/avatar-{size}.png";
+        static const char URL[] = "http://amberlith.invalid/{size}/avatar-{size}.png";
         struct {
             char url[NET_PROFILE_URL_MAX];
             u32 size;

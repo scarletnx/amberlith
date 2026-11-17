@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The table source/tests/t_paceref.c holds is the one tools/pace-expect.py prints, and the constants the script
 works from are the ones source/paceref.h and source/paceref.c give the program."""

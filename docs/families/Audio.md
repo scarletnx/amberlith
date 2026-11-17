@@ -111,7 +111,7 @@ the rule makes Eden's two lines one Newton step, r = r0 (2 - a r0).
 **The listening sequence** (`listen` in the mode file, or the listen row of the start screen) is
 about 40 seconds for a person, played before the cases through the final mix, so it is loud: peaks from 0.12 to 0.4 of full scale. Each part opens with
 880 Hz beeps, one, two or three; inside a part, a low beep (440 Hz) comes before one take and a high
-beep (1760 Hz) before the take it is compared with. The emulator's log carries an `EDENPROBE
+beep (1760 Hz) before the take it is compared with. The emulator's log carries an `AMBERLITH
 LISTEN` line as each part starts.
 
 - **a**, the resampler: four takes of noise bursts, a sweep from 4 to 16 kHz and a second of hiss,
@@ -131,7 +131,7 @@ and after it: the part and its name on the top row, then the step of the sequenc
 with the take, a bar of the steps done in the running screen's colours, and what to listen for. Y
 repeats that take. X skips to the next part, from the opening notes on to part a and from a part on
 to the next, and from the closing notes it ends the sequence. With no press the sequence plays
-straight through, and the `EDENPROBE LISTEN` lines are unchanged.
+straight through, and the `AMBERLITH LISTEN` lines are unchanged.
 
 The recording only holds the phrase whole when the renderer runs at the speed of the sound it
 plays. With the emulator's output engine set to null it renders as fast as it can, the ring wraps

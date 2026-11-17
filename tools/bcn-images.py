@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Builds source/bcnimages.c: the astcimage suite's picture in every BCn format, for the bcnimage suite.
 
@@ -602,7 +602,7 @@ def c_file(source_hash, arrays, image_hashes, mode_hashes):
     """The C file: @p arrays by name, @p image_hashes in IMAGES' order, @p mode_hashes (unsigned, signed)
     in mode_blocks()' order."""
     parts = [
-        "// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors",
+        "// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors",
         "// SPDX-License-Identifier: GPL-3.0-or-later",
         "",
         "// Written by tools/bcn-images.py; run it again rather than editing this file.",

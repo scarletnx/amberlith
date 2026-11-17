@@ -1,12 +1,12 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The registry's tables (features.inc, made by features.py) and how to read them: the layer and
 // its check find an extension or a feature by its name, and a feature in a structure by its
 // place after pNext, since every feature structure is sType, pNext and VkBool32 members.
 
-#ifndef EDENPROBE_MASQUERADE_FEATURES_H
-#define EDENPROBE_MASQUERADE_FEATURES_H
+#ifndef AMBERLITH_MASQUERADE_FEATURES_H
+#define AMBERLITH_MASQUERADE_FEATURES_H
 
 #include <stddef.h>
 #include <string.h>

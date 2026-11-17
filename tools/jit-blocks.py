@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Writes source/jitblocks.c: the straight-line functions the cpu suite's compile case calls, and
 the state each must leave, worked out here from the architecture's rules and nothing else.
@@ -253,7 +253,7 @@ def words(values, indent):
 def render():
     init, blocks = generate()
     out = []
-    out.append("// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors")
+    out.append("// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors")
     out.append("// SPDX-License-Identifier: GPL-3.0-or-later")
     out.append("// Written by tools/jit-blocks.py; run it again rather than editing this file.")
     out.append("")

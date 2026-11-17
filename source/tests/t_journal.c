@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Before any header: the host regression below uses fopencookie, which glibc hides
@@ -12,7 +12,7 @@
 #include <string.h>
 #include <sys/types.h>
 
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -27,7 +27,7 @@
 #include "../journal.h"
 #include "../mode.h"
 #include "../report.h"
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
 #include "../runner.h"
 #endif
 #include "tests.h"
@@ -1665,7 +1665,7 @@ static void CheckBanTable(void) {
                said[0], said[1], said[2], said[3], (unsigned)quiet);
 }
 
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
 // A run of two steps, launched as main launches one, in a process of its own each time: the first
 // step has a case that ends the program between two that do not, the second step comes after.
 static const char *const RELAUNCH_ENDS = "a case that ends the program";
@@ -2129,7 +2129,7 @@ static void CheckSkipSuites(void) {
 }
 
 void RunSupportJournal(const char *scratch) {
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     // A suite skip= leaves out, as a run with the word has one, from the first check on: a check
     // that asks whether a case runs and does not set the suites aside fails here too, not only in
     // a run that named some.
@@ -2150,7 +2150,7 @@ void RunSupportJournal(const char *scratch) {
     CheckDroppingCookie();
 #endif
     const uint32_t crashes_before = ReportCrashedMark();
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     // As a run on ScarletNX has it: a machine whose lines ban SM4. A check that leans on SM4
     // running, or on no machine, then fails here too, and not only on the machine.
     char host_machine[BAN_MACHINE_MAX + 1u];
@@ -2170,12 +2170,12 @@ void RunSupportJournal(const char *scratch) {
     CheckBanVersions();
     CheckBanTable();
     CheckCrashesHandedBack(crashes_before);
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     ReportSetMachine(host_machine, host_version);
     ReportSetSkipSuites(NULL, 0u);
 #endif
     CheckModeWords();
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     CheckRelaunch(scratch);
     CheckRelaunchBanned(scratch);
     CheckRelaunchSkipped(scratch);

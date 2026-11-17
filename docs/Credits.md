@@ -116,7 +116,7 @@
   - `source/icons.h` holds ten of its menu icons from `src/gui/icons.hex` (play, image, folder,
     activity, wifi, gamepad, log-out, gauge, rotate-ccw, save): ScarletNX's drawings in the VGA
     font's stroke, each after the Lucide 1.61.0 icon of its name, https://lucide.dev. The
-    eleventh, headphones, is edenprobe's, drawn the same way after Lucide's. Lucide's licence, which
+    eleventh, headphones, is Amberlith's, drawn the same way after Lucide's. Lucide's licence, which
     covers what they take from its icons:
 
     ```
@@ -165,7 +165,7 @@
     ```
 
 - **Wimsy**, ScarletNX's mascot, drawn by Liz (ScarletNX's `dist/wimsy.svg`, GPL-3.0-or-later):
-  `static/icon.svg`, the cover, draws her as edenprobe, in Eden's sunset colours (Eden's
+  `static/icon.svg`, the cover, draws her as Amberlith, in Eden's sunset colours (Eden's
   `dist/dev.eden_emu.eden.svg`) with a test probe. wimsy-dist's `tools/make_edenprobe.py`
   (https://github.com/scarletnx/wimsy-dist) makes it from her shapes, as it makes her other designs.
   `static/wimsy.svg` is that drawing, unchanged, as ScarletNX has it at commit
@@ -174,7 +174,7 @@
   Four more of her drawings, unchanged, from wimsy-dist (https://github.com/scarletnx/wimsy-dist,
   commit ce8c740c1a7d05fbc19e41a5efd3310ffa1de806), each GPL-3.0-or-later there, give the heavy
   levels' crowd its other colours: `static/wimsy-fuddles.svg`, Fuddles' own Wimsy
-  (fuddlesworth); `static/wimsy-edenprobe.svg`, edenprobe's, in Eden's sunset colours;
+  (fuddlesworth); `static/wimsy-amberlith.svg`, Amberlith's, in Eden's sunset colours;
   `static/wimsy-accord.svg`, Accord's, DraVee's forge, and the Sepia theme's Wimsy there, the
   same file; and `static/wimsy-default.svg`, Wimsy in the Default theme's colours. The fan drawings
   there, under a non-commercial licence, are not used.

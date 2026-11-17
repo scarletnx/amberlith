@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 name: Build
 
@@ -87,8 +87,8 @@ jobs:
       - name: Check the NRO names its commit
         run: |
           cat build/version.h
-          hash=$(sed -n 's/^#define EDENPROBE_HASH "\(.*\)"$/\1/p' build/version.h)
-          build=$(sed -n 's/^#define EDENPROBE_BUILD "\(.*\)"$/\1/p' build/version.h)
+          hash=$(sed -n 's/^#define AMBERLITH_HASH "\(.*\)"$/\1/p' build/version.h)
+          build=$(sed -n 's/^#define AMBERLITH_BUILD "\(.*\)"$/\1/p' build/version.h)
           case $hash in
             ''|*-dirty|unknown) echo "::error::the build names its commit \"$hash\""; exit 1 ;;
           esac
@@ -101,19 +101,19 @@ jobs:
           esac
       # A machine that answers a game's SDK functions itself takes the program's by these symbols (docs/Hooks.md)
       - name: Check the NRO exports the SDK functions sdk.h declares
-        run: python3 tools/sdk-exports.py edenprobe.elf
+        run: python3 tools/sdk-exports.py amberlith.elf
       # A runtime that runs NVN itself takes a function when a call of the lookup returns it: each lookup has to be
       # a call through a pointer, which a compiler that can tell the target turns into a call by name
       - name: Check the NRO looks its NVN up through pointers
-        run: python3 tools/nvn-lookups.py edenprobe.elf
+        run: python3 tools/nvn-lookups.py amberlith.elf
       # The probe as a Switch 2 program (docs/Ounce.md): the ExeFS builds, its descriptor is a Switch 2's, and it looks
       # its NVN up through pointers as the NRO does
       - name: Build the Switch 2 ExeFS
         run: make -f ounce.mk -j"$(nproc)"
       - name: Check the ExeFS is a Switch 2 program's
         run: |
-          python3 tools/npdm-ounce.py read edenprobe-ounce/exefs/main.npdm | grep -x 'descriptor: Switch 2, its magic at 0x300'
-          python3 tools/nvn-lookups.py edenprobe-ounce.elf
+          python3 tools/npdm-ounce.py read amberlith-ounce/exefs/main.npdm | grep -x 'descriptor: Switch 2, its magic at 0x300'
+          python3 tools/nvn-lookups.py amberlith-ounce.elf
       # The probe as a mod of a game (docs/Mod.md): the module builds, asks of a game only what mod/imports.txt
       # lists, exports nothing and holds nothing of libnx's start
       - name: Build the mod of a game and check what it asks of the game
@@ -125,28 +125,28 @@ jobs:
             cmp -s build/version.h "$made" || { echo "::error::$made is not build/version.h"; diff build/version.h "$made"; exit 1; }
           done
       - name: Name the NRO after its version and commit
-        run: cp edenprobe.nro "edenprobe-${{ steps.name.outputs.stem }}.nro"
+        run: cp amberlith.nro "amberlith-${{ steps.name.outputs.stem }}.nro"
       # Each ExeFS folder zipped as exefs/ and its files, which go whole into a program's or a game's mod's folder
       - name: Zip the Switch 2 program and the mod, named after the version and the commit
         run: |
           for made in ounce mod; do
-            (cd "edenprobe-$made" && python3 -m zipfile -c "../edenprobe-$made-${{ steps.name.outputs.stem }}.zip" exefs)
-            python3 -m zipfile -l "edenprobe-$made-${{ steps.name.outputs.stem }}.zip"
+            (cd "amberlith-$made" && python3 -m zipfile -c "../amberlith-$made-${{ steps.name.outputs.stem }}.zip" exefs)
+            python3 -m zipfile -l "amberlith-$made-${{ steps.name.outputs.stem }}.zip"
           done
       # Not zipped: the artifact is the NRO itself, named after its version and commit, and each ExeFS its zip
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-${{ steps.name.outputs.stem }}.nro
+          path: amberlith-${{ steps.name.outputs.stem }}.nro
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-ounce-${{ steps.name.outputs.stem }}.zip
+          path: amberlith-ounce-${{ steps.name.outputs.stem }}.zip
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-mod-${{ steps.name.outputs.stem }}.zip
+          path: amberlith-mod-${{ steps.name.outputs.stem }}.zip
           archive: false
           if-no-files-found: error
 
@@ -181,23 +181,23 @@ jobs:
             sleep 5
           done
       - name: Build the APK
-        run: JAVA_HOME=$JAVA_HOME_21_X64 gradle -p android assembleDebug -Pedenprobe.out="$RUNNER_TEMP/apk"
+        run: JAVA_HOME=$JAVA_HOME_21_X64 gradle -p android assembleDebug -Pamberlith.out="$RUNNER_TEMP/apk"
       # The library names this commit, clean, as the NRO's version.h does: what a report from it opens with
       - name: Check the APK names its commit
         run: |
           set -euo pipefail
-          apk=$RUNNER_TEMP/apk/gradle/outputs/apk/debug/edenprobe-debug.apk
-          unzip -l "$apk" | grep -E 'lib/(arm64-v8a|x86_64)/libedenprobe.so' | tee "$RUNNER_TEMP/libs.txt"
-          [ "$(wc -l < "$RUNNER_TEMP/libs.txt")" = 2 ] || { echo "::error::the APK lacks an ABI's libedenprobe.so"; exit 1; }
+          apk=$RUNNER_TEMP/apk/gradle/outputs/apk/debug/amberlith-debug.apk
+          unzip -l "$apk" | grep -E 'lib/(arm64-v8a|x86_64)/libamberlith.so' | tee "$RUNNER_TEMP/libs.txt"
+          [ "$(wc -l < "$RUNNER_TEMP/libs.txt")" = 2 ] || { echo "::error::the APK lacks an ABI's libamberlith.so"; exit 1; }
           hash=$(git describe --always --dirty --abbrev=7 --exclude='*')
           case $hash in ''|*-dirty) echo "::error::the build names its commit \"$hash\""; exit 1 ;; esac
-          unzip -p "$apk" lib/arm64-v8a/libedenprobe.so | grep -aq "$hash" ||
-            { echo "::error::libedenprobe.so does not name $hash"; exit 1; }
-          cp "$apk" "edenprobe-${{ steps.name.outputs.stem }}.apk"
+          unzip -p "$apk" lib/arm64-v8a/libamberlith.so | grep -aq "$hash" ||
+            { echo "::error::libamberlith.so does not name $hash"; exit 1; }
+          cp "$apk" "amberlith-${{ steps.name.outputs.stem }}.apk"
       # Not zipped: the artifact is the APK itself, named after it
       - uses: actions/upload-artifact@v7
         with:
-          path: edenprobe-${{ steps.name.outputs.stem }}.apk
+          path: amberlith-${{ steps.name.outputs.stem }}.apk
           archive: false
           if-no-files-found: error
 

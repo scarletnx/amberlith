@@ -1,8 +1,8 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The probe as a Switch 2 program (docs/Ounce.md): the engine and the cases a program of that
-# console can run, built into an ExeFS folder, edenprobe-ounce/exefs, of main (an NSO) and
+# console can run, built into an ExeFS folder, amberlith-ounce/exefs, of main (an NSO) and
 # main.npdm, which is what a runtime recompiles and runs. No console starts it.
 #
 #   make -f ounce.mk
@@ -11,7 +11,7 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error Set DEVKITPRO first, e.g. export DEVKITPRO=/opt/devkitpro)
 endif
 
-TARGET   := edenprobe-ounce
+TARGET   := amberlith-ounce
 BUILD    := build-ounce
 EXEFS    := $(TARGET)/exefs
 
@@ -37,7 +37,7 @@ CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
 # As the NRO's link, less deko3d's abort wrap: nothing here makes a deko3d object.
 LDFLAGS  := $(ARCH) -specs=$(LIBNX)/switch.specs -Wl,--gc-sections -g $(NVNLAYER_LDFLAGS) \
             -Wl,--export-dynamic-symbol='_ZN2nn*' -Wl,--export-dynamic-symbol='_ZNK2nn*' \
-            -Wl,--undefined=edenprobe_sdk_label
+            -Wl,--undefined=amberlith_sdk_label
 LIBS     := -L$(LIBNX)/lib -lnx -lm
 
 # The engine (source/portable.txt), the console's side of platform.h, the start through the SDK's
@@ -66,7 +66,7 @@ all: $(EXEFS)/main $(EXEFS)/main.npdm
 
 $(BUILD)/version.h: FORCE
 	@mkdir -p $(dir $@)
-	@printf '#define EDENPROBE_VERSION "%s"\n#define EDENPROBE_BUILD "%s"\n#define EDENPROBE_HASH "%s"\n' "$(APP_VERSION)" "$(APP_BUILD)" "$(APP_HASH)" > $@.tmp; \
+	@printf '#define AMBERLITH_VERSION "%s"\n#define AMBERLITH_BUILD "%s"\n#define AMBERLITH_HASH "%s"\n' "$(APP_VERSION)" "$(APP_BUILD)" "$(APP_HASH)" > $@.tmp; \
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 FORCE:
 $(BUILD)/ounce/frontend.o: $(BUILD)/version.h

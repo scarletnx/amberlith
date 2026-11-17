@@ -218,8 +218,8 @@ empties it once at each launch of the application rather than each time a progra
 saves, which had deleted a file a game made a moment before.
 
 The suite opens the storage with libnx's `fsOpen_TemporaryStorage` (OpenSaveDataFileSystem, 51,
-space and type Temporary) and leaves a marker in it, `/edenprobe-launch`, eight bytes, saying on the
-memory card which one (`sdmc:/edenprobe/service/temporary`). The next launch looks for it before
+space and type Temporary) and leaves a marker in it, `/amberlith-launch`, eight bytes, saying on the
+memory card which one (`sdmc:/amberlith/service/temporary`). The next launch looks for it before
 leaving its own: the first launch on a card has nothing to look for, so its second case is skipped
 as `depends`, and a run is only a question from the second launch on.
 
@@ -267,7 +267,7 @@ handle that is none.
 | ldn:u's state follows each step from Initialize to Finalize | GetState (0), then Initialize, OpenAccessPoint (200), CreateNetwork (202), DestroyNetwork (204), CloseAccessPoint (201), OpenStation (300), CloseStation (301) and Finalize (401), each followed by 0 | every command succeeds; 1, 2, 3, 2, 1, 4 and 1 after the first seven; None (0) or Error (6) before Initialize and after Finalize | exact |
 | the state change event is signaled when a network comes and goes | AttachStateChangeEvent (100), then the first seven steps above, the event cleared before each and waited on for a twentieth of a second after it | 100 and every step succeed; signaled after 202 and after 204 | exact |
 | a command out of its state is refused as BadState | before Initialize: 200, 300, 201, 301 and GetNetworkInfo (1); initialized: 202, 1, GetSecurityParameter (4), GetNetworkConfig (5) and GetNetworkInfoLatestUpdate (101); with the access point open: 1; as a station: 202 and 1 | each one `0x40CB` (BadState), with Initialize, 200, 201 and 300 between them succeeding | exact |
-| the network created is the one asked, with this console as node 0 | Initialize, 200, 202, then 1 | the intent asked, a session id, type Ldn (2), an SSID of 1 to 32 characters ending at its length, channel 1, 6 or 11, Product (1), room 4 and one node; node 0 with id 0, connected, "edenprobe", version 3, a unicast MAC that is the BSSID; nodes 1 to 7 with their ids, not connected | exact |
+| the network created is the one asked, with this console as node 0 | Initialize, 200, 202, then 1 | the intent asked, a session id, type Ldn (2), an SSID of 1 to 32 characters ending at its length, channel 1, 6 or 11, Product (1), room 4 and one node; node 0 with id 0, connected, "amberlith", version 3, a unicast MAC that is the BSSID; nodes 1 to 7 with their ids, not connected | exact |
 | node 0's connection is read once, into one to eight entries | a network created, 1, then 101 into nine entries, into none, and twice into eight | nine `0x64CB` (InvalidBufferCount), none `0xC0CB` (BadInput); the first eight say node 0 connected (1) and nothing else, with 1's network; the second say nothing | exact |
 | the network's address, security parameter and config read back | a network created, 1, GetIpv4Address (2), 4, 5, GetDisconnectReason (3) | the mask a run of ones from the top bit, the address's network and host parts not nought; 4's server random and session id the network's; 5 the intent, room and version asked with the network's channel; reason 0 | exact |
 | advertise data up to 384 bytes is carried, and past it refused | a network created, SetAdvertiseData (206) of 384 bytes, of 385, of none, 1 after each | 384 carried as given; 385 `0x14CB` (AdvertiseDataTooLarge) with the 384 still carried; none leaves 0 carried | exact |
@@ -293,7 +293,7 @@ Disconnect, Scan, SetAdvertiseData, an OpenAccessPoint with the station open) is
 it.
 
 The five cases after them each create the same network, as a game's CreateNetwork asks it:
-Product security, the user name "edenprobe", the local communication id `0x01000000000ED000`,
+Product security, the user name "amberlith", the local communication id `0x01000000000ED000`,
 scene `0x5A`, room for four nodes, version 3, and the channel left to the service. reden answers
 from the network it keeps: node 0 is this console, the channel for the Default asked is 6 (in
 Ryujinx too), advertise data is kept up to 384 bytes, and a node's change stays until
@@ -572,7 +572,7 @@ with IDirectory's GetEntryCount (1) and Read (0), and DeleteDirectoryRecursively
 1f03dee126 (#4312) made a directory renamed inside its own parent keep what it holds, where the
 rename had left a save without its files.
 
-The suite works on the memory card libnx mounted at start, under `/edenprobe/service/directory`,
+The suite works on the memory card libnx mounted at start, under `/amberlith/service/directory`,
 which it deletes first, so a run left half done does not change the next.
 
 | case | what it asks | passes when | tier |
@@ -710,7 +710,7 @@ smGetServiceOriginal, outside of libnx's own session to it.
 | sm refuses an empty service name as InvalidServiceName | GetServiceHandle (smGetServiceOriginal) of eight NULs | 0xC15 and no session | exact |
 | sm refuses a name with a byte past its first NUL as InvalidServiceName | GetServiceHandle of `s e \0 t` | 0xC15 and no session | exact |
 
-The last two hold sm to the name rule of the sm the consoles edenprobe runs on carry (Atmosphere's,
+The last two hold sm to the name rule of the sm the consoles Amberlith runs on carry (Atmosphere's,
 `ValidateServiceName`): one to eight bytes, NUL padded, nothing past the first NUL; ScarletNX's sm
 test holds its sm to the same. reden keeps only the printable bytes of a name and so takes
 `se\0t` for `set` and hands a session back; the case closes any session it is given. This is the
@@ -804,7 +804,7 @@ filters with one list (Match, 0, and Filter, 1). reden finds nothing and hands e
 it was sent, and answers version 1 for its lists (`ngc/ngc.cpp` at 75c12299a6); a clean name is
 what a console would give back too.
 
-The text is "edenprobe player" in a buffer of 0x40 bytes; ngc:u takes it by a mapped buffer, ngct:u
+The text is "amberlith player" in a buffer of 0x40 bytes; ngc:u takes it by a mapped buffer, ngct:u
 by pointer, and the buffer it comes back in is filled with 0xEE first.
 
 | case | what it asks | passes when | tier |
@@ -969,7 +969,7 @@ would be DirectoryNotEmpty, so the case takes any refusal), and a file is dated 
 
 Each file is made at its size and written inside it: a write past the end of a file not opened to
 append is refused on a console (FileExtensionWithoutOpenModeAllowAppend, `0x307202`), which reden
-does not check. Everything is made under `/edenprobe/service/file` on the card, which the suite
+does not check. Everything is made under `/amberlith/service/file` on the card, which the suite
 deletes before and after; all five are skipped as `unavailable` when the card is not mounted.
 
 ## acc-app

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Builds source/astcimages.c: one 128x128 picture, encoded by ARM's astcenc, for the astcimage suite.
 
@@ -173,7 +173,7 @@ def c_bytes(name, data):
 
 def c_file(source_hash, encoded):
     parts = [
-        "// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors",
+        "// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors",
         "// SPDX-License-Identifier: GPL-3.0-or-later",
         "",
         "// Written by tools/astc-images.py; run it again rather than editing this file.",

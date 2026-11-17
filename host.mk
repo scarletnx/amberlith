@@ -1,17 +1,17 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Builds the parts that do not touch the console for the machine you are sitting at, so what
 # decides pass and fail can be exercised with no emulator and no device.
 
 HOSTCC   ?= cc
-HOSTOUT  := build-host/edenprobe-host
+HOSTOUT  := build-host/amberlith-host
 HOSTSRC  := source/platform_host.c $(shell grep -v '^\#' source/portable.txt) source/host_main.c
 
 # One object per source, so the -MMD below has somewhere to put its dependency files. Without
 # them an edited header rebuilds nothing and the run reports the previous binary's answer.
-# EDENPROBE_HOST: the few judge cases that hold this build to what host_main.c sets up
-HOSTFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -MMD -MP -Isource -DEDENPROBE_HOST
+# AMBERLITH_HOST: the few judge cases that hold this build to what host_main.c sets up
+HOSTFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -MMD -MP -Isource -DAMBERLITH_HOST
 HOSTOBJ  := $(patsubst source/%.c,build-host/%.o,$(HOSTSRC))
 HOSTDEP  := $(HOSTOBJ:.o=.d)
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Tests for perf.py: python3 -m unittest discover -s tools (host.mk's host-run does it)."""
 
@@ -22,7 +22,7 @@ def case(suite, name, us=None, result="pass"):
 class Parse(unittest.TestCase):
     def test_only_timed_cases_count(self):
         lines = [
-            '{"type":"note","text":"edenprobe starting"}\n',
+            '{"type":"note","text":"Amberlith starting"}\n',
             case("selfcheck", "no time"),
             case("clear", "opaque red", 8000),
             case("clear", "cyan", 250, result="fail"),

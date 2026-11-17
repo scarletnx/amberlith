@@ -179,7 +179,7 @@ functions in [the hooks mode](../Hooks.md). The card opens (none tier), then:
 | 64 files of 4 KiB are made, written, read back and removed | each made, opened, written and closed; then each opened, read, closed and removed | four | every file's bytes |
 
 Only the calls are timed, each on its own: making the bytes to write and checking the ones read happen between
-them. The files live in `sdmc:/edenprobe/pace` and are removed as the suite ends. The fs family times reads in the
+them. The files live in `sdmc:/amberlith/pace` and are removed as the suite ends. The fs family times reads in the
 patterns a game makes; this suite adds what it does not have, writes and the cost of making and removing a file.
 
 ## pace-gpu

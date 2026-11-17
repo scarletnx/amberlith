@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <reent.h>
@@ -86,8 +86,8 @@ static bool MountCard(ModStart *start) {
     return start->mounted_by != NULL;
 }
 
-void EdenprobeModInit(void);
-void EdenprobeModInit(void) {
+void AmberlithModInit(void);
+void AmberlithModInit(void) {
     fake_heap_start = heap;
     fake_heap_end = heap + sizeof(heap);
 
@@ -97,7 +97,7 @@ void EdenprobeModInit(void) {
         // ends here as it does after a run, so a game that starts is never taken for a run.
         char said[320];
         snprintf(said, sizeof(said),
-                 "edenprobe mod: no memory card: nn::fs::MountSdCardForDebug(\"" SDK_CARD "\") "
+                 "amberlith mod: no memory card: nn::fs::MountSdCardForDebug(\"" SDK_CARD "\") "
                  "returned 0x%x and nn::fs::MountSdCard 0x%x (0xffffffff: the game's SDK has no "
                  "such function); a game's own main.npdm gives no access to the card, the mod's "
                  "does. The process ends with no report",
@@ -107,7 +107,7 @@ void EdenprobeModInit(void) {
     }
     const int device = AddDevice(SdkCardDevice());
     if (device < 0) {
-        Say("edenprobe mod: the C library has no room for the sdmc device: the process ends "
+        Say("amberlith mod: the C library has no room for the sdmc device: the process ends "
             "with no report");
         svcExitProcess();
     }

@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 /**
  * What a case found: whether it passed, and in words what it got against what Android gives; or that it could not ask

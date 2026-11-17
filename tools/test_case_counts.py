@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/case-counts.py: the catalogue it makes from reports, the blocks it writes, what it refuses; and this tree's
 docs/cases.tsv and blocks as current as the host build that just ran can tell.
 
-host-run runs the binary before these tests, so edenprobe-host-report.jsonl is this tree's: a case the host build
+host-run runs the binary before these tests, so amberlith-host-report.jsonl is this tree's: a case the host build
 gains or loses fails here until docs/cases.tsv has it, and a block not rewritten after the catalogue changed fails
 too."""
 
@@ -21,7 +21,7 @@ ROOT = os.path.dirname(HERE)
 SPEC = importlib.util.spec_from_file_location("case_counts", os.path.join(HERE, "case-counts.py"))
 tool = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tool)
-HOST_REPORT = os.path.join(ROOT, "edenprobe-host-report.jsonl")
+HOST_REPORT = os.path.join(ROOT, "amberlith-host-report.jsonl")
 
 UI = """static const struct { const char *suite; UiFamily family; } FAMILIES[] = {
     {"selfcheck", UI_FAMILY_JUDGE},
@@ -47,7 +47,7 @@ ORIGIN = """static const struct { const char *suite; ReportFrom from; } ORIGINS[
 def report(path, cases, host=False):
     with open(path, "w", encoding="utf-8") as file:
         file.write(
-            json.dumps({"type": "note", "text": "edenprobe host build" if host else "edenprobe 9.9.9 (x) starting"})
+            json.dumps({"type": "note", "text": "Amberlith host build" if host else "Amberlith 9.9.9 (x) starting"})
         )
         file.write("\n")
         if not host:
@@ -136,7 +136,7 @@ class Catalogue(unittest.TestCase):
         self.assertEqual(rows[("clear", "a rectangle")].judge, "unknown")
         self.assertEqual(rows[("depth", "less at a half")][3:5], ("ulp", "console"))
         self.assertEqual(rows[("fs", "a read past the end")][2:4], ("fs", "unknown"))
-        self.assertIn("# nro: edenprobe 9.9.9 (x), machine scarletnx abc1234", self.tree.read("docs", "cases.tsv"))
+        self.assertIn("# nro: Amberlith 9.9.9 (x), machine scarletnx abc1234", self.tree.read("docs", "cases.tsv"))
 
     def test_the_rows_follow_ui_c_s_order_then_each_report_s(self):
         self.tree.catalogue({"host": [self.host], "nro": [self.nro]})
@@ -154,7 +154,7 @@ class Catalogue(unittest.TestCase):
         self.assertNotIn(("selfcheck", "a host only seek"), rows)
         self.assertEqual(len(rows), 6)
         header = self.tree.read("docs", "cases.tsv")
-        self.assertIn("# nro: edenprobe 9.9.9", header)
+        self.assertIn("# nro: Amberlith 9.9.9", header)
         self.assertEqual(header.count("# host: "), 1)
 
     def test_new_lines_that_settle_a_judge_replace_the_old_one(self):
@@ -408,7 +408,7 @@ class ThisTree(unittest.TestCase):
                     (gained, lost),
                     ([], []),
                     "%s: %s the host ran that docs/cases.tsv does not give it, %s it gives the host and the host did "
-                    "not run; run tools/case-counts.py catalogue host=edenprobe-host-report.jsonl, then write"
+                    "not run; run tools/case-counts.py catalogue host=amberlith-host-report.jsonl, then write"
                     % (suite, tool.plural(len(gained), "case"), tool.plural(len(lost), "case")),
                 )
 
@@ -425,7 +425,7 @@ class ThisTree(unittest.TestCase):
                     tool.strongest(case.source),
                     source,
                     "the host's line says %s, docs/cases.tsv %s; run tools/case-counts.py catalogue "
-                    "host=edenprobe-host-report.jsonl, then write" % (source, case.source),
+                    "host=amberlith-host-report.jsonl, then write" % (source, case.source),
                 )
 
 

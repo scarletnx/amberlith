@@ -1,15 +1,15 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # android/tools/run-scarletnx.sh --driver PROGRAM --apk APK --out DIR [--mode WORDS] [--java-home DIR] [--framework JAR]
 #                                [--timeout SECONDS] [--stall SECONDS] [--launches N] [-- DRIVER OPTION...]
-# Runs edenprobe's APK on ScarletNX's Android layer: PROGRAM is its scarletnx-android, run --headless with nothing on
+# Runs Amberlith's APK on ScarletNX's Android layer: PROGRAM is its scarletnx-android, run --headless with nothing on
 # the display (DISPLAY and WAYLAND_DISPLAY unset) and an empty home of the run's own (XDG_DATA_HOME, XDG_CONFIG_HOME,
 # XDG_STATE_HOME and XDG_CACHE_HOME in DIR/home), so the user's ScarletNX data is never read or written; the app's
 # mode file there holds WORDS ("quick" when not given) and machine=scarletnx-android, unless WORDS name a machine.
 # --java-home and --framework go to the driver as its options. The driver runs in DIR, so what a crash leaves (the
 # JVM's hs_err_pid files) lands there with each launch's log (launch-N.log) and the run's report.jsonl and journal. A
-# launch that ends before EDENPROBE DONE, prints no edenprobe line for --stall seconds (120), or runs past --timeout
+# launch that ends before AMBERLITH DONE, prints no Amberlith line for --stall seconds (120), or runs past --timeout
 # seconds (900), is stopped and launched again: the engine reports the case it ended inside as crashed and goes on, up
 # to --launches (5). A launch this script stopped is said in the journal, `timeout <limit> <quiet>`, the limit it ran
 # into and the seconds since the journal's last record, so the engine reports that case as timeout instead, off the
@@ -45,7 +45,7 @@ log() { echo "run-scarletnx: $(date +%H:%M:%S) $*"; }
 mkdir -p "$out/home" || exit 1
 out=$(cd "$out" && pwd)
 # where the layer keeps the app's external files, getExternalFilesDir's: the engine's root under it
-root=$out/home/data/scarletnx/android/data/org.scarletnx.edenprobe/external/files/edenprobe
+root=$out/home/data/scarletnx/android/data/org.scarletnx.amberlith/external/files/amberlith
 # the machine for the ban list (docs/Crashes.md), unless the words name one: the driver says its build only once it runs,
 # so no version
 case " $mode " in
@@ -96,12 +96,12 @@ for launch in $(seq 1 "$launches"); do
     start=$(date +%s) last_lines=0 last_move=$start
     while :; do
         sleep 2
-        done_line=$(grep -a 'EDENPROBE DONE ' "$l" | tail -n 1)
+        done_line=$(grep -a 'AMBERLITH DONE ' "$l" | tail -n 1)
         if [ -n "$done_line" ]; then
             # the activity finishes once the report is closed, which ends the process; give it 15 s
             for _ in $(seq 1 15); do kill -0 "$pid" 2> /dev/null || break; sleep 1; done
             if kill -0 "$pid" 2> /dev/null; then
-                log "launch $launch: the process was still running 15 s after EDENPROBE DONE: stopping it"
+                log "launch $launch: the process was still running 15 s after AMBERLITH DONE: stopping it"
                 stop
             else
                 wait "$pid"
@@ -111,11 +111,11 @@ for launch in $(seq 1 "$launches"); do
             break 2
         fi
         now=$(date +%s)
-        lines=$(grep -ac 'edenprobe' "$l")
+        lines=$(grep -ac 'amberlith' "$l")
         [ "$lines" != "$last_lines" ] && last_lines=$lines last_move=$now
         if ! kill -0 "$pid" 2> /dev/null; then
             wait "$pid"
-            log "launch $launch: the process ended with status $? before EDENPROBE DONE; its last lines:"
+            log "launch $launch: the process ended with status $? before AMBERLITH DONE; its last lines:"
             pid=
             tail -n 5 "$l" | sed 's/^/    /'
             break
@@ -129,9 +129,9 @@ for launch in $(seq 1 "$launches"); do
     done
 done
 if [ -n "$done_line" ]; then
-    log "${done_line##*EDENPROBE DONE }"
+    log "${done_line##*AMBERLITH DONE }"
 else
-    log "no EDENPROBE DONE after $launches launches: the report is not whole"
+    log "no AMBERLITH DONE after $launches launches: the report is not whole"
 fi
 # last-run names the folder the latest launch reported in, under the root
 folder=$(cat "$root/last-run" 2> /dev/null)

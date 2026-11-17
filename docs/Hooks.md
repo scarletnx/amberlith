@@ -82,7 +82,7 @@ native nnSdk, nn::ngc's functions and nn::prepo's Save are such hooks.
 ## The start
 
 The program's `__appInit` (`source/hooks.c`) is libnx's, step for step, up to the card and the clocks. Then it mounts
-the memory card through nn::fs::MountSdCard as `sdmc`, and reads `sdmc:/edenprobe/mode` through nn::fs, as the runner
+the memory card through nn::fs::MountSdCard as `sdmc`, and reads `sdmc:/amberlith/mode` through nn::fs, as the runner
 reads it later (the first 4096 bytes, a folder as no file). Without `hooks` it unmounts the card and goes on as
 libnx: time:u, the C library's time zone, fsp-srv, its `sdmc:` device. With `hooks` the card stays mounted and becomes
 the C library's `sdmc:` device (`source/sdk_card.c`), every file the program writes going through nn::fs (each write flushed, as a journal
@@ -93,7 +93,7 @@ When the machine answered MountSdCard itself and the file has no `hooks`, the pr
 before it opens time:u, which such a machine may refuse:
 
 ```
-edenprobe: the machine answered nn::fs::MountSdCard itself and the mode file has no hooks: the IPC mode opens time:u and fsp-srv now, which such a machine may refuse; the word hooks in sdmc:/edenprobe/mode asks through the SDK's functions instead
+Amberlith: the machine answered nn::fs::MountSdCard itself and the mode file has no hooks: the IPC mode opens time:u and fsp-srv now, which such a machine may refuse; the word hooks in sdmc:/amberlith/mode asks through the SDK's functions instead
 ```
 
 The C library's `time()` and `gettimeofday()` have no clock in hooks mode: libnx's answer to them is time:u's, which
@@ -127,8 +127,8 @@ reden's; a case says in its line which way it went where the two differ.
 
 | family | suites | in hooks mode |
 |---|---|---|
-| fs | fs | the card mounted as `edenprobe-fs`, every read nn::fs::ReadFile |
-| service | fsp, fsdir, fs-file | the temporary storage mounted as `edenprobe-temp`, the card as the start mounted it; a file written to is flushed before it is closed, which the SDK asks of a writer and fsp-srv does itself |
+| fs | fs | the card mounted as `amberlith-fs`, every read nn::fs::ReadFile |
+| service | fsp, fsdir, fs-file | the temporary storage mounted as `amberlith-temp`, the card as the start mounted it; a file written to is flushed before it is closed, which the SDK asks of a writer and fsp-srv does itself |
 | service | time, time-snap, time-zone | nn::time's functions; Initialize stands for time:u and its objects, and a function the SDK declares void answers nought where the IPC mode puts its command's result; CalculateSpanBetween's false is `0xffffffff` there. The snapshot's type is on the line and not judged: ClockSnapshot::CreateWithStandardSystemClock picks it, and no reference says which |
 | service | time-perm | the clocks through the three setters an application links, held to `ServiceJudgeTimeSdkClocks`; the settings case is skipped, since their setters answer nothing and stop the program on a refusal |
 | service | pl | the fonts by their addresses: each offset counts from 8 bytes before the lowest font, the memory's start in the IPC mode's layout, since the SDK gives no base |

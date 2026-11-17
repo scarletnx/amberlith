@@ -39,8 +39,8 @@ make -f mod.mk          # DEVKITPRO set, as for the NRO
 make -f mod.mk check    # the same, then tools/mod-imports.py on the module
 ```
 
-It leaves `edenprobe-mod/exefs/subsdk9` and `main.npdm`, and `edenprobe-mod.elf` beside them. A release's
-`edenprobe-mod-<version>.zip` ([Releases](Releases.md)) holds the same two files in `exefs/`. The sources are the
+It leaves `amberlith-mod/exefs/subsdk9` and `main.npdm`, and `amberlith-mod.elf` beside them. A release's
+`amberlith-mod-<version>.zip` ([Releases](Releases.md)) holds the same two files in `exefs/`. The sources are the
 engine's (`source/portable.txt`, less the libc family), the card's device over nn::fs (`source/sdk_card.c`), the
 nvn suite, `mod/` and the layer built for [a game's own driver](NvnLayer.md#a-games-own-driver). The toolchain is
 the NRO's: devkitA64 and its C library, libnx's headers and of its code the kernel's calls alone, `elf2nso` and
@@ -112,7 +112,7 @@ output as it is first called.
 
 ## The report
 
-Where the NRO's is, `sdmc:/edenprobe/runs/<build>/report.jsonl`, with the same mode file and the same journal: a
+Where the NRO's is, `sdmc:/amberlith/runs/<build>/report.jsonl`, with the same mode file and the same journal: a
 launch that ends inside a case goes on after it at the next launch. A `label=` in the mode file keeps each game's
 runs in a folder of their own. Each report says what it was made on:
 
@@ -143,17 +143,17 @@ row a name and case. It refuses a report whose notes and case lines do not agree
 With Atmosphere, whose loader takes a program's modules and its `main.npdm` from the card before the game's own
 (`atmosphere/contents/<program id>/exefs/`):
 
-1. `make -f mod.mk`, or unzip a release's `edenprobe-mod-<version>.zip`.
-2. Copy `edenprobe-mod/exefs/subsdk9` and `edenprobe-mod/exefs/main.npdm` to
+1. `make -f mod.mk`, or unzip a release's `amberlith-mod-<version>.zip`.
+2. Copy `amberlith-mod/exefs/subsdk9` and `amberlith-mod/exefs/main.npdm` to
    `atmosphere/contents/<program id>/exefs/` on the card, `<program id>` the game's sixteen hexadecimal digits.
    A game that has a `subsdk9` of its own, or a folder that holds another mod's, takes the module under another
    free name from `subsdk0` to `subsdk8`.
-3. Write `edenprobe/mode` on the card: `quick nvn label=<a name for this game's driver>`.
+3. Write `amberlith/mode` on the card: `quick nvn label=<a name for this game's driver>`.
 4. Start the game, once. The screen stays black while the cases run, and the console goes back to its menu when the
    report is closed. A case that calls a function the game's driver has not ends unavailable and the run goes on,
    so one launch is the whole run; only a case that ends the program (the console's error screen) asks for another
    launch, which goes on after it.
-5. The report is `edenprobe/runs/<build>_<label>/report.jsonl` on the card, whole once its last line is the
+5. The report is `amberlith/runs/<build>_<label>/report.jsonl` on the card, whole once its last line is the
    summary. `tools/mod-lacked.py` on it says what the driver lacks and which cases that took. Take the two files
    out of the folder to play the game again.
 
@@ -167,14 +167,14 @@ shows when a game's process ends this way.
 ## Under an emulator
 
 Eden takes a game's mods from `load/<program id>/<mod name>/exefs/` in its data folder: copy `subsdk9` and
-`main.npdm` to `load/<program id>/edenprobe/exefs/`, write the mode file in its card, `sdmc/edenprobe/mode`, and
+`main.npdm` to `load/<program id>/amberlith/exefs/`, write the mode file in its card, `sdmc/amberlith/mode`, and
 start the game. Its loader reads the module beside the game's own and takes the mod's `main.npdm` for the game's, so
-the process runs under the descriptor's program ID; the run ends by itself, the report in `sdmc/edenprobe/runs/`.
+the process runs under the descriptor's program ID; the run ends by itself, the report in `sdmc/amberlith/runs/`.
 A case that never returns there is ended by closing the emulator, and the next launch goes on after it.
 
 ## Under ScarletNX
 
 A mod of a game there is a folder of the game's mods folder ([ScarletNX's usage](https://github.com/scarletnx/ScarletNX/blob/main/docs/user/usage.md#mods)):
-`<game>_data/mods/edenprobe/exefs/subsdk9` and `main.npdm`, and the mode file in the game's card,
-`<game>_data/sdmc/edenprobe/mode`. The driver recompiles the game with the module the next time it plays it, and the
-run ends by itself with the report in `<game>_data/sdmc/edenprobe/runs/`.
+`<game>_data/mods/amberlith/exefs/subsdk9` and `main.npdm`, and the mode file in the game's card,
+`<game>_data/sdmc/amberlith/mode`. The driver recompiles the game with the module the next time it plays it, and the
+run ends by itself with the report in `<game>_data/sdmc/amberlith/runs/`.

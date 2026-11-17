@@ -41,7 +41,7 @@ cases; a run past that, or one that ran out of memory, says on the overview how 
 keeps nothing.
 
 The look is ScarletNX's launcher in its YoRHa theme's colours, on a frame of 720 lines: its 8 by 16 VGA font at its own
-size, the tabs as buttons along the top (a screen with no tabs has its title there, `EDENPROBE  /  RESULTS`, at the same
+size, the tabs as buttons along the top (a screen with no tabs has its title there, `AMBERLITH  /  RESULTS`, at the same
 size), and the theme's paper page with its grid, corners a little darker and a grain. A row is a box, the one under the
 cursor inverted with a rule over and under it and the cursor in the margin. The screens drawn while the run goes
 (running, listening) are on the run screen's dark page with its scan lines. The foot is the sentence of what is under
@@ -87,7 +87,7 @@ Each row starts as the mode file has it:
 | quick | leave when the report closes, with no results screens |
 | notime | each drawing suite once, with no timing passes |
 | crash list | the crash list's cases again (the word `retry`); X from any row |
-| save | write the choice into `sdmc:/edenprobe/mode` for the next launch |
+| save | write the choice into `sdmc:/amberlith/mode` for the next launch |
 
 Beside the rows, what the row under the cursor does, and the cases on the crash list, by name; while that choice is on
 with a case to run, a warning there says the program may end and, started again, goes on after that case. Nothing pressed for ten seconds begins the run as the

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -73,7 +73,7 @@ extern "C" {
 ///   service   another: commands a game sends to the system's services, each answer held to
 ///             reden's. It runs only when named until a console has shown what it answers.
 ///   net       another: the online services, nifm to friend, against the backend the file
-///             sdmc:/edenprobe/net names (see netref.h). On Android, the Java side's sockets and
+///             sdmc:/amberlith/net names (see netref.h). On Android, the Java side's sockets and
 ///             names.
 ///   libc      another: the C library and what it asks of the system, the same cases on every
 ///             frontend: formatting, parsing, strings, libm, jumps, dates, then threads and the
@@ -218,7 +218,7 @@ typedef enum {
 #define MODE_KEY_MAX 384u
 
 /// How many `skip=<suite>` words a mode file may have, and the longest suite name one takes: every
-/// suite edenprobe has fits, the longest today twelve characters.
+/// suite Amberlith has fits, the longest today twelve characters.
 #define MODE_SKIPS_MAX 4u
 #define MODE_SKIP_NAME_MAX 16u
 
@@ -317,7 +317,7 @@ typedef struct {
     bool label_was_refused;
     char label_refused[MODE_LABEL_MAX + 1u];
     bool label_refused_cut;
-    /// `baseline=<name>`: this run's times go into sdmc:/edenprobe/baseline/<name>.jsonl as a new
+    /// `baseline=<name>`: this run's times go into sdmc:/amberlith/baseline/<name>.jsonl as a new
     /// sample. Like the label, it decides nothing the suites report, so it stays out of the key.
     ModeName baseline;
     /// `compare=<name>`: this run's times are held to that file's samples once the suites end.
@@ -436,7 +436,7 @@ void ModeJournalWords(char *run_key, size_t run_key_size, char *chosen, size_t c
 bool ModeLabelValid(const char *label);
 
 /// The name of the folder a run's report, pictures and journal go in, under
-/// sdmc:/edenprobe/runs: the build's @p hash, and `_<label>` after it when the mode file has a
+/// sdmc:/amberlith/runs: the build's @p hash, and `_<label>` after it when the mode file has a
 /// label. The hash keeps letters, digits, dots and dashes, every other character a dash, at
 /// most MODE_HASH_MAX of them, and is `unknown` when it is empty or NULL; it has no underscore,
 /// so the first one in a name is where the label starts. Returns the length, or 0 with an empty

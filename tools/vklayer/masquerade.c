@@ -1,20 +1,20 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// VK_LAYER_EDENPROBE_masquerade: makes this machine's Vulkan driver look like one that lacks
+// VK_LAYER_AMBERLITH_masquerade: makes this machine's Vulkan driver look like one that lacks
 // what the variables name, to the emulator above it, so a path the emulator takes only on such
-// a driver runs here, under edenprobe. Each mask is off unless its variable is set:
+// a driver runs here, under Amberlith. Each mask is off unless its variable is set:
 //
-//   EDENPROBE_MASQUERADE_API=1.1           the physical device reports that Vulkan version, 1.0 to
+//   AMBERLITH_MASQUERADE_API=1.1           the physical device reports that Vulkan version, 1.0 to
 //                                          1.4, where its own is newer: an emulator then enables
 //                                          the later versions' features through their extensions.
-//   EDENPROBE_MASQUERADE_HIDE=NAME,NAME    each NAME a device extension or a feature, by the
+//   AMBERLITH_MASQUERADE_HIDE=NAME,NAME    each NAME a device extension or a feature, by the
 //                                          registry's name. An extension leaves the device's
 //                                          list, and a feature structure that only hidden
 //                                          extensions add reads all VK_FALSE, unless the version
 //                                          reported has it in its core. A feature reads VK_FALSE
 //                                          in every structure that has it, the core ones too.
-//   EDENPROBE_MASQUERADE_NO_HOST_QUERY_RESET=1
+//   AMBERLITH_MASQUERADE_NO_HOST_QUERY_RESET=1
 //                                          the same as HIDE=VK_EXT_host_query_reset,hostQueryReset.
 //
 // A name the registry has not, or an API that is no version, makes vkCreateInstance fail with
@@ -23,7 +23,7 @@
 // down untouched. The driver itself is not changed: an application that enables what was hidden
 // still gets it, so the masks decide what an emulator chooses, not what the driver can do.
 // Enabled with VK_ADD_LAYER_PATH pointing at the directory of the manifest and
-// VK_INSTANCE_LAYERS=VK_LAYER_EDENPROBE_masquerade (see tools/vklayer/Makefile).
+// VK_INSTANCE_LAYERS=VK_LAYER_AMBERLITH_masquerade (see tools/vklayer/Makefile).
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -35,7 +35,7 @@
 
 #include "features.h"
 
-#define LAYER_NAME "VK_LAYER_EDENPROBE_masquerade"
+#define LAYER_NAME "VK_LAYER_AMBERLITH_masquerade"
 #define MAX_OBJECTS 16
 
 #if defined(__GNUC__)
@@ -122,28 +122,28 @@ static bool Hide(Instance *instance, const char *name, size_t length) {
 /// The masks from the environment, into the instance; false, with the reason on stderr, for a
 /// value that names nothing.
 static bool ReadMasks(Instance *instance) {
-    const char *const api = getenv("EDENPROBE_MASQUERADE_API");
+    const char *const api = getenv("AMBERLITH_MASQUERADE_API");
     if (api != NULL && api[0] != '\0') {
         if (strlen(api) != 3 || api[0] != '1' || api[1] != '.' || api[2] < '0' || api[2] > '4') {
             fprintf(stderr,
-                    LAYER_NAME ": EDENPROBE_MASQUERADE_API=%s is not 1.0, 1.1, 1.2, 1.3 or 1.4: no "
+                    LAYER_NAME ": AMBERLITH_MASQUERADE_API=%s is not 1.0, 1.1, 1.2, 1.3 or 1.4: no "
                                "instance is made\n",
                     api);
             return false;
         }
         instance->api = VK_MAKE_API_VERSION(0, 1, (uint32_t)(api[2] - '0'), 0);
     }
-    if (Set("EDENPROBE_MASQUERADE_NO_HOST_QUERY_RESET")) {
+    if (Set("AMBERLITH_MASQUERADE_NO_HOST_QUERY_RESET")) {
         Hide(instance, "VK_EXT_host_query_reset", strlen("VK_EXT_host_query_reset"));
         Hide(instance, "hostQueryReset", strlen("hostQueryReset"));
     }
-    const char *at = getenv("EDENPROBE_MASQUERADE_HIDE");
+    const char *at = getenv("AMBERLITH_MASQUERADE_HIDE");
     while (at != NULL && *at != '\0') {
         at += strspn(at, ", ");
         const size_t length = strcspn(at, ", ");
         if (length != 0 && !Hide(instance, at, length)) {
             fprintf(stderr,
-                    LAYER_NAME ": EDENPROBE_MASQUERADE_HIDE names %.*s, which is no device extension or "
+                    LAYER_NAME ": AMBERLITH_MASQUERADE_HIDE names %.*s, which is no device extension or "
                                "feature of the Vulkan registry " MASQUERADE_REGISTRY
                                " this layer was made from: no instance is made\n",
                     (int)length, at);

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -2697,17 +2697,17 @@ static void DebugCase(const char *name) {
         const NVNdebugDomainId first = nvn.nvn.nvnDeviceGenerateDebugDomainId(&nvn.device, "one");
         Gives(why, sizeof(why), "the debug domain made after another",
               nvn.nvn.nvnDeviceGenerateDebugDomainId(&nvn.device, "two"), (long long)first + 1);
-        nvn.nvn.nvnDeviceSetDebugLabel(&nvn.device, "edenprobe's device");
-        nvn.nvn.nvnQueueSetDebugLabel(&nvn.queue, "edenprobe's queue");
-        nvn.nvn.nvnMemoryPoolSetDebugLabel(&nvn.read_pool, "edenprobe's readback pool");
-        nvn.nvn.nvnTextureSetDebugLabel(&nvn.target, "edenprobe's target");
-        nvn.nvn.nvnCommandBufferSetDebugLabel(&nvn.command, "edenprobe's command buffer");
-        nvn.nvn.nvnBufferSetDebugLabel(&buffer, "edenprobe's buffer");
-        nvn.nvn.nvnSamplerSetDebugLabel(&sampler, "edenprobe's sampler");
-        nvn.nvn.nvnProgramSetDebugLabel(&program, "edenprobe's program");
-        nvn.nvn.nvnSyncSetDebugLabel(&sync, "edenprobe's sync");
-        nvn.nvn.nvnTexturePoolSetDebugLabel(&textures, "edenprobe's texture pool");
-        nvn.nvn.nvnSamplerPoolSetDebugLabel(&samplers, "edenprobe's sampler pool");
+        nvn.nvn.nvnDeviceSetDebugLabel(&nvn.device, "Amberlith's device");
+        nvn.nvn.nvnQueueSetDebugLabel(&nvn.queue, "Amberlith's queue");
+        nvn.nvn.nvnMemoryPoolSetDebugLabel(&nvn.read_pool, "Amberlith's readback pool");
+        nvn.nvn.nvnTextureSetDebugLabel(&nvn.target, "Amberlith's target");
+        nvn.nvn.nvnCommandBufferSetDebugLabel(&nvn.command, "Amberlith's command buffer");
+        nvn.nvn.nvnBufferSetDebugLabel(&buffer, "Amberlith's buffer");
+        nvn.nvn.nvnSamplerSetDebugLabel(&sampler, "Amberlith's sampler");
+        nvn.nvn.nvnProgramSetDebugLabel(&program, "Amberlith's program");
+        nvn.nvn.nvnSyncSetDebugLabel(&sync, "Amberlith's sync");
+        nvn.nvn.nvnTexturePoolSetDebugLabel(&textures, "Amberlith's texture pool");
+        nvn.nvn.nvnSamplerPoolSetDebugLabel(&samplers, "Amberlith's sampler pool");
         Gives(why, sizeof(why), "the labelled buffer's debug number",
               (long long)nvn.nvn.nvnBufferGetDebugID(&buffer), 0);
         Gives(why, sizeof(why), "the labelled texture's debug number",
@@ -2801,7 +2801,7 @@ static void SubroutineLinkageCase(const char *name) {
 /// Records into the open command buffer the Ounce's markers and groups, which say whether they
 /// name graphics or compute work: a compute group inside a graphics one, a marker in each.
 static void RecordOunceMarkers(NVNdebugDomainId domain) {
-    nvn.nvn.nvnCommandBufferPushDebugGroupGraphics(&nvn.command, domain, "edenprobe's clear");
+    nvn.nvn.nvnCommandBufferPushDebugGroupGraphics(&nvn.command, domain, "Amberlith's clear");
     nvn.nvn.nvnCommandBufferInsertDebugMarkerGraphics(&nvn.command, domain, "before the clear");
     nvn.nvn.nvnCommandBufferPushDebugGroupCompute(&nvn.command, domain, "no compute work");
     nvn.nvn.nvnCommandBufferInsertDebugMarkerCompute(&nvn.command, domain, "nothing here");
@@ -3246,7 +3246,7 @@ static void WindowSaysCase(const char *name) {
     NvnLayerClearError();
     char why[256] = "";
     // A label is the debug layer's: the window says the same with one.
-    nvn.nvn.nvnWindowSetDebugLabel(&win.window, "edenprobe's window");
+    nvn.nvn.nvnWindowSetDebugLabel(&win.window, "Amberlith's window");
     Gives(why, sizeof(why), "the window's native window",
           (long long)(uintptr_t)nvn.nvn.nvnWindowGetNativeWindow(&win.window),
           (long long)(uintptr_t)NativeWindow());

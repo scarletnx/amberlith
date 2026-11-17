@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # tools/uam.sh DIR: uam 1.1.0 with the fixes of scarletnx/uam (the commit below) and tools/uam/*.patch on it, built

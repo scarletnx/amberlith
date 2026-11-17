@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <arpa/inet.h>
@@ -387,9 +387,9 @@ static void RunAm(void) {
 
 /// Where a launch says on the memory card which marker it left in the temporary storage, so the
 /// next launch knows what to look for; and the marker's place in the storage.
-#define SERVICE_DIRECTORY "sdmc:/edenprobe/service"
+#define SERVICE_DIRECTORY "sdmc:/amberlith/service"
 static const char *const TEMP_PROMISE = SERVICE_DIRECTORY "/temporary";
-static const char *const TEMP_MARKER = "/edenprobe-launch";
+static const char *const TEMP_MARKER = "/amberlith-launch";
 
 static uint64_t ReadPromise(void) {
     unsigned long long promised = 0;
@@ -445,7 +445,7 @@ static void RunFsp(void) {
     bool opens = false;
     if (Start(SERVICE_TEMP_OPENS)) {
         Volume fs;
-        const Result rc = VolumeOpenTemporary(&fs, "edenprobe-temp");
+        const Result rc = VolumeOpenTemporary(&fs, "amberlith-temp");
         opens = R_SUCCEEDED(rc);
         char left[200] = "";
         if (opens) {
@@ -2257,7 +2257,7 @@ static void RunAuddev(void) {
 
 /// Where the directory cases work on the memory card, under the service family's own directory,
 /// and the names they use there.
-#define DIR_PARENT "/edenprobe/service/directory"
+#define DIR_PARENT "/amberlith/service/directory"
 #define DIR_OLD DIR_PARENT "/a"
 #define DIR_NEW DIR_PARENT "/b"
 #define DIR_FILE "f"
@@ -2280,8 +2280,8 @@ static void RunFsdir(void) {
     if (Start(SERVICE_DIR_RENAME)) {
         ServiceDirRename seen;
         memset(&seen, 0, sizeof(seen));
-        VolumeCreateDirectory(card, "/edenprobe");
-        VolumeCreateDirectory(card, "/edenprobe/service");
+        VolumeCreateDirectory(card, "/amberlith");
+        VolumeCreateDirectory(card, "/amberlith/service");
         VolumeDeleteDirectoryRecursively(card, DIR_PARENT);
         seen.make_rc = VolumeCreateDirectory(card, DIR_PARENT);
         if (R_SUCCEEDED(seen.make_rc)) {
@@ -2446,8 +2446,8 @@ static void RunAmChannel(void) {
         Skip(SERVICE_CHANNEL_PREVIOUS, REPORT_REASON_UNAVAILABLE, "%s", why);
         return;
     }
-    static const char FIRST[SERVICE_CHANNEL_BYTES] = "edenprobe first";
-    static const char SECOND[SERVICE_CHANNEL_BYTES] = "edenprobe secnd";
+    static const char FIRST[SERVICE_CHANNEL_BYTES] = "amberlith first";
+    static const char SECOND[SERVICE_CHANNEL_BYTES] = "amberlith secnd";
     if (!hosversionAtLeast(6, 0, 0)) {
         Skip(SERVICE_CHANNEL_UNPOP, REPORT_REASON_UNAVAILABLE,
              "UnpopToUserChannel came with 6.0.0; this machine says it is older");
@@ -3380,7 +3380,7 @@ static void RunRenderer(void) {
 
 /// The text the profanity filter is asked about: a name a player could type, with no word in it
 /// that a list would hold.
-static const char kNgcText[] = "edenprobe player";
+static const char kNgcText[] = "amberlith player";
 
 /// The text in a buffer of SERVICE_NGC_SIZE, the rest of it nought.
 static uint8_t g_ngc_text[SERVICE_NGC_SIZE];
@@ -4396,7 +4396,7 @@ static void RunPctl(void) {
 // ---------------------------------------------------------------------------------------------
 // fs-file
 
-#define FILE_PARENT "/edenprobe/service/file"
+#define FILE_PARENT "/amberlith/service/file"
 
 /// A file of SIZE bytes made at PATH on the card with the bytes given, or none. It is made at its
 /// size and written inside it: a write past the end needs a file opened to append.
@@ -4430,8 +4430,8 @@ static void RunFsFile(void) {
         Skip(SERVICE_FILE_SPACE, REPORT_REASON_UNAVAILABLE, "%s", why);
         return;
     }
-    VolumeCreateDirectory(card, "/edenprobe");
-    VolumeCreateDirectory(card, "/edenprobe/service");
+    VolumeCreateDirectory(card, "/amberlith");
+    VolumeCreateDirectory(card, "/amberlith/service");
     VolumeDeleteDirectoryRecursively(card, FILE_PARENT);
     const Result parent_rc = VolumeCreateDirectory(card, FILE_PARENT);
     static const char bytes[4] = { 'a', 'b', 'c', 'd' };

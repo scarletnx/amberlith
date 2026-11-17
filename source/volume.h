@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -16,7 +16,7 @@ extern "C" {
 /// A file system as a case reaches it, the memory card or the temporary storage, in the mode the
 /// run is in (hooks.h): libnx's file system object in IPC mode, each call the command libnx sends;
 /// a mount of nn::fs's in hooks mode, each call the SDK's function. Paths are the file system's
-/// own, "/edenprobe/...", in both; results are the service's or the SDK's, and the open modes,
+/// own, "/amberlith/...", in both; results are the service's or the SDK's, and the open modes,
 /// write options, directory modes and entries are libnx's, which have the SDK's values.
 typedef struct {
     bool hooks;

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Runs edenprobe under an emulator until its report is whole.
+"""Runs Amberlith under an emulator until its report is whole.
 
     tools/run.py --emulator EMULATOR --nro NRO --xdg DIR [--mode WORDS] [--machine NAME[@VERSION]]
                  [--relaunches N] [--timeout SECONDS] [--rounds N] [--log FILE] [--who NAME]
@@ -14,7 +14,7 @@ starting point, so two builds would not run from their own defaults. A binary's 
 its folder empty, and the emulator starts from its defaults; its later runs keep what it, or a
 person, wrote there. DIR/config, every binary's settings before, is no longer read and stays where
 it is, which the run says. The run starts clean: the
-reports and pictures in every run folder (sdmc:/edenprobe/runs/*), the support suite's scratch
+reports and pictures in every run folder (sdmc:/amberlith/runs/*), the support suite's scratch
 directory, last-run and the mode file are removed, and WORDS (default `quick`; empty for no file,
 which is the detailed screen) written into a new mode file, with machine=NAME[@VERSION] after them
 for the ban list (docs/Crashes.md): --machine's, or the one the emulator's name says, eden asked for
@@ -26,7 +26,7 @@ own driver writes no such file): with less than the tex8k suite's textures want,
 does not try them and says both numbers (docs/families/Graphics.md), since a host that runs out
 there can lose its graphics device. WORDS that say vram= keep theirs, and a machine whose driver
 says no such number gets no word, which is said: its textures are tried. The program names the folder it
-reports in, its build's hash and the mode file's label, in sdmc:/edenprobe/last-run; the report
+reports in, its build's hash and the mode file's label, in sdmc:/amberlith/last-run; the report
 and the journal are read from there.
 
 A launch whose report has no summary line ended before the run did: it crashed, or was stopped at
@@ -44,7 +44,7 @@ launch's and the case may only have been the one running when it came. A person 
 script stops the emulator the same way and writes `stopped` into the journal, so the case it was
 in is not taken for a crash by the next launch.
 
-The crash list (sdmc:/edenprobe/crashes) is kept per emulator binary, under DIR/crash-lists/, and
+The crash list (sdmc:/amberlith/crashes) is kept per emulator binary, under DIR/crash-lists/, and
 put on the card before the first launch and taken back after the last: one binary's crashes are
 not skipped on another's run. A rebuilt binary, another size or modification time, has a list of
 its own.
@@ -61,7 +61,7 @@ launch after another, and in logs/<suite>/<case>.log what the emulator itself sa
 that did not pass ran, in every pass and launch, cut out by the probe's own lines in that output
 (CaseLogs). A failure whose cause only the emulator knows, a shader it could not translate, a job
 it never ran, is then beside the case. Every line also goes to FILE as it came when --log is
-given; the lines about edenprobe are printed as they come, with ANSI colours taken off. At the end it prints the counts and, on lines of their
+given; the lines about Amberlith are printed as they come, with ANSI colours taken off. At the end it prints the counts and, on lines of their
 own, the cases skipped as crashed and the ones a launch was stopped inside at its limit, and exits
 0 when the report ends on its summary, 1 when it does not, 1 too when the run ended at a device loss, and 130 when stopped.
 
@@ -89,13 +89,13 @@ import threading
 import time
 
 ANSI = re.compile(rb"\x1b\[[0-9;]*m")
-SHOWN = re.compile(rb"edenprobe|EDENPROBE|\"type\":")
+SHOWN = re.compile(rb"amberlith|AMBERLITH|\"type\":")
 # The probe's own lines in the emulator's output, its report's and its breadcrumbs, and the case
 # lines among them.
-PROBE = re.compile(rb"EDENPROBE|\"type\":")
+PROBE = re.compile(rb"AMBERLITH|\"type\":")
 CASE = re.compile(rb"\"type\":\"case\"")
 # A breadcrumb before a rehearsed case (source/report.h, ReportBuildBreadcrumb): its suite and pass.
-CRUMB = re.compile(rb"EDENPROBE TIMING (\S+) pass (\d+) case ")
+CRUMB = re.compile(rb"AMBERLITH TIMING (\S+) pass (\d+) case ")
 # What an emulator logs when the host's driver has dropped its graphics device: Eden's "Device loss
 # occurred!", or the Vulkan result by its name (VK_ERROR_DEVICE_LOST, ErrorDeviceLost). Names only,
 # as they are spelled: "audio device lost" is another device's.
@@ -103,7 +103,7 @@ LOST = re.compile(rb"Device loss occurred|DEVICE_LOST|DeviceLost")
 
 
 def card(xdg):
-    return os.path.join(xdg, "data", "eden", "sdmc", "edenprobe")
+    return os.path.join(xdg, "data", "eden", "sdmc", "amberlith")
 
 
 # What the program writes into last-run: one folder under runs/, never a path out of the card.
@@ -916,7 +916,7 @@ def one_run(emulator, nro, xdg, mode="quick", relaunches=16, timeout=60, log_pat
 def perf_tool():
     """tools/perf.py, which reads a report's times and knows a median and a spread."""
     spec = importlib.util.spec_from_file_location(
-        "edenprobe_perf", os.path.join(os.path.dirname(os.path.abspath(__file__)), "perf.py"))
+        "amberlith_perf", os.path.join(os.path.dirname(os.path.abspath(__file__)), "perf.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

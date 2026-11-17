@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 /* bionic's resolver from native code, for names that never resolve and for localhost; the sockets themselves are
    the libc family's socket suite (source/tests/t_libc.c). */

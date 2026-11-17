@@ -26,7 +26,7 @@ Portable C, the same sources in every build (`source/portable.txt` lists them):
 - **the mode file** (`mode.c`): the words that choose the families ([The mode file](ModeFile.md));
 - **the run** (`runner.c`): the mode file read, the run's folder made, the journal of the run before read and the
   plan made from it, the steps run in their order with the journal written between them, the summary, and
-  `EDENPROBE DONE` on the log;
+  `AMBERLITH DONE` on the log;
 - **the judge** (selfcheck, support, reference) and the references the cases are held to;
 - **the cases every frontend runs**: the libc family's suites, the C library and what it asks of the system
   ([libc](families/Libc.md)).
@@ -40,7 +40,7 @@ for its screens. It writes files with stdio; a machine with no file system gets 
 
 | What | Required | Console | Android | Host |
 |---|---|---|---|---|
-| `PlatformLog`, the machine's log | yes | the debug string service | logcat, tag `edenprobe` | standard output |
+| `PlatformLog`, the machine's log | yes | the debug string service | logcat, tag `amberlith` | standard output |
 | `PlatformLogIsStandardOutput`, whether a case can read the log back | yes | no | no | yes |
 | `PlatformSocketsOpen`, for the socket suite | when it runs that suite | bsd (`socketInitializeDefault`) | nothing to bring up | nothing to bring up |
 | `PlatformSurface*`, a surface to draw into and read back | when it runs a drawing suite of the engine's | no: its graphics family is deko3d's own | not yet | no |
@@ -65,11 +65,11 @@ The rest is the frontend's own code, around the runner's calls (`runner.h`):
 
 | Frontend | Source | Root | Families |
 |---|---|---|---|
-| The console (NRO) | `source/main.c`, `source/platform_switch.c` | `sdmc:/edenprobe` | judge and cpu always; graphics, fs, net when no word names one; pad, kernel, pace, display, video, audio, service, game, libc and music when named |
-| Android (APK) | `android/src/main/cpp/frontend.c`, `platform_android.c`, the Java in `android/src/main/java` | the app's external files, `edenprobe/` | judge always; libc, graphics, net, jni and framework when no word names one ([On Android](Android.md)) |
-| The Switch 2 (ExeFS) | `ounce/frontend.c`, `source/platform_switch.c` | `sdmc:/edenprobe` | judge always; nvn (the `nvn` and `nvn2` suites) when no word names one ([The probe as a Switch 2 program](Ounce.md)) |
-| A mod of a game (`subsdk9`) | `mod/frontend.c`, `mod/start.c`, `mod/platform.c` | `sdmc:/edenprobe` | the judge's selfcheck and support always; nvn (the `mod` suite and the `nvn` suite's looked up way, on the game's own driver) when no word names one ([The probe as a mod of a game](Mod.md)) |
-| Host | `source/host_main.c`, `source/platform_host.c` | none: `edenprobe-host-report.jsonl` where it runs | the judge and the libc family, every time ([Build](Build.md#the-host-build)) |
+| The console (NRO) | `source/main.c`, `source/platform_switch.c` | `sdmc:/amberlith` | judge and cpu always; graphics, fs, net when no word names one; pad, kernel, pace, display, video, audio, service, game, libc and music when named |
+| Android (APK) | `android/src/main/cpp/frontend.c`, `platform_android.c`, the Java in `android/src/main/java` | the app's external files, `amberlith/` | judge always; libc, graphics, net, jni and framework when no word names one ([On Android](Android.md)) |
+| The Switch 2 (ExeFS) | `ounce/frontend.c`, `source/platform_switch.c` | `sdmc:/amberlith` | judge always; nvn (the `nvn` and `nvn2` suites) when no word names one ([The probe as a Switch 2 program](Ounce.md)) |
+| A mod of a game (`subsdk9`) | `mod/frontend.c`, `mod/start.c`, `mod/platform.c` | `sdmc:/amberlith` | the judge's selfcheck and support always; nvn (the `mod` suite and the `nvn` suite's looked up way, on the game's own driver) when no word names one ([The probe as a mod of a game](Mod.md)) |
+| Host | `source/host_main.c`, `source/platform_host.c` | none: `amberlith-host-report.jsonl` where it runs | the judge and the libc family, every time ([Build](Build.md#the-host-build)) |
 
 The console runs the libc family only when a word names it, so a run that names no family reports what it did
 before the family existed.
@@ -77,8 +77,8 @@ before the family existed.
 ## A new frontend
 
 1. A build that compiles `source/portable.txt` with its compiler, `-std=c11 -Wall -Wextra -Werror`, and its own
-   sources beside them, and names its build as the Makefile does (`EDENPROBE_VERSION`, `EDENPROBE_BUILD`,
-   `EDENPROBE_HASH`, [Versions](Versions.md)).
+   sources beside them, and names its build as the Makefile does (`AMBERLITH_VERSION`, `AMBERLITH_BUILD`,
+   `AMBERLITH_HASH`, [Versions](Versions.md)).
 2. `platform_<name>.c` with `PlatformLog`, `PlatformError`, and the sockets and the surface for the suites it runs.
 3. A `RunnerFrontend` and an entry that calls the runner in order: `RunnerInit`, `RunnerModeFromFile`,
    `RunnerPlan`, `RunnerModeAtStart`, `RunnerOpen`, `RunnerBeginJournal` for a new run, `RunnerApplyMode`,
@@ -98,7 +98,7 @@ what each needs:
   `devkitpro/devkitarm` container as the NRO's job uses `devkitpro/devkita64`. This machine has devkitA64 and libnx
   only; devkitPro's installer writes `/opt/devkitpro`, which takes root.
 - **Platform:** `PlatformLog` through `svcOutputDebugString`, which Citra and its forks log; sockets through
-  `socInit` with a buffer of its own; files on the SD card through libctru's sdmc, so the root is `sdmc:/edenprobe`
+  `socInit` with a buffer of its own; files on the SD card through libctru's sdmc, so the root is `sdmc:/amberlith`
   as on the Switch.
 - **Shared cases:** libc whole (newlib, as the Switch's); system (libctru's pthreads and `clock_gettime`); socket
   over `soc:U` on loopback.
@@ -107,7 +107,7 @@ what each needs:
 
 - **Toolchain:** VitaSDK, which installs in a folder of the user's (`vdpm`, `VITASDK=$HOME/vitasdk`), no root.
 - **Platform:** `PlatformLog` through `sceClibPrintf`, which Vita3K logs; sockets through `sceNetInit` and
-  `sceNetCtlInit`; files under `ux0:data/edenprobe`.
+  `sceNetCtlInit`; files under `ux0:data/amberlith`.
 - **Shared cases:** libc whole (VitaSDK's newlib); system (its pthreads, `clock_gettime`); socket on loopback once
   the network module is up.
 

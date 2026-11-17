@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """source/jitblocks.c is what tools/jit-blocks.py writes, and the rules it works the expected state
 out with give the architecture's answers on values worked out by hand."""

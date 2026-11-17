@@ -19,7 +19,7 @@
 <!-- /counts -->
 
 The net family asks the services a program reaches the network through, the way a game asks them,
-and judges each answer against its protocol or against what `sdmc:/edenprobe/net` says the backend
+and judges each answer against its protocol or against what `sdmc:/amberlith/net` says the backend
 publishes (see [The net file](#the-net-file) below). Every line says what was expected and what came
 back. A case that needs a backend the file does not name, or a service this program cannot open, is
 `skip`, with the reason. The tier is exact wherever a value is compared and none where a line only
@@ -106,7 +106,7 @@ documentation's reading, but the unknown profile's, whose id is the fork's code 
 ## The net file
 
 The net family needs to know what the machine's backend promises, and a file on the memory card says
-it: `sdmc:/edenprobe/net`, one `key value` per line, `#` to the end of a line a comment, and a line
+it: `sdmc:/amberlith/net`, one `key value` per line, `#` to the end of a line a comment, and a line
 it does not understand counted and named in the report and otherwise ignored.
 
 | line | what it promises |
@@ -118,7 +118,7 @@ it does not understand counted and named in the report and otherwise ignored.
 | `profile <16 hex digits> <url or -> <name>` | one entry of its `/api/v1/profiles`, the name running to the end of the line |
 | `server <a.b.c.d> <port>` | a game server reachable over TCP and TLS; an address, not a name, so a server known by name is resolved by hand first |
 | `server-name <name>` | the name to present to it, which its certificate has to carry as a subject alternative name for the verifying cases to pass |
-| `server-cert <path>` | the certificate it presents, PEM, relative to `sdmc:/edenprobe` |
+| `server-cert <path>` | the certificate it presents, PEM, relative to `sdmc:/amberlith` |
 
 With no file, every case that needs a backend is skipped and the rest still run: loopback sockets, a
 dotted address resolving to itself, a connection's defaults. Without a `session` line nothing asks
@@ -126,10 +126,10 @@ acc or friend for anything that reaches a server, which on a console would be th
 console run against a deployed game server names `server`, `server-name` and, when no authority
 signed the certificate, `server-cert`; the same file runs there and here. By hand, for a server at
 203.0.113.7 whose certificate names `game.example.org`, copied to the card as
-`sdmc:/edenprobe/game.pem`:
+`sdmc:/amberlith/game.pem`:
 
 ```
-# sdmc:/edenprobe/net
+# sdmc:/amberlith/net
 server 203.0.113.7 443
 server-name game.example.org
 server-cert game.pem
@@ -141,10 +141,10 @@ time; the session lines only make sense against an emulator configured for that 
 ```
 session http://127.0.0.1:41234
 account bb00000100000002
-rewrite game.edenprobe.invalid localhost 127.0.0.1
+rewrite game.amberlith.invalid localhost 127.0.0.1
 blocked bb00000100000009
 blocked bb0000010000000a
-profile bb00000100000002 http://127.0.0.1:41234/avatar/{size}.png edenprobe
+profile bb00000100000002 http://127.0.0.1:41234/avatar/{size}.png Amberlith
 server 127.0.0.1 8443
 server-name redenex
 server-cert net-server.pem
@@ -177,7 +177,7 @@ redenex bringing that database up is started again, three tries in all, each wit
 
 It fails loudly rather than print a table: a server that does not come up, `make run` exiting
 non-zero (no emulator there, a build error, a run with no summary), or output with no
-`EDENPROBE DONE` line ends it with one line saying which and a non-zero exit, and the previous
+`AMBERLITH DONE` line ends it with one line saying which and a non-zero exit, and the previous
 report is deleted before the run, so nothing from an earlier run can pass for this one's.
 `NET_CONFIG_DELAY=6` makes the backend hold `/api/v1/config` for six seconds, which is how the
 sign-in wait is tested.

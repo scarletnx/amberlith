@@ -1,21 +1,21 @@
 /build/
 /build-host/
-/edenprobe.elf
-/edenprobe.nro
-/edenprobe.nacp
-/edenprobe-host-report.jsonl
+/amberlith.elf
+/amberlith.nro
+/amberlith.nacp
+/amberlith-host-report.jsonl
 /tools/__pycache__/
 /.github/scripts/__pycache__/
-/tools/vklayer/libVkLayer_edenprobe_masquerade.so
+/tools/vklayer/libVkLayer_amberlith_masquerade.so
 /tools/vklayer/check_masquerade
-# what a Gradle build of android/ run there by hand leaves; -Pedenprobe.out=DIR puts it elsewhere
+# what a Gradle build of android/ run there by hand leaves; -Pamberlith.out=DIR puts it elsewhere
 /android/build/
 /android/.gradle/
 /android/.cxx/
 /android/local.properties
 /build-ounce/
-/edenprobe-ounce.elf
-/edenprobe-ounce/
+/amberlith-ounce.elf
+/amberlith-ounce/
 /build-mod/
-/edenprobe-mod.elf
-/edenprobe-mod/
+/amberlith-mod.elf
+/amberlith-mod/

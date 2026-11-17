@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 /* JNI as ART gives it to native code: the version, FindClass's class loaders, strings, exceptions, arrays, calls. */
 #include "probe.h"

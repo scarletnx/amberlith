@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -17,7 +17,7 @@ extern "C" {
 /// emulator is a fact about the emulator and not about a parser nobody checked.
 
 /// Where the net family reads what the backend promises, beside the mode file.
-#define NET_FILE_PATH "sdmc:/edenprobe/net"
+#define NET_FILE_PATH "sdmc:/amberlith/net"
 
 #define NET_NAME_MAX 128u
 #define NET_REWRITE_MAX 4u
@@ -43,7 +43,7 @@ typedef struct {
     char url[NET_PROFILE_URL_MAX];
 } NetProfile;
 
-/// What `sdmc:/edenprobe/net` says. One `key value...` per line, `#` to the end of a line is a
+/// What `sdmc:/amberlith/net` says. One `key value...` per line, `#` to the end of a line is a
 /// comment, and anything this file does not know is counted and quoted, never fatal:
 ///
 ///   session <origin>             an online session in the sense of reden's docs/OnlineService.md
@@ -58,7 +58,7 @@ typedef struct {
 ///                                one entry of its /api/v1/profiles; the name runs to the end.
 ///   server <a.b.c.d> <port>      a game server reachable over TCP and TLS.
 ///   server-name <name>           the name to present to it, and the one its certificate carries.
-///   server-cert <path>           the certificate it presents, PEM, relative to sdmc:/edenprobe.
+///   server-cert <path>           the certificate it presents, PEM, relative to sdmc:/amberlith.
 typedef struct {
     bool file_found;
     bool has_session;
@@ -219,7 +219,7 @@ bool NetSessionAnswered(const NetConfig *config, const char *asked, const char *
 const char *NetSessionProbeName(const NetConfig *config);
 
 /// The name every dns case that carries the placeholder asks about.
-#define NET_PLACEHOLDER_NAME "probe-%.edenprobe.invalid"
+#define NET_PLACEHOLDER_NAME "probe-%.amberlith.invalid"
 
 /// What nsd's answer @p got for @p asked, a name carrying the placeholder, is when it is not the
 /// @p expected one, as a clause a failure's detail ends on: the name handed back as it was asked,
