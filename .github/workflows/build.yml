@@ -109,6 +109,10 @@ jobs:
         run: |
           python3 tools/npdm-ounce.py read edenprobe-ounce/exefs/main.npdm | grep -x 'descriptor: Switch 2, its magic at 0x300'
           python3 tools/nvn-lookups.py edenprobe-ounce.elf
+      # The probe as a mod of a game (docs/Mod.md): the module builds, asks of a game only what mod/imports.txt
+      # lists, exports nothing and holds nothing of libnx's start
+      - name: Build the mod of a game and check what it asks of the game
+        run: make -f mod.mk -j"$(nproc)" check
       - name: Name the NRO after its commit
         run: cp edenprobe.nro "edenprobe-${{ steps.commit.outputs.short }}.nro"
       # Not zipped: the artifact is the NRO itself, named after it
