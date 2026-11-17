@@ -165,9 +165,10 @@
     ```
 
 - **Wimsy**, ScarletNX's mascot, drawn by Liz (ScarletNX's `dist/wimsy.svg`, GPL-3.0-or-later):
-  `static/wimsy-amberlith.svg` draws her as Amberlith, in amber with a test probe, from her shapes as
-  `static/wimsy-sunset.svg` has them; `tools/cover.py` sets her on the cover, `static/icon.svg`, and
-  `tools/wimsy-picture.py` makes the picture of her the start screen draws.
+  `static/wimsy-amberlith.svg` draws her as Amberlith, in amber with a test probe, as wimsy-dist's
+  `tools/make_amberlith.py` makes it (https://github.com/scarletnx/wimsy-dist, commit
+  bf602a69a28c6e723f973dc3ae59ffe68aa9091a, `dist/wimsy-amberlith.svg`, unchanged); `tools/cover.py` sets her on the
+  cover, `static/icon.svg`, and `tools/wimsy-picture.py` makes the picture of her the start screen draws.
   `static/wimsy.svg` is that drawing, unchanged, as ScarletNX has it at commit
   27a379c8a08a371e000350284aa72f61dd309ea8; `tools/wimsy-mesh.py` makes `source/wimsymesh.c`
   from it, the model and the sprite the game family's [levels](families/Game.md#the-levels) draw.
@@ -175,7 +176,8 @@
   commit ce8c740c1a7d05fbc19e41a5efd3310ffa1de806), each GPL-3.0-or-later there, give the heavy
   levels' crowd its other colours: `static/wimsy-fuddles.svg`, Fuddles' own Wimsy
   (fuddlesworth); `static/wimsy-sunset.svg`, edenprobe's, in Eden's sunset colours (Eden's
-  `dist/dev.eden_emu.eden.svg`) with a test probe, made by wimsy-dist's `tools/make_edenprobe.py`;
+  `dist/dev.eden_emu.eden.svg`) with a test probe, its `dist/wimsy-edenprobe.svg` at bf602a6, made by
+  `tools/make_edenprobe.py`;
   `static/wimsy-accord.svg`, Accord's, DraVee's forge, and the Sepia theme's Wimsy there, the
   same file; and `static/wimsy-default.svg`, Wimsy in the Default theme's colours. The fan drawings
   there, under a non-commercial licence, are not used.
