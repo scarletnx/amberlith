@@ -164,6 +164,7 @@ static const RunnerStep STEPS[] = {
 // The console's frontend for the runner: its folder, its build and its steps.
 static const RunnerFrontend FRONTEND = {
     .root = PROBE_DIRECTORY,
+    .old_root = PROBE_OLD_DIRECTORY,
     .version = AMBERLITH_VERSION,
     .build = AMBERLITH_BUILD,
     .hash = AMBERLITH_HASH,

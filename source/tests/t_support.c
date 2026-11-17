@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "../check.h"
@@ -883,6 +884,7 @@ static void CheckHooksWord(void);
 static void CheckWidestMode(void);
 static void CheckFrontendFamilies(void);
 static void CheckRunnerRoot(void);
+static void CheckOldRoot(void);
 
 static void CheckLaunchAndMode(void) {
     // The pad is waited for until it answers, and no longer.
@@ -1190,6 +1192,7 @@ static void CheckLaunchAndMode(void) {
     CheckWidestMode();
     CheckFrontendFamilies();
     CheckRunnerRoot();
+    CheckOldRoot();
 }
 
 /// `label=<name>` names the folder a run goes in beside the build's hash, and a name a folder
@@ -2088,6 +2091,74 @@ static void CheckRunnerRoot(void) {
                "runs %.100s",
                (unsigned)(RUNNER_ROOT_MAX + 1u), refused ? "refused" : "taken", root,
                runner.mode_path, runner.crash_list_path, runner.runs_directory);
+}
+
+/// The folder a launch runs from: the old one, whole, on a card an edenprobe build left and no
+/// Amberlith build has run on; the root otherwise. Scratch files a case leaves in the root (its
+/// fs/ folder) do not make it one Amberlith ran on.
+static void CheckOldRoot(void) {
+    static const struct {
+        bool root_mode, root_runs, old_mode, old_runs;
+        RunnerRootChoice want;
+    } RULES[] = {
+        { false, false, false, false, RUNNER_ROOT_NEW },
+        { false, false, true, false, RUNNER_ROOT_OLD },
+        { false, false, false, true, RUNNER_ROOT_OLD },
+        { true, false, true, true, RUNNER_ROOT_NEW_BESIDE_OLD },
+        { false, true, false, true, RUNNER_ROOT_NEW_BESIDE_OLD },
+        { true, true, false, false, RUNNER_ROOT_NEW },
+    };
+    unsigned rules = 0;
+    for (size_t i = 0; i < sizeof(RULES) / sizeof(RULES[0]); ++i) {
+        rules += RunnerOldRoot(RULES[i].root_mode, RULES[i].root_runs, RULES[i].old_mode,
+                               RULES[i].old_runs) == RULES[i].want
+                     ? 1u
+                     : 0u;
+    }
+    char root[RUNNER_ROOT_MAX];
+    char old[RUNNER_ROOT_MAX];
+    char path[RUNNER_ROOT_MAX + 16u];
+    snprintf(root, sizeof(root), "%.100s/amberlith-root", Scratch());
+    snprintf(old, sizeof(old), "%.100s/edenprobe-root", Scratch());
+    (void)mkdir(old, 0777);
+    snprintf(path, sizeof(path), "%s/mode", old);
+    FILE *mode = fopen(path, "w");
+    if (mode != NULL) {
+        fputs("quick\n", mode);
+        fclose(mode);
+    }
+    (void)mkdir(root, 0777);
+    snprintf(path, sizeof(path), "%s/fs", root);
+    (void)mkdir(path, 0777);
+    static Runner runner;
+    RunnerFrontend frontend;
+    memset(&frontend, 0, sizeof(frontend));
+    frontend.root = root;
+    frontend.old_root = old;
+    const bool took_old = RunnerInit(&runner, &frontend) && runner.root_choice == RUNNER_ROOT_OLD &&
+                          strcmp(runner.root, old) == 0 && strcmp(RunnerRootInUse(), old) == 0 &&
+                          strncmp(runner.mode_path, old, strlen(old)) == 0;
+    snprintf(path, sizeof(path), "%s/runs", root);
+    (void)mkdir(path, 0777);
+    const bool took_root = RunnerInit(&runner, &frontend) &&
+                           runner.root_choice == RUNNER_ROOT_NEW_BESIDE_OLD &&
+                           strcmp(runner.root, root) == 0 && strcmp(RunnerRootInUse(), root) == 0;
+    (void)rmdir(path);
+    snprintf(path, sizeof(path), "%s/fs", root);
+    (void)rmdir(path);
+    (void)rmdir(root);
+    snprintf(path, sizeof(path), "%s/mode", old);
+    (void)remove(path);
+    (void)rmdir(old);
+    CHECK_TRUE(SUITE,
+               "a card an edenprobe build left runs from its folder whole until an Amberlith build "
+               "has run on it",
+               CHECK_NONE, rules == sizeof(RULES) / sizeof(RULES[0]) && took_old && took_root,
+               "%u of %u rules right; with edenprobe's mode file and only a scratch folder in the "
+               "root, %s; with runs/ in the root, %s",
+               rules, (unsigned)(sizeof(RULES) / sizeof(RULES[0])),
+               took_old ? "the old folder" : "not the old folder",
+               took_root ? "the root" : "not the root");
 }
 
 static void CheckLayout(void) {

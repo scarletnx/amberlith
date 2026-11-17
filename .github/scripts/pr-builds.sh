@@ -17,6 +17,8 @@ if [ $# -lt 4 ] || [ $# -gt 5 ] || { [ $# -eq 5 ] && [ "$5" != --print ]; }; the
 fi
 repo=$1 pr=$2 run=$3 sha=$4 print=${5:-}
 mark='<!-- amberlith-builds -->'
+# the mark a pull request's comment has from before Amberlith 1.0.0, which is rewritten with the new one
+old_mark='<!-- edenprobe-builds -->'
 
 if [ -z "$print" ] && [ "$(gh api "repos/$repo/pulls/$pr" --jq .head.sha)" != "$sha" ]; then
     echo "$sha is no longer the head of #$pr: its comment stays"
@@ -44,7 +46,8 @@ if [ -n "$print" ]; then
     exit 0
 fi
 id=$(gh api --paginate "repos/$repo/issues/$pr/comments?per_page=100" --jq \
-    ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$mark\"))) | .id" | head -n1)
+    ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$mark\") or startswith(\"$old_mark\"))) | .id" |
+    head -n1)
 if [ -n "$id" ]; then
     gh api -X PATCH "repos/$repo/issues/comments/$id" -f body="$body" > /dev/null
 else

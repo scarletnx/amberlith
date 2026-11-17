@@ -16,8 +16,9 @@ extern "C" {
 /// suites. The `reference` suite pins all of it on the host, so a case that fails under an
 /// emulator is a fact about the emulator and not about a parser nobody checked.
 
-/// Where the net family reads what the backend promises, beside the mode file.
-#define NET_FILE_PATH "sdmc:/amberlith/net"
+/// What the net family reads what the backend promises from, beside the mode file: `net` in the
+/// folder the run is in (RunnerRootInUse).
+#define NET_FILE_NAME "net"
 
 #define NET_NAME_MAX 128u
 #define NET_REWRITE_MAX 4u
@@ -84,8 +85,9 @@ typedef struct {
 /// Reads @p text, NULL meaning there was no file. Never fails: what it cannot read it counts.
 void NetConfigParse(const char *text, NetConfig *out);
 
-/// The report's one line about it. Returns the length; the text is always terminated.
-size_t NetConfigDescribe(char *out, size_t out_size, const NetConfig *config);
+/// The report's one line about it, read from @p path. Returns the length; the text is always
+/// terminated.
+size_t NetConfigDescribe(char *out, size_t out_size, const NetConfig *config, const char *path);
 
 /// Whether the file says this machine should have a network at all: it names a backend or a
 /// server. Without that, nothing says a disconnected machine is wrong.

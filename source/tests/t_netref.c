@@ -96,7 +96,7 @@ static void CheckNetFile(void) {
                (unsigned)config.problem_count, config.problems);
 
     char said[512];
-    NetConfigDescribe(said, sizeof(said), &config);
+    NetConfigDescribe(said, sizeof(said), &config, "sdmc:/amberlith/net");
     static const char EXPECTED[] =
         "net: sdmc:/amberlith/net; session http://127.0.0.1:41234; account named; 1 rewrite, "
         "2 blocked, 2 profiles; server 127.0.0.1:8443, name redenex, certificate net-server.pem; "
@@ -104,7 +104,7 @@ static void CheckNetFile(void) {
     static NetConfig none;
     NetConfigParse(NULL, &none);
     char none_said[256];
-    NetConfigDescribe(none_said, sizeof(none_said), &none);
+    NetConfigDescribe(none_said, sizeof(none_said), &none, "sdmc:/amberlith/net");
     const bool none_right =
         !none.file_found && !NetConfigDeclaresOnline(&none) &&
         strcmp(none_said,

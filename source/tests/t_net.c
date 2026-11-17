@@ -23,6 +23,7 @@
 #include "../hooks.h"
 #include "../netref.h"
 #include "../report.h"
+#include "../runner.h"
 #include "../sdk.h"
 #include "tests.h"
 
@@ -141,9 +142,17 @@ static void AddressBytes(const struct sockaddr_in *in, uint8_t out[4]) {
     memcpy(out, &in->sin_addr.s_addr, 4);
 }
 
+/// The net file, or what it names, in the folder the run is in.
+static void InFolder(char *out, size_t out_size, const char *name) {
+    const char *const root = RunnerRootInUse();
+    snprintf(out, out_size, "%s/%s", root != NULL ? root : PROBE_DIRECTORY, name);
+}
+
 static void LoadConfig(void) {
     static char text[8192];
-    FILE *file = fopen(NET_FILE_PATH, "rb");
+    char path[RUNNER_ROOT_MAX + 8u];
+    InFolder(path, sizeof(path), NET_FILE_NAME);
+    FILE *file = fopen(path, "rb");
     if (file == NULL) {
         NetConfigParse(NULL, &config);
     } else {
@@ -153,7 +162,7 @@ static void LoadConfig(void) {
         NetConfigParse(text, &config);
     }
     char said[REPORT_NOTE_MAX + 1];
-    NetConfigDescribe(said, sizeof(said), &config);
+    NetConfigDescribe(said, sizeof(said), &config, path);
     ReportNote("%s", said);
 }
 
@@ -1668,8 +1677,8 @@ static void RunSsl(const char *sockets_why, const char *streams_why) {
     if (config.server_cert[0] == '\0') {
         snprintf(cert_why, sizeof(cert_why), "the net file names no server-cert");
     } else {
-        char path[NET_NAME_MAX + 32];
-        snprintf(path, sizeof(path), "sdmc:/amberlith/%s", config.server_cert);
+        char path[RUNNER_ROOT_MAX + NET_NAME_MAX + 2u];
+        InFolder(path, sizeof(path), config.server_cert);
         FILE *file = fopen(path, "rb");
         const size_t length = file != NULL ? fread(pem, 1, sizeof(pem) - 1u, file) : 0u;
         if (file != NULL) {

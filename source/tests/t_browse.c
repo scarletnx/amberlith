@@ -815,7 +815,7 @@ static void CheckJudgeMargin(uint8_t *pixels) {
 /// directory: host only, and never a case, as the screens' own frames are.
 static void DumpBrowser(uint8_t *pixels) {
 #ifndef __SWITCH__
-    const char *const directory = getenv("AMBERLITH_FRAMES");
+    const char *const directory = SupportFramesDirectory();
     if (directory == NULL || directory[0] == '\0' || pixels == NULL) {
         return;
     }

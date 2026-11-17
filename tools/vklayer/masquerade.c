@@ -94,8 +94,25 @@ static Device *FindDevice(const void *handle) {
     return NULL;
 }
 
-static bool Set(const char *name) {
+/// The variable @p name, or the one it was before Amberlith 1.0.0 (EDENPROBE_ for AMBERLITH_),
+/// said on stderr with both names when only the old one is set.
+static const char *Variable(const char *name) {
     const char *const value = getenv(name);
+    if (value != NULL) {
+        return value;
+    }
+    char old[64];
+    snprintf(old, sizeof(old), "EDENPROBE_%s", name + strlen("AMBERLITH_"));
+    const char *const before = getenv(old);
+    if (before != NULL) {
+        fprintf(stderr, LAYER_NAME ": %s=%s is read as %s, its name since Amberlith 1.0.0\n", old,
+                before, name);
+    }
+    return before;
+}
+
+static bool Set(const char *name) {
+    const char *const value = Variable(name);
     return value != NULL && value[0] != '\0' && strcmp(value, "0") != 0;
 }
 
@@ -122,7 +139,7 @@ static bool Hide(Instance *instance, const char *name, size_t length) {
 /// The masks from the environment, into the instance; false, with the reason on stderr, for a
 /// value that names nothing.
 static bool ReadMasks(Instance *instance) {
-    const char *const api = getenv("AMBERLITH_MASQUERADE_API");
+    const char *const api = Variable("AMBERLITH_MASQUERADE_API");
     if (api != NULL && api[0] != '\0') {
         if (strlen(api) != 3 || api[0] != '1' || api[1] != '.' || api[2] < '0' || api[2] > '4') {
             fprintf(stderr,
@@ -137,7 +154,7 @@ static bool ReadMasks(Instance *instance) {
         Hide(instance, "VK_EXT_host_query_reset", strlen("VK_EXT_host_query_reset"));
         Hide(instance, "hostQueryReset", strlen("hostQueryReset"));
     }
-    const char *at = getenv("AMBERLITH_MASQUERADE_HIDE");
+    const char *at = Variable("AMBERLITH_MASQUERADE_HIDE");
     while (at != NULL && *at != '\0') {
         at += strspn(at, ", ");
         const size_t length = strcspn(at, ", ");

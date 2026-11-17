@@ -44,11 +44,9 @@ ORIGIN = """static const struct { const char *suite; ReportFrom from; } ORIGINS[
 """
 
 
-def report(path, cases, host=False):
+def report(path, cases, host=False, name="Amberlith"):
     with open(path, "w", encoding="utf-8") as file:
-        file.write(
-            json.dumps({"type": "note", "text": "Amberlith host build" if host else "Amberlith 9.9.9 (x) starting"})
-        )
+        file.write(json.dumps({"type": "note", "text": name + (" host build" if host else " 9.9.9 (x) starting")}))
         file.write("\n")
         if not host:
             file.write(json.dumps({"type": "note", "text": "mode: quick; machine scarletnx, version abc1234"}) + "\n")
@@ -137,6 +135,18 @@ class Catalogue(unittest.TestCase):
         self.assertEqual(rows[("depth", "less at a half")][3:5], ("ulp", "console"))
         self.assertEqual(rows[("fs", "a read past the end")][2:4], ("fs", "unknown"))
         self.assertIn("# nro: Amberlith 9.9.9 (x), machine scarletnx abc1234", self.tree.read("docs", "cases.tsv"))
+
+    def test_a_report_of_a_build_from_before_amberlith_reads_as_one_of_amberlith(self):
+        old_nro = report(self.tree.path("old.jsonl"), [("fs", "a read", "exact", "pass")], name="edenprobe")
+        old_host = report(
+            self.tree.path("old-host.jsonl"), [("selfcheck", "integer arithmetic", "none", "pass")], True, "edenprobe"
+        )
+        rows = self.tree.catalogue({"nro": [old_nro], "host": [old_host]})
+        self.assertEqual(rows[("selfcheck", "integer arithmetic")].builds, ("host",))
+        self.assertIn("# nro: edenprobe 9.9.9 (x), machine scarletnx abc1234", self.tree.read("docs", "cases.tsv"))
+        with self.assertRaises(tool.Refused) as caught:
+            tool.catalogue(self.tree.root, {"nro": [old_host]})
+        self.assertIn("given as nro, and it is the host build", str(caught.exception))
 
     def test_the_rows_follow_ui_c_s_order_then_each_report_s(self):
         self.tree.catalogue({"host": [self.host], "nro": [self.nro]})

@@ -47,6 +47,10 @@ ORIGIN = "source/origin.c"
 DOCS = "docs"
 
 BUILDS = ("nro", "ounce", "mod", "apk", "host")
+# The program's name opening a report's first note, and the host build's note: Amberlith's, then
+# edenprobe's, which the reports of builds before 1.0.0 have.
+PROGRAM_NAMES = ("Amberlith ", "edenprobe ")
+HOST_NOTES = ("Amberlith host build", "edenprobe host build")
 # The tiers that compare what the machine produced, in source/report.h's order.
 TIERS = ("exact", "ulp", "position", "level", "bound")
 BUILD_WORDS = {
@@ -219,7 +223,7 @@ def read_report(path, build):
                 entry = json.loads(line)
             except ValueError as error:
                 raise Refused("%s:%d: not a JSON line: %s" % (path, number, error))
-            if entry.get("type") == "note" and entry.get("text") == "amberlith host build":
+            if entry.get("type") == "note" and entry.get("text") in HOST_NOTES:
                 host = True
             if entry.get("type") != "case":
                 continue
@@ -328,7 +332,7 @@ def describe(path):
                     break
                 continue
             text = entry.get("text", "")
-            if text.startswith("amberlith "):
+            if text.startswith(PROGRAM_NAMES):
                 words.append(text.replace(" starting", ""))
             match = re.search(r"machine ([a-z0-9-]+)(?:, version ([\w.-]+))?", text)
             if match and text.startswith("mode:"):
