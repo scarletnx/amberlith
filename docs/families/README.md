@@ -35,7 +35,7 @@ judge no machine, so the last line leaves them out.
 | System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 | 0 | 0 | 14 | 0 | 0 |
 | Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 35 |
 | Speed | [Pace](Pace.md) | 6 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 |
-| The judge and the tools | [The judge](Judge.md) | 3 | 813 | - | - | - | - | - | - | - | - |
+| The judge and the tools | [The judge](Judge.md) | 3 | 815 | - | - | - | - | - | - | - | - |
 | **On a machine** | | **118** | **1662** | **1318** | **0** | **16** | **210** | **117** | **975** | **269** | **75** |
 <!-- /counts -->
 
