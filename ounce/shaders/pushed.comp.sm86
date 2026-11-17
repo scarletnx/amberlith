@@ -1,4 +1,4 @@
-; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
 ; The scale program with its numbers pushed: each invocation takes its own word of storage buffer 0 and writes it

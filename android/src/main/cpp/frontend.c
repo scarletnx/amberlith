@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // Android's frontend (docs/Frontends.md, docs/Android.md): the engine runs here as it runs on the
@@ -97,9 +97,9 @@ static const RunnerStep STEPS[] = {
 
 // Every family runs when the file names none: none of them needs a person, a server or sound.
 static RunnerFrontend g_android = {
-    .version = EDENPROBE_VERSION,
-    .build = EDENPROBE_BUILD,
-    .hash = EDENPROBE_HASH,
+    .version = AMBERLITH_VERSION,
+    .build = AMBERLITH_BUILD,
+    .hash = AMBERLITH_HASH,
     .steps = STEPS,
     .step_count = sizeof(STEPS) / sizeof(STEPS[0]),
     .present = ANDROID_FAMILIES,
@@ -140,7 +140,7 @@ static void NoteDevice(const char *java) {
     ReportNote("device: %s, native library %s, page size %ld", java, ABI, sysconf(_SC_PAGESIZE));
 }
 
-JNIEXPORT jint JNICALL Java_org_scarletnx_edenprobe_Engine_nativeRun(JNIEnv *env, jclass engine,
+JNIEXPORT jint JNICALL Java_org_scarletnx_amberlith_Engine_nativeRun(JNIEnv *env, jclass engine,
                                                                     jstring root, jstring tmp,
                                                                     jstring device) {
     g_frontend.env = env;
@@ -162,7 +162,7 @@ JNIEXPORT jint JNICALL Java_org_scarletnx_edenprobe_Engine_nativeRun(JNIEnv *env
     g_android.root = root_path;
     if (!fits || !RunnerInit(&g_runner, &g_android)) {
         char said[RUNNER_ROOT_MAX + 96u];
-        snprintf(said, sizeof(said), "edenprobe: the folder %s is longer than %u characters",
+        snprintf(said, sizeof(said), "amberlith: the folder %s is longer than %u characters",
                  root_path, (unsigned)RUNNER_ROOT_MAX);
         PlatformLog(said, strlen(said));
         return -1;
@@ -194,7 +194,7 @@ JNIEXPORT jint JNICALL Java_org_scarletnx_edenprobe_Engine_nativeRun(JNIEnv *env
     return (jint)ReportFailed();
 }
 
-JNIEXPORT jboolean JNICALL Java_org_scarletnx_edenprobe_Engine_start(JNIEnv *env, jclass engine,
+JNIEXPORT jboolean JNICALL Java_org_scarletnx_amberlith_Engine_start(JNIEnv *env, jclass engine,
                                                                     jstring suite, jstring name) {
     (void)engine;
     const char *const s = (*env)->GetStringUTFChars(env, suite, NULL);
@@ -205,7 +205,7 @@ JNIEXPORT jboolean JNICALL Java_org_scarletnx_edenprobe_Engine_start(JNIEnv *env
     return runs ? JNI_TRUE : JNI_FALSE;
 }
 
-JNIEXPORT void JNICALL Java_org_scarletnx_edenprobe_Engine_result(JNIEnv *env, jclass engine,
+JNIEXPORT void JNICALL Java_org_scarletnx_amberlith_Engine_result(JNIEnv *env, jclass engine,
                                                                  jstring suite, jstring name,
                                                                  jstring tier, jboolean passed,
                                                                  jstring detail) {
@@ -223,7 +223,7 @@ JNIEXPORT void JNICALL Java_org_scarletnx_edenprobe_Engine_result(JNIEnv *env, j
     (*env)->ReleaseStringUTFChars(env, suite, s);
 }
 
-JNIEXPORT void JNICALL Java_org_scarletnx_edenprobe_Engine_skip(JNIEnv *env, jclass engine,
+JNIEXPORT void JNICALL Java_org_scarletnx_amberlith_Engine_skip(JNIEnv *env, jclass engine,
                                                                jstring suite, jstring name,
                                                                jstring detail) {
     (void)engine;

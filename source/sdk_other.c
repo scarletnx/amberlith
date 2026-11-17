@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <string.h>
@@ -13,7 +13,7 @@
 
 /// The label in the program's read-only data (sdk.h). Nothing here reads it: the Makefile's
 /// --undefined keeps it through the linker's section collection.
-const char edenprobe_sdk_label[] = SDK_LABEL;
+const char amberlith_sdk_label[] = SDK_LABEL;
 
 // ------------------------------------------------------------------------------------- nn::pl
 

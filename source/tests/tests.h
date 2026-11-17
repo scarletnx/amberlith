@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -449,7 +449,7 @@ void RunFluidAlias(void);
 void FluidAliasDemo(const DemoRun *run);
 
 /// The net family: nifm, dns, bsd, ssl, acc and friend, in that order, against whatever
-/// sdmc:/edenprobe/net says the backend promises. A case that needs a backend the file does not
+/// sdmc:/amberlith/net says the backend promises. A case that needs a backend the file does not
 /// name, or a service this program cannot open, is skipped with the reason and counted apart.
 void RunNet(void);
 #endif

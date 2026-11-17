@@ -12,7 +12,7 @@ case.
 
 ## Making one
 
-`baseline=<name>` in the [mode file](ModeFile.md) adds the run to `sdmc:/edenprobe/baseline/<name>.jsonl` once its
+`baseline=<name>` in the [mode file](ModeFile.md) adds the run to `sdmc:/amberlith/baseline/<name>.jsonl` once its
 suites end: one sample, the `us` of every timed case ([Time per case](TimePerCase.md)), and a note with the sample's
 number and how many the file has. The name follows the label's rules: letters, digits, dot, dash and underscore, at
 most 32, not starting with a dot.
@@ -20,8 +20,8 @@ most 32, not starting with a dot.
 - Name it after the machine (`console`, `eden-master`, `scarletnx`): a baseline is a machine's, not a build's.
 - Take at least three runs before comparing, and five or more where a case runs at one of two speeds per process;
   under `make run`, `ROUNDS=5` makes them in one go ([Time per case](TimePerCase.md#several-rounds-of-one-build)).
-- A file with samples from more than one edenprobe build says how many builds and names the first two, since a newer
-  edenprobe can time a case differently.
+- A file with samples from more than one Amberlith build says how many builds and names the first two, since a newer
+  Amberlith can time a case differently.
 
 These add nothing, each with a note: a `notime` run; a run whose families time no case (the drawing suites,
 `fs`, the game family's frames and the [pace](families/Pace.md) family are timed); a launch that went on after the program ended inside the run, which has only the cases after the one
@@ -29,7 +29,7 @@ it ended in (it is still compared, and its note says how many cases it had).
 
 ## The file
 
-Plain text: a line that opens each sample (its number, the edenprobe build, the label, how many cases follow), then a
+Plain text: a line that opens each sample (its number, the Amberlith build, the label, how many cases follow), then a
 line per case. A console's file copied to an emulator's card is what `compare=console` holds the emulator to. It is
 read strictly, so what a cut write leaves cannot pass for a time:
 

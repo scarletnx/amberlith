@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """source/vp9jobs.c holds what tools/vp9-jobs.py works out from the frames it carries, and the
 script's pieces give the answers worked out by hand: the container, the superframe index, the

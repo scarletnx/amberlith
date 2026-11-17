@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <math.h>
@@ -104,7 +104,7 @@ static void CaseFrom(const char *name, ReportFrom from, bool passed, const char 
 /// A line for the person listening: the emulator's log shows it as the part it names starts.
 static void Say(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void Say(const char *fmt, ...) {
-    char line[200] = "EDENPROBE LISTEN ";
+    char line[200] = "AMBERLITH LISTEN ";
     const size_t used = strlen(line);
     va_list args;
     va_start(args, fmt);

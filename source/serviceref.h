@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -430,7 +430,7 @@ bool ServiceJudgeLdnMonitor(const ServiceLdnMonitor *seen, char *out, size_t out
 #define SERVICE_LDN_LOCAL_ID 0x01000000000ED000ull
 #define SERVICE_LDN_SCENE 0x5Au
 #define SERVICE_LDN_ROOM 4u
-#define SERVICE_LDN_USER "edenprobe"
+#define SERVICE_LDN_USER "amberlith"
 #define SERVICE_LDN_VERSION 3
 /// The steps the state case walks, in order: Initialize, OpenAccessPoint (200), CreateNetwork,
 /// DestroyNetwork (204), CloseAccessPoint (201), OpenStation (300), CloseStation (301), Finalize
@@ -1078,7 +1078,7 @@ bool ServiceJudgeSessionClose(uint32_t open_rc, uint32_t close_rc, uint32_t afte
 /// GetServiceHandle (sm 1) of a name sm must refuse, @p rc what it answered and @p handed whether a
 /// session came back: InvalidServiceName and no session. A name is one to eight bytes padded with
 /// NULs; empty, or a byte past the first NUL, is no name (Atmosphere's sm, ValidateServiceName,
-/// the sm the consoles edenprobe runs on carry; reden keeps only the printable bytes and so takes
+/// the sm the consoles Amberlith runs on carry; reden keeps only the printable bytes and so takes
 /// "se\0t" for "set").
 bool ServiceJudgeBadName(uint32_t rc, bool handed, char *out, size_t out_size);
 

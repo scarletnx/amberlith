@@ -1,8 +1,8 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The probe as a mod of a game (docs/Mod.md): the engine and the nvn family built as one more
-# module of a game's program, edenprobe-mod/exefs/subsdk9, with the main.npdm that gives it the
+# module of a game's program, amberlith-mod/exefs/subsdk9, with the main.npdm that gives it the
 # memory card. Its NVN is the driver of the game it is loaded in.
 #
 #   make -f mod.mk          # the two files
@@ -12,7 +12,7 @@ ifeq ($(strip $(DEVKITPRO)),)
 $(error Set DEVKITPRO first, e.g. export DEVKITPRO=/opt/devkitpro)
 endif
 
-TARGET   := edenprobe-mod
+TARGET   := amberlith-mod
 BUILD    := build-mod
 EXEFS    := $(TARGET)/exefs
 
@@ -33,11 +33,11 @@ APP_BUILD   := $(strip $(shell git describe --tags --match 'v[0-9]*' --always --
 APP_HASH    := $(strip $(shell git describe --always --dirty --abbrev=7 --exclude='*' 2>/dev/null || echo unknown))
 
 ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC
-# One thread runs the probe, and its thread pointer is the game's SDK's: EDENPROBE_ONE_THREAD keeps
+# One thread runs the probe, and its thread pointer is the game's SDK's: AMBERLITH_ONE_THREAD keeps
 # the engine off thread-locals, which libnx's reader would look up in libnx's thread data.
 CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
             -Wall -Wextra -Werror -Wno-unused-parameter \
-            -D__SWITCH__ -DEDENPROBE_ONE_THREAD -I$(LIBNX)/include -Isource -Imod -I$(BUILD) \
+            -D__SWITCH__ -DAMBERLITH_ONE_THREAD -I$(LIBNX)/include -Isource -Imod -I$(BUILD) \
             $(NVNLAYER_CFLAGS)
 # A shared object with libnx's section layout and none of its start: the game's dynamic linker
 # relocates the module, binds its imports and calls its DT_INIT. No packed relocations, which a
@@ -45,7 +45,7 @@ CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
 # stays a dynamic symbol, so the game's linker leaves its address nought when the game has none.
 LDFLAGS  := $(ARCH) -g -shared -nostartfiles -Wl,-T,$(LIBNX)/switch.ld -Wl,--gc-sections \
             -Wl,-z,text -Wl,-z,now -Wl,--build-id=sha1 -Wl,--nx-module-name \
-            -Wl,-init=EdenprobeModInit -Wl,--version-script=mod/exports.map \
+            -Wl,-init=AmberlithModInit -Wl,--version-script=mod/exports.map \
             -Wl,-Map,$(BUILD)/$(TARGET).map $(NVNLAYER_LDFLAGS)
 # libnx for the kernel's calls alone (tools/mod-imports.py reads the map for it).
 LIBS     := -L$(LIBNX)/lib -lnx -lm -Wl,--start-group -lc -lsysbase -lgcc -Wl,--end-group
@@ -68,7 +68,7 @@ all: $(EXEFS)/subsdk9 $(EXEFS)/main.npdm
 
 $(BUILD)/version.h: FORCE
 	@mkdir -p $(dir $@)
-	@printf '#define EDENPROBE_VERSION "%s"\n#define EDENPROBE_BUILD "%s"\n#define EDENPROBE_HASH "%s"\n' "$(APP_VERSION)" "$(APP_BUILD)" "$(APP_HASH)" > $@.tmp; \
+	@printf '#define AMBERLITH_VERSION "%s"\n#define AMBERLITH_BUILD "%s"\n#define AMBERLITH_HASH "%s"\n' "$(APP_VERSION)" "$(APP_BUILD)" "$(APP_HASH)" > $@.tmp; \
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 FORCE:
 $(BUILD)/mod/frontend.o: $(BUILD)/version.h

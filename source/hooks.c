@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -102,7 +102,7 @@ static void StartIpc(void) {
 static void StartHooks(void) {
     const int device = AddDevice(SdkCardDevice());
     if (device < 0) {
-        Say("edenprobe: hooks mode: the C library has no room for the sdmc device");
+        Say("amberlith: hooks mode: the C library has no room for the sdmc device");
         diagAbortWithResult(MAKERESULT(Module_Libnx, LibnxError_TooManyDevOpTabs));
     }
     setDefaultDevice(device);
@@ -117,7 +117,7 @@ static void StartFiles(void) {
     if (R_FAILED(card_rc)) {
         char said[160];
         snprintf(said, sizeof(said),
-                 "edenprobe: nn::fs::MountSdCard(\"" CARD "\") returned 0x%x, so the mode file is "
+                 "amberlith: nn::fs::MountSdCard(\"" CARD "\") returned 0x%x, so the mode file is "
                  "read as no file: the IPC mode",
                  (unsigned)card_rc);
         Say(said);
@@ -128,7 +128,7 @@ static void StartFiles(void) {
         return;
     }
     if (R_SUCCEEDED(card_rc) && !card_own) {
-        Say("edenprobe: the machine answered nn::fs::MountSdCard itself and the mode file has no "
+        Say("amberlith: the machine answered nn::fs::MountSdCard itself and the mode file has no "
             "hooks: the IPC mode opens time:u and fsp-srv now, which such a machine may refuse; "
             "the word hooks in " MODE_PATH " asks through the SDK's functions instead");
     }

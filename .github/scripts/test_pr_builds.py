@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """pr-builds.sh against fake_github.py's fake gh: the comment that links a pull request's NRO posted once, then
 rewritten at each run, its size to a tenth of a MiB, a job that did not pass named, nothing posted for a commit that is
@@ -16,7 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "pr-builds.sh")
 REPO = "owner/repo"
 HEAD = "a" * 40
-MARK = "<!-- edenprobe-builds -->"
+MARK = "<!-- amberlith-builds -->"
 
 
 @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "pr-builds.sh needs bash and jq")
@@ -28,7 +28,7 @@ class PrBuilds(unittest.TestCase):
         artifacts = [
             {
                 "id": 556,
-                "name": "edenprobe-aaaaaaa.nro",
+                "name": "amberlith-aaaaaaa.nro",
                 "size_in_bytes": 1_797_929,
                 "expired": False,
                 "expires_at": "2027-01-15T10:00:00Z",
@@ -69,7 +69,7 @@ class PrBuilds(unittest.TestCase):
         self.assertEqual(
             ours[0]["body"],
             f"{MARK}\nBuilds of aaaaaaa, kept until 2027-01-15:\n"
-            f"- [edenprobe-aaaaaaa.nro](https://github.com/{REPO}/actions/runs/60/artifacts/556), 1.7 MiB",
+            f"- [amberlith-aaaaaaa.nro](https://github.com/{REPO}/actions/runs/60/artifacts/556), 1.7 MiB",
         )
         # the next run: the same comment, a job that failed named; the person's comment left alone
         done = self.run_script(REPO, "7", "60", HEAD, needs={"nro": {"result": "failure"}})
@@ -91,7 +91,7 @@ class PrBuilds(unittest.TestCase):
         done = self.run_script(REPO, "7", "60", "b" * 40, "--print")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertTrue(done.stdout.startswith(f"{MARK}\nBuilds of bbbbbbb"), done.stdout)
-        self.assertIn("edenprobe-aaaaaaa.nro", done.stdout)
+        self.assertIn("amberlith-aaaaaaa.nro", done.stdout)
         self.assertNotIn("an-old-one", done.stdout)
         self.assertEqual(len(self.comments()), 1)
 

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdarg.h>
@@ -69,10 +69,10 @@ static uint64_t previous[SLOT_COUNT];
 // vibration use; -1 until a press arrives.
 static int answered = -1;
 
-static const char *heading = "edenprobe";
+static const char *heading = "Amberlith";
 
 void PadSetHeading(const char *text) {
-    heading = text != NULL ? text : "edenprobe";
+    heading = text != NULL ? text : "Amberlith";
 }
 
 static uint64_t Now(void) {
@@ -82,7 +82,7 @@ static uint64_t Now(void) {
 /// A line for whoever watches the emulator's log rather than the screen.
 static void Say(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void Say(const char *fmt, ...) {
-    char line[200] = "EDENPROBE PAD ";
+    char line[200] = "AMBERLITH PAD ";
     const size_t used = strlen(line);
     va_list args;
     va_start(args, fmt);

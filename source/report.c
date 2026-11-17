@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // fileno and ftruncate, which the host build's C11 does not declare without asking.
@@ -370,13 +370,13 @@ size_t ReportBuildBreadcrumb(char *out, size_t out_size, const char *suite, uint
         return 0;
     }
     if (name != NULL) {
-        snprintf(out, out_size, "EDENPROBE TIMING %s pass %u case %s", suite, (unsigned)pass,
+        snprintf(out, out_size, "AMBERLITH TIMING %s pass %u case %s", suite, (unsigned)pass,
                  name);
     } else if (previous != NULL) {
-        snprintf(out, out_size, "EDENPROBE TIMING %s pass %u case number %u after %s", suite,
+        snprintf(out, out_size, "AMBERLITH TIMING %s pass %u case number %u after %s", suite,
                  (unsigned)pass, (unsigned)(index + 1u), previous);
     } else {
-        snprintf(out, out_size, "EDENPROBE TIMING %s pass %u case number %u", suite,
+        snprintf(out, out_size, "AMBERLITH TIMING %s pass %u case number %u", suite,
                  (unsigned)pass, (unsigned)(index + 1u));
     }
     return strlen(out);

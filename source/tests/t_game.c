@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -690,7 +690,7 @@ static bool BringUpDrawing(char *why, size_t why_size) {
 /// The card's big file, made the first time as the fs suite makes it, and opened to read. What
 /// opened is said in @p card_open and @p file_open, for the close.
 static bool BringUpCard(char *why, size_t why_size, bool *card_open, bool *file_open) {
-    Result rc = VolumeOpenCard(&card, "edenprobe-game");
+    Result rc = VolumeOpenCard(&card, "amberlith-game");
     if (R_FAILED(rc)) {
         snprintf(why, why_size, "the memory card: 0x%x", (unsigned)rc);
         return false;

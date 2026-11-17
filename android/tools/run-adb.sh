@@ -1,22 +1,22 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # android/tools/run-adb.sh --serial SERIAL --apk APK --out DIR [--mode WORDS] [--timeout SECONDS] [--stall SECONDS]
 #                          [--launches N]
-# Runs edenprobe's APK on a device or emulator over adb and leaves it as it was: the package must not be installed (it
+# Runs Amberlith's APK on a device or emulator over adb and leaves it as it was: the package must not be installed (it
 # is refused, never replaced), the APK is installed, the app launched with WORDS ("quick" when not given) and
 # machine=android@<the device's Android release> (unless WORDS name a machine) for its mode file and watched, its
 # report pulled, and the package uninstalled on every way out. No tap is sent. DIR gets: device.txt, logcat.txt (from
 # the install on), meminfo.txt, for each launch that died its exit-info-N.txt, and the run's report.jsonl and journal.
-# A launch that ends before EDENPROBE DONE, says the run did not start (as one right after a boot can, before the app
-# has its storage), logs no edenprobe line for --stall seconds (60), or runs past --timeout seconds (600), is stopped
+# A launch that ends before AMBERLITH DONE, says the run did not start (as one right after a boot can, before the app
+# has its storage), logs no Amberlith line for --stall seconds (60), or runs past --timeout seconds (600), is stopped
 # and launched again: the engine reports the case it ended inside as crashed and goes on, up to --launches (5); one
 # this script stopped is said in the journal, `timeout <limit> <quiet>`, so that case is a timeout instead. ADB
 # names adb (adb on PATH when not set). Exit 0 with a whole report, 1 a run that did not end whole, 2 refused (usage),
 # 3 the package is already on the device.
 set -u
-pkg=org.scarletnx.edenprobe
-root=/storage/emulated/0/Android/data/$pkg/files/edenprobe
+pkg=org.scarletnx.amberlith
+root=/storage/emulated/0/Android/data/$pkg/files/amberlith
 serial= apk= out= mode=quick timeout=600 stall=60 launches=5
 usage() { sed -n '4,15s/^# \{0,1\}//p' "$0"; }
 while [ $# -gt 0 ]; do
@@ -123,26 +123,26 @@ done_line=
 for launch in $(seq 1 "$launches"); do
     log "launch $launch"
     # counted before the launch: the app can say it in the time am start takes to come back
-    refused_before=$(grep -ac ' edenprobe: the run did not start' "$out/logcat.txt")
+    refused_before=$(grep -ac ' amberlith: the run did not start' "$out/logcat.txt")
     # the app writes the words to its mode file: adb's shell cannot write the app's folder before the app has run
     adb shell "am start -W -n $pkg/.ProbeActivity --es mode '$mode'" > "$out/start-$launch.txt" 2>&1
     adb shell dumpsys meminfo "$pkg" > "$out/meminfo.txt" 2>&1
     start=$(date +%s) last_lines=0 last_move=$start
     while :; do
         sleep 2
-        done_line=$(grep -a ' edenprobe: EDENPROBE DONE ' "$out/logcat.txt" | tail -n 1)
+        done_line=$(grep -a ' amberlith: AMBERLITH DONE ' "$out/logcat.txt" | tail -n 1)
         [ -n "$done_line" ] && break 2
-        if [ "$(grep -ac ' edenprobe: the run did not start' "$out/logcat.txt")" != "$refused_before" ]; then
-            refused=$(grep -a ' edenprobe: the run did not start' "$out/logcat.txt" | tail -n 1)
-            log "launch $launch: ${refused##* edenprobe: }"
+        if [ "$(grep -ac ' amberlith: the run did not start' "$out/logcat.txt")" != "$refused_before" ]; then
+            refused=$(grep -a ' amberlith: the run did not start' "$out/logcat.txt" | tail -n 1)
+            log "launch $launch: ${refused##* amberlith: }"
             adb shell am force-stop "$pkg"
             break
         fi
         now=$(date +%s)
-        lines=$(grep -ac ' edenprobe: ' "$out/logcat.txt")
+        lines=$(grep -ac ' amberlith: ' "$out/logcat.txt")
         [ "$lines" != "$last_lines" ] && last_lines=$lines last_move=$now
         if [ -z "$(adb shell pidof "$pkg" | tr -d '\r')" ]; then
-            log "launch $launch: the process ended before EDENPROBE DONE"
+            log "launch $launch: the process ended before AMBERLITH DONE"
             adb shell dumpsys activity exit-info "$pkg" > "$out/exit-info-$launch.txt" 2>&1
             break
         fi
@@ -156,9 +156,9 @@ for launch in $(seq 1 "$launches"); do
     done
 done
 if [ -n "$done_line" ]; then
-    log "${done_line##* edenprobe: }"
+    log "${done_line##* amberlith: }"
 else
-    log "no EDENPROBE DONE after $launches launches: the report is not whole"
+    log "no AMBERLITH DONE after $launches launches: the report is not whole"
 fi
 # last-run names the folder the latest launch reported in, under the root
 folder=$(adb shell cat "$root/last-run" | tr -d '\r')

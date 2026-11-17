@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/run.py starts the emulator again after a crash, a bounded number of times, and reads the
 journal the probe writes. The emulator here is a script that plays one launch after another from a
@@ -41,7 +41,7 @@ def write(path, text):
 def read(path):
     with open(path) as f:
         return f.read()
-card = os.path.join(os.environ["XDG_DATA_HOME"], "eden", "sdmc", "edenprobe")
+card = os.path.join(os.environ["XDG_DATA_HOME"], "eden", "sdmc", "amberlith")
 with open(os.path.join(card, "fake-scenario")) as f:
     lines = [l.strip() for l in f if l.strip()]
 count_path = os.path.join(card, "fake-launches")
@@ -56,7 +56,7 @@ write(os.path.join(card, "fake-settings"), "%s\n%s\n" % (
 os.makedirs(os.path.dirname(ini), exist_ok=True)
 write(ini, "written by %s\n" % os.path.basename(sys.argv[0]))
 what = lines[min(n, len(lines)) - 1].split(" ", 2)
-print("\x1b[1;33mEDENPROBE fake launch %d: %s\x1b[0m" % (n, what[0]), flush=True)
+print("\x1b[1;33mAMBERLITH fake launch %d: %s\x1b[0m" % (n, what[0]), flush=True)
 if what[0] == "early":
     sys.exit(1)
 folder_path = os.path.join(card, "fake-folder")
@@ -116,16 +116,16 @@ if what[0] == "talk":
     case = '{"type":"case","suite":"one","name":"%s","tier":"exact","result":"%s","detail":""}'
     emulator("booting")
     probe('{"type":"note","text":"timing one: 1 warm-up and 1 rehearsal before the verdict pass"}')
-    probe("EDENPROBE TIMING one pass 1 case number 1", False)
+    probe("AMBERLITH TIMING one pass 1 case number 1", False)
     emulator("IMUL32I not implemented")
-    probe("EDENPROBE TIMING one pass 1 case number 2 after Bitwise AND, 4x4", False)
+    probe("AMBERLITH TIMING one pass 1 case number 2 after Bitwise AND, 4x4", False)
     emulator("said in the second case's warm-up")
-    probe("EDENPROBE TIMING one pass 1 case number 3 after another", False)
+    probe("AMBERLITH TIMING one pass 1 case number 3 after another", False)
     emulator("closing the device")
-    probe("EDENPROBE TIMING one pass 2 case Bitwise AND, 4x4", False)
+    probe("AMBERLITH TIMING one pass 2 case Bitwise AND, 4x4", False)
     emulator("pass two of the first")
-    probe("EDENPROBE TIMING one pass 2 case another", False)
-    probe("EDENPROBE TIMING one pass 2 case number 3 after another", False)
+    probe("AMBERLITH TIMING one pass 2 case another", False)
+    probe("AMBERLITH TIMING one pass 2 case number 3 after another", False)
     emulator("every pixel 0x80000000")
     probe(case % ("Bitwise AND, 4x4", "fail"))
     emulator("said in the second case")
@@ -143,7 +143,7 @@ if what[0] == "step":
 add(journal, "end one 0 pass a case\nfinished 1 0 0 1\n")
 add(report, '{"type":"case","suite":"one","name":"a case","tier":"none","result":"pass","detail":""}\n')
 add(report, '{"type":"summary","passed":1,"failed":0,"skipped":0,"crashed":1}\n')
-print("EDENPROBE DONE passed=1 failed=0 skipped=0 crashed=1", flush=True)
+print("AMBERLITH DONE passed=1 failed=0 skipped=0 crashed=1", flush=True)
 '''
 
 
@@ -159,14 +159,14 @@ def read(path):
 
 class Fixture:
     def __init__(self, scenario):
-        self.tmp = tempfile.TemporaryDirectory(prefix="edenprobe-run-test-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="amberlith-run-test-")
         self.dir = self.tmp.name
         self.emulator = self.make_emulator("eden-cli-fake")
         self.xdg = os.path.join(self.dir, "xdg")
         self.card = run.card(self.xdg)
         os.makedirs(self.card)
         self.scenario(scenario)
-        self.nro = os.path.join(self.dir, "edenprobe.nro")
+        self.nro = os.path.join(self.dir, "amberlith.nro")
         open(self.nro, "w").close()
         # No card of this machine's: a run here writes the vram= word only when a test makes one.
         self.drm = os.path.join(self.dir, "drm")
@@ -332,7 +332,7 @@ class Relaunch(unittest.TestCase):
         whole = read(os.path.join(folder, "emulator.log"))
         self.assertTrue(whole.startswith("== launch 1\n"), whole[:80])
         for text in ("booting", "closing the device", "said in the second case",
-                     "EDENPROBE TIMING one pass 2 case another", '"name":"another"'):
+                     "AMBERLITH TIMING one pass 2 case another", '"name":"another"'):
             self.assertIn(text, whole)
         self.assertNotIn("\x1b", whole)
         self.assertIn("the emulator's output: " + os.path.join(folder, "emulator.log"), said)

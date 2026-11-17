@@ -2,7 +2,7 @@
 <!-- SPDX-FileCopyrightText: Liz (Wimsy, ScarletNX's dist/wimsy.svg) -->
 <!-- SPDX-FileCopyrightText: 2026 the wimsy-dist contributors -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-<!-- Wimsy (Liz, ScarletNX's dist/wimsy.svg, GPL-3.0-or-later) with edenprobe's sunset and a test probe and colours.
+<!-- Wimsy (Liz, ScarletNX's dist/wimsy.svg, GPL-3.0-or-later) with Amberlith's sunset and a test probe and colours.
      The leaves keep Wimsy's own shapes; Eden's sunset colours (Eden's dist/dev.eden_emu.eden.svg); fan art. -->
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512"
      viewBox="0 0 512 512" fill="none">
@@ -10,16 +10,16 @@
     <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cc="http://creativecommons.org/ns#"
              xmlns:dc="http://purl.org/dc/elements/1.1/">
       <cc:Work rdf:about="">
-        <dc:title>Wimsy with edenprobe's sunset and a test probe</dc:title>
+        <dc:title>Wimsy with Amberlith's sunset and a test probe</dc:title>
         <dc:creator><cc:Agent><dc:title>Liz (Wimsy)</dc:title></cc:Agent></dc:creator>
-        <dc:contributor><cc:Agent><dc:title>AO55 (sunset and a test probe, edenprobe's colours)</dc:title></cc:Agent></dc:contributor>
+        <dc:contributor><cc:Agent><dc:title>AO55 (sunset and a test probe, Amberlith's colours)</dc:title></cc:Agent></dc:contributor>
         <dc:license rdf:resource="https://spdx.org/licenses/GPL-3.0-or-later.html"/>
         <dc:source>https://github.com/scarletnx/ScarletNX/blob/main/dist/wimsy.svg</dc:source>
       </cc:Work>
     </rdf:RDF>
   </metadata>
   <defs>
-    <!-- edenprobe: Eden's sunset, pink hair going purple, the leaves below down to its blue, a white front with cyan trim, a dark arm, a test probe toward the empty corner -->
+    <!-- Amberlith: Eden's sunset, pink hair going purple, the leaves below down to its blue, a white front with cyan trim, a dark arm, a test probe toward the empty corner -->
     <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FF2E88"/>
       <stop offset="1" stop-color="#BF42F6"/>

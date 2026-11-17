@@ -1,10 +1,10 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The icons of the start and resume screens' rows, in the stroke of the VGA font. All but
 // headphones are ScarletNX's menu icons, src/gui/icons.hex at commit
 // 8efbf9c44dd8f1b4368ced2b87179bb09a124795, unchanged: ScarletNX's drawings (GPL-3.0-or-later),
-// each after the Lucide 1.61.0 icon of its name (ISC). Headphones is edenprobe's, drawn the same
+// each after the Lucide 1.61.0 icon of its name (ISC). Headphones is Amberlith's, drawn the same
 // way after Lucide's; Lucide's log-out and headphones come from Feather (MIT). See
 // docs/Credits.md.
 
@@ -41,7 +41,7 @@ static const uint16_t ICONS[ICON_COUNT][16] = {
     // activity
     { 0x0000, 0x0000, 0x0300, 0x0300, 0x0780, 0x078c, 0x06cc, 0xfecc,
       0x00de, 0x0070, 0x0070, 0x0020, 0x0000, 0x0000, 0x0000, 0x0000 },
-    // headphones, edenprobe's
+    // headphones, Amberlith's
     { 0x0000, 0x0000, 0x0fc0, 0x3030, 0x6018, 0xc00c, 0xc00c, 0xc00c,
       0xf87c, 0xd86c, 0xd86c, 0xd86c, 0x7038, 0x0000, 0x0000, 0x0000 },
     // wifi

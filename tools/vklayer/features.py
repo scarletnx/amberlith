@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Writes features.inc, the tables the masquerade layer and its check read, from the Vulkan
@@ -112,7 +112,7 @@ def main():
 
     ordered = [("VkPhysicalDeviceFeatures", first)] + sorted(structs.items(), key=lambda kv: kv[1]["stype"])
     out = open(sys.argv[2], "w", newline="\n")
-    out.write("// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors\n")
+    out.write("// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors\n")
     out.write("// SPDX-License-Identifier: GPL-3.0-or-later\n")
     out.write("//\n// Made by features.py from the Vulkan registry %s: `make features` makes it again.\n" % version)
     out.write("// Read by masquerade.c and check_masquerade.c through features.h, nothing else.\n\n")

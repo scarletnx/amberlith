@@ -62,7 +62,7 @@ Three places say where:
 - **The debug channel** gets a line before every rehearsed case, so the emulator's log ends on the case about to run:
 
   ```
-  EDENPROBE TIMING depth pass 4 case a fragment nearer than the buffer passes
+  AMBERLITH TIMING depth pass 4 case a fragment nearer than the buffer passes
   ```
 
   Passes count from one, the warm-up first. The warm-up numbers the case after the one it names (`pass 1 case number 3
@@ -101,7 +101,7 @@ make run: 3 rounds, 12 timed cases; each case's spread is from its fastest round
   suite         timed  median_spread  max_spread  the case with it
   support           2           0.0%        0.0%  baseline: a made-up timed suite's case that draws twice
   fs               10          57.2%      294.1%  sequential reads of 64 KiB cover 64 MiB
-make run: every case's median, mean, fastest, slowest and spread: build/xdg/data/eden/sdmc/edenprobe/runs/5fd6ec1/rounds/times.tsv
+make run: every case's median, mean, fastest, slowest and spread: build/xdg/data/eden/sdmc/amberlith/runs/5fd6ec1/rounds/times.tsv
 ```
 
 Each round's report is kept in the run's folder as `rounds/report-<n>.jsonl`; `report.jsonl`, the pictures and the

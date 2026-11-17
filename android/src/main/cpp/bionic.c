@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 /* bionic's own behaviour, each case one function that returns what it measured as text (BionicCases.java compares);
    what the C standard defines is the libc family's (source/tests/t_libc.c). */
@@ -27,7 +27,7 @@ JNIEXPORT jstring JNICALL PROBE_FN(printfWords)(JNIEnv* env, jclass cls) {
 JNIEXPORT jstring JNICALL PROBE_FN(strerror)(JNIEnv* env, jclass cls) {
     (void)cls;
     errno = 0;
-    int fd = open("/nonexistent-edenprobe", O_RDONLY);
+    int fd = open("/nonexistent-amberlith", O_RDONLY);
     int e = errno;
     if (fd >= 0) close(fd);
     char t[4][96];
@@ -41,14 +41,14 @@ JNIEXPORT jstring JNICALL PROBE_FN(dl)(JNIEnv* env, jclass cls) {
     void* h = dlopen("libc.so", RTLD_NOW);
     size_t (*len)(const char*) = h ? (size_t(*)(const char*))dlsym(h, "strlen") : NULL;
     dlerror();
-    void* missing = h ? dlsym(h, "edenprobe_no_such_symbol") : NULL;
+    void* missing = h ? dlsym(h, "amberlith_no_such_symbol") : NULL;
     const char* e = dlerror();
     char e1[256];
     snprintf(e1, sizeof e1, "%s", e ? "yes" : "no");
-    void* lib = dlopen("libedenprobe_missing.so", RTLD_NOW);
+    void* lib = dlopen("libamberlith_missing.so", RTLD_NOW);
     e = dlerror();
     char e2[512];
-    snprintf(e2, sizeof e2, "%s", e && strstr(e, "libedenprobe_missing.so") ? "names it" : e ? e : "none");
+    snprintf(e2, sizeof e2, "%s", e && strstr(e, "libamberlith_missing.so") ? "names it" : e ? e : "none");
     if (lib) dlclose(lib);
     jstring s = probe_string(env, "libc %s|strlen %zu|missing symbol %s, error %s|missing library %s, error %s", h ? "yes" : "no",
                              len ? len("hello") : 0, missing ? "found" : "NULL", e1, lib ? "loaded" : "NULL", e2);
@@ -91,14 +91,14 @@ JNIEXPORT jstring JNICALL PROBE_FN(procSelf)(JNIEnv* env, jclass cls, jstring pa
     if (f) {
         char* line = NULL;
         size_t cap = 0;
-        while (!found && getline(&line, &cap, f) > 0) found = strstr(line, "libedenprobe.so") != NULL;
+        while (!found && getline(&line, &cap, f) > 0) found = strstr(line, "libamberlith.so") != NULL;
         free(line);
         fclose(f);
     }
     char exe[256] = "";
     ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
     exe[n > 0 ? n : 0] = 0;
-    return probe_string(env, "cmdline %s|maps %s|exe %s", cmd, f ? (found ? "names libedenprobe.so" : "lacks libedenprobe.so") : "unreadable",
+    return probe_string(env, "cmdline %s|maps %s|exe %s", cmd, f ? (found ? "names libamberlith.so" : "lacks libamberlith.so") : "unreadable",
                         n > 0 ? exe : "unreadable");
 }
 

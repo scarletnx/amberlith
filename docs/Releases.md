@@ -2,14 +2,14 @@
 
 Every push to `main` that builds becomes a nightly, and every version tag a release, each with these files and a
 `.sha256` beside each, named after the version, the commit's `VERSION`, which the report's first line names too. A
-nightly's carry the commit after it, `edenprobe-0.18.0-0123abc.nro`. Only the CI uploads them.
+nightly's carry the commit after it, `amberlith-0.18.0-0123abc.nro`. Only the CI uploads them.
 
 | File, in version 0.18.0 | What it is |
 |---|---|
-| `edenprobe-0.18.0.nro` | the probe, for a console's homebrew menu and an emulator |
-| `edenprobe-0.18.0.apk` | the probe on Android ([On Android](Android.md)) |
-| `edenprobe-ounce-0.18.0.zip` | the probe as a Switch 2 program, which ScarletNX runs ([Ounce](Ounce.md)) |
-| `edenprobe-mod-0.18.0.zip` | the probe as a mod of a game, the nvn suite on the game's own driver ([Mod](Mod.md)) |
+| `amberlith-0.18.0.nro` | the probe, for a console's homebrew menu and an emulator |
+| `amberlith-0.18.0.apk` | the probe on Android ([On Android](Android.md)) |
+| `amberlith-ounce-0.18.0.zip` | the probe as a Switch 2 program, which ScarletNX runs ([Ounce](Ounce.md)) |
+| `amberlith-mod-0.18.0.zip` | the probe as a mod of a game, the nvn suite on the game's own driver ([Mod](Mod.md)) |
 
 Each zip holds an ExeFS folder, `exefs/` and its files, which goes whole where its program is read from.
 
@@ -20,19 +20,19 @@ Each zip holds an ExeFS folder, `exefs/` and its files, which goes whole where i
 | The newest nightly | https://github.com/scarletnx/edenprobe/releases/tag/nightly |
 | One nightly (the newest 30 are kept) | `https://github.com/scarletnx/edenprobe/releases/tag/nightly-<date>-<commit>` |
 
-A file's own link is `.../releases/download/<tag>/<name>`, `.../download/v0.18.0/edenprobe-0.18.0.nro`. The newest
+A file's own link is `.../releases/download/<tag>/<name>`, `.../download/v0.18.0/amberlith-0.18.0.nro`. The newest
 version's NRO and its checksum without knowing its number, with GitHub's CLI (`gh release download nightly ...` takes
 the newest nightly's):
 
 ```sh
-gh release download -R scarletnx/edenprobe -p 'edenprobe-*.nro' -p 'edenprobe-*.nro.sha256'
-sha256sum -c edenprobe-*.nro.sha256
+gh release download -R scarletnx/edenprobe -p 'amberlith-*.nro' -p 'amberlith-*.nro.sha256'
+sha256sum -c amberlith-*.nro.sha256
 ```
 
 `nightly`'s files are replaced one after the other, so a check that fails while a nightly lands passes when they are
 fetched again; a dated nightly and a version never change. A pull request's builds are its Build run's artifacts,
-named as a nightly's, `edenprobe-<version>-<commit>.nro`, `.apk`, `edenprobe-ounce-<version>-<commit>.zip` and
-`edenprobe-mod-<version>-<commit>.zip`, linked from a comment on the pull request (a fork's on the run's page).
+named as a nightly's, `amberlith-<version>-<commit>.nro`, `.apk`, `amberlith-ounce-<version>-<commit>.zip` and
+`amberlith-mod-<version>-<commit>.zip`, linked from a comment on the pull request (a fork's on the run's page).
 
 ## The CI
 
@@ -68,7 +68,7 @@ shows at once; the cases only a machine runs are counted again before each relea
 ```sh
 make run EMULATOR=/path/to/emulator TIMEOUT=3600 MODE="quick hooks all pad nvn demo music pace game stress level=0 level=1 level=2 level=3 level=4"
 make -f host.mk host-run
-python3 tools/case-counts.py catalogue nro=<that run's report.jsonl> host=edenprobe-host-report.jsonl
+python3 tools/case-counts.py catalogue nro=<that run's report.jsonl> host=amberlith-host-report.jsonl
 python3 tools/case-counts.py write
 ```
 

@@ -36,7 +36,7 @@ functions ([The hooks mode](Hooks.md)). What a Switch 2's processor adds is for 
 make -f ounce.mk          # DEVKITPRO set, as for the NRO
 ```
 
-It leaves `edenprobe-ounce/exefs/main` and `main.npdm`, and `edenprobe-ounce.elf` beside them. The sources are the
+It leaves `amberlith-ounce/exefs/main` and `main.npdm`, and `amberlith-ounce.elf` beside them. The sources are the
 engine's (`source/portable.txt`), the console's platform file and its start through the SDK's functions, the nvn
 suite, `ounce/frontend.c`, `ounce/t_nvn2.c` and the layer at API 231. The programs under `ounce/shaders/*.sm86`
 are assembled by `tools/sm86asm.py` into the build.
@@ -47,15 +47,15 @@ for a Switch 2 program is gigabytes.
 ## Running it
 
 In ScarletNX, as an extracted game's ExeFS is run: recompile the folder, then start the program it wrote. A release's
-`edenprobe-ounce-<version>.zip` ([Releases](Releases.md)) holds the same folder, `exefs/`: unzipped in
-`edenprobe-ounce/`, it is the one the commands below name.
+`amberlith-ounce-<version>.zip` ([Releases](Releases.md)) holds the same folder, `exefs/`: unzipped in
+`amberlith-ounce/`, it is the one the commands below name.
 
 ```sh
-scarletnx -r edenprobe-ounce/exefs -o edenprobe-ounce --outdir GAMES
-(cd GAMES/edenprobe-ounce && ./edenprobe-ounce -H)        # -H: no window
+scarletnx -r amberlith-ounce/exefs -o amberlith-ounce --outdir GAMES
+(cd GAMES/amberlith-ounce && ./amberlith-ounce -H)        # -H: no window
 ```
 
-The mode file and the report are where the console's are, `edenprobe/mode` and `edenprobe/runs/` on the program's
+The mode file and the report are where the console's are, `amberlith/mode` and `amberlith/runs/` on the program's
 SD card ([The mode file](ModeFile.md)). The frontend has no screens: every run leaves once its report is closed,
 and a file with no `quick` says so in the report. Its steps are the judge's three and the nvn family, which runs
 when the file names no family: the `nvn` suite, less the scene (a Switch program's shaders, and deko3d), and

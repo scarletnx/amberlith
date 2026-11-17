@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 /**
  * EGL and GLES from native code on a 16 by 16 pbuffer of its own, read back with glReadPixels. A pixel is RGBA as

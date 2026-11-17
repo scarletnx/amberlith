@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 import android.os.Build;
 
@@ -45,7 +45,7 @@ final class BionicCases {
     static final class ProcSelf implements Case {
         @Override public Outcome run(Env env) {
             String pkg = env.activity.getPackageName();
-            return Outcome.check("cmdline " + pkg + "|maps names libedenprobe.so|exe /system/bin/app_process64", NativeLib.procSelf(pkg));
+            return Outcome.check("cmdline " + pkg + "|maps names libamberlith.so|exe /system/bin/app_process64", NativeLib.procSelf(pkg));
         }
     }
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """publish-builds.py against fake_github.py's fake gh and fake Discord: which Build runs are published; a nightly
 prerelease with the NRO, the APK and the two ExeFS zips and their checksums, named after the commit's VERSION and the
@@ -49,10 +49,10 @@ def named(stem):
     """the four files of a release or a run named after stem (a version, or a version and a commit), as build.yml and
     publish-builds.py name them"""
     return {
-        "nro": f"edenprobe-{stem}.nro",
-        "apk": f"edenprobe-{stem}.apk",
-        "ounce": f"edenprobe-ounce-{stem}.zip",
-        "mod": f"edenprobe-mod-{stem}.zip",
+        "nro": f"amberlith-{stem}.nro",
+        "apk": f"amberlith-{stem}.apk",
+        "ounce": f"amberlith-ounce-{stem}.zip",
+        "mod": f"amberlith-mod-{stem}.zip",
     }
 
 
@@ -90,7 +90,7 @@ class Publish(unittest.TestCase):
         self.previous = world.commit("the previous nightly")
         world.git("tag", "v0.1.0")
         world.git("switch", "-q", "-c", "feature")
-        world.commit("edenprobe: a commit of the pull request")
+        world.commit("amberlith: a commit of the pull request")
         world.git("switch", "-q", "main")
         world.git(
             "merge", "-q", "--no-ff", "feature", "-m", "Merge pull request #5 from someone/feature\n\n[ci] its title"
@@ -106,7 +106,7 @@ class Publish(unittest.TestCase):
             "created_at": "2026-09-01",
             "body": "old",
             "prerelease": True,
-            "assets": [{"id": 7, "name": "edenprobe.nro", "data": "old"}, {"id": 8, "name": "gone.txt", "data": ""}],
+            "assets": [{"id": 7, "name": "amberlith.nro", "data": "old"}, {"id": 8, "name": "gone.txt", "data": ""}],
         }
         world.save(
             {
@@ -297,9 +297,9 @@ class Publish(unittest.TestCase):
         self.assertEqual(state["tags"]["nightly"], self.sha)
         self.assertIn(f"https://github.com/{REPO}/releases/tag/{self.tag}", rolling["body"])
         self.assertIn(f"https://github.com/{REPO}/releases/download/nightly/{name['nro']}", rolling["body"])
-        # the files of the nightly before, under other names, are gone from it (edenprobe.nro, gone.txt)
-        self.assertNotIn("edenprobe.nro", {a["name"] for a in rolling["assets"]})
-        self.assertEqual(rolling["name"], f"edenprobe nightly 2026-10-15 ({self.sha[:7]}), the newest")
+        # the files of the nightly before, under other names, are gone from it (amberlith.nro, gone.txt)
+        self.assertNotIn("amberlith.nro", {a["name"] for a in rolling["assets"]})
+        self.assertEqual(rolling["name"], f"Amberlith nightly 2026-10-15 ({self.sha[:7]}), the newest")
         # every write is the repository's, with its token
         writes = [c for c in self.world.calls() if "-X" in c["args"] or c["args"][0] == "release"]
         self.assertTrue(writes)
@@ -328,7 +328,7 @@ class Publish(unittest.TestCase):
     def test_a_missing_artifact_stops(self):
         done = self.publish("nightly", self.sha, data=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn(f"run 41 built, yet has no edenprobe-{self.stem}.nro", done.stderr)
+        self.assertIn(f"run 41 built, yet has no amberlith-{self.stem}.nro", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_file_that_is_no_nro_stops(self):
@@ -340,7 +340,7 @@ class Publish(unittest.TestCase):
     def test_a_missing_apk_stops(self):
         done = self.publish("nightly", self.sha, apk=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn(f"run 41 built, yet has no edenprobe-{self.stem}.apk", done.stderr)
+        self.assertIn(f"run 41 built, yet has no amberlith-{self.stem}.apk", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_file_that_is_no_apk_stops(self):
@@ -352,7 +352,7 @@ class Publish(unittest.TestCase):
     def test_a_missing_zip_stops(self):
         done = self.publish("nightly", self.sha, mod=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn(f"run 41 built, yet has no edenprobe-mod-{self.stem}.zip", done.stderr)
+        self.assertIn(f"run 41 built, yet has no amberlith-mod-{self.stem}.zip", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_zip_without_its_files_stops(self):
@@ -361,19 +361,19 @@ class Publish(unittest.TestCase):
             (
                 exefs({"exefs/main": MODULE}),
                 MOD,
-                f"edenprobe-ounce-{short}.zip of run 41 holds exefs/main, not the Switch 2 program's exefs/main, "
+                f"amberlith-ounce-{short}.zip of run 41 holds exefs/main, not the Switch 2 program's exefs/main, "
                 "exefs/main.npdm",
             ),
             (
                 OUNCE,
                 exefs({"exefs/subsdk9": MODULE, "exefs/main.npdm": DESCRIPTOR, "exefs/main": MODULE}),
-                f"edenprobe-mod-{short}.zip of run 41 holds exefs/main, exefs/main.npdm, exefs/subsdk9, not the mod of "
+                f"amberlith-mod-{short}.zip of run 41 holds exefs/main, exefs/main.npdm, exefs/subsdk9, not the mod of "
                 "a game's exefs/main.npdm, exefs/subsdk9",
             ),
             (
                 OUNCE,
                 exefs({"subsdk9": MODULE, "main.npdm": DESCRIPTOR}, folder=False),
-                f"edenprobe-mod-{short}.zip of run 41 holds main.npdm, subsdk9, not the mod of a game's "
+                f"amberlith-mod-{short}.zip of run 41 holds main.npdm, subsdk9, not the mod of a game's "
                 "exefs/main.npdm, exefs/subsdk9",
             ),
         ):
@@ -388,7 +388,7 @@ class Publish(unittest.TestCase):
         done = self.publish("nightly", self.sha, ounce={"exefs/main": MODULE, "exefs/main.npdm": DESCRIPTOR})
         self.assertNotEqual(done.returncode, 0)
         self.assertIn(
-            f"edenprobe-ounce-{self.stem}.zip is a folder of 2 files (exefs/main, exefs/main.npdm), not the one Switch "
+            f"amberlith-ounce-{self.stem}.zip is a folder of 2 files (exefs/main, exefs/main.npdm), not the one Switch "
             "2 program: a download that unpacked the zip leaves its files there",
             done.stderr,
         )
@@ -400,7 +400,7 @@ class Publish(unittest.TestCase):
         )
         self.assertNotEqual(done.returncode, 0)
         self.assertIn(
-            f'exefs/subsdk9 in edenprobe-mod-{self.stem}.zip of run 41 starts with "NRO0", not the NSO0 a mod of a '
+            f'exefs/subsdk9 in amberlith-mod-{self.stem}.zip of run 41 starts with "NRO0", not the NSO0 a mod of a '
             "game's subsdk9 starts with",
             done.stderr,
         )
@@ -414,7 +414,7 @@ class Publish(unittest.TestCase):
             with self.subTest(said):
                 done = self.publish("nightly", self.sha, ounce=ounce)
                 self.assertNotEqual(done.returncode, 0)
-                self.assertIn(f"edenprobe-ounce-{self.stem}.zip of run 41 {said}", done.stderr)
+                self.assertIn(f"amberlith-ounce-{self.stem}.zip of run 41 {said}", done.stderr)
                 self.assertIsNone(self.find(self.tag))
 
     def test_dry_run_writes_nothing(self):
@@ -450,7 +450,7 @@ class Publish(unittest.TestCase):
             {
                 "id": 50,
                 "tag_name": "v0.1.0",
-                "name": "edenprobe v0.1.0",
+                "name": "Amberlith v0.1.0",
                 "created_at": "2026-10-01",
                 "published_at": "2026-10-01",
                 "body": "",
@@ -471,18 +471,18 @@ class Publish(unittest.TestCase):
         )
         # named after the version alone
         self.assertEqual(sorted(a["name"] for a in version["assets"]), files("0.2.0"))
-        self.assertTrue(version["body"].startswith("edenprobe v0.2.0, built from [`"), version["body"])
+        self.assertTrue(version["body"].startswith("Amberlith v0.2.0, built from [`"), version["body"])
         self.assertIn("## Changes since v0.1.0", version["body"])
-        self.assertIn(f"https://github.com/{REPO}/releases/download/v0.2.0/edenprobe-0.2.0.nro", version["body"])
+        self.assertIn(f"https://github.com/{REPO}/releases/download/v0.2.0/amberlith-0.2.0.nro", version["body"])
         posts = sent("releases", mark)
         self.assertEqual(len(posts), 1)
         message = posts[0]["body"]["embeds"][0]
-        self.assertEqual(message["title"], "edenprobe v0.2.0")
+        self.assertEqual(message["title"], "Amberlith v0.2.0")
         self.assertEqual([f["name"] for f in message["fields"]], ["NRO", "APK", "Switch 2", "Mod", "Source", "Since"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe-0.2.0.nro", message["fields"][0]["value"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe-0.2.0.apk", message["fields"][1]["value"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe-ounce-0.2.0.zip", message["fields"][2]["value"])
-        self.assertIn("/releases/download/v0.2.0/edenprobe-mod-0.2.0.zip", message["fields"][3]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.nro", message["fields"][0]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.apk", message["fields"][1]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-ounce-0.2.0.zip", message["fields"][2]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-mod-0.2.0.zip", message["fields"][3]["value"])
         self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][5]["value"])
         self.assertIn(hashlib.sha256(NRO).hexdigest(), message["description"])
         self.assertEqual(posts[0]["body"]["allowed_mentions"], {"parse": []})
@@ -493,7 +493,7 @@ class Publish(unittest.TestCase):
     def test_a_tag_with_a_dash_is_a_prerelease(self):
         (self.world.checkout / "VERSION").write_text("0.3.0-rc1\n")
         self.world.git("add", "VERSION")
-        candidate_sha = self.world.commit("edenprobe: version 0.3.0-rc1")
+        candidate_sha = self.world.commit("amberlith: version 0.3.0-rc1")
         self.world.git("tag", "v0.3.0-rc1")
         done = self.publish("release", candidate_sha, "--tag", "v0.3.0-rc1", version="0.3.0-rc1")
         candidate = self.find("v0.3.0-rc1")

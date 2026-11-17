@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/mod-imports.py holds the mod's module to its list of imports, to exporting nothing, to a dynamic section a
 game's linker takes, to its MOD0 header and to nothing of libnx but the kernel's calls."""

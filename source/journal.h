@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -16,11 +16,11 @@ extern "C" {
 /// crash costs the case it happened in and not the rest of the run.
 ///
 /// Two files. The journal (`journal`, beside the report in the run's folder under
-/// `sdmc:/edenprobe/runs`) says what the run has done: a line before each case starts and one
+/// `sdmc:/amberlith/runs`) says what the run has done: a line before each case starts and one
 /// after it ends, in every pass, each on the card before the program goes on. A launch that finds
 /// a run whose last line is a case starting knows the program ended inside that case, and resumes
 /// the run after it. One per folder, so each build and label goes on with its own run. The crash
-/// list (`sdmc:/edenprobe/crashes`) names the cases that ended this machine's program, one per
+/// list (`sdmc:/amberlith/crashes`) names the cases that ended this machine's program, one per
 /// line, and outlives the run and the build: they are skipped until the word `retry` asks for
 /// them again.
 ///
@@ -28,7 +28,7 @@ extern "C" {
 /// the reading, the writing and every decision a relaunch makes.
 
 #define JOURNAL_FILE_NAME "journal"
-#define CRASH_LIST_PATH "sdmc:/edenprobe/crashes"
+#define CRASH_LIST_PATH "sdmc:/amberlith/crashes"
 
 /// The longest suite or step name, and the longest case name, kept whole. A report line carries
 /// at most 127 characters of a name, so every name a line can hold fits.

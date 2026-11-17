@@ -190,7 +190,7 @@ scene's. Five levels:
 `static/wimsy.svg`: each of its five leaves a slab with a white bevel where the drawing strokes
 it, each eye a short cylinder, every part closed and wound one way. The sprite is that model seen
 from the front, drawn by the processor in whole numbers, so its texels are the same bytes on every
-machine. Her four other drawings in `static/` (wimsy-dist's: Fuddles', edenprobe's, Accord's,
+machine. Her four other drawings in `static/` (wimsy-dist's: Fuddles', Amberlith's, Accord's,
 its Sepia theme's too, and the Default theme's) are the same leaves and eyes in other colours,
 so each is a palette for the one mesh, a leaf's colour its path's fill or the mean of its
 gradient's stops; what they draw inside the leaves is left out.

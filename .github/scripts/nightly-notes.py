@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """A release's file names, title and notes: the NRO, the APK and the two ExeFS folders, named after the version (and a
 nightly's after its commit too), with their sizes and SHA-256, where to read how to run them, what changed since the
@@ -18,10 +18,10 @@ SERVER = "https://github.com"
 # What a release holds, in this order: the NRO, the APK and two ExeFS folders zipped, each with its checksum beside it
 # in the form sha256sum -c reads; each kind's name before the version, its ending after it
 KINDS = {
-    "nro": ("edenprobe", ".nro"),
-    "apk": ("edenprobe", ".apk"),
-    "ounce": ("edenprobe-ounce", ".zip"),
-    "mod": ("edenprobe-mod", ".zip"),
+    "nro": ("amberlith", ".nro"),
+    "apk": ("amberlith", ".apk"),
+    "ounce": ("amberlith-ounce", ".zip"),
+    "mod": ("amberlith-mod", ".zip"),
 }
 SUM = ".sha256"
 # what each file is, after its name in the notes
@@ -90,7 +90,7 @@ def change_line(change, url):
 
 
 def title(checkout, sha):
-    return f"edenprobe nightly {git(checkout, 'log', '-1', '--format=%cs', sha).strip()} ({sha[:7]})"
+    return f"Amberlith nightly {git(checkout, 'log', '-1', '--format=%cs', sha).strip()} ({sha[:7]})"
 
 
 def size(count):
@@ -98,7 +98,7 @@ def size(count):
 
 
 def names(version, commit=""):
-    """each kind's file name: edenprobe-<version>.nro in a version's release, edenprobe-<version>-<commit>.nro in a
+    """each kind's file name: amberlith-<version>.nro in a version's release, amberlith-<version>-<commit>.nro in a
     nightly and as a run's artifact"""
     stem = f"{version}-{commit}" if commit else version
     return {kind: f"{before}-{stem}{ending}" for kind, (before, ending) in KINDS.items()}

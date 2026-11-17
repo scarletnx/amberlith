@@ -1,6 +1,6 @@
 # The mode file
 
-`sdmc:/edenprobe/mode`: words in any order and any case, anything that is not a letter between them.
+`sdmc:/amberlith/mode`: words in any order and any case, anything that is not a letter between them.
 
 | word | what it does |
 |---|---|
@@ -22,7 +22,7 @@
 | `cpu` | the processor family. It runs in every mode, so naming it alone leaves the graphics, fs and net families out: a few seconds, nothing drawn |
 | `graphics` | the graphics family: the drawing suites, clear to copy, and tex8k; selfcheck, support, reference and cpu always run, whatever family is named |
 | `nvn` | the nvn family: the clear suite's question asked through the program's NVN, a layer on deko3d that a runtime running a game's NVN itself (ScarletNX) takes as a game's driver; only when named, with no row on the start screen; its window case runs only in a quick run from the mode file, since a run begun on the start screen keeps the program's screen up to its end, `noprogress` or not, and the start screen says so; see [nvn](families/Nvn.md) |
-| `fs` | the fs family: reads from the memory card, timed and checked; it writes a 64 MiB file and 256 small ones under `sdmc:/edenprobe/fs` the first time |
+| `fs` | the fs family: reads from the memory card, timed and checked; it writes a 64 MiB file and 256 small ones under `sdmc:/amberlith/fs` the first time |
 | `audio` | the audio family: the renderer's resampler, circular buffer sink and limiter, recorded through its own effect and sink; only when named, since it makes sound (most at a gain of nought) |
 | `listen` | the listening sequence before the audio family's cases, and the audio family with it: about 40 seconds of sound meant to be heard; see [The audio family](families/Audio.md) |
 | `pad` | the pad family: a person presses each button the screen names, the sticks and a vibration, then taps targets on the touch screen; only when named; see [pad](families/Pad.md) and [touch](families/Touch.md) |
@@ -31,7 +31,7 @@
 | `display` | the display family: the buffer history of a layer of its own (transaction 17); only when named, with no row on the start screen; see [display](families/Display.md) |
 | `video` | the video family: the video image compositor, a job per case, and the decoder on VP9 jobs from libvpx's test vectors, a job per frame; only when named, with no row on the start screen; see [video](families/Video.md) and [nvdec](families/Nvdec.md) |
 | `service` | the service family: commands a game sends to the system's services, each answer held to reden's; only when named, with no row on the start screen; see [service](families/Service.md) |
-| `net` | the net family: nifm, dns, bsd, ssl, acc and friend, against what `sdmc:/edenprobe/net` names |
+| `net` | the net family: nifm, dns, bsd, ssl, acc and friend, against what `sdmc:/amberlith/net` names |
 | `libc` | the libc family: the C library and what it asks of the system, the same cases on every frontend; on the console only when named, on Android in every run that names no family; see [libc](families/Libc.md) |
 | `jni` | Android's jni family: native code and the Java runtime calling each other; see [On Android](Android.md) |
 | `framework` | Android's framework family: the framework's Java API and its resources; see [On Android](Android.md) |
@@ -43,7 +43,7 @@
 | `machine=<name>[@<version>]` | the machine the run is on, one of `console`, `eden`, `ryujinx`, `scarletnx`, `scarletnx-android` and `android`, and its version when the runner knows it (1 to 32 letters, digits, dots, dashes and underscores): the ban list's lines for it hold. The runners write it ([The ban list](Crashes.md#the-ban-list)); without it no line holds. A name the list does not know, or a version that cannot be one, is refused in the mode line with the machine in effect: `machine=yuzu names no machine the ban list knows (console eden ryujinx scarletnx scarletnx-android android): the run has no machine, and no ban holds` |
 | `vram=<MiB>` | the graphics memory the machine's card has of its own, in MiB, a whole number from 1 to 1048576: with less than 4096 the tex8k suite's textures are not tried, each device's case a `skip` with the reason `unavailable` and both numbers ([tex8k](families/Graphics.md#tex8k)). `make run` writes it from the host ([Under an emulator](Emulator.md)); without it, as on the console, they are tried. Anything else is refused in the mode line with the number in effect: `vram=8G is not a whole number of MiB from 1 to 1048576: the run has no vram, and tex8k's textures are tried` |
 | `label=<name>` | the run's folder gets `_<name>` after the build's hash, to keep apart runs of one build under two emulators; see [the report](Report.md#where-a-run-leaves-its-report) |
-| `baseline=<name>` | once the suites end, this run's times go into `sdmc:/edenprobe/baseline/<name>.jsonl` as a new sample; the name takes the label's rules; see [Baselines](Baseline.md) |
+| `baseline=<name>` | once the suites end, this run's times go into `sdmc:/amberlith/baseline/<name>.jsonl` as a new sample; the name takes the label's rules; see [Baselines](Baseline.md) |
 | `skip=<suite>` | the suite's cases are skipped as `asked`, whatever `hang`, `unban` or `retry` ask: a suite that harms this machine left out of every run ([Leaving a suite out](Crashes.md#leaving-a-suite-out)). The name its lines carry, 1 to 16 letters, digits and dashes, in any case; up to four, one word each. Anything else, or a fifth, is refused in the mode line with the suites in effect: `skip=te_x is not a suite name, 1 to 16 letters, digits and dashes, the first a letter: the run leaves out tex8k` |
 | `compare=<name>` | once the suites end, this run's times are held to that file's samples: a line for each case held to them, `same`, `slower` or `faster`, and one that sums them up, no verdict changed; see [Baselines](Baseline.md) |
 
@@ -55,8 +55,8 @@ build lacks is listed in the mode line and skipped. Any other word is quoted and
 effect: a typo costs a line, never the run.
 
 The start screen chooses the same words for a person, and its L and R open the browser ([The browser](UI.md)); the file is for a script or a choice that should stay. Under
-`make run` it is the `MODE` variable; in Eden's Android build, `files/sdmc/edenprobe/mode` in the app's data folder;
-for edenprobe's own APK, `files/edenprobe/mode` in its external files ([Android](Android.md)). For example:
+`make run` it is the `MODE` variable; in Eden's Android build, `files/sdmc/amberlith/mode` in the app's data folder;
+for Amberlith's own APK, `files/amberlith/mode` in its external files ([Android](Android.md)). For example:
 
 | the file holds | what runs |
 |---|---|

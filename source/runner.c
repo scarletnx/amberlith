@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -158,7 +158,7 @@ static void OpenReport(Runner *runner) {
     const JournalPlan *const plan = &runner->plan;
     if (plan->start == JOURNAL_FRESH) {
         ReportOpen(runner->report_path);
-        ReportNote("edenprobe %s (%s) starting", runner->frontend->version, runner->frontend->build);
+        ReportNote("Amberlith %s (%s) starting", runner->frontend->version, runner->frontend->build);
         ReportNote("folder: %s", runner->run_directory);
         (void)remove(runner->journal_path);
         return;
@@ -283,7 +283,7 @@ static bool StepRuns(const RunnerStep *step, uint32_t families) {
 ///
 /// A hang in a rehearsal is read from three places: the report ends on this suite's timing note,
 /// which says why nothing of the suite follows it, the emulator's log ends on the
-/// `EDENPROBE TIMING` line naming the pass and the case that was about to run, and the journal
+/// `AMBERLITH TIMING` line naming the pass and the case that was about to run, and the journal
 /// ends on that case's start. With the mode word `notime` none of this happens and the suite
 /// runs once, as it did before cases were timed.
 static void RunTimed(const char *suite, void (*run)(void), bool timing) {
@@ -530,7 +530,7 @@ void RunnerFinish(Runner *runner, const RunMode *mode, bool timing) {
     // A runner watching the log knows the process is finished and what it decided, without
     // parsing the lines above or waiting out a timeout.
     char done[160];
-    snprintf(done, sizeof(done), "EDENPROBE DONE passed=%zu failed=%zu skipped=%zu crashed=%zu",
+    snprintf(done, sizeof(done), "AMBERLITH DONE passed=%zu failed=%zu skipped=%zu crashed=%zu",
              ReportPassed(), ReportFailed(), ReportSkipped(), ReportCrashed());
     PlatformLog(done, strlen(done));
 }

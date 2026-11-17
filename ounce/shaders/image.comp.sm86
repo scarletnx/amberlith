@@ -1,4 +1,4 @@
-; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
 ; One block of 16 by 16 invocations, one a texel: each loads its texel of image 1, a word a texel, and stores three

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <android/log.h>
@@ -11,7 +11,7 @@
 
 void PlatformLog(const char *line, size_t length) {
     (void)length;
-    __android_log_write(ANDROID_LOG_INFO, "edenprobe", line);
+    __android_log_write(ANDROID_LOG_INFO, "amberlith", line);
 }
 
 bool PlatformLogIsStandardOutput(void) {

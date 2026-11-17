@@ -36,7 +36,7 @@ Nothing written ever covers a target: the support suite checks every one.
 
 The screen decides nothing: every verdict comes from the states the suite read with libnx's
 `hidGetTouchScreenStates`, and a machine with no screen runs the prompts with only the log, where
-`EDENPROBE TOUCH prompt n of 9: ...` names each.
+`AMBERLITH TOUCH prompt n of 9: ...` names each.
 
 ## The cases
 

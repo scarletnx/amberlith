@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 # android/tests/test-run-scarletnx.sh: android/tools/run-scarletnx.sh with a fake driver (fake-driver): headless, no
 # display, an empty home inside the run folder with the mode file in the app's place, the driver's options passed, a

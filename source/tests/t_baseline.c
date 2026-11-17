@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <errno.h>
@@ -576,7 +576,7 @@ static void CheckNewest(const char *scratch) {
     (void)remove(path);
 }
 
-/// Samples of more than one edenprobe build: a case's time moves with the probe's own code as well
+/// Samples of more than one Amberlith build: a case's time moves with the probe's own code as well
 /// as with the machine, so the comparison says how many builds and the first two.
 static void CheckBuilds(const char *scratch) {
     char path[512];
@@ -597,7 +597,7 @@ static void CheckBuilds(const char *scratch) {
     const bool read =
         BaselineCompareFile(path, "builds-check", &CAPTURE, &totals) == BASELINE_READ;
     const bool several =
-        Noted("compare=builds-check: the file's 4 samples come from 3 edenprobe builds, v0.5.0 "
+        Noted("compare=builds-check: the file's 4 samples come from 3 Amberlith builds, v0.5.0 "
               "first and v0.5.0-3-gabc second") != NULL;
     // Two builds, the fewest that mix, say so as well.
     Seed(path, 2, 1000);
@@ -611,7 +611,7 @@ static void CheckBuilds(const char *scratch) {
     CaptureReset();
     const bool read_two =
         BaselineCompareFile(path, "builds-check", &CAPTURE, &totals) == BASELINE_READ;
-    const bool two = Noted("compare=builds-check: the file's 3 samples come from 2 edenprobe "
+    const bool two = Noted("compare=builds-check: the file's 3 samples come from 2 Amberlith "
                            "builds, build first and v0.6.0 second") != NULL;
     // One build, the usual file, says nothing about it.
     Seed(path, 3, 1000);
@@ -620,7 +620,7 @@ static void CheckBuilds(const char *scratch) {
     CaptureReset();
     const bool read_one =
         BaselineCompareFile(path, "builds-check", &CAPTURE, &totals) == BASELINE_READ;
-    const bool quiet = Noted("edenprobe build") == NULL;
+    const bool quiet = Noted("Amberlith build") == NULL;
     CHECK_TRUE(SUITE, "baseline: samples of more than one build say how many and the first two",
                CHECK_NONE, read && several && read_two && two && read_one && quiet,
                "three %d, two %d, one quiet %d: %.300s", (int)several, (int)two, (int)quiet,

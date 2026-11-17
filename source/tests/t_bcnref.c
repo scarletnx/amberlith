@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <math.h>
@@ -122,7 +122,7 @@ static void PutWord64(uint8_t *out, uint64_t value) {
 
 /// Each rule's interpolants against numbers worked out by hand: NVIDIA's are the bcn suite's (an
 /// NVIDIA card's, as ScarletNX's BCn decoder test measured them), the sixty-fourths' what RADV on
-/// an RX 6700 XT read in the bcn suite (edenprobe 23f4c7a under ScarletNX), the rounded and cut
+/// an RX 6700 XT read in the bcn suite (Amberlith 23f4c7a under ScarletNX), the rounded and cut
 /// ones the specification's fractions.
 static void Rules(void) {
     uint8_t bc1[8];

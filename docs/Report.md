@@ -55,7 +55,7 @@ A case that could not ask its question is a `skip`, tier `none`, with a one-word
 | `timeout` | a runner stopped the program inside it at a launch's time limit, earlier in this run; the detail gives the limit and how long the case had run ([a launch stopped at its time limit](Crashes.md#a-launch-stopped-at-its-time-limit)) |
 
 The summary's four counts add up to the case lines; `skipped` leaves out the `crashed` ones, which have their own
-count. The debug channel's `EDENPROBE DONE` line carries the same four. With `compare=<name>`, `baseline` lines and a
+count. The debug channel's `AMBERLITH DONE` line carries the same four. With `compare=<name>`, `baseline` lines and a
 `baseline_summary` line come just before the summary ([Baselines](Baseline.md)). A run that dies halfway leaves every
 line up to its last finished case. The summary is the last line, but for a detailed run nobody attended, which adds
 one note after it ([On the console](Console.md)).
@@ -63,7 +63,7 @@ one note after it ([On the console](Console.md)).
 ## Where a run leaves its report
 
 ```
-sdmc:/edenprobe/
+sdmc:/amberlith/
   mode              the mode file, read by every build
   net               what the net family is pointed at
   crashes           the crash list: this machine's, shared by every build

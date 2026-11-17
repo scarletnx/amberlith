@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -41,7 +41,7 @@ final class NetCases {
                     } catch (Exception ignored) {
                         // the client's read times out and reports it
                     }
-                }, "edenprobe-echo");
+                }, "amberlith-echo");
                 t.start();
                 try (Socket c = new Socket()) {
                     c.connect(new InetSocketAddress("127.0.0.1", server.getLocalPort()), TIMEOUT_MS);
@@ -75,11 +75,11 @@ final class NetCases {
         @Override public Outcome run(Env env) {
             String java;
             try {
-                java = "resolved " + InetAddress.getByName("edenprobe.invalid");
+                java = "resolved " + InetAddress.getByName("amberlith.invalid");
             } catch (UnknownHostException e) {
                 java = e.getClass().getName();
             }
-            return Outcome.check("java.net.UnknownHostException|" + "getaddrinfo 7", java + "|" + NativeLib.resolve("edenprobe.invalid"));
+            return Outcome.check("java.net.UnknownHostException|" + "getaddrinfo 7", java + "|" + NativeLib.resolve("amberlith.invalid"));
         }
     }
 

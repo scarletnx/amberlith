@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Writes the main.npdm of the probe's Ounce build, or says what one holds.
 
@@ -17,7 +17,7 @@ reads exactly that, src/nx/loader/ounce.h). The toolchain's npdmtool writes the 
 key (no machine that runs homebrew checks them, and no console starts this file), and the access control info with
 one kernel capability, the thread one. Nothing else is granted, since nothing a runtime reads asks for more.
 
-  --name NAME            the program's name, at most 16 bytes (edenprobe)
+  --name NAME            the program's name, at most 16 bytes (Amberlith)
   --title HEX            its title number (0100000000001000, the one ScarletNX gives a program that has none, so the
                          game's folder is named by its recompile and not by a number)
   --stack BYTES          the main thread's stack (0x100000)
@@ -55,7 +55,7 @@ def span(text, what, lowest, highest):
     return first, last
 
 
-def build(name="edenprobe", title=DEFAULT_TITLE, stack=0x100000, priority=44, core=0, priorities=(28, 59),
+def build(name="amberlith", title=DEFAULT_TITLE, stack=0x100000, priority=44, core=0, priorities=(28, 59),
           cores=(0, 2)):
     """the file's bytes"""
     raw = name.encode("ascii", "strict") if name.isascii() else None
@@ -140,7 +140,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="verb", required=True)
     write = sub.add_parser("write")
     write.add_argument("out")
-    write.add_argument("--name", default="edenprobe")
+    write.add_argument("--name", default="amberlith")
     write.add_argument("--title", default="%016x" % DEFAULT_TITLE)
     write.add_argument("--stack", default="0x100000")
     write.add_argument("--priority", default="44")

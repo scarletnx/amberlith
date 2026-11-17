@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/sdk-exports.py reads sdk.h's symbols and a dynamic symbol table, and names what is missing, what is not a
 defined global function and what is exported under nn:: without a declaration."""

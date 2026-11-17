@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Publish a Build run's NRO, APK and ExeFS folders as a release, and say so on Discord.
 
@@ -14,10 +14,10 @@ the run whose files publish takes (kind, run, sha, short, tag, stem), when there
 - a push to main that built becomes the prerelease nightly-<date>-<commit>, never the latest, only the newest N
   nightlies staying; the prerelease "nightly" takes its files and notes, its tag moved to that commit.
 A pull request's run is not published: its files are the run's artifacts, which build.yml links from the pull request.
-Nothing is built: the NRO, the APK and the two ExeFS folders are the run's artifacts edenprobe-<stem>.nro,
-edenprobe-<stem>.apk, edenprobe-ounce-<stem>.zip (the probe as a Switch 2 program) and edenprobe-mod-<stem>.zip (the
+Nothing is built: the NRO, the APK and the two ExeFS folders are the run's artifacts amberlith-<stem>.nro,
+amberlith-<stem>.apk, amberlith-ounce-<stem>.zip (the probe as a Switch 2 program) and amberlith-mod-<stem>.zip (the
 probe as a mod of a game), <stem> the commit's VERSION and its first 7 digits (0.18.0-0123abc), which the workflow
-downloads into DIR between the two. A nightly holds them under those names, a version's release as edenprobe-0.18.0.nro
+downloads into DIR between the two. A nightly holds them under those names, a version's release as amberlith-0.18.0.nro
 and so on, each with its .sha256 beside it, which sha256sum -c reads. A zip holds its ExeFS folder, exefs/, with
 exactly the files that program's loader reads.
 
@@ -353,7 +353,7 @@ class Publisher(Hub):
         since = earlier[0]["tag_name"] if earlier else ""
         previous = notes.git(self.checkout, "rev-list", "-n", "1", since).strip() if since else ""
         where = f"{SERVER}/{self.repo}/releases/download/{tag}"
-        title = f"edenprobe {tag}"
+        title = f"Amberlith {tag}"
         body = notes.notes(self.checkout, sha, previous, self.repo, where, built, "", since, f"{title}, built from")
         made, new = self.put_release(tag, title, body, "-" in tag, files, sha)
         print(f"{'published' if new else 'replaced the files of'} {tag}")
@@ -392,7 +392,7 @@ class Publisher(Hub):
             "tag": tag,
             "stem": f"{version_of(self.checkout, sha)}-{sha[:7]}",
         }
-        print(f"to publish: the {kind} files of run {run['id']}, edenprobe-{self.output['stem']}.nro and the rest")
+        print(f"to publish: the {kind} files of run {run['id']}, amberlith-{self.output['stem']}.nro and the rest")
 
     def tagged(self, name):
         """name is a tag of REPO (a run's head_branch is the tag a tag push pushed)"""

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The ban list: source/bans.txt checked line by line and written as the C table the program holds.
 
@@ -113,7 +113,7 @@ def c_string(text):
 
 
 def table(machines, lines):
-    out = ["// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors",
+    out = ["// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors",
            "// SPDX-License-Identifier: GPL-3.0-or-later",
            "// Written by tools/bans.py from source/bans.txt; edit that file and run it again rather than this one.",
            "",

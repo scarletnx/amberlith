@@ -1,6 +1,6 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
-package org.scarletnx.edenprobe;
+package org.scarletnx.amberlith;
 
 /**
  * The Java suites, each case in the order a run takes it. A suite and a name never change once a report has them: a
@@ -16,7 +16,7 @@ final class Suites {
         Def(String name, String tier, String className) {
             this.name = name;
             this.tier = tier;
-            this.className = "org.scarletnx.edenprobe." + className;
+            this.className = "org.scarletnx.amberlith." + className;
         }
     }
 

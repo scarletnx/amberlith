@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Writes source/vp9jobs.c: the VP9 jobs the video family's nvdec suite hands the decode engine,
 one per frame of six libvpx test vectors, and what each image must hash to.
@@ -1154,7 +1154,7 @@ def limits(cases):
 def render(cases):
     out = []
     w = out.append
-    w("// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors")
+    w("// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors")
     w("// SPDX-License-Identifier: GPL-3.0-or-later")
     w("// Written by tools/vp9-jobs.py generate; run it again rather than editing this file.")
     w("// The frames are libvpx's test vectors (Copyright (c) 2010, The WebM Project authors,")
@@ -1241,7 +1241,7 @@ def render(cases):
 
 def render_defaults(defaults):
     out = [
-        "# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors",
+        "# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors",
         "# SPDX-License-Identifier: GPL-3.0-or-later",
         '"""Written by tools/vp9-jobs.py generate; run it again rather than editing this file.',
         "",

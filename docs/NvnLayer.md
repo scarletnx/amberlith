@@ -25,7 +25,7 @@ NVN is the API a game draws with, and each game carries its own driver for it; a
 (`NvnLoadProcs`) and calls nothing of the layer's by name, as a game calls its driver.
 
 It is a module of its own: a folder, a public header (`nvnlayer/include/nvnlayer.h`), a make fragment
-(`nvnlayer/layer.mk`) and a test. Nothing in it reads edenprobe's sources, so a demo or another homebrew program
+(`nvnlayer/layer.mk`) and a test. Nothing in it reads Amberlith's sources, so a demo or another homebrew program
 links it without the rest of the probe. It is no development kit and takes nothing from one: the names and argument
 types are ScarletNX's `gpu/nvn/nvn.hook`, the types h1k421's reconstruction (see
 [Where its numbers come from](#where-its-numbers-come-from)).
@@ -127,9 +127,9 @@ if (!nvn.nvnDeviceInitialize(&device, &builder)) { /* NvnLayerError() says why, 
   many draws as a word the graphics unit reads says (`nvnCommandBufferMultiDrawArraysIndirectCount` and
   `MultiDrawElementsIndirectCount`), a texture drawn with no program (`nvnCommandBufferDrawTexture`), transform feedback
   (its two binds, its four steps and `nvnCommandBufferDrawTransformFeedback`). A program that can do without tells that
-  from a call it got wrong; edenprobe's cases skip as unavailable on it. Never under ScarletNX.
+  from a call it got wrong; Amberlith's cases skip as unavailable on it. Never under ScarletNX.
 - **`NvnLayerSetGuard(guard)`**: deko3d ends the program when it cannot make an object. A program that can turn
-  that abort into a return (edenprobe's `AbortGuarded`, a linker wrap of `diagAbortWithResult`) gives the layer its
+  that abort into a return (Amberlith's `AbortGuarded`, a linker wrap of `diagAbortWithResult`) gives the layer its
   guard, and a bring-up that fails is then a false NVN result with its reason. Without one the abort stands.
 - **`NvnLayerSetFatal(hook)`**, for the API 231 build: called with the function's name before the layer writes
   `nvnlayer: FATAL: <name> was reached: no NVN implementation took it` to the debug output and breaks.
@@ -421,7 +421,7 @@ The layer's reference is the graphics unit running what the layer recorded, neve
   once, and the layer gives no function of its own.
 - The nvn family, in the NRO: the layer's functions on the console and in Eden, ScarletNX's NVN under ScarletNX,
   and one scene down three ways, the layer's own functions among them, which run its bodies under ScarletNX too.
-- `tools/nvn-lookups.py edenprobe.elf`, which the CI runs on the NRO: `nvnBootstrapLoader` is exported, every
+- `tools/nvn-lookups.py amberlith.elf`, which the CI runs on the NRO: `nvnBootstrapLoader` is exported, every
   lookup in `NvnLoadProcs` is a call through a pointer, and nothing reaches an entry point by name. ScarletNX
   takes a function when a call of the lookup returns its address, and a compiler that can tell which function a
   pointer holds calls it by name instead, guarded by a compare: GCC 15 did so for the lookups of a build that

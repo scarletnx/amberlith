@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Builds source/wimsymesh.c: Wimsy, ScarletNX's mascot, as a mesh, for the game family's levels.
 
@@ -19,7 +19,7 @@ that are far from a half, so every machine writes the same file.
 The triangles are in painting order: leaf by leaf as the drawing has them, each leaf's back, wall, bevel and front,
 then the eyes. Drawn in that order with no depth test, the ones that face the eye give the drawing.
 
-Her other drawings (wimsy-dist's, the GPL-3.0-or-later ones: Fuddles', edenprobe's, Accord's, which is its Sepia
+Her other drawings (wimsy-dist's, the GPL-3.0-or-later ones: Fuddles', Amberlith's, Accord's, which is its Sepia
 theme's too, the same file, and the Default theme's) are the same five leaves and eyes in other colours, with
 details inside the leaves that the mesh leaves out. Each is a palette for the one mesh: a leaf's colour is its path's fill, the mean of its stops where the
 fill is a gradient; the eyes' black is the first pupil's. The Default theme's drawing is 32 by 32 squares in six
@@ -52,7 +52,7 @@ BACK_SHADE = 154
 MITER_LIMIT = 3.0
 WHITE = (255, 255, 255)
 # The drawings, the first the one the mesh is made of: a name and its file in static/.
-VARIANTS = (("wimsy", "wimsy.svg"), ("fuddles", "wimsy-fuddles.svg"), ("edenprobe", "wimsy-edenprobe.svg"),
+VARIANTS = (("wimsy", "wimsy.svg"), ("fuddles", "wimsy-fuddles.svg"), ("sunset", "wimsy-sunset.svg"),
             ("accord", "wimsy-accord.svg"), ("default", "wimsy-default.svg"))
 # Where each leaf's path starts in every drawing but the Default theme's, and a pupil's radius.
 LEAF_STARTS = ((192.28931, 12.793038), (283.32464, 18.471579), (3.1326032, 310.41929), (80.650839, 503.85583),
@@ -363,7 +363,7 @@ def build(svg_path):
 
 def c_file(mesh):
     lines = [
-        "// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors",
+        "// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors",
         "// SPDX-License-Identifier: GPL-3.0-or-later",
         "",
         "// Written by tools/wimsy-mesh.py from static/wimsy.svg; run it again rather than editing this file.",

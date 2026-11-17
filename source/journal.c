@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 // fileno and stat, which the host build's C11 does not declare without asking.
@@ -767,7 +767,7 @@ size_t CrashListFormat(char *out, size_t out_size, const CrashList *list) {
     }
     static const char HEADER[] =
         "# Cases that ended this machine's program, one per line: the suite, then the case.\n"
-        "# edenprobe skips them until the mode word retry runs them again; delete a line to try\n"
+        "# Amberlith skips them until the mode word retry runs them again; delete a line to try\n"
         "# one case again. The program writes this file whole, so comments here do not stay.\n";
     size_t used = 0;
     int wrote = snprintf(out, out_size, "%s", HEADER);

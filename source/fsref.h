@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -15,7 +15,7 @@ extern "C" {
 
 /// Where the fs family keeps its files on the card, as the file system service names them, and
 /// the big file there: 64 MiB, written once by whichever suite finds it missing first.
-#define FS_DIRECTORY "/edenprobe/fs"
+#define FS_DIRECTORY "/amberlith/fs"
 #define FS_BIG_PATH FS_DIRECTORY "/big.bin"
 #define FS_BIG_SIZE (64u * 1024u * 1024u)
 

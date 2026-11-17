@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -80,7 +80,7 @@ static const Look RUN = {
 // the screens its cases judge. A build on one thread whose thread pointer is not its C library's
 // (the mod of a game, mod.mk) keeps one for the process: reading a thread-local there reads the
 // game's thread data as libnx's.
-#ifdef EDENPROBE_ONE_THREAD
+#ifdef AMBERLITH_ONE_THREAD
 static const Look *g_look = &MENU;
 #else
 static _Thread_local const Look *g_look = &MENU;
@@ -1791,7 +1791,7 @@ static void CountsBand(const UiFrame *frame, ReportResult verdict, const char *w
 }
 
 static void ResultsHead(const UiFrame *frame, const UiRun *run, UiState state) {
-    Head(frame, state.browser ? UI_TAB_RESULTS : UI_TABS, "EDENPROBE  /  RESULTS",
+    Head(frame, state.browser ? UI_TAB_RESULTS : UI_TABS, "AMBERLITH  /  RESULTS",
          run != NULL ? run->heading : NULL);
 }
 
@@ -2391,12 +2391,12 @@ static const struct {
     { "fs", "reads from the memory card, timed" },
     { "audio", "the audio renderer, nearly silent" },
     { "listen", "about 40 s of sound to hear, before the audio suite" },
-    { "net", "the online services, against sdmc:/edenprobe/net" },
+    { "net", "the online services, against sdmc:/amberlith/net" },
     { "pad", "the controller, then the touch screen: needs a person" },
     { "quick", "leave when the report closes, with no results screens" },
     { "notime", "each drawing suite once, with no timing passes" },
     { "crash list", NULL },
-    { "save", "write these choices into sdmc:/edenprobe/mode" },
+    { "save", "write these choices into sdmc:/amberlith/mode" },
 };
 
 // Each row's icon, in the order of UiStartRow.
@@ -2532,7 +2532,7 @@ static void ComposeStartBody(const UiFrame *frame, const UiStartInfo *info, UiSt
     if (warned) {
         static const char *const WARNING[UI_START_WARNING_LINES] = {
             "these cases ended an emulator's program; this one may end too",
-            "if it does, start edenprobe again: the run goes on after the case",
+            "if it does, start Amberlith again: the run goes on after the case",
             "that ended it, which is then skipped as crashed and listed",
         };
         FillRect(frame, x + 6u, warning_top, 3u, UI_START_WARNING_LINES * LINE, FAILED);
@@ -2554,7 +2554,7 @@ void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState 
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
-    Head(frame, UI_TAB_START, "EDENPROBE  /  START", info->heading);
+    Head(frame, UI_TAB_START, "AMBERLITH  /  START", info->heading);
     char tip[160];
     const uint8_t *colour = TEXT;
     if (seconds_left > 0u) {
@@ -2674,7 +2674,7 @@ void UiComposeResume(const UiFrame *frame, const UiResumeInfo *info, UiResumeSta
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
-    SayFitted(frame, MARGIN, HEAD_Y, TEXT, info->heading != NULL ? info->heading : "edenprobe");
+    SayFitted(frame, MARGIN, HEAD_Y, TEXT, info->heading != NULL ? info->heading : "Amberlith");
     DrawSecondBox(frame);
     SayFitted(frame, MARGIN, SECOND_Y, SKIPPED,
               "the last run in this folder stopped before its end");
@@ -2870,7 +2870,7 @@ void UiComposeProgress(const UiFrame *frame, const UiProgress *progress) {
     }
     // The launcher's run screen: its colours, the title and the program at its right, the step
     // and its bar, the case under way, the counts.
-    Head(frame, UI_TABS, "EDENPROBE  /  RUNNING", progress->heading);
+    Head(frame, UI_TABS, "AMBERLITH  /  RUNNING", progress->heading);
     const uint32_t right = frame->width - EDGE;
     char text[200];
     const uint32_t step = progress->step < progress->steps ? progress->step : progress->steps;
@@ -3086,7 +3086,7 @@ void UiComposeListen(const UiFrame *frame, UiListenScreen screen, double left, d
         snprintf(line, sizeof(line), "%s", screen == UI_LISTEN_OPENING ? "before the parts"
                                                                        : "after the parts");
     }
-    Head(frame, UI_TABS, "EDENPROBE  /  LISTENING", line);
+    Head(frame, UI_TABS, "AMBERLITH  /  LISTENING", line);
 
     const uint32_t steps = UI_LISTEN_CLOSING + 1u;
     const uint32_t step = screen < steps ? (uint32_t)screen + 1u : steps;
@@ -3166,7 +3166,7 @@ void UiComposePad(const UiFrame *frame, const UiPadScreen *screen) {
     // the top row, a dim second row, the prompt and its bar where a list would start.
     Say(frame, MARGIN, HEAD_Y, TEXT, "controller");
     SayFitted(frame, MARGIN + 12u * GLYPH, HEAD_Y, DIM,
-              screen->heading != NULL ? screen->heading : "edenprobe");
+              screen->heading != NULL ? screen->heading : "Amberlith");
     SayFitted(frame, MARGIN, SECOND_Y, DIM,
               "press what the screen asks; nothing for 10 s skips the prompt");
 
@@ -3258,7 +3258,7 @@ void UiComposeTouch(const UiFrame *frame, const UiTouchScreen *screen) {
     }
     Say(frame, MARGIN, HEAD_Y, TEXT, "touch");
     SayFitted(frame, MARGIN + 7u * GLYPH, HEAD_Y, DIM,
-              screen->heading != NULL ? screen->heading : "edenprobe");
+              screen->heading != NULL ? screen->heading : "Amberlith");
     char line[200];
     const uint32_t prompt = screen->prompt < screen->prompts ? screen->prompt : screen->prompts;
     snprintf(line, sizeof(line), "prompt %u of %u: touch what the screen asks; nothing for 10 s "
@@ -3964,7 +3964,7 @@ static const char *FamilyWords(UiFamily family) {
     case UI_FAMILY_SERVICE:
         return "Commands a game sends to the system's services, each answer held to reden's.";
     case UI_FAMILY_NET:
-        return "The online services, nifm to friend, against what sdmc:/edenprobe/net names.";
+        return "The online services, nifm to friend, against what sdmc:/amberlith/net names.";
     case UI_FAMILY_GAME:
         return "Everything at once, as a game does it: the scene and the Wimsy levels.";
     case UI_FAMILY_LIBC:
@@ -4450,7 +4450,7 @@ void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBro
         return;
     }
     char title[48];
-    snprintf(title, sizeof(title), "EDENPROBE  /  %s", UiTabName(state->tab));
+    snprintf(title, sizeof(title), "AMBERLITH  /  %s", UiTabName(state->tab));
     for (char *c = title; *c != '\0'; ++c) {
         *c = (char)(*c >= 'a' && *c <= 'z' ? *c - 'a' + 'A' : *c);
     }

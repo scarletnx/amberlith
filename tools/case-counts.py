@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The probe's cases, how many each suite and family has and how many of them a judge holds to an answer.
 
@@ -8,7 +8,7 @@
     tools/case-counts.py unjudged [FAMILY] [--root DIR]
 
 catalogue reads the reports of a run of each build (BUILD one of nro, ounce, mod, apk, host; the report.jsonl a run
-left, the host build's edenprobe-host-report.jsonl) and writes docs/cases.tsv: a line a case, its suite, its family,
+left, the host build's amberlith-host-report.jsonl) and writes docs/cases.tsv: a line a case, its suite, its family,
 its judge and the builds that ran it. A build not given keeps its cases as the catalogue has them, so the host
 report alone updates the host's part. A case's judge comes from its lines: the tiers that compare what the machine
 produced (exact, ulp, position, level, bound), `none` when it passed comparing nothing (a device that opens, a
@@ -219,7 +219,7 @@ def read_report(path, build):
                 entry = json.loads(line)
             except ValueError as error:
                 raise Refused("%s:%d: not a JSON line: %s" % (path, number, error))
-            if entry.get("type") == "note" and entry.get("text") == "edenprobe host build":
+            if entry.get("type") == "note" and entry.get("text") == "amberlith host build":
                 host = True
             if entry.get("type") != "case":
                 continue
@@ -230,7 +230,7 @@ def read_report(path, build):
                 raise Refused("%s:%d: case %r of %s has a tab or a line break in it" % (path, number, name, suite))
             lines.append((suite, name, entry.get("tier", "none"), entry.get("result"), entry.get("expected_from")))
     if build == "host" and not host:
-        raise Refused("%s: given as host, and its notes have no 'edenprobe host build': another build's report" % path)
+        raise Refused("%s: given as host, and its notes have no 'Amberlith host build': another build's report" % path)
     if build != "host" and host:
         raise Refused("%s: given as %s, and it is the host build's report" % (path, build))
     if not lines:
@@ -328,7 +328,7 @@ def describe(path):
                     break
                 continue
             text = entry.get("text", "")
-            if text.startswith("edenprobe "):
+            if text.startswith("amberlith "):
                 words.append(text.replace(" starting", ""))
             match = re.search(r"machine ([a-z0-9-]+)(?:, version ([\w.-]+))?", text)
             if match and text.startswith("mode:"):

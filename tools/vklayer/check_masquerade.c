@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Asks the first physical device, once without the masquerade layer and once through it, about
@@ -32,7 +32,7 @@ typedef struct {
 } Side;
 
 static int Open(Side *side, bool layer) {
-    static const char *const LAYERS[] = { "VK_LAYER_EDENPROBE_masquerade" };
+    static const char *const LAYERS[] = { "VK_LAYER_AMBERLITH_masquerade" };
     const VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                     .apiVersion = VK_API_VERSION_1_4 };
     const VkInstanceCreateInfo info = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,

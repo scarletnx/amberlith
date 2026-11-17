@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """source/wimsymesh.c is what tools/wimsy-mesh.py makes of static/wimsy.svg today, and the mesh it holds is one a
 machine may cull the back faces of: every part closed, wound one way, its counts the header's."""

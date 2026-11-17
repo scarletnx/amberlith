@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """libc-math.py: prints source/libcmath.h, the correctly rounded results the libc suite's libm case
 compares the C library with (source/tests/t_libc.c). Each value is computed in decimal at 100
@@ -97,7 +97,7 @@ def main():
         ("expf", "expf(VF(1.0f))", exp(one)),
         ("logf", "logf(VF(10.0f))", ln(ten)),
     ]
-    out = ["// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors",
+    out = ["// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors",
            "// SPDX-License-Identifier: GPL-3.0-or-later",
            "",
            "// Made by tools/libc-math.py: the correctly rounded results of the libc suite's libm case. Do not",

@@ -1,11 +1,11 @@
 {
     "file_format_version": "1.2.0",
     "layer": {
-        "name": "VK_LAYER_EDENPROBE_masquerade",
+        "name": "VK_LAYER_AMBERLITH_masquerade",
         "type": "GLOBAL",
-        "library_path": "./libVkLayer_edenprobe_masquerade.so",
+        "library_path": "./libVkLayer_amberlith_masquerade.so",
         "api_version": "1.4.0",
         "implementation_version": "1",
-        "description": "Reports a Vulkan driver without what the variables name: EDENPROBE_MASQUERADE_API=1.1, EDENPROBE_MASQUERADE_HIDE=NAME,NAME (device extensions and features), EDENPROBE_MASQUERADE_NO_HOST_QUERY_RESET=1"
+        "description": "Reports a Vulkan driver without what the variables name: AMBERLITH_MASQUERADE_API=1.1, AMBERLITH_MASQUERADE_HIDE=NAME,NAME (device extensions and features), AMBERLITH_MASQUERADE_NO_HOST_QUERY_RESET=1"
     }
 }

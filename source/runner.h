@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -35,7 +35,7 @@ typedef struct {
 /// A frontend: where its files are, which build it is, and the steps it has.
 typedef struct {
     /// The probe's folder: the mode file, the crash list, runs/ and baseline/ go under it.
-    /// sdmc:/edenprobe on the console. At most RUNNER_ROOT_MAX characters.
+    /// sdmc:/amberlith on the console. At most RUNNER_ROOT_MAX characters.
     const char *root;
     const char *version;
     const char *build;
@@ -119,7 +119,7 @@ typedef void (*RunnerProgress)(uint32_t number, const char *name, bool timed);
 void RunnerSteps(Runner *runner, uint32_t families, bool timing, RunnerProgress progress);
 
 /// After the steps: the notes a run ends on, the baseline's lines, the summary; the report and the
-/// journal closed, and `EDENPROBE DONE` with the counts on the log.
+/// journal closed, and `AMBERLITH DONE` with the counts on the log.
 void RunnerFinish(Runner *runner, const RunMode *mode, bool timing);
 
 /// A run the browser begins (docs/UI.md), in a folder of its own under the launch's:

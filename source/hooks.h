@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
@@ -23,7 +23,7 @@ extern "C" {
 /// The mode file is read before either: through nn::fs's functions, which answer in both.
 
 /// Where the run leaves its files on the machine it ran on, and where the mode file is.
-#define PROBE_DIRECTORY "sdmc:/edenprobe"
+#define PROBE_DIRECTORY "sdmc:/amberlith"
 
 /// Whether the program started in hooks mode.
 bool HooksOn(void);

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdarg.h>
@@ -32,10 +32,10 @@ _Static_assert(TOUCH_ATTRIBUTE_START == HidTouchAttribute_Start &&
 #define DRAW_NANOSECONDS 100000000ull
 #define RESULT_NANOSECONDS 700000000ull
 
-static const char *heading = "edenprobe";
+static const char *heading = "Amberlith";
 
 void TouchSetHeading(const char *text) {
-    heading = text != NULL ? text : "edenprobe";
+    heading = text != NULL ? text : "Amberlith";
 }
 
 static uint64_t Now(void) {
@@ -45,7 +45,7 @@ static uint64_t Now(void) {
 /// A line for whoever watches the emulator's log rather than the screen.
 static void Say(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void Say(const char *fmt, ...) {
-    char line[200] = "EDENPROBE TOUCH ";
+    char line[200] = "AMBERLITH TOUCH ";
     const size_t used = strlen(line);
     va_list args;
     va_start(args, fmt);

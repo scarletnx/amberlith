@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """A fake gh (a small GitHub kept in a JSON file: releases and tags, pull requests, issues and their comments, Build
 runs with their jobs and artifacts) and a fake Discord (a local HTTP server keeping each webhook's

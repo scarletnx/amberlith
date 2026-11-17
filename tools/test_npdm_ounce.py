@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """tools/npdm-ounce.py writes an NPDM a runtime takes for a Switch 2 program's, and reads one back."""
 
@@ -53,7 +53,7 @@ class Write(unittest.TestCase):
         self.assertTrue(scarletnx_takes_for_ounce(data))
         got = scarletnx_reads(data)
         self.assertEqual(got, {"is64": 1, "aspace": 3, "prio": 44, "core": 0, "stack": 0x100000,
-                               "name": b"edenprobe", "title": 0x0100000000001000,
+                               "name": b"amberlith", "title": 0x0100000000001000,
                                "cores": 0b111, "priorities": ((1 << 60) - 1) & ~((1 << 28) - 1)})
         # no magic where a Switch's descriptor has it: a machine that looks there sees none
         acid = struct.unpack_from("<I", data, 0x78)[0]

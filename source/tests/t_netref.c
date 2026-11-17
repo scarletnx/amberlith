@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdio.h>
@@ -56,10 +56,10 @@ static void CheckNetFile(void) {
         "# written by tools/net-fixture.sh\n"
         "session http://127.0.0.1:41234\n"
         "account BB00000100000002   # from /api/v1/config\n"
-        "rewrite game.edenprobe.invalid localhost 127.0.0.1\n"
+        "rewrite game.amberlith.invalid localhost 127.0.0.1\n"
         "blocked bb00000100000009\n"
         "blocked BB0000010000000A\n"
-        "profile bb00000100000002 http://127.0.0.1:41234/avatar/{size}.png   edenprobe  player \n"
+        "profile bb00000100000002 http://127.0.0.1:41234/avatar/{size}.png   amberlith  player \n"
         "profile bb00000100000003 -\n"
         "server 127.0.0.1 8443\r\n"
         "server-name redenex\n"
@@ -74,14 +74,14 @@ static void CheckNetFile(void) {
         config.file_found && config.has_session &&
         strcmp(config.session, "http://127.0.0.1:41234") == 0 && config.has_account &&
         config.account == 0xBB00000100000002ull && config.rewrite_count == 1u &&
-        strcmp(config.rewrites[0].source, "game.edenprobe.invalid") == 0 &&
+        strcmp(config.rewrites[0].source, "game.amberlith.invalid") == 0 &&
         strcmp(config.rewrites[0].destination, "localhost") == 0 &&
         memcmp(config.rewrites[0].address, (const uint8_t[]){ 127, 0, 0, 1 }, 4) == 0 &&
         config.blocked_count == 2u && config.blocked[0] == 0xBB00000100000009ull &&
         config.blocked[1] == 0xBB0000010000000Aull && config.profile_count == 2u &&
         config.profiles[0].account == 0xBB00000100000002ull &&
         strcmp(config.profiles[0].url, "http://127.0.0.1:41234/avatar/{size}.png") == 0 &&
-        strcmp(config.profiles[0].name, "edenprobe  player") == 0 &&
+        strcmp(config.profiles[0].name, "amberlith  player") == 0 &&
         config.profiles[1].url[0] == '\0' && config.profiles[1].name[0] == '\0' &&
         config.has_server && config.server_port == 8443u &&
         memcmp(config.server_ip, (const uint8_t[]){ 127, 0, 0, 1 }, 4) == 0 &&
@@ -98,7 +98,7 @@ static void CheckNetFile(void) {
     char said[512];
     NetConfigDescribe(said, sizeof(said), &config);
     static const char EXPECTED[] =
-        "net: sdmc:/edenprobe/net; session http://127.0.0.1:41234; account named; 1 rewrite, "
+        "net: sdmc:/amberlith/net; session http://127.0.0.1:41234; account named; 1 rewrite, "
         "2 blocked, 2 profiles; server 127.0.0.1:8443, name redenex, certificate net-server.pem; "
         "3 lines not understood: line 13, line 14, line 15";
     static NetConfig none;
@@ -108,7 +108,7 @@ static void CheckNetFile(void) {
     const bool none_right =
         !none.file_found && !NetConfigDeclaresOnline(&none) &&
         strcmp(none_said,
-               "net: no sdmc:/edenprobe/net, so every case that needs a backend is skipped") == 0;
+               "net: no sdmc:/amberlith/net, so every case that needs a backend is skipped") == 0;
     static NetConfig server_only;
     NetConfigParse("server 10.0.0.2 443\n", &server_only);
     static NetConfig session_only;
@@ -163,8 +163,8 @@ static void CheckWords(void) {
 
     // The placeholder is every percent sign, not the first.
     char out[64];
-    const bool one = NetExpandPlaceholder(out, sizeof(out), "probe-%.edenprobe.invalid", "lp1") &&
-                     strcmp(out, "probe-lp1.edenprobe.invalid") == 0;
+    const bool one = NetExpandPlaceholder(out, sizeof(out), "probe-%.amberlith.invalid", "lp1") &&
+                     strcmp(out, "probe-lp1.amberlith.invalid") == 0;
     char two_out[64];
     const bool two = NetExpandPlaceholder(two_out, sizeof(two_out), "%.a.%", "dd1") &&
                      strcmp(two_out, "dd1.a.dd1") == 0;
@@ -409,13 +409,13 @@ static void CheckFriendProfile(void) {
     memset(raw, 0xAA, sizeof(raw));
     const uint8_t id[8] = { 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xBB };
     memcpy(raw, id, 8);
-    memcpy(raw + 8, "edenprobe", 10);
+    memcpy(raw + 8, "amberlith", 10);
     memcpy(raw + 48, "http://127.0.0.1/avatar/{size}.png", 35);
     raw[208] = 1;
     NetFriendProfile profile;
     NetFriendProfileDecode(raw, &profile);
     const bool fields = profile.account == 0xBB00000100000002ull &&
-                        strcmp(profile.name, "edenprobe") == 0 &&
+                        strcmp(profile.name, "amberlith") == 0 &&
                         strcmp(profile.url, "http://127.0.0.1/avatar/{size}.png") == 0 &&
                         profile.valid == 1u;
     // A name with no terminator in its field stops at the field's end, not in the url after it.
@@ -432,8 +432,8 @@ static void CheckFriendProfile(void) {
 static void CheckExpectations(void) {
     static NetConfig signed_in;
     NetConfigParse("session http://127.0.0.1:1\n"
-                   "rewrite game.edenprobe.invalid localhost 127.0.0.1\n"
-                   "rewrite cdn.edenprobe.invalid cdn.example.test 10.0.0.9\n",
+                   "rewrite game.amberlith.invalid localhost 127.0.0.1\n"
+                   "rewrite cdn.amberlith.invalid cdn.example.test 10.0.0.9\n",
                    &signed_in);
     static NetConfig offline;
     NetConfigParse("server 10.0.0.2 443\n", &offline);
@@ -444,15 +444,15 @@ static void CheckExpectations(void) {
     char c[64];
     char d[64];
     const bool nsd =
-        NetExpectNsd(&signed_in, "cdn.edenprobe.invalid", "lp1", a, sizeof(a)) &&
+        NetExpectNsd(&signed_in, "cdn.amberlith.invalid", "lp1", a, sizeof(a)) &&
         strcmp(a, "cdn.example.test") == 0 &&
         NetExpectNsd(&signed_in, NET_PLACEHOLDER_NAME, "lp1", b, sizeof(b)) &&
-        strcmp(b, "probe-lp1.edenprobe.invalid") == 0 &&
-        NetExpectNsd(&offline, "plain.edenprobe.invalid", "lp1", c, sizeof(c)) &&
-        strcmp(c, "plain.edenprobe.invalid") == 0 &&
-        NetExpectNsd(&offline, "game.edenprobe.invalid", "lp1", d, sizeof(d)) &&
-        strcmp(d, "game.edenprobe.invalid") == 0 &&
-        !NetExpectNsd(&signed_in, "cdn.edenprobe.invalid", "lp1", a, 8);
+        strcmp(b, "probe-lp1.amberlith.invalid") == 0 &&
+        NetExpectNsd(&offline, "plain.amberlith.invalid", "lp1", c, sizeof(c)) &&
+        strcmp(c, "plain.amberlith.invalid") == 0 &&
+        NetExpectNsd(&offline, "game.amberlith.invalid", "lp1", d, sizeof(d)) &&
+        strcmp(d, "game.amberlith.invalid") == 0 &&
+        !NetExpectNsd(&signed_in, "cdn.amberlith.invalid", "lp1", a, 8);
     CHECK_TRUE(SUITE, "nsd is expected to answer a rewrite, then the placeholder, else the name",
                CHECK_NONE, nsd, "got \"%s\", \"%s\", \"%s\", \"%s\"", a, b, c, d);
 
@@ -461,18 +461,18 @@ static void CheckExpectations(void) {
     const uint8_t LOOP[4] = { 127, 0, 0, 1 };
     bool addresses = NetExpectAddress(&offline, "192.168.4.5", NULL, ip) &&
                      memcmp(ip, (const uint8_t[]){ 192, 168, 4, 5 }, 4) == 0;
-    addresses = addresses && NetExpectAddress(&signed_in, "cdn.edenprobe.invalid", NULL, ip) &&
+    addresses = addresses && NetExpectAddress(&signed_in, "cdn.amberlith.invalid", NULL, ip) &&
                 memcmp(ip, (const uint8_t[]){ 10, 0, 0, 9 }, 4) == 0;
     addresses = addresses && NetExpectAddress(&signed_in, NET_PLACEHOLDER_NAME, NULL, ip) &&
                 memcmp(ip, LOOP, 4) == 0;
     addresses = addresses &&
-                NetExpectAddress(&signed_in, "probe-lp1.edenprobe.invalid",
-                                 "probe-lp1.edenprobe.invalid", ip) &&
+                NetExpectAddress(&signed_in, "probe-lp1.amberlith.invalid",
+                                 "probe-lp1.amberlith.invalid", ip) &&
                 memcmp(ip, LOOP, 4) == 0;
-    addresses = addresses && !NetExpectAddress(&signed_in, "probe-lp1.edenprobe.invalid", NULL,
+    addresses = addresses && !NetExpectAddress(&signed_in, "probe-lp1.amberlith.invalid", NULL,
                                                ip) &&
                 !NetExpectAddress(&offline, NET_PLACEHOLDER_NAME, NULL, ip) &&
-                !NetExpectAddress(&signed_in, "plain.edenprobe.invalid", NULL, ip);
+                !NetExpectAddress(&signed_in, "plain.amberlith.invalid", NULL, ip);
     CHECK_TRUE(SUITE, "sfdnsres is expected to answer loopback only for a session's own names",
                CHECK_NONE, addresses, "last answer %u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
 
@@ -481,14 +481,14 @@ static void CheckExpectations(void) {
     static NetConfig bare;
     NetConfigParse("session http://127.0.0.1:1\n", &bare);
     const bool session =
-        strcmp(NetSessionProbeName(&signed_in), "game.edenprobe.invalid") == 0 &&
+        strcmp(NetSessionProbeName(&signed_in), "game.amberlith.invalid") == 0 &&
         strcmp(NetSessionProbeName(&bare), NET_PLACEHOLDER_NAME) == 0 &&
-        NetSessionAnswered(&signed_in, "game.edenprobe.invalid", "lp1", "localhost") &&
-        !NetSessionAnswered(&signed_in, "game.edenprobe.invalid", "lp1",
-                            "game.edenprobe.invalid") &&
-        NetSessionAnswered(&bare, NET_PLACEHOLDER_NAME, "lp1", "probe-lp1.edenprobe.invalid") &&
+        NetSessionAnswered(&signed_in, "game.amberlith.invalid", "lp1", "localhost") &&
+        !NetSessionAnswered(&signed_in, "game.amberlith.invalid", "lp1",
+                            "game.amberlith.invalid") &&
+        NetSessionAnswered(&bare, NET_PLACEHOLDER_NAME, "lp1", "probe-lp1.amberlith.invalid") &&
         !NetSessionAnswered(&bare, NET_PLACEHOLDER_NAME, "lp1", NET_PLACEHOLDER_NAME) &&
-        !NetSessionAnswered(&bare, "plain.edenprobe.invalid", "lp1", "plain.edenprobe.invalid");
+        !NetSessionAnswered(&bare, "plain.amberlith.invalid", "lp1", "plain.amberlith.invalid");
     CHECK_TRUE(SUITE, "the sign-in wait ends only on the answer a signed in session gives",
                CHECK_NONE, session, "%s", "one of the seven readings was wrong");
 
@@ -515,12 +515,12 @@ static void CheckExpectations(void) {
     NetProfile expected;
     memset(&expected, 0, sizeof(expected));
     expected.account = 0xBB00000100000002ull;
-    snprintf(expected.name, sizeof(expected.name), "edenprobe");
+    snprintf(expected.name, sizeof(expected.name), "amberlith");
     snprintf(expected.url, sizeof(expected.url), "http://h/{size}.png");
     NetFriendProfile got;
     memset(&got, 0, sizeof(got));
     got.account = expected.account;
-    snprintf(got.name, sizeof(got.name), "edenprobe");
+    snprintf(got.name, sizeof(got.name), "amberlith");
     snprintf(got.url, sizeof(got.url), "http://h/{size}.png");
     got.valid = 1;
     bool slots = NetProfileMatches(&expected, &got);
@@ -544,14 +544,14 @@ static void CheckExpectations(void) {
 /// decide from what the machine answered.
 static void CheckNetPreconditions(void) {
     static const char *const ASKED = NET_PLACEHOLDER_NAME;
-    static const char *const EXPECTED = "probe-lp1.edenprobe.invalid";
+    static const char *const EXPECTED = "probe-lp1.amberlith.invalid";
     char said[200];
     const bool as_asked =
         NetDescribeExpansion(said, sizeof(said), ASKED, EXPECTED, ASKED, true) > 0u &&
         strcmp(said, "nsd handed the name back as it was asked, placeholder and all: its Resolve "
                      "did nothing to it, as one not implemented answers") == 0;
     const bool other_environment =
-        NetDescribeExpansion(said, sizeof(said), ASKED, EXPECTED, "probe-dd1.edenprobe.invalid",
+        NetDescribeExpansion(said, sizeof(said), ASKED, EXPECTED, "probe-dd1.amberlith.invalid",
                              true) > 0u &&
         strcmp(said, "nsd replaced the placeholder, but not with the environment it named") == 0;
     const bool left_in =

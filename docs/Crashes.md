@@ -79,7 +79,7 @@ own, a person closing the window) leaves a stop looking like the program ending 
 
 ## The crash list
 
-`sdmc:/edenprobe/crashes` names the cases that ended this machine's program, `<suite> <case>` a line. They are skipped
+`sdmc:/amberlith/crashes` names the cases that ended this machine's program, `<suite> <case>` a line. They are skipped
 as `crashed` in every later run until the word `retry` runs them again; one that then runs to its end leaves the
 list. A case that ended the program in this very run is skipped even under `retry`. Delete a line to try one case
 again; the program rewrites the file whole, so a comment typed into it does not stay.
@@ -147,7 +147,7 @@ The runner's own files are never edited for it: `make run MODE="quick skip=tex8k
 | the APK on a device, `android/tools/run-adb.sh` ([On Android](Android.md)) | it launches the app again, up to `--launches` (5) in all |
 | the APK on ScarletNX's Android layer, `android/tools/run-scarletnx.sh` | it launches the driver again, up to `--launches` (5) in all |
 | ScarletNX, through its `scripts/edenprobe.py run` | it launches the program again, up to `--launches` (16) in all |
-| the console from the homebrew menu, Ryujinx, or any emulator opened by hand | by hand: open `edenprobe.nro` again, until the report ends on its summary |
+| the console from the homebrew menu, Ryujinx, or any emulator opened by hand | by hand: open `amberlith.nro` again, until the report ends on its summary |
 | the host build, `make -f host.mk host-run` | nothing goes on: it keeps no journal and runs the judge and the libc family whole every time |
 
 ## What a crash costs
@@ -165,5 +165,5 @@ the journal is on.
 
 ## Ryujinx and the console
 
-Started by hand, as the table says. Ryujinx's card is `~/.config/Ryujinx/sdcard/edenprobe/` on Linux
+Started by hand, as the table says. Ryujinx's card is `~/.config/Ryujinx/sdcard/amberlith/` on Linux
 (`$XDG_CONFIG_HOME/Ryujinx/...`, or `portable/sdcard/` beside a portable build).

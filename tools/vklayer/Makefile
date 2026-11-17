@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The masquerade layer, for the host that runs the emulator. `make` builds it beside its
 # manifest; then, for an emulator run:
 #
-#   VK_ADD_LAYER_PATH=$(pwd) VK_INSTANCE_LAYERS=VK_LAYER_EDENPROBE_masquerade \
-#   EDENPROBE_MASQUERADE_HIDE=VK_EXT_graphics_pipeline_library,shaderFloat16 eden-cli -g ...
+#   VK_ADD_LAYER_PATH=$(pwd) VK_INSTANCE_LAYERS=VK_LAYER_AMBERLITH_masquerade \
+#   AMBERLITH_MASQUERADE_HIDE=VK_EXT_graphics_pipeline_library,shaderFloat16 eden-cli -g ...
 #
 # `make check` asks the first device what the layer lets through, against what the driver says
 # without it: every mask hides what it names, an extension the core of the device's version has
@@ -15,7 +15,7 @@
 
 CC     ?= cc
 CFLAGS := -std=c11 -O2 -g -fPIC -fvisibility=hidden -Wall -Wextra -Werror
-OUT    := libVkLayer_edenprobe_masquerade.so
+OUT    := libVkLayer_amberlith_masquerade.so
 VK_XML ?= /usr/share/vulkan/registry/vk.xml
 ADD    := VK_ADD_LAYER_PATH=$(CURDIR) VK_INSTANCE_LAYERS=
 # an extension with a structure of its own, one the core took in with its feature, a core 1.0
@@ -35,14 +35,14 @@ features:
 	python3 features.py $(VK_XML) features.inc
 
 check: $(OUT) check_masquerade
-	$(ADD) EDENPROBE_MASQUERADE_HIDE=$(subst $(space),$(comma),$(NAMES)) ./check_masquerade --expect hidden $(NAMES)
+	$(ADD) AMBERLITH_MASQUERADE_HIDE=$(subst $(space),$(comma),$(NAMES)) ./check_masquerade --expect hidden $(NAMES)
 	$(ADD) ./check_masquerade --expect same $(NAMES)
-	$(ADD) EDENPROBE_MASQUERADE_HIDE=VK_KHR_synchronization2 ./check_masquerade --expect same synchronization2
-	$(ADD) EDENPROBE_MASQUERADE_API=1.1 EDENPROBE_MASQUERADE_NO_HOST_QUERY_RESET=1 \
+	$(ADD) AMBERLITH_MASQUERADE_HIDE=VK_KHR_synchronization2 ./check_masquerade --expect same synchronization2
+	$(ADD) AMBERLITH_MASQUERADE_API=1.1 AMBERLITH_MASQUERADE_NO_HOST_QUERY_RESET=1 \
 	    ./check_masquerade --expect hidden --api 1.1 VK_EXT_host_query_reset hostQueryReset
-	$(ADD) EDENPROBE_MASQUERADE_HIDE=VK_EXT_no_such_thing ./check_masquerade independentBlend \
+	$(ADD) AMBERLITH_MASQUERADE_HIDE=VK_EXT_no_such_thing ./check_masquerade independentBlend \
 	    2>check.err; test $$? = 3 && grep -q 'names VK_EXT_no_such_thing' check.err
-	$(ADD) EDENPROBE_MASQUERADE_API=1.9 ./check_masquerade independentBlend \
+	$(ADD) AMBERLITH_MASQUERADE_API=1.9 ./check_masquerade independentBlend \
 	    2>check.err; test $$? = 3 && grep -q 'API=1.9 is not' check.err
 	@rm -f check.err
 	@echo "check: each mask hides what it names, the core keeps its features, none changes nothing, unknown names stop"

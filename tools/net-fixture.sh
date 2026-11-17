@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+# SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Runs the net family under an emulator against backends on this machine, and takes them down
@@ -12,7 +12,7 @@
 #
 # What the probe expects is not written here. The script asks the backend over its own protocol
 # (discovery, a token per scope, the three API reads) and writes what it answered into
-# sdmc:/edenprobe/net, so an expectation is only ever what the backend published.
+# sdmc:/amberlith/net, so an expectation is only ever what the backend published.
 #
 #   tools/net-fixture.sh                         the emulator make run uses by default
 #   EMULATOR=/path/to/eden-cli tools/net-fixture.sh
@@ -37,11 +37,11 @@ REDEN=${REDEN:-$HOME/WorkDir/accord/reden}
 REDENEX=${REDENEX:-$HOME/WorkDir/accord/redenex}
 WORK=$PROBE/build/net
 XDG=$PROBE/build/xdg
-SDMC=$XDG/data/eden/sdmc/edenprobe
+SDMC=$XDG/data/eden/sdmc/amberlith
 CONFIG_DIR=$XDG/config/eden
 CONFIG=$CONFIG_DIR/sdl2-config.ini
-CLIENT_ID=edenprobe
-CLIENT_SECRET=edenprobe-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
+CLIENT_ID=amberlith
+CLIENT_SECRET=amberlith-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
 
 say() { printf 'net-fixture: %s\n' "$*"; }
 die() { printf 'net-fixture: FAILED: %s\n' "$*" >&2; exit 1; }
@@ -215,11 +215,11 @@ make -C "$PROBE" --no-print-directory run MODE="net quick" ${EMULATOR:+EMULATOR=
     >"$WORK/run.log" 2>&1
 status=$?
 set -e
-{ grep -aE 'EDENPROBE DONE|^mode file|make run:| error: |\*\*\* ' "$WORK/run.log" || true; } |
-    sed 's/.*\(EDENPROBE DONE\)/\1/' | head -20
+{ grep -aE 'AMBERLITH DONE|^mode file|make run:| error: |\*\*\* ' "$WORK/run.log" || true; } |
+    sed 's/.*\(AMBERLITH DONE\)/\1/' | head -20
 [ "$status" = 0 ] || die "make run exited $status; see $WORK/run.log"
-grep -aq 'EDENPROBE DONE' "$WORK/run.log" ||
-    die "this run printed no EDENPROBE DONE line; see $WORK/run.log"
+grep -aq 'AMBERLITH DONE' "$WORK/run.log" ||
+    die "this run printed no AMBERLITH DONE line; see $WORK/run.log"
 FOLDER=$(cat "$SDMC/last-run" 2>/dev/null) || die "this run named no folder in $SDMC/last-run"
 case $FOLDER in runs/*) ;; *) die "last-run names $FOLDER, not a folder under runs/" ;; esac
 REPORT=$SDMC/$FOLDER/report.jsonl

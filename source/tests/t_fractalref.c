@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+// SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <stdbool.h>
@@ -179,7 +179,7 @@ static void CheckPalette(void) {
     Report("a count's colour is the turned palette's, black where it never escaped", &t);
 }
 
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
 static uint32_t counts[FRACTAL_PIXELS];
 static uint8_t image[FRACTAL_IMAGE_BYTES];
 
@@ -248,7 +248,7 @@ void RunReferenceFractal(void) {
     CheckPrecision();
     CheckIterate();
     CheckPalette();
-#ifdef EDENPROBE_HOST
+#ifdef AMBERLITH_HOST
     CheckPinned(FRACTAL_MANDELBROT);
     CheckPinned(FRACTAL_JULIA);
     static const uint32_t MANDELBROT_DOUBLE[2] = { 210u, 54036u };

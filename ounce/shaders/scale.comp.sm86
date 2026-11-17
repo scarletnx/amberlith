@@ -1,4 +1,4 @@
-; SPDX-FileCopyrightText: Copyright 2026 edenprobe contributors
+; SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
 ; Each invocation takes its own word of storage buffer 0 and writes three times it plus its index 0x200 bytes on:
