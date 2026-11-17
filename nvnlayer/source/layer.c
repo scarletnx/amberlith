@@ -11,6 +11,11 @@
 // hooks it sets, the lookup over the build's table, and the loader a program fills its function
 // pointers with. It names no deko3d and no machine function, so it also builds where the
 // program's own tests run.
+//
+// A build for a game's own driver (NVN_LAYER_GAME_DRIVER, layer.mk's NVNLAYER_DRIVER := game) is
+// this file alone, less the lookup: nvnBootstrapLoader is then no function of the program's, and
+// the one the loader calls is the driver's of the game the program is loaded in, bound by the
+// game's own dynamic linker.
 
 // ---- the failure a program reports
 
@@ -54,15 +59,23 @@ void LayerComplain(const char *format, ...) {
 // ---- the program's hooks
 
 static NvnLayerGuard layer_guard;
-static NvnLayerFatalHook layer_fatal;
 
 void NvnLayerSetGuard(NvnLayerGuard guard) {
     layer_guard = guard;
 }
 
+#ifdef NVN_LAYER_GAME_DRIVER
+void NvnLayerSetFatal(NvnLayerFatalHook hook) {
+    // No body of the layer's is in this build to be reached.
+    (void)hook;
+}
+#else
+static NvnLayerFatalHook layer_fatal;
+
 void NvnLayerSetFatal(NvnLayerFatalHook hook) {
     layer_fatal = hook;
 }
+#endif
 
 bool LayerGuarded(void (*call)(void), const char *what) {
     if (layer_guard == NULL) {
@@ -77,6 +90,7 @@ bool LayerGuarded(void (*call)(void), const char *what) {
     return false;
 }
 
+#ifndef NVN_LAYER_GAME_DRIVER
 void LayerFatal(const char *name) {
     // The hook is taken down first: a hook that itself reaches a body must not come back here.
     const NvnLayerFatalHook hook = layer_fatal;
@@ -181,9 +195,18 @@ static NvnGenericProc Nvnl_nvnDeviceGetProcAddress(const NVNdevice *device, cons
 NvnGenericProc nvnBootstrapLoader(const char *name) {
     return Lookup(name);
 }
+#endif // !NVN_LAYER_GAME_DRIVER
 
 // ---- what a program does with the lookup
 
+#ifdef NVN_LAYER_GAME_DRIVER
+bool NvnLayerOwnProcs(NvnProcs *procs) {
+    (void)procs;
+    LayerComplain("NvnLayerOwnProcs in a build for a game's own driver: the layer has no function "
+                  "of its own there, and nvnBootstrapLoader is the game's");
+    return false;
+}
+#else
 /// Whether NvnLoadProcs has looked the functions up: from then on a runtime may hold them.
 static bool looked_up;
 
@@ -204,6 +227,7 @@ bool NvnLayerOwnProcs(NvnProcs *procs) {
 #undef NVN_LAYER_OWN
     return true;
 }
+#endif
 
 bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size) {
     // Through pointers the compiler cannot see through, as a game calls its imports: a runtime
@@ -214,7 +238,9 @@ bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size) {
     // compare: GCC 15 did, and the names looked up that way kept the layer's bodies under
     // ScarletNX. tools/nvn-lookups.py checks the program for it.
     NvnGenericProc (*volatile bootstrap)(const char *) = nvnBootstrapLoader;
+#ifndef NVN_LAYER_GAME_DRIVER
     looked_up = true;
+#endif
     memset(procs, 0, sizeof(*procs));
     const NvnDeviceGetProcAddressProc volatile get =
         (NvnDeviceGetProcAddressProc)bootstrap("nvnDeviceGetProcAddress");

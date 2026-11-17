@@ -18,7 +18,8 @@ HOSTDEP  := $(HOSTOBJ:.o=.d)
 # The NVN layer's own test (nvnlayer/tests), once for each API version the layer builds for: its
 # shared part, the API 231 build's bodies and the API 55 build's control sections, none of which
 # touches the console.
-LAYERTEST := build-host/nvnlayer-test-55 build-host/nvnlayer-test-231
+LAYERTEST := build-host/nvnlayer-test-55 build-host/nvnlayer-test-231 \
+             build-host/nvnlayer-test-game-55 build-host/nvnlayer-test-game-231
 LAYERFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -Invnlayer/include
 
 .PHONY: host host-run host-clean music-wav
@@ -39,6 +40,14 @@ build-host/nvnlayer-test-231: nvnlayer/tests/layer_test.c nvnlayer/source/layer.
                               $(wildcard nvnlayer/include/*.h nvnlayer/include/nvn/*.h)
 	@mkdir -p $(dir $@)
 	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=231 $(filter %.c,$^) -o $@
+
+# And the build for a game's own driver (NVNLAYER_DRIVER := game), which is the shared part with
+# no lookup of its own: the test's nvnBootstrapLoader stands for the game's.
+build-host/nvnlayer-test-game-%: nvnlayer/tests/game_test.c nvnlayer/source/layer.c \
+                                 $(wildcard nvnlayer/source/*.h) \
+                                 $(wildcard nvnlayer/include/*.h nvnlayer/include/nvn/*.h)
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(LAYERFLAGS) -DNVN_LAYER_API=$* -DNVN_LAYER_GAME_DRIVER $(filter %.c,$^) -o $@
 
 build-host/%.o: source/%.c
 	@mkdir -p $(dir $@)
@@ -62,6 +71,8 @@ host-run: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST)
 	cd / && exec $(CURDIR)/$(HOSTOUT)
 	./build-host/nvnlayer-test-55
 	./build-host/nvnlayer-test-231
+	./build-host/nvnlayer-test-game-55
+	./build-host/nvnlayer-test-game-231
 	./$(FLUIDTOOL) 64 600
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/scripts
