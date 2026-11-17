@@ -1,7 +1,7 @@
 # Amberlith
 <p align="center">
-  <img src="./static/icon.svg" alt="Wimsy as Amberlith, with a test probe" width="200"><br>
-  <b>Wimsy as amberlith</b>
+  <img src="./static/icon.svg" alt="Wimsy as Amberlith, in amber with a test probe" width="200"><br>
+  <b>Wimsy as Amberlith</b>
 </p>
 
 A test program for the console and its emulators. Every case works out the answer it expects, checks the one it

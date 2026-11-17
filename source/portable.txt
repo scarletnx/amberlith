@@ -17,6 +17,7 @@ source/check.c
 source/mode.c
 source/picture.c
 source/ui.c
+source/wimsypicture.c
 source/browse.c
 source/raster.c
 source/intref.c
