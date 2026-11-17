@@ -406,6 +406,7 @@ static const RunnerStep STEPS[] = {
 
 static const RunnerFrontend FRONTEND = {
     .root = PROBE_DIRECTORY,
+    .old_root = PROBE_OLD_DIRECTORY,
     .version = AMBERLITH_VERSION,
     .build = AMBERLITH_BUILD,
     .hash = AMBERLITH_HASH,

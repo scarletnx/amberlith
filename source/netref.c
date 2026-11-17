@@ -273,14 +273,13 @@ bool NetConfigDeclaresOnline(const NetConfig *config) {
     return config != NULL && (config->has_session || config->has_server);
 }
 
-size_t NetConfigDescribe(char *out, size_t out_size, const NetConfig *config) {
+size_t NetConfigDescribe(char *out, size_t out_size, const NetConfig *config, const char *path) {
     if (out == NULL || out_size == 0u) {
         return 0;
     }
     out[0] = '\0';
     if (config == NULL || !config->file_found) {
-        snprintf(out, out_size, "net: no %s, so every case that needs a backend is skipped",
-                 NET_FILE_PATH);
+        snprintf(out, out_size, "net: no %s, so every case that needs a backend is skipped", path);
         return strlen(out);
     }
     char server[48] = "none";
@@ -292,7 +291,7 @@ size_t NetConfigDescribe(char *out, size_t out_size, const NetConfig *config) {
     snprintf(out, out_size,
              "net: %s; session %.100s; account %s; %u rewrite%s, %u blocked, %u profile%s; "
              "server %s, name %.60s, certificate %.60s",
-             NET_FILE_PATH, config->has_session ? config->session : "none",
+             path, config->has_session ? config->session : "none",
              config->has_account ? "named" : "none", (unsigned)config->rewrite_count,
              config->rewrite_count == 1u ? "" : "s", (unsigned)config->blocked_count,
              (unsigned)config->profile_count, config->profile_count == 1u ? "" : "s", server,

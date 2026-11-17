@@ -37,6 +37,9 @@ typedef struct {
     /// The probe's folder: the mode file, the crash list, runs/ and baseline/ go under it.
     /// sdmc:/amberlith on the console. At most RUNNER_ROOT_MAX characters.
     const char *root;
+    /// The folder the program had before it was Amberlith, sdmc:/edenprobe on the console, or
+    /// NULL: a card set up for an edenprobe build runs from it whole (RunnerOldRoot).
+    const char *old_root;
     const char *version;
     const char *build;
     /// What the run's folder is named after (ModeRunFolder).
@@ -57,9 +60,32 @@ typedef struct {
 #define RUNNER_BROWSER_RUNS_MAX 9999u
 #define RUNNER_PATH_MAX (RUNNER_ROOT_MAX + 16u + MODE_FOLDER_MAX + 16u)
 
+/// Which of a frontend's two folders a launch runs from.
+typedef enum {
+    /// Its root: the only folder there is, or the old one had nothing of a run.
+    RUNNER_ROOT_NEW,
+    /// The old root, whole: the root has no mode file and no runs/, the old root has either.
+    RUNNER_ROOT_OLD,
+    /// The root, with the old one beside it holding a mode file or runs/ this launch leaves.
+    RUNNER_ROOT_NEW_BESIDE_OLD,
+} RunnerRootChoice;
+
+/// The folder a launch runs from, by what each holds: a card where no Amberlith build has run (no
+/// mode file and no runs/ in the root) and an edenprobe build has runs as that build left it, so
+/// its mode file, net file, crash list and baselines carry over, and a launcher that writes the old
+/// folder's mode file finds its report there. Scratch files a case writes elsewhere do not count.
+RunnerRootChoice RunnerOldRoot(bool root_mode, bool root_runs, bool old_mode, bool old_runs);
+
+/// The folder the latest RunnerInit chose, the root or the old one: where the net file and what
+/// it names are read from. NULL before any.
+const char *RunnerRootInUse(void);
+
 /// A run, as the runner works it out. Large: a frontend keeps one, static.
 typedef struct {
     const RunnerFrontend *frontend;
+    /// The folder every path below is under, and why: the frontend's root or its old one.
+    const char *root;
+    RunnerRootChoice root_choice;
     char mode_path[RUNNER_ROOT_MAX + 8u];
     char crash_list_path[RUNNER_ROOT_MAX + 16u];
     char last_run_path[RUNNER_ROOT_MAX + 16u];

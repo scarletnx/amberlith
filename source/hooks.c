@@ -11,6 +11,7 @@
 #include "mode.h"
 #include "platform.h"
 #include "report.h"
+#include "runner.h"
 #include "sdk.h"
 #include "sdk_card.h"
 
@@ -28,8 +29,7 @@ void userAppInit(void) __attribute__((weak));
 void userAppExit(void) __attribute__((weak));
 extern AppletType __nx_applet_type;
 
-/// The mode file's path, and the nn::fs mount name the memory card has in hooks mode.
-#define MODE_PATH PROBE_DIRECTORY "/mode"
+/// The nn::fs mount name the memory card has in hooks mode.
 #define CARD SDK_CARD
 
 static bool hooks_on;
@@ -46,16 +46,31 @@ bool HooksOn(void) {
 
 // ------------------------------------------------------------------------- the mode file first
 
+/// Whether @p folder "/" @p name is on the card, through nn::fs.
+static bool CardHolds(const char *folder, const char *name) {
+    char path[64];
+    int32_t type = -1;
+    snprintf(path, sizeof(path), "%s/%s", folder, name);
+    return R_SUCCEEDED(NnFsGetEntryType(&type, path));
+}
+
 /// Whether the mode file, read through nn::fs from the card mounted as CARD, has the word `hooks`,
-/// as RunnerModeFromFile reads it: a folder is no file, and past MODE_FILE_MAX nothing is read.
+/// as RunnerModeFromFile reads it: a folder is no file, and past MODE_FILE_MAX nothing is read. The
+/// mode file is the one of the folder the runner will run from (RunnerOldRoot).
+static const char *mode_path = PROBE_DIRECTORY "/mode";
+
 static bool ModeAsksHooks(void) {
     static char text[MODE_FILE_MAX + 2u];
+    const RunnerRootChoice choice =
+        RunnerOldRoot(CardHolds(PROBE_DIRECTORY, "mode"), CardHolds(PROBE_DIRECTORY, "runs"),
+                      CardHolds(PROBE_OLD_DIRECTORY, "mode"), CardHolds(PROBE_OLD_DIRECTORY, "runs"));
+    mode_path = choice == RUNNER_ROOT_OLD ? PROBE_OLD_DIRECTORY "/mode" : PROBE_DIRECTORY "/mode";
     int32_t type = -1;
-    if (R_SUCCEEDED(NnFsGetEntryType(&type, MODE_PATH)) && type == NN_FS_ENTRY_DIRECTORY) {
+    if (R_SUCCEEDED(NnFsGetEntryType(&type, mode_path)) && type == NN_FS_ENTRY_DIRECTORY) {
         return false;
     }
     NnFsFileHandle file = { 0 };
-    if (R_FAILED(NnFsOpenFile(&file, MODE_PATH, NN_FS_OPEN_READ))) {
+    if (R_FAILED(NnFsOpenFile(&file, mode_path, NN_FS_OPEN_READ))) {
         return false;
     }
     int64_t size = 0;
@@ -128,9 +143,13 @@ static void StartFiles(void) {
         return;
     }
     if (R_SUCCEEDED(card_rc) && !card_own) {
-        Say("amberlith: the machine answered nn::fs::MountSdCard itself and the mode file has no "
-            "hooks: the IPC mode opens time:u and fsp-srv now, which such a machine may refuse; "
-            "the word hooks in " MODE_PATH " asks through the SDK's functions instead");
+        char said[320];
+        snprintf(said, sizeof(said),
+                 "amberlith: the machine answered nn::fs::MountSdCard itself and the mode file has "
+                 "no hooks: the IPC mode opens time:u and fsp-srv now, which such a machine may "
+                 "refuse; the word hooks in %s asks through the SDK's functions instead",
+                 mode_path);
+        Say(said);
     }
     if (R_SUCCEEDED(card_rc)) {
         NnFsUnmount(CARD);

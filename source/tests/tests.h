@@ -32,6 +32,10 @@ void RunSupportScreens(void);
 /// The browser's catalogue, picks, walk, HUD and pause menu: part of the support suite.
 void RunSupportBrowse(void);
 
+/// Where the host build writes the screens' frames for a person: AMBERLITH_FRAMES, or the
+/// EDENPROBE_FRAMES of builds before 1.0.0, said on stderr with both names; NULL for neither.
+const char *SupportFramesDirectory(void);
+
 /// The journal, the crash list and what a launch decides from them: part of the support suite,
 /// which hands it a directory of its own to write a file into and take it away again.
 void RunSupportJournal(const char *scratch);

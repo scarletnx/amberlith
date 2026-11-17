@@ -44,8 +44,10 @@ check: $(OUT) check_masquerade
 	    2>check.err; test $$? = 3 && grep -q 'names VK_EXT_no_such_thing' check.err
 	$(ADD) AMBERLITH_MASQUERADE_API=1.9 ./check_masquerade independentBlend \
 	    2>check.err; test $$? = 3 && grep -q 'API=1.9 is not' check.err
+	$(ADD) EDENPROBE_MASQUERADE_HIDE=independentBlend ./check_masquerade --expect hidden independentBlend \
+	    2>check.err && grep -q 'EDENPROBE_MASQUERADE_HIDE=independentBlend is read as AMBERLITH_MASQUERADE_HIDE' check.err
 	@rm -f check.err
-	@echo "check: each mask hides what it names, the core keeps its features, none changes nothing, unknown names stop"
+	@echo "check: each mask hides what it names, the core keeps its features, none changes nothing, unknown names stop, an old name is read and said"
 
 clean:
 	rm -f $(OUT) check_masquerade check.err

@@ -81,6 +81,21 @@ class PrBuilds(unittest.TestCase):
         patched = [c for c in self.world.calls() if c["args"][:3] == ["api", "-X", "PATCH"]]
         self.assertEqual(patched[0]["args"][3], f"repos/{REPO}/issues/comments/{ours[0]['id']}")
 
+    def test_a_comment_from_before_amberlith_is_rewritten(self):
+        state = self.world.state()
+        old = {
+            "id": 11,
+            "user": {"login": "github-actions[bot]", "type": "Bot"},
+            "body": "<!-- edenprobe-builds -->\nold",
+        }
+        state["comments"]["7"].append(old)
+        self.world.save(state)
+        done = self.run_script(REPO, "7", "60", HEAD, needs={"nro": {"result": "success"}})
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        ours = [c for c in self.comments() if c["user"]["login"] == "github-actions[bot]"]
+        self.assertEqual([c["id"] for c in ours], [11])
+        self.assertTrue(ours[0]["body"].startswith(f"{MARK}\nBuilds of aaaaaaa"), ours[0]["body"])
+
     def test_a_commit_no_longer_the_head(self):
         done = self.run_script(REPO, "7", "60", "b" * 40)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)

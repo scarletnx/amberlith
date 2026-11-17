@@ -24,6 +24,9 @@ extern "C" {
 
 /// Where the run leaves its files on the machine it ran on, and where the mode file is.
 #define PROBE_DIRECTORY "sdmc:/amberlith"
+/// The folder the program had before it was Amberlith, which a card set up for an edenprobe build
+/// still runs from (RunnerOldRoot).
+#define PROBE_OLD_DIRECTORY "sdmc:/edenprobe"
 
 /// Whether the program started in hooks mode.
 bool HooksOn(void);

@@ -300,11 +300,31 @@ static uint32_t CaseNamed(const UiRun *run, uint32_t group, const char *name) {
     return UINT32_MAX;
 }
 
+const char *SupportFramesDirectory(void) {
+#ifndef __SWITCH__
+    const char *const directory = getenv("AMBERLITH_FRAMES");
+    if (directory != NULL) {
+        return directory;
+    }
+    const char *const before = getenv("EDENPROBE_FRAMES");
+    static bool said;
+    if (before != NULL && !said) {
+        fprintf(stderr, "amberlith: EDENPROBE_FRAMES=%s is read as AMBERLITH_FRAMES, its name since "
+                        "Amberlith 1.0.0\n",
+                before);
+        said = true;
+    }
+    return before;
+#else
+    return NULL;
+#endif
+}
+
 /// Writes a composed frame where a person can look at it, when AMBERLITH_FRAMES names a
 /// directory. Host only, and never a case: a frame nobody asked for is not a result.
 static void DumpFrame(const UiFrame *frame, const char *name) {
 #ifndef __SWITCH__
-    const char *const directory = getenv("AMBERLITH_FRAMES");
+    const char *const directory = SupportFramesDirectory();
     if (directory == NULL || directory[0] == '\0') {
         return;
     }

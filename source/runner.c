@@ -21,13 +21,44 @@ static bool Join(char *out, size_t out_size, const char *root, const char *name)
     return written > 0 && (size_t)written < out_size;
 }
 
+RunnerRootChoice RunnerOldRoot(bool root_mode, bool root_runs, bool old_mode, bool old_runs) {
+    const bool old_used = old_mode || old_runs;
+    if (!old_used) {
+        return RUNNER_ROOT_NEW;
+    }
+    return root_mode || root_runs ? RUNNER_ROOT_NEW_BESIDE_OLD : RUNNER_ROOT_OLD;
+}
+
+static const char *root_in_use;
+
+const char *RunnerRootInUse(void) {
+    return root_in_use;
+}
+
+/// Whether @p name is there under @p root, as a file or a folder.
+static bool Holds(const char *root, const char *name) {
+    char path[RUNNER_ROOT_MAX + 16u];
+    struct stat about;
+    return Join(path, sizeof(path), root, name) && stat(path, &about) == 0;
+}
+
 bool RunnerInit(Runner *runner, const RunnerFrontend *frontend) {
     memset(runner, 0, sizeof(*runner));
     runner->frontend = frontend;
-    const char *const root = frontend->root;
+    const char *root = frontend->root;
     if (root == NULL || strlen(root) > RUNNER_ROOT_MAX) {
         return false;
     }
+    const char *const old = frontend->old_root;
+    if (old != NULL && strlen(old) <= RUNNER_ROOT_MAX) {
+        runner->root_choice = RunnerOldRoot(Holds(root, "mode"), Holds(root, "runs"),
+                                            Holds(old, "mode"), Holds(old, "runs"));
+        if (runner->root_choice == RUNNER_ROOT_OLD) {
+            root = old;
+        }
+    }
+    runner->root = root;
+    root_in_use = root;
     if (!Join(runner->mode_path, sizeof(runner->mode_path), root, "mode") ||
         !Join(runner->crash_list_path, sizeof(runner->crash_list_path), root, "crashes") ||
         !Join(runner->last_run_path, sizeof(runner->last_run_path), root, "last-run") ||
@@ -150,6 +181,21 @@ static void JournalSimple(JournalKind kind, const char *step, uint32_t number) {
     ReportJournalWrite(&record);
 }
 
+/// Says which folder the launch runs from when the old one is on the card, naming both.
+static void NoteOldRoot(const Runner *runner) {
+    const char *const root = runner->frontend->root;
+    const char *const old = runner->frontend->old_root;
+    if (runner->root_choice == RUNNER_ROOT_OLD) {
+        ReportNote("card: %s, edenprobe's, holds a mode file or runs and %s neither, so this "
+                   "launch runs from %s whole; renamed %s, it is read from there",
+                   old, root, old, root);
+    } else if (runner->root_choice == RUNNER_ROOT_NEW_BESIDE_OLD) {
+        ReportNote("card: %s, edenprobe's, is on the card beside %s: this launch runs from %s, "
+                   "and reads nothing of %s",
+                   old, root, root, old);
+    }
+}
+
 /// Starts the report the way the plan says, and the journal of a run that goes on. A new run's
 /// journal is begun by RunnerBeginJournal, once a start screen has chosen what runs; the run
 /// before's goes now, so a launch that ends before then does not go on with that run in this
@@ -160,6 +206,7 @@ static void OpenReport(Runner *runner) {
         ReportOpen(runner->report_path);
         ReportNote("Amberlith %s (%s) starting", runner->frontend->version, runner->frontend->build);
         ReportNote("folder: %s", runner->run_directory);
+        NoteOldRoot(runner);
         (void)remove(runner->journal_path);
         return;
     }
@@ -430,7 +477,7 @@ void RunnerAdoptBrowserCrash(Runner *runner) {
         return;
     }
     char path[RUNNER_PATH_MAX + RUNNER_ROOT_MAX + 16u];
-    snprintf(path, sizeof(path), "%s/%s/%s", runner->frontend->root, runner->browser_last,
+    snprintf(path, sizeof(path), "%s/%s/%s", runner->root, runner->browser_last,
              JOURNAL_FILE_NAME);
     static JournalState journal;
     JournalStateInit(&journal);
