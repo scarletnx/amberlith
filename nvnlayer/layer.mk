@@ -13,7 +13,8 @@
 #   NVNLAYER_DRIVER  whose NVN the program's lookup reaches: layer, this layer's, as above; game,
 #                 the driver of the game the program is loaded in as one more module, where the
 #                 layer is its types, its list of names, the loader, and for a name that driver
-#                 lacks a body that stops the program. Another value stops the build.
+#                 lacks a body that keeps the name and returns nought. Another value stops the
+#                 build.
 
 NVNLAYER_DIR ?= nvnlayer
 NVNLAYER_API ?= 55
@@ -26,7 +27,7 @@ endif
 ifeq ($(filter $(NVNLAYER_API),55 231),)
 $(error NVNLAYER_API=$(NVNLAYER_API) is not an API version the layer builds for: 55 or 231 (unset, it is 55))
 else ifeq ($(NVNLAYER_DRIVER),game)
-NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/api231_surface.c
+NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/game_driver.c
 else ifeq ($(NVNLAYER_API),55)
 NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/api55_deko3d.c \
                     $(NVNLAYER_DIR)/source/api55_draw.c $(NVNLAYER_DIR)/source/api55_shader.c \

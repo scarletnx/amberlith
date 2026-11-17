@@ -93,10 +93,17 @@ under ScarletNX with the game recompiled unoptimized it alone took over ten minu
 A driver of another API major fails the second case with both numbers, and the nvn suite is not run: its objects
 would be made in storage of another size.
 
-A driver has the names of its own API version, and the suite looks up every version's. The names a game's driver
-has no function for are a note of the report, and the suite runs: a case that calls one of them ends the launch
-there, its last line naming the function, and the next launch goes on after that case, which the report keeps as
-crashed ([When the program ends in the middle](Crashes.md)).
+A driver has the names of its own API version, and the suite looks up every version's. A call of a name the game's
+driver has no function for does nothing and returns nought ([the layer](NvnLayer.md#a-games-own-driver)), so the
+case goes on to its end and finalizes what it made, and the run goes on in the same launch. What the case came to
+then judged no answer of the driver's, so its line is a skip, `unavailable`, with the functions it called:
+
+```
+{"type":"case","suite":"nvn","name":"a queue builder gives back its memory and priority, and a queue's memory counts are nought once reset","tier":"none","result":"skip","reason":"unavailable","detail":"the game's driver has no nvnQueueBuilderSetPrimaryQueue, which the case called: nothing was done and nought came back, so the verdict the case came to judged no answer (pass)"}
+```
+
+The case is asked as it ends (the report's `ReportSetUnasked`), and each lacked function is said on the debug
+output as it is first called.
 
 ## The report
 
@@ -114,6 +121,18 @@ The SDK version is the label in the read-only data of the module that holds `nvn
 that module's build id note. They name the driver, which is what two reports are compared by; nothing names the
 game.
 
+Then what that driver lacks, every name, over as many notes as they take, and as the nvn step ends, each lacked
+function a case called with the cases it made unavailable:
+
+```
+host: the game's driver has no function for 11 of the 523 names this build looks up (1 of 1): nvnQueueAcquireTexture, nvnCommandBufferSetControlMemoryCallbackEnabled, ...
+host: nvnQueueBuilderSetPrimaryQueue, which the game's driver has not, made 1 case unavailable: "a queue builder gives back its memory and priority, and a queue's memory counts are nought once reset"
+```
+
+`tools/mod-lacked.py REPORT...` reads those notes of one report or several: for each driver its lacked names, the
+cases each took and the names no case calls, then each name with the drivers that lack it, and with `--csv FILE` a
+row a name and case. It refuses a report whose notes and case lines do not agree, with the numbers.
+
 ## On a console
 
 With Atmosphere, whose loader takes a program's modules and its `main.npdm` from the card before the game's own
@@ -125,10 +144,13 @@ With Atmosphere, whose loader takes a program's modules and its `main.npdm` from
    A game that has a `subsdk9` of its own, or a folder that holds another mod's, takes the module under another
    free name from `subsdk0` to `subsdk8`.
 3. Write `edenprobe/mode` on the card: `quick nvn label=<a name for this game's driver>`.
-4. Start the game. The screen stays black while the cases run, and the console goes back to its menu when the
-   report is closed.
-5. The report is `edenprobe/runs/<build>_<label>/report.jsonl` on the card. Take the two files out of the folder to
-   play the game again.
+4. Start the game, once. The screen stays black while the cases run, and the console goes back to its menu when the
+   report is closed. A case that calls a function the game's driver has not ends unavailable and the run goes on,
+   so one launch is the whole run; only a case that ends the program (the console's error screen) asks for another
+   launch, which goes on after it.
+5. The report is `edenprobe/runs/<build>_<label>/report.jsonl` on the card, whole once its last line is the
+   summary. `tools/mod-lacked.py` on it says what the driver lacks and which cases that took. Take the two files
+   out of the folder to play the game again.
 
 `main.npdm` is the same file for every game: Atmosphere's loader writes the launched program's ID into the one it
 reads from the card. It is there for the memory card, which a game's own descriptor gives no access to.

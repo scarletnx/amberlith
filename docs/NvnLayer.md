@@ -74,9 +74,11 @@ under ScarletNX. The object sizes are still the build's `NVNLAYER_API`'s, so the
 before it makes an object.
 
 A game's driver has the names of its own API version, where the list has every version's. A name the driver
-answers nothing for fails no load there, but for the two the lookup is made of: its field holds one of the bodies
-the API 231 build has under every name, which ends the program saying which function was called and that the
-game's driver has none of that name, and `NvnLayerLackedCount` and `NvnLayerLackedName` give the names.
+answers nothing for fails no load there, but for the two the lookup is made of, and `NvnLayerLackedCount` and
+`NvnLayerLackedName` give the names. The field of such a name holds a body of the layer's (`source/game_driver.c`)
+that does nothing and returns nought, zero, false, NULL or 0.0f as the function's result is: the program goes on,
+to finalize what it had made, and `NvnLayerMissedCount` and `NvnLayerMissedName` give the lacked names it called
+since `NvnLayerMissedClear`, each once. `NvnLayerSetFatal`'s hook is told each as it is first called.
 
 ## Using it in a program
 
@@ -414,8 +416,9 @@ The layer's reference is the graphics unit running what the layer recorded, neve
   conditions ScarletNX asks of a section, and ten kinds of module are refused, each naming the value.
 - `nvnlayer/tests/game_test.c`, built and run the same way for the build of [a game's own
   driver](#a-games-own-driver), with a `nvnBootstrapLoader` of the test's standing for the game's: the loader asks
-  it once and fills every field from the function it hands back, a driver without a name is named, and the layer
-  gives no function of its own.
+  it once and fills every field from the function it hands back, a driver without a name is named, a call of a
+  name it lacks returns nought in the register of the function's result with the name kept and the hook told
+  once, and the layer gives no function of its own.
 - The nvn family, in the NRO: the layer's functions on the console and in Eden, ScarletNX's NVN under ScarletNX,
   and one scene down three ways, the layer's own functions among them, which run its bodies under ScarletNX too.
 - `tools/nvn-lookups.py edenprobe.elf`, which the CI runs on the NRO: `nvnBootstrapLoader` is exported, every

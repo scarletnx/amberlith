@@ -15,8 +15,8 @@
 // A build for a game's own driver (NVN_LAYER_GAME_DRIVER, layer.mk's NVNLAYER_DRIVER := game) is
 // this file less the lookup: nvnBootstrapLoader is then no function of the program's, and the
 // one the loader calls is the driver's of the game the program is loaded in, bound by the game's
-// own dynamic linker. Its table is the bodies that stop the program (api231_surface.c), which
-// the loader gives the names that driver lacks.
+// own dynamic linker. Its table is game_driver.c's bodies, which the loader gives the names that
+// driver lacks.
 
 // ---- the failure a program reports
 
@@ -84,6 +84,38 @@ bool LayerGuarded(void (*call)(void), const char *what) {
     return false;
 }
 
+#ifdef NVN_LAYER_GAME_DRIVER
+/// The names of the lacked functions the program called since the last clear, each once, in the
+/// order of their first call: at most every name of the list.
+static const char *missed[sizeof(NvnProcs) / sizeof(NvnGenericProc)];
+static size_t missed_count;
+
+void LayerMissed(const char *name) {
+    for (size_t i = 0; i < missed_count; ++i) {
+        if (strcmp(missed[i], name) == 0) {
+            return;
+        }
+    }
+    if (missed_count < sizeof(missed) / sizeof(missed[0])) {
+        missed[missed_count++] = name;
+    }
+    if (layer_fatal != NULL) {
+        layer_fatal(name);
+    }
+}
+
+size_t NvnLayerMissedCount(void) {
+    return missed_count;
+}
+
+const char *NvnLayerMissedName(size_t index) {
+    return index < missed_count ? missed[index] : NULL;
+}
+
+void NvnLayerMissedClear(void) {
+    missed_count = 0;
+}
+#else
 void LayerFatal(const char *name) {
     // The hook is taken down first: a hook that itself reaches a body must not come back here.
     const NvnLayerFatalHook hook = layer_fatal;
@@ -92,18 +124,11 @@ void LayerFatal(const char *name) {
         hook(name);
     }
     char text[192];
-#ifdef NVN_LAYER_GAME_DRIVER
-    snprintf(text, sizeof(text),
-             "nvnlayer: FATAL: %s was called, and the game's driver has no function of that name",
-             name);
-#else
     snprintf(text, sizeof(text),
              "nvnlayer: FATAL: %s was reached: no NVN implementation took it", name);
-#endif
     LayerStop(text);
 }
 
-#ifndef NVN_LAYER_GAME_DRIVER
 
 // ---- nvnDeviceGetInteger
 
@@ -269,7 +294,7 @@ bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size) {
     }
 #ifdef NVN_LAYER_GAME_DRIVER
     // A game's driver has the names of its own API version, and the list has every version's: a
-    // name it lacks gets the body that ends the program saying which function was called, in the
+    // name it lacks gets the body that keeps the name and returns nought (game_driver.c), in the
     // list's order as the table is, and the load goes on.
     size_t next = 0;
     lacked_count = 0;

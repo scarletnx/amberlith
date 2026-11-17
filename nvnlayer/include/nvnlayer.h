@@ -93,12 +93,20 @@ bool NvnLoadProcs(NvnProcs *procs, char *missing, size_t missing_size);
 #ifdef NVN_LAYER_GAME_DRIVER
 /// In a build for a game's own driver, a name that driver answers NULL for fails no load, but
 /// for the two the lookup itself is made of: a game's driver has the names of its own API
-/// version, and the list every version's. The field of such a name holds a body of the layer's
-/// that ends the program saying which function was called (NvnLayerSetFatal's hook first), and
-/// these say which names those were at the last NvnLoadProcs, in the list's order: how many, and
-/// the name at @p index, NULL from the count on.
+/// version, and the list every version's. These say which names those were at the last
+/// NvnLoadProcs, in the list's order: how many, and the name at @p index, NULL from the count on.
 size_t NvnLayerLackedCount(void);
 const char *NvnLayerLackedName(size_t index);
+
+/// The field of a lacked name holds a body of the layer's that does nothing and returns nought:
+/// zero, false, NULL or 0.0f, as the function's result is. So a program that calls one goes on,
+/// to finalize what it had made, and reads here what it called and was not answered: the lacked
+/// names called since the last NvnLayerMissedClear, each once, in the order of their first call,
+/// how many, and the name at @p index, NULL from the count on. NvnLayerSetFatal's hook is told
+/// each name as it is first called.
+size_t NvnLayerMissedCount(void);
+const char *NvnLayerMissedName(size_t index);
+void NvnLayerMissedClear(void);
 #endif
 
 /// Fills @p procs with the layer's own functions, through no lookup: what NvnLoadProcs gives on
@@ -142,7 +150,9 @@ void NvnLayerSetGuard(NvnLayerGuard guard);
 /// "nvnlayer: FATAL: <name> was reached: no NVN implementation took it" to the debug output and
 /// breaks (svcBreak), so the run ends there instead of drawing nothing. NULL, the default, for
 /// no call. The API 55 build has every body and never calls it. A build for a game's own driver
-/// calls it for a function that driver lacks, and its line says so.
+/// calls it with the name of a function that driver lacks, the first time the program calls it
+/// since the last NvnLayerMissedClear, and nothing is written and nothing ends: the call
+/// returns.
 typedef void (*NvnLayerFatalHook)(const char *name);
 void NvnLayerSetFatal(NvnLayerFatalHook hook);
 
