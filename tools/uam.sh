@@ -5,7 +5,8 @@
 # tools/uam.sh DIR: uam 1.1.0 with the fixes of scarletnx/uam (the commit below) and tools/uam/*.patch on it, built
 # into DIR/uam. The toolchain's uam puts a multisample fetch's sample in the register the console reads the handle from
 # (tools/uam/0001-*.patch), and reads a uniform block's vector indexed by a component worked out at run time from the
-# vector's first word (the fork's commits); the shaders that do either are built by this one (Makefile, UAM_FIXED).
+# vector's first word (the fork's commits); the shaders that do either are built by this one (Makefile, UAM_FIXED). Its
+# --nvn (tools/uam/0003-*.patch) lays a program's buffers out as NVN's driver keeps them, for the mod's zooms (mod.mk).
 #
 # The first run clones the source (tools/uam-source.sh, which also moves an older clone to this commit), which needs the
 # network, and it needs git, meson, ninja, bison, flex, Python 3 with mako, and a C and a C++ compiler for this machine.

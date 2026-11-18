@@ -1,0 +1,173 @@
+Amberlith's own, for the mod's demos: uam --nvn lays a program's buffers out as NVN's driver keeps them in its bank 0,
+where a game's NVN (ScarletNX's, an emulator running a game's driver, a console's) writes them, rather than where
+deko3d does: each stage's storage buffers from 0x110 + 0x100 * stage in uam's stage order (vertex 0x110,
+tessellation control 0x210, tessellation evaluation 0x310, geometry 0x410, fragment 0x510) and a compute
+program's uniform buffer table from 0x210, 16 bytes an entry, and uniform block binding b in constant buffer 3 + b,
+NVN's slot b (ScarletNX's src/nx/gpu/nvn/nvn_draw.c and draw_state.h say the driver's layout). Texture and image
+handles stay where deko3d reads them: NVN keeps them in bank 2, and such a program reads a texture by its handle.
+
+diff --git a/mesa-imported/codegen/nv50_ir_driver.h b/mesa-imported/codegen/nv50_ir_driver.h
+index 79decf3..bbc6c8d 100644
+--- a/mesa-imported/codegen/nv50_ir_driver.h
++++ b/mesa-imported/codegen/nv50_ir_driver.h
+@@ -200,6 +200,9 @@ struct nv50_ir_prog_info
+    void *driverPriv;
+ };
+ 
++/* uam --nvn: buffers in the layout of NVN's driver banks rather than deko3d's (source/compiler_iface.cpp) */
++extern bool uam_nvn_layout;
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+diff --git a/mesa-imported/codegen/nv50_ir_emit_gm107.cpp b/mesa-imported/codegen/nv50_ir_emit_gm107.cpp
+index 04717c8..0ce71d4 100644
+--- a/mesa-imported/codegen/nv50_ir_emit_gm107.cpp
++++ b/mesa-imported/codegen/nv50_ir_emit_gm107.cpp
+@@ -307,6 +307,17 @@ CodeEmitterGM107::emitADDR(int gpr, int off, int len, int shr,
+    emitField(off, len, v->reg.data.offset >> shr);
+ }
+ 
++// The hardware constant buffer of codegen's buffer @p raw: deko3d's layout puts the driver's buffer (codegen's 17) at 0,
++// the compiler's constants (0) at 1 and uniform block binding b (codegen's b + 1) at b + 2. NVN's (uam --nvn) puts
++// binding b one further, at 3 + b, its slot b: bank 2 is the driver's texture handles there.
++static unsigned
++uam_cbuf_id(int raw)
++{
++   if (uam_nvn_layout && raw != 0 && raw != 17)
++      return raw + 2;
++   return (raw + 1) % 18;
++}
++
+ void
+ CodeEmitterGM107::emitCBUF(int buf, int gpr, int off, int len, int shr,
+                            const ValueRef &ref)
+@@ -316,7 +327,7 @@ CodeEmitterGM107::emitCBUF(int buf, int gpr, int off, int len, int shr,
+ 
+    assert(!(s->reg.data.offset & ((1 << shr) - 1)));
+ 
+-   emitField(buf,  5, (v->reg.fileIndex + 1) % 18); // fincs-edit: Shuffle cbufs around
++   emitField(buf,  5, uam_cbuf_id(v->reg.fileIndex)); // fincs-edit: Shuffle cbufs around
+    if (gpr >= 0)
+       emitGPR(gpr, ref.getIndirect(0));
+    emitField(off, 16, s->reg.data.offset >> shr);
+diff --git a/mesa-imported/codegen/nv50_ir_lowering_nvc0.cpp b/mesa-imported/codegen/nv50_ir_lowering_nvc0.cpp
+index a42931c..52f7c9b 100644
+--- a/mesa-imported/codegen/nv50_ir_lowering_nvc0.cpp
++++ b/mesa-imported/codegen/nv50_ir_lowering_nvc0.cpp
+@@ -1827,10 +1827,11 @@ NVC0LoweringPass::loadUboInfo64(Value *ptr, uint32_t off)
+    // fincs-edit: This entire function was rewritten to account for the removal of the size field
+ 
+    uint8_t b = prog->driver->io.auxCBSlot;
+-   off = prog->driver->io.uboInfoBase + off/2;
++   // NVN's table keeps a size after each address, 16 bytes an entry; deko3d's the address alone
++   off = prog->driver->io.uboInfoBase + (uam_nvn_layout ? off : off/2);
+ 
+    if (ptr)
+-      ptr = bld.mkOp2v(OP_SHL, TYPE_U32, bld.getScratch(), ptr, bld.mkImm(3));
++      ptr = bld.mkOp2v(OP_SHL, TYPE_U32, bld.getScratch(), ptr, bld.mkImm(uam_nvn_layout ? 4 : 3));
+ 
+    return bld.
+       mkLoadv(TYPE_U64, bld.mkSymbol(FILE_MEMORY_CONST, b, TYPE_U64, off), ptr);
+diff --git a/source/compiler_iface.cpp b/source/compiler_iface.cpp
+index 7ce5809..b644a22 100644
+--- a/source/compiler_iface.cpp
++++ b/source/compiler_iface.cpp
+@@ -200,7 +200,9 @@ nvc0_program_assign_varying_slots(struct nv50_ir_prog_info *info)
+ 	return ret;
+ }
+ 
+-DekoCompiler::DekoCompiler(pipeline_stage stage, int optLevel) :
++bool uam_nvn_layout = false;
++
++DekoCompiler::DekoCompiler(pipeline_stage stage, int optLevel, bool nvn) :
+ 	m_stage{stage}, m_glsl{}, m_tgsi{}, m_tgsiNumTokens{}, m_info{}, m_code{}, m_codeSize{},
+ 	m_nvsh{}, m_dkph{}
+ {
+@@ -268,6 +270,19 @@ DekoCompiler::DekoCompiler(pipeline_stage stage, int optLevel) :
+ 	m_info.io.uboInfoBase    = 0x020;         // Similar to bufInfoBase, but for UBOs. Compute shaders need this because there aren't enough hardware constbufs.
+ 	m_info.prop.cp.gridInfoBase = 0x000;      // Compute dimension parameters (gl_LocalGroupSizeARB and gl_NumWorkGroups)
+ 
++	// --nvn: the buffers where NVN's driver keeps them in its bank 0, so the program runs under a game's NVN: each stage's
++	// storage buffers {address, size} from 0x110 + 0x100 * stage (vertex 0x110 to fragment 0x510) and a compute
++	// program's from 0x310, its uniform buffers' table from 0x210, 16 bytes an entry; uniform block binding b is NVN's
++	// slot b, constant buffer 3 + b (nv50_ir_emit_gm107.cpp). Texture and image handles are not moved: NVN keeps them in
++	// bank 2, so such a program reads a texture by its handle.
++	uam_nvn_layout = nvn;
++	if (nvn)
++	{
++		static const uint16_t storage[] = { 0x110, 0x210, 0x310, 0x410, 0x510, 0x310 };
++		m_info.io.bufInfoBase = storage[stage];
++		m_info.io.uboInfoBase = 0x210;
++	}
++
+ 	// The following fields are unused in our case, but are kept here for reference's sake:
+ 	//m_info.io.genUserClip  = prog->vp.num_ucps;             // This is used for old-style clip plane handling (gl_ClipVertex).
+ 	//m_info.io.msInfoCBSlot = 17;                            // This is used for msInfoBase (which is unused, see below)
+diff --git a/source/compiler_iface.h b/source/compiler_iface.h
+index 63e1042..8774c4d 100644
+--- a/source/compiler_iface.h
++++ b/source/compiler_iface.h
+@@ -34,7 +34,7 @@ class DekoCompiler
+ 	void GenerateHeaders();
+ 
+ public:
+-	DekoCompiler(pipeline_stage stage, int optLevel = 3);
++	DekoCompiler(pipeline_stage stage, int optLevel = 3, bool nvn = false);
+ 	~DekoCompiler();
+ 
+ 	bool CompileGlsl(const char* glsl);
+diff --git a/source/main.cpp b/source/main.cpp
+index 146e065..97e893f 100644
+--- a/source/main.cpp
++++ b/source/main.cpp
+@@ -11,6 +11,8 @@ static int usage(const char* prog)
+ 		"  -t, --tgsi=<file>  Specifies the file to which output intermediary TGSI code\n"
+ 		"  -s, --stage=<name> Specifies the pipeline stage of the shader\n"
+ 		"                     (vert, tess_ctrl, tess_eval, geom, frag, comp)\n"
++		"  -n, --nvn          Lays the buffers out as NVN's driver does, for a program run\n"
++		"                     through a game's NVN rather than deko3d\n"
+ 		"  -v, --version      Displays version information\n"
+ 		, prog);
+ 	return EXIT_FAILURE;
+@@ -19,6 +21,7 @@ static int usage(const char* prog)
+ int main(int argc, char* argv[])
+ {
+ 	const char *inFile = nullptr, *outFile = nullptr, *rawFile = nullptr, *tgsiFile = nullptr, *stageName = nullptr;
++	bool nvn = false;
+ 
+ 	static struct option long_options[] =
+ 	{
+@@ -26,13 +29,14 @@ int main(int argc, char* argv[])
+ 		{ "raw",     required_argument, NULL, 'r' },
+ 		{ "tgsi",    required_argument, NULL, 't' },
+ 		{ "stage",   required_argument, NULL, 's' },
++		{ "nvn",     no_argument,       NULL, 'n' },
+ 		{ "help",    no_argument,       NULL, '?' },
+ 		{ "version", no_argument,       NULL, 'v' },
+ 		{ NULL, 0, NULL, 0 }
+ 	};
+ 
+ 	int opt, optidx = 0;
+-	while ((opt = getopt_long(argc, argv, "o:r:t:s:?v", long_options, &optidx)) != -1)
++	while ((opt = getopt_long(argc, argv, "o:r:t:s:n?v", long_options, &optidx)) != -1)
+ 	{
+ 		switch (opt)
+ 		{
+@@ -40,6 +44,7 @@ int main(int argc, char* argv[])
+ 			case 'r': rawFile = optarg; break;
+ 			case 't': tgsiFile = optarg; break;
+ 			case 's': stageName = optarg; break;
++			case 'n': nvn = true; break;
+ 			case '?': usage(argv[0]); return EXIT_SUCCESS;
+ 			case 'v': printf("%s - Built on %s %s\n", PACKAGE_STRING, __DATE__, __TIME__); return EXIT_SUCCESS;
+ 			default:  return usage(argv[0]);
+@@ -94,7 +99,7 @@ int main(int argc, char* argv[])
+ 	fclose(fin);
+ 	glsl_source[fsize] = 0;
+ 
+-	DekoCompiler compiler{stage};
++	DekoCompiler compiler{stage, 3, nvn};
+ 	bool rc = compiler.CompileGlsl(glsl_source);
+ 	delete[] glsl_source;
+ 
