@@ -38,31 +38,33 @@ layout (std430, binding = 0) writeonly buffer Counts
 void main()
 {
     uvec2 at = gl_GlobalInvocationID.xy;
-    if (at.x >= f.width || at.y >= f.height) {
-        return;
-    }
-    // The pixel's centre from the middle of the target, exact: whole numbers and halves.
-    precise float px = float(at.x) - (float(f.width / 2u) - 0.5);
-    precise float py = float(at.y) - (float(f.height / 2u) - 0.5);
-    // The top row is the plane's highest.
-    precise float ax = fma(px, f.step, f.centre.x);
-    precise float ay = fma(py, -f.step, f.centre.y);
-    precise float x = f.julia != 0u ? ax : 0.0;
-    precise float y = f.julia != 0u ? ay : 0.0;
-    precise float cx = f.julia != 0u ? f.seed.x : ax;
-    precise float cy = f.julia != 0u ? f.seed.y : ay;
-    uint n = 0u;
-    for (; n < f.iterations; ++n) {
-        precise float yy = y * y;
-        precise float r2 = fma(x, x, yy);
-        if (r2 > 4.0) {
-            break;
+    // The pixels past the target's edge do nothing inside the test rather than after an early
+    // return, which uam compiles to a PRET and RET, a pair some shader translators lack (the
+    // geometry family's square twins judge that apart): the zooms are about their arithmetic.
+    if (at.x < f.width && at.y < f.height) {
+        // The pixel's centre from the middle of the target, exact: whole numbers and halves.
+        precise float px = float(at.x) - (float(f.width / 2u) - 0.5);
+        precise float py = float(at.y) - (float(f.height / 2u) - 0.5);
+        // The top row is the plane's highest.
+        precise float ax = fma(px, f.step, f.centre.x);
+        precise float ay = fma(py, -f.step, f.centre.y);
+        precise float x = f.julia != 0u ? ax : 0.0;
+        precise float y = f.julia != 0u ? ay : 0.0;
+        precise float cx = f.julia != 0u ? f.seed.x : ax;
+        precise float cy = f.julia != 0u ? f.seed.y : ay;
+        uint n = 0u;
+        for (; n < f.iterations; ++n) {
+            precise float yy = y * y;
+            precise float r2 = fma(x, x, yy);
+            if (r2 > 4.0) {
+                break;
+            }
+            precise float t = fma(-y, y, cx);
+            precise float nx = fma(x, x, t);
+            precise float ny = fma(x + x, y, cy);
+            x = nx;
+            y = ny;
         }
-        precise float t = fma(-y, y, cx);
-        precise float nx = fma(x, x, t);
-        precise float ny = fma(x + x, y, cy);
-        x = nx;
-        y = ny;
+        counts[at.y * f.width + at.x] = n;
     }
-    counts[at.y * f.width + at.x] = n;
 }
