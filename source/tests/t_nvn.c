@@ -10,6 +10,9 @@
 #include <nvnlayer.h>
 
 #include "../check.h"
+#ifdef NVN_LAYER_GAME_DRIVER
+#include "mod_shaders.h"
+#endif
 #include "../picture.h"
 #include "../report.h"
 #include "tests.h"
@@ -2799,6 +2802,162 @@ static void SubroutineLinkageCase(const char *name) {
                     why[0] != '\0' ? why : NvnLayerError());
 }
 
+#ifdef NVN_LAYER_GAME_DRIVER
+// Two things a game's own driver does that a runtime answering NVN itself may not, read in the
+// code of an API 55.8 driver of SDK 12.3.9 (docs/Mod.md says where). The mod runs them; the plain
+// program's NVN is the layer's own over deko3d on every machine but ScarletNX, so it has none.
+
+/// A program of one compute stage, the zooms' (built for NVN's layout, uam --nvn), its section as
+/// NvnLayerShaderControl writes it: the driver's nvnProgramSetShaders (its 0xb6f53d0) answers
+/// false, at 0xb6f5810 to 0xb6f5820, for a stage whose section has not 0x120 at 0xc and 0xb at
+/// 0x10, and takes the same stage with them.
+static void SectionWordsCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    char why[320] = "";
+    static _Alignas(8) NVNmemoryPool code_pool;
+    static void *code_storage;
+    static _Alignas(8) uint8_t section[NVN_LAYER_CONTROL_BYTES];
+    static _Alignas(8) NVNprogram without, with;
+    int padding = 0;
+    nvn.nvn.nvnDeviceGetInteger(&nvn.device, NVN_DEVICE_INFO_SHADER_CODE_MEMORY_POOL_PADDING_SIZE,
+                                &padding);
+    NvnLayerShaderCode code;
+    const bool made = NvnLayerShaderControl(fractal_comp_dksh, (size_t)fractal_comp_dksh_size,
+                                            section, &code);
+    const size_t pool_bytes =
+        RoundUp((size_t)code.code_bytes + (size_t)(padding > 0 ? padding : 0), POOL_PAGE);
+    bool pool_up = made && MakePool(&code_pool, &code_storage, pool_bytes,
+                                    NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED |
+                                        NVN_MEMORY_POOL_FLAGS_GPU_CACHED |
+                                        NVN_MEMORY_POOL_FLAGS_SHADER_CODE);
+    uint8_t *const mapped = pool_up ? nvn.nvn.nvnMemoryPoolMap(&code_pool) : NULL;
+    if (mapped == NULL || !nvn.nvn.nvnProgramInitialize(&without, &nvn.device) ||
+        !nvn.nvn.nvnProgramInitialize(&with, &nvn.device)) {
+        if (pool_up) {
+            DropPool(&code_pool, &code_storage, &pool_up);
+        }
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   made ? Why("the code pool, its mapping or nvnProgramInitialize answered no")
+                        : NvnLayerError());
+        return;
+    }
+    memcpy(mapped, code.code, code.code_bytes);
+    NVNshaderData stage = { nvn.nvn.nvnMemoryPoolGetBufferAddress(&code_pool), section };
+    static _Alignas(8) uint8_t bare[NVN_LAYER_CONTROL_BYTES];
+    memcpy(bare, section, sizeof(bare));
+    memset(bare + 0xc, 0, 8);
+    stage.control = bare;
+    Gives(why, sizeof(why), "whether a stage without 0x120 at 0xc and 0xb at 0x10 was taken",
+          nvn.nvn.nvnProgramSetShaders(&without, 1, &stage), 0);
+    stage.control = section;
+    Gives(why, sizeof(why), "whether the same stage with them was taken",
+          nvn.nvn.nvnProgramSetShaders(&with, 1, &stage), 1);
+    nvn.nvn.nvnQueueFinish(&nvn.queue);
+    nvn.nvn.nvnProgramFinalize(&without);
+    nvn.nvn.nvnProgramFinalize(&with);
+    DropPool(&code_pool, &code_storage, &pool_up);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER, why[0] == '\0', "%s", why);
+}
+
+/// What the memory callback below saw: how often each event, and whether more memory was left.
+static struct {
+    uint32_t command_events;
+    uint32_t control_events;
+    NVNmemoryPool *pool;
+    size_t half;
+    void *control;
+    size_t control_bytes;
+} memory_seen;
+
+/// The driver ran out of a command buffer's memory: the other half of the pool, or the control
+/// memory again, so recording goes on.
+static void MemoryEvent(NVNcommandBuffer *cmd, NVNcommandBufferMemoryEvent event, size_t least,
+                        void *data) {
+    (void)data;
+    (void)least;
+    if (event == NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_COMMAND_MEMORY) {
+        const ptrdiff_t at = (ptrdiff_t)((memory_seen.command_events & 1u) == 0u ? memory_seen.half
+                                                                                 : 0u);
+        ++memory_seen.command_events;
+        nvn.nvn.nvnCommandBufferAddCommandMemory(cmd, memory_seen.pool, at, memory_seen.half);
+    } else {
+        ++memory_seen.control_events;
+        nvn.nvn.nvnCommandBufferAddControlMemory(cmd, memory_seen.control,
+                                                 memory_seen.control_bytes);
+    }
+}
+
+/// A command buffer given the least command memory its driver takes, once, and lists recorded
+/// into it and ended, never submitted: a game's driver hands each list memory from what it was
+/// given and takes none back (its reserve, 0xb6e332c, and nvnCommandBufferDispatchCompute's at
+/// 0xb70de54 end in the memory callback, or nn::diag::Abort without one), so lists of more
+/// bytes in all than the memory call the callback for more.
+static void CommandMemoryCase(const char *name) {
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    NvnLayerClearError();
+    int least = 0, alignment = 0, control_least = 0;
+    nvn.nvn.nvnDeviceGetInteger(&nvn.device, NVN_DEVICE_INFO_COMMAND_BUFFER_MIN_COMMAND_SIZE,
+                                &least);
+    nvn.nvn.nvnDeviceGetInteger(&nvn.device, NVN_DEVICE_INFO_COMMAND_BUFFER_COMMAND_ALIGNMENT,
+                                &alignment);
+    nvn.nvn.nvnDeviceGetInteger(&nvn.device, NVN_DEVICE_INFO_COMMAND_BUFFER_MIN_CONTROL_SIZE,
+                                &control_least);
+    const size_t half = RoundUp((size_t)(least > 0 ? least : 0x1000),
+                                (size_t)(alignment > 0 ? alignment : 4));
+    const size_t control_bytes = RoundUp((size_t)(control_least > 0 ? control_least : 0x400), 8u);
+    static _Alignas(8) NVNmemoryPool pool;
+    static void *storage;
+    static _Alignas(8) NVNcommandBuffer command;
+    bool pool_up = MakePool(&pool, &storage, RoundUp(2u * half, POOL_PAGE),
+                            NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+    void *const control = aligned_alloc(8u, control_bytes);
+    if (!pool_up || control == NULL || !nvn.nvn.nvnCommandBufferInitialize(&command, &nvn.device)) {
+        if (pool_up) {
+            DropPool(&pool, &storage, &pool_up);
+        }
+        free(control);
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   Why("the pool, the control memory or nvnCommandBufferInitialize answered no"));
+        return;
+    }
+    memset(&memory_seen, 0, sizeof(memory_seen));
+    memory_seen.pool = &pool;
+    memory_seen.half = half;
+    memory_seen.control = control;
+    memory_seen.control_bytes = control_bytes;
+    nvn.nvn.nvnCommandBufferSetMemoryCallback(&command, MemoryEvent);
+    nvn.nvn.nvnCommandBufferAddCommandMemory(&command, &pool, 0, half);
+    nvn.nvn.nvnCommandBufferAddControlMemory(&command, control, control_bytes);
+    // Four times the memory in barriers, a few words each, in lists of 64.
+    enum { BARRIERS = 64 };
+    const uint32_t lists = (uint32_t)(4u * half / (BARRIERS * 8u)) + 1u;
+    uint32_t recorded = 0;
+    for (; recorded < lists && memory_seen.command_events == 0u; ++recorded) {
+        nvn.nvn.nvnCommandBufferBeginRecording(&command);
+        for (int b = 0; b < BARRIERS; ++b) {
+            nvn.nvn.nvnCommandBufferBarrier(&command, NVN_BARRIER_ORDER_FRAGMENTS_BIT);
+        }
+        (void)nvn.nvn.nvnCommandBufferEndRecording(&command);
+    }
+    nvn.nvn.nvnCommandBufferFinalize(&command);
+    DropPool(&pool, &storage, &pool_up);
+    free(control);
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    memory_seen.command_events > 0u && NvnLayerError()[0] == '\0',
+                    "%u lists of %d barriers recorded into 0x%zx bytes of command memory given "
+                    "once: the callback heard of no command memory run out (%u of control "
+                    "memory), so the memory each list used was given back%s%s",
+                    (unsigned)recorded, (int)BARRIERS, half,
+                    (unsigned)memory_seen.control_events,
+                    NvnLayerError()[0] != '\0' ? "; " : "", NvnLayerError());
+}
+#endif
+
 #if NVN_LAYER_API >= 231
 /// Records into the open command buffer the Ounce's markers and groups, which say whether they
 /// name graphics or compute work: a compute group inside a graphics one, a marker in each.
@@ -3802,6 +3961,12 @@ static void LayerCases(LayerWay way) {
 
     DebugCase(DEBUG);
     SubroutineLinkageCase(SUBROUTINE_LINKAGE);
+#ifdef NVN_LAYER_GAME_DRIVER
+    SectionWordsCase("a program's stage whose section lacks the two words a game's driver checks "
+                     "is refused, and taken with them");
+    CommandMemoryCase("lists recorded past a command buffer's memory call the memory callback: "
+                      "a list's memory is not given back");
+#endif
     WindowBuilderCase(WINDOW_BUILDER);
 #if NVN_LAYER_API >= 231
     // A colour no case before left in the target or in the readback.

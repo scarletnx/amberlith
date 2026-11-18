@@ -113,7 +113,7 @@ $(NVN_ASM) $(NVN_HDR) &: $(NVN_DKSH)
 $(NVN_OBJ): $(NVN_ASM)
 	$(CC) $(ARCH) -c $< -o $@
 
-$(BUILD)/mod/fractal_nvn.o: $(NVN_HDR)
+$(BUILD)/mod/fractal_nvn.o $(BUILD)/source/tests/t_nvn.o: $(NVN_HDR)
 
 # As the NRO's build (Makefile): the fluid reference rounds a multiply and the add after it apart.
 $(BUILD)/source/demo_fluidref.o: CFLAGS += -ffp-contract=off
