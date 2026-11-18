@@ -387,6 +387,30 @@ static uint64_t Now(void) {
     return armTicksToNs(armGetSystemTick());
 }
 
+bool ScreenShowImage(const uint8_t *pixels, uint32_t width, uint32_t height) {
+    if (!ScreenIsUp() || pixels == NULL || width == 0u || height == 0u || width > SCREEN_WIDTH ||
+        height > SCREEN_HEIGHT) {
+        return false;
+    }
+    const uint32_t across = SCREEN_WIDTH / width;
+    const uint32_t down = SCREEN_HEIGHT / height;
+    const uint32_t scale = across < down ? across : down;
+    const uint32_t left = (SCREEN_WIDTH - width * scale) / 2u;
+    const uint32_t top = (SCREEN_HEIGHT - height * scale) / 2u;
+    static const uint8_t BACKGROUND[4] = { 0x0F, 0x0F, 0x14, 0xFF };
+    for (uint32_t y = 0; y < SCREEN_HEIGHT; ++y) {
+        uint8_t *const row = g_screen.composed + (size_t)y * SCREEN_WIDTH * 4u;
+        const bool inside_y = y >= top && y < top + height * scale;
+        for (uint32_t x = 0; x < SCREEN_WIDTH; ++x) {
+            const bool inside = inside_y && x >= left && x < left + width * scale;
+            const size_t at = (size_t)((y - top) / scale) * width + (x - left) / scale;
+            memcpy(row + (size_t)x * 4u, inside ? pixels + at * 4u : BACKGROUND, 4u);
+        }
+    }
+    Present();
+    return g_screen.error[0] == '\0';
+}
+
 void ScreenStart(const UiStartInfo *info, UiStartState state) {
     if (!ScreenIsUp() || info == NULL) {
         return;

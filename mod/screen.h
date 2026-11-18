@@ -51,6 +51,11 @@ void ScreenProgressWatch(const char *suite, const char *name, bool started);
 /// The results of the run just closed, for UI_UNATTENDED_NANOSECONDS, a frame a second.
 void ScreenResults(const char *heading);
 
+/// Shows @p pixels, @p width by @p height in RGBA8, the top row first, scaled up by whole steps to
+/// fit and centred, as the plain program shows a demo's frames while its screen is up
+/// (ViewerShowImage). False when the screens are not up or the image is larger than they are.
+bool ScreenShowImage(const uint8_t *pixels, uint32_t width, uint32_t height);
+
 /// What a frame's copy and present answered, for the report: "" while every one went through.
 const char *ScreenError(void);
 

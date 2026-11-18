@@ -16,6 +16,8 @@
 #include <nvnlayer.h>
 
 #include "check.h"
+#include "demo.h"
+#include "fractal_nvn.h"
 #include "game.h"
 #include "hooks.h"
 #include "host.h"
@@ -536,10 +538,11 @@ static void StepDone(const char *name) {
     }
 }
 
-// ---- the demos, which the mod lists as skipped
+// ---- the demos the mod does not run yet, listed as skipped
 //
-// Each demo's first case, as the plain program names it, skipped with why: its frames are
-// deko3d's and its programs uam's, and in a game's process the mod has only the game's NVN.
+// Each one's first case, as the plain program names it, skipped with why: its frames are
+// deko3d's, and in a game's process the mod has only the game's NVN. The fractal zooms run
+// through it (fractal_nvn.c).
 
 static const char *const NO_DEMO =
     "the demos draw through deko3d, which the mod has not: in a game's process it draws only "
@@ -567,20 +570,6 @@ static void SkipWimsy(void) {
     }
 }
 
-static void SkipZoom(const char *suite) {
-    ReportSkip(suite,
-               "a graphics device with compute, the programs and a way to the display come up",
-               REPORT_REASON_UNAVAILABLE, NO_DEMO);
-}
-
-static void SkipMandelbrot(void) {
-    SkipZoom("mandelbrot");
-}
-
-static void SkipJulia(void) {
-    SkipZoom("julia");
-}
-
 static void SkipFluidScene(const char *suite) {
     ReportSkip(suite, "a graphics device, the fields' targets, the shaders and a way to the "
                "display come up",
@@ -599,16 +588,16 @@ static void SkipFluidAlias(void) {
 // drawing suites' references, which no case here is judged by, and under a recompiler that made
 // the game unoptimized it alone took over ten minutes. Then the nvn family, which runs when the
 // file names no family: the mod's own cases and the nvn suite's looked up way. Then the game and
-// demo families, each run only when named, as on the plain program: their demos listed as
-// skipped, in the plain program's order.
+// demo families, each run only when named, as on the plain program, in its order: the fractal
+// zooms through the game's NVN, the other demos listed as skipped.
 static const RunnerStep STEPS[] = {
     { "selfcheck", RunSelfcheck, 0, false, false },
     { "support", RunSupportSteps, 0, false, false },
     { "nvn", RunInGame, MODE_FAMILY_NVN, false, true },
     { "game", SkipGameScene, MODE_FAMILY_GAME, false, false },
     { "wimsy", SkipWimsy, MODE_FAMILY_GAME, false, false },
-    { "mandelbrot", SkipMandelbrot, MODE_FAMILY_DEMO, false, false },
-    { "julia", SkipJulia, MODE_FAMILY_DEMO, false, false },
+    { "mandelbrot", RunMandelbrotNvn, MODE_FAMILY_DEMO, false, true },
+    { "julia", RunJuliaNvn, MODE_FAMILY_DEMO, false, true },
     { "fluid", SkipFluid, MODE_FAMILY_DEMO, false, false },
     { "fluid-alias", SkipFluidAlias, MODE_FAMILY_DEMO, false, false },
 };
@@ -634,23 +623,31 @@ bool NvnGameScreenUp(void) {
     return ScreenIsUp();
 }
 
-/// The screens on the mod's window: the driver asked its version and given its memory, then the
-/// screens' device and window. False with the reason in a note; the run then goes on without
-/// them, and the nvn suite's window cases have the window.
-static bool ScreensUp(void) {
+bool ModGraphicsReady(char *why, size_t why_size) {
     AskApiVersion();
     if (!ApiIsThisBuilds()) {
-        ReportNote("screens: none, since %s gave API %d.%d, where this build has the objects of "
-                   "API %d to %d",
-                   api_asked, api_major, api_minor, NVN_LAYER_GAME_API_MAJOR_OLDEST,
-                   NVN_LAYER_API_MAJOR);
+        snprintf(why, why_size,
+                 "%s gave API %d.%d, where this build has the objects of API %d to %d", api_asked,
+                 api_major, api_minor, NVN_LAYER_GAME_API_MAJOR_OLDEST, NVN_LAYER_API_MAJOR);
         return false;
     }
     GiveGraphics();
     if (!graphics.allocator || !graphics.initialize) {
-        ReportNote("screens: none, since the game's SDK has no %s, which a game calls before "
-                   "nvnDeviceInitialize",
-                   !graphics.allocator ? "nv::SetGraphicsAllocator" : "nv::InitializeGraphics");
+        snprintf(why, why_size,
+                 "the game's SDK has no %s, which a game calls before nvnDeviceInitialize",
+                 !graphics.allocator ? "nv::SetGraphicsAllocator" : "nv::InitializeGraphics");
+        return false;
+    }
+    return true;
+}
+
+/// The screens on the mod's window: the driver asked its version and given its memory, then the
+/// screens' device and window. False with the reason in a note; the run then goes on without
+/// them, and the nvn suite's window cases have the window.
+static bool ScreensUp(void) {
+    char ready[200];
+    if (!ModGraphicsReady(ready, sizeof(ready))) {
+        ReportNote("screens: none, since %s", ready);
         return false;
     }
     const char *no_window = NULL;
@@ -733,6 +730,8 @@ int ModRun(const ModStart *start) {
     }
     const bool timing = !mode.no_timing;
     levels = mode.levels;
+    DemoSetFrames(mode.frames);
+    DemoSetTiming(timing);
     uint32_t steps = 0;
     for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); ++i) {
         steps += STEPS[i].family == 0u || (families & STEPS[i].family) != 0u ? 1u : 0u;
