@@ -304,10 +304,12 @@ memory. `NvnLayerShaderControl` makes both from a DKSH:
   compiler's constants on a 0x100 boundary after them.
 - **The control section**, 0x900 bytes the program keeps for as long as the NVN program lives. Its first 0x800
   are what ScarletNX's `nvnProgramSetShaders` reads of a game's section, written from the DKSH's header: the magic
-  `0x98761234` and a one, format 8, at 0x700 the constants' offset in the code area, at 0x704 the code area's
-  bytes, at 0x708 the program's offset (0x30), at 0x714 the stage, and for a fragment stage at 0x718 whether it
-  asked for the early tests, and for a tessellation evaluation stage its four declarations (the domain, the
-  spacing, points or not, the winding), each in GLSL's own word for it, from the DKSH's tessellation mode word.
+  `0x98761234` and a one, format 8, 0x120 at 0xc and 0xb at 0x10 (a game's driver of API 55 answers its
+  `nvnProgramSetShaders` false for a stage without those two, and ScarletNX reads neither), at 0x700 the
+  constants' offset in the code area, at 0x704 the code area's bytes, at 0x708 the program's offset (0x30), at
+  0x714 the stage, and for a fragment stage at 0x718 whether it asked for the early tests, and for a tessellation
+  evaluation stage its four declarations (the domain, the spacing, points or not, the winding), each in GLSL's
+  own word for it, from the DKSH's tessellation mode word.
   Every other byte is nought, unless `NvnLayerShaderCapture` then says what a capture takes of the stage's outputs
   (transform feedback): a one at 0x6ec, and for each of four capture buffers its stride at 0x6dc, its stream at
   0x6e4 and its groups' count at 0x6e8, a group being an output (the position, 0, or generic n, 0x20 + n) at 0xdc,

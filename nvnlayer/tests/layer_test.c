@@ -349,9 +349,14 @@ static void TestControl(void) {
     EXPECT(code.code == module + MODULE_CONTROL && code.code_bytes == MODULE_CODE,
            "the code is said to be %u bytes at offset %td", (unsigned)code.code_bytes,
            (const uint8_t *)code.code - module);
+    // The two words a game's driver checks before it takes the program (its nvnProgramSetShaders,
+    // API 55.8): 0x120 and 0xb, which a section of the console's compiler has there.
+    EXPECT(Read(section, 0x00c) == 0x120u && Read(section, 0x010) == 0xbu,
+           "the words a game's driver checks are 0x%x and 0x%x, not 0x120 and 0xb",
+           (unsigned)Read(section, 0x00c), (unsigned)Read(section, 0x010));
     // Everything ScarletNX reads past those fields is nought: the early tests' byte, the capture
     // layout from 0x6dc, the tessellation words at 0x738, the subroutines' byte at 0x7c0.
-    for (uint32_t at = 0x00c; at < 0x800u; ++at) {
+    for (uint32_t at = 0x014; at < 0x800u; ++at) {
         if (at >= 0x700u && at < 0x70cu) {
             continue;
         }
