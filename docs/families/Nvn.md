@@ -157,9 +157,9 @@ and its count after a reset, and a new window builder's HDR metadata, with the w
   timed out, for a sync no queue and no list was told to signal. ScarletNX says so of the driver it measured; the
   layer answers the same on the console.
 - **with no OpenGL, a sync from an OpenGL sync and an OpenGL sync from a sync both fail** (exact):
-  `nvnSyncInitializeFromFencedGLSync` answers false with a status of one, and `nvnSyncCreateGLSync` answers four
-  and leaves the place for the OpenGL sync as it was. The probe makes no OpenGL context; ScarletNX says both of
-  the driver it read, and the layer answers the same.
+  `nvnSyncInitializeFromFencedGLSync` answers false with a status of four, and `nvnSyncCreateGLSync` answers four
+  and leaves the place for the OpenGL sync as it was. The probe makes no OpenGL context; a game's driver (API 55.8)
+  stores that status when the process registered no OpenGL interop, and the layer answers the same.
 - **a pool builder given a native handle forgets its storage, and takes storage again** (exact):
   `nvnMemoryPoolBuilderSetNativeHandleNVX` leaves the builder with no memory and no size, and storage set after it
   is given back. A native handle is the system's memory manager's, for an image another service made, so no pool

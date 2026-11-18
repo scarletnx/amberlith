@@ -521,9 +521,10 @@ NVNboolean Nvnl_nvnSyncInitialize(NVNsync *sync, NVNdevice *device) {
 }
 
 // OpenGL has no part in a program of deko3d's, as it has none in a console's program that made
-// no OpenGL context: NVN's two calls between its syncs and OpenGL's fail there, one with a
-// status of one and false, the other with four and nothing written.
-#define SYNC_NO_OPENGL_STATUS 1
+// no OpenGL context: NVN's two calls between its syncs and OpenGL's fail there, each with four,
+// one as the status beside false and the other as its result, nothing written. A game's driver
+// (API 55.8) stores that status when the process registered no OpenGL interop.
+#define SYNC_NO_OPENGL_STATUS 4
 #define SYNC_NO_OPENGL_RESULT 4
 
 NVNboolean Nvnl_nvnSyncInitializeFromFencedGLSync(NVNsync *sync, NVNdevice *device,
