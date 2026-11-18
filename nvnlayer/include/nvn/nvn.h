@@ -232,8 +232,11 @@ typedef struct {
     char reserved[0x60];
 } NVNsamplerBuilder;
 
+// Amberlith's change: 0x40 where the reconstruction has 0x30. An API 55.8 driver (SDK 12.3.9) writes 0x40
+// bytes of a sampler: its nvnSamplerInitialize clears 0x40 and copies the builder's 0x30 to 0x8
+// (nvnlayer/tests/game_test.c holds every type to what that driver writes).
 typedef struct {
-    char reserved[0x30];
+    char reserved[0x40];
 } NVNsampler;
 
 typedef struct {
