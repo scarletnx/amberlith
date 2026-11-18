@@ -497,6 +497,19 @@ static void Colour(int program, uint32_t slot, NVNtexture *target, int width, in
     n->nvnCommandBufferDrawArrays(list, NVN_DRAW_PRIMITIVE_TRIANGLES, 0, 3);
 }
 
+/// Begins a recording on the whole of the command buffer's memory again. A game's driver hands
+/// out command and control memory from what it was given and never takes it back by itself: given
+/// it once, a driver of API 55 ran out after some hundred frames and aborted (a frame's list,
+/// nvnCommandBufferDispatchCompute's reserve). Each frame here waits for the graphics unit, so
+/// the same memory is free to be given again.
+static void BeginRecording(void) {
+    const NvnProcs *const n = &g_zoom.nvn;
+    n->nvnCommandBufferAddCommandMemory(&g_zoom.command, &g_zoom.command_pool.pool, 0,
+                                        COMMAND_BYTES);
+    n->nvnCommandBufferAddControlMemory(&g_zoom.command, g_zoom.control, CONTROL_BYTES);
+    n->nvnCommandBufferBeginRecording(&g_zoom.command);
+}
+
 /// Ends the recording, submits it and waits for the graphics unit.
 static void Submit(const char *what) {
     const NVNcommandHandle handle = g_zoom.nvn.nvnCommandBufferEndRecording(&g_zoom.command);
@@ -514,7 +527,7 @@ static void Draw(uint32_t slot, uint32_t judged, int image) {
     const NvnProcs *const n = &g_zoom.nvn;
     NVNcommandBuffer *const list = &g_zoom.command;
     g_zoom.last_slot = slot;
-    n->nvnCommandBufferBeginRecording(list);
+    BeginRecording();
     // The processor rewrote the slot after the graphics unit last read it.
     n->nvnCommandBufferBarrier(list, NVN_BARRIER_INVALIDATE_SHADER_BIT);
 
@@ -576,7 +589,7 @@ static void ShowAgain(void) {
     if (image < 0) {
         return;
     }
-    g_zoom.nvn.nvnCommandBufferBeginRecording(&g_zoom.command);
+    BeginRecording();
     Colour(PROGRAM_SHOW, g_zoom.last_slot, &g_zoom.textures[image], WINDOW_WIDTH, WINDOW_HEIGHT);
     Submit("a frame shown again");
     (void)Present(image);
