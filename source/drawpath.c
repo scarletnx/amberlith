@@ -467,11 +467,18 @@ static void DkDrawIndirectCount(DrawPath *path, const DrawElements *elements,
 
 static void DkDrawTexture(DrawPath *path, int texture, const float destination[4],
                           const float source[4]) {
-    (void)destination;
-    (void)source;
-    DrawPathFail(path, "texture %d drawn with no program: deko3d has no call for the graphics "
-                       "unit's own texture draw",
-                 texture);
+    Deko3dPath *const dk = Dk(path);
+    if (texture < 0 || (uint32_t)texture >= dk->textures) {
+        DrawPathFail(path, "texture %d drawn, where the scene made %u", texture,
+                     (unsigned)dk->textures);
+        return;
+    }
+    // A region is its four numbers: x and y of one corner, then of the other, as deko3d's.
+    const DkDrawTextureRegion onto = { destination[0], destination[1], destination[2],
+                                       destination[3] };
+    const DkDrawTextureRegion from = { source[0], source[1], source[2], source[3] };
+    dkCmdBufDrawTexture(dk->gpu.cmdbuf, dkMakeTextureHandle((uint32_t)texture, (uint32_t)texture),
+                        &onto, &from);
 }
 
 static int DkProgramCapturing(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,

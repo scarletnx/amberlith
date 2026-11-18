@@ -2119,12 +2119,32 @@ void Nvnl_nvnCommandBufferMultiDrawElementsIndirectCount(NVNcommandBuffer *cmd,
 void Nvnl_nvnCommandBufferDrawTexture(NVNcommandBuffer *cmd, NVNtextureHandle handle,
                                       const NVNdrawTextureRegion *destination,
                                       const NVNdrawTextureRegion *source) {
-    (void)cmd;
-    (void)destination;
-    (void)source;
-    LayerLack("nvnCommandBufferDrawTexture: texture handle 0x%llx drawn with no program, and "
-              "deko3d has no call for the graphics unit's own texture draw",
-              (unsigned long long)handle);
+    static const char *const WHAT = "nvnCommandBufferDrawTexture";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    // The handle is the layer's own, deko3d's texture and sampler pair in 32 bits
+    // (nvnDeviceGetTextureHandle).
+    if (destination == NULL || source == NULL || handle > UINT32_MAX) {
+        LayerComplain("%s: texture handle 0x%llx with a destination region at %p and a source "
+                      "region at %p, where both regions are needed and a handle the layer made "
+                      "is 32 bits",
+                      WHAT, (unsigned long long)handle, (const void *)destination,
+                      (const void *)source);
+        return;
+    }
+    // NVN's region is deko3d's: a corner's x and y, then the other corner's, four floats.
+    DkDrawTextureRegion onto;
+    DkDrawTextureRegion from;
+    memcpy(&onto, destination, sizeof(onto));
+    memcpy(&from, source, sizeof(from));
+    // An empty destination draws nothing, as ScarletNX's NVN reads NVN (its nvn_cmd.c); deko3d
+    // would divide by its size.
+    if (onto.x1 == onto.x0 || onto.y1 == onto.y0) {
+        return;
+    }
+    dkCmdBufDrawTexture(record->cmdbuf, (DkResHandle)handle, &onto, &from);
 }
 
 // Transform feedback, which deko3d has no call for: the graphics unit takes it through

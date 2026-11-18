@@ -11,7 +11,8 @@
   * [The binds that take several, and the deferred ones](#the-binds-that-take-several-and-the-deferred-ones)
   * [A uniform buffer updated inside the list](#a-uniform-buffer-updated-inside-the-list)
   * [Instanced draws, and draws that read their numbers](#instanced-draws-and-draws-that-read-their-numbers)
-  * [The draws deko3d has none of](#the-draws-deko3d-has-none-of)
+  * [The draw deko3d has none of](#the-draw-deko3d-has-none-of)
+  * [A texture drawn with no program, through deko3d and the layer](#a-texture-drawn-with-no-program-through-deko3d-and-the-layer)
   * [A capture of what a vertex stage writes](#a-capture-of-what-a-vertex-stage-writes)
 * [The command buffer, down two ways](#the-command-buffer-down-two-ways)
   * [Counters and the render enable](#counters-and-the-render-enable)
@@ -413,10 +414,10 @@ cell** and **the same eight instances through the NVN the program looks up are e
 that starts at instance nought draws the first two cells again and leaves its own the clear colour; a failing
 case says whose colour the first wrong pixel has.
 
-### The draws deko3d has none of
+### The draw deko3d has none of
 
-A sixth scene, for the NVN the program looks up alone: deko3d has neither of its draws, so the deko3d way cannot
-draw it and the layer lacks them.
+A sixth scene, for the NVN the program looks up alone: deko3d has no draw of as many draws as a word says, so the
+deko3d way cannot draw it and the layer lacks it.
 
 - the top left quarter: the first scene's 8 by 8 texture drawn with no program, four pixels a texel, through its
   own sampler (`nvnCommandBufferDrawTexture`, its two regions each a corner's x and y and the other corner's, in
@@ -431,6 +432,14 @@ The case is **a texture drawn with no program and as many draws as a word says, 
 up, are each in its place** (exact), skipped as `unavailable` where the layer answers. Which row of the target a
 region's y of nought is follows the device's window origin, the upper left here, as every draw of the scenes
 does; no console has said so of this draw.
+
+### A texture drawn with no program, through deko3d and the layer
+
+The sixth scene's texture draw alone, for the two ways the sixth scene leaves out: deko3d's `dkCmdBufDrawTexture`
+(scarletnx/deko3d's, which the NRO links: 0.5.0 has none), and the layer's own `nvnCommandBufferDrawTexture`, which
+is that call. The top left quarter is the 8 by 8 texture four pixels a texel; the rest keeps the clear colour. The
+cases are **a texture drawn with no program through deko3d fills its quarter, four pixels a texel** and **the same
+texture drawn with no program through the layer's own NVN functions fills its quarter** (exact).
 
 ### A capture of what a vertex stage writes
 

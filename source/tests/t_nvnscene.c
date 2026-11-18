@@ -567,16 +567,17 @@ static bool InstancedDraw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
-// ---- the draws deko3d has none of
+// ---- the draw deko3d has none of
 
-// The sixth scene, for the NVN the program looks up alone: deko3d has neither of its draws, so
-// the deko3d way cannot draw it and the layer lacks them, which is a skip where the layer
-// answers. The top left quarter is the first scene's 8 by 8 texture drawn with no program, four
-// pixels a texel (nvnCommandBufferDrawTexture); the top right keeps the clear colour; the
-// bottom row is the instanced scene's cells 4 to 7, two by as many draws of vertices as a word
-// in a buffer says and two by as many draws of indices, each draw one instance from its own
-// base instance. The word says two and the buffers hold a third draw's numbers, cell 0's, so a
-// runtime that draws as many as the most it was given paints over the texture.
+// The sixth scene, for the NVN the program looks up alone: deko3d has no draw of as many draws
+// as a word says, so the deko3d way cannot draw it and the layer lacks it, which is a skip where
+// the layer answers (the texture draw alone is the next scene, for those two ways). The top left
+// quarter is the first scene's 8 by 8 texture drawn with no program, four pixels a texel
+// (nvnCommandBufferDrawTexture); the top right keeps the clear colour; the bottom row is the
+// instanced scene's cells 4 to 7, two by as many draws of vertices as a word in a buffer says
+// and two by as many draws of indices, each draw one instance from its own base instance. The
+// word says two and the buffers hold a third draw's numbers, cell 0's, so a runtime that draws
+// as many as the most it was given paints over the texture.
 
 static void RareExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
     if (y >= INSTANCE_CELL_HEIGHT) {
@@ -670,6 +671,48 @@ static bool RareDraw(DrawPath *path, char *why, size_t why_size) {
     DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
     DrawPathDrawIndirectCount(path, NULL, &of_vertices, &count, 3, 16);
     DrawPathDrawIndirectCount(path, &by_index, &of_indices, &count, 3, 20);
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
+// ---- a texture drawn with no program
+
+// The sixth scene's texture draw alone, for deko3d's call and the layer's, both
+// dkCmdBufDrawTexture of the deko3d the NRO links: the top left quarter is the first scene's 8 by
+// 8 texture drawn four pixels a texel, and the rest keeps the clear colour.
+
+static void DrawnExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    if (x < SCENE_QUARTER && y < SCENE_QUARTER) {
+        SceneTexel(x / 4u, y / 4u, out);
+    } else {
+        memcpy(out, SCENE_CLEAR, 4);
+    }
+}
+
+static bool DrawnDraw(DrawPath *path, char *why, size_t why_size) {
+    uint8_t texels[SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u];
+    for (uint32_t y = 0; y < SCENE_TEXTURE_SIZE; ++y) {
+        for (uint32_t x = 0; x < SCENE_TEXTURE_SIZE; ++x) {
+            SceneTexel(x, y, texels + (y * SCENE_TEXTURE_SIZE + x) * 4u);
+        }
+    }
+    const int texture =
+        DrawPathTexture(path, SCENE_TEXTURE_SIZE, SCENE_TEXTURE_SIZE, texels, false);
+    if (texture < 0) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    static const float onto[4] = { 0.0f, 0.0f, (float)SCENE_QUARTER, (float)SCENE_QUARTER };
+    static const float from[4] = { 0.0f, 0.0f, (float)SCENE_TEXTURE_SIZE,
+                                   (float)SCENE_TEXTURE_SIZE };
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathDrawTexture(path, texture, onto, from);
     if (!DrawPathEnd(path)) {
         snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
         return false;
@@ -827,6 +870,8 @@ static const Scene UPDATED = { false, 0, 0, UpdatedDraw, IndexedExpected, Indexe
 static const Scene RARE = { false, 1,           SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
                             RareDraw, RareExpected, RareLooksLike,
                             DRAW_BINDS_SINGLE };
+static const Scene DRAWN = { false, 1, SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u, DrawnDraw,
+                             DrawnExpected, RareLooksLike, DRAW_BINDS_SINGLE };
 static const Scene CAPTURE = { false, 0, 0, CaptureDraw, CaptureExpected, CaptureLooksLike,
                                DRAW_BINDS_SINGLE };
 static const Scene CAPTURE_SEVERAL = { false,           0, 0, CaptureSeveralDraw, CaptureExpected,
@@ -947,6 +992,12 @@ void NvnSceneFirst(void) {
     SceneCase(DRAW_PATH_LAYER, &INSTANCED,
               "the same eight instances through the layer's own NVN functions are each in "
               "its cell");
+    SceneCase(DRAW_PATH_DEKO3D, &DRAWN,
+              "a texture drawn with no program through deko3d fills its quarter, four pixels a "
+              "texel");
+    SceneCase(DRAW_PATH_LAYER, &DRAWN,
+              "the same texture drawn with no program through the layer's own NVN functions "
+              "fills its quarter");
 }
 
 void NvnSceneLast(void) {

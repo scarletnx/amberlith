@@ -127,8 +127,8 @@ if (!nvn.nvnDeviceInitialize(&device, &builder)) { /* NvnLayerError() says why, 
   whatever its arguments: a pool of a native handle, a virtual memory pool and `nvnMemoryPoolMapVirtual`, a list that
   waits on an event (`nvnCommandBufferWaitEvent`) or adds to one (`nvnCommandBufferSignalEvent` in its add mode), as
   many draws as a word the graphics unit reads says (`nvnCommandBufferMultiDrawArraysIndirectCount` and
-  `MultiDrawElementsIndirectCount`), a texture drawn with no program (`nvnCommandBufferDrawTexture`), transform feedback
-  (its two binds, its four steps and `nvnCommandBufferDrawTransformFeedback`). A program that can do without tells that
+  `MultiDrawElementsIndirectCount`), transform feedback (its two binds, its four steps and
+  `nvnCommandBufferDrawTransformFeedback`). A program that can do without tells that
   from a call it got wrong; Amberlith's cases skip as unavailable on it. Never under ScarletNX.
 - **`NvnLayerSetGuard(guard)`**: deko3d ends the program when it cannot make an object. A program that can turn
   that abort into a return (Amberlith's `AbortGuarded`, a linker wrap of `diagAbortWithResult`) gives the layer its
@@ -281,6 +281,10 @@ Five hundred and twenty seven functions, each recording the deko3d commands that
 - **instanced draws** (`nvnCommandBufferDrawArraysInstanced`, `DrawElementsInstanced`) and **draws whose
   numbers the graphics unit reads** from a buffer (`DrawArraysIndirect`, `DrawElementsIndirect`): NVN's words
   there are deko3d's, in the same order;
+- **a texture drawn with no program** (`nvnCommandBufferDrawTexture`): deko3d's `dkCmdBufDrawTexture`
+  (scarletnx/deko3d's: 0.5.0 has none), whose regions are NVN's, a corner's x and y and the other corner's, and
+  whose handle is the layer's texture and sampler pair; an empty destination draws nothing, as ScarletNX's NVN
+  reads NVN;
 - **the binds**: a program, each state, vertex buffers, uniform buffers, textures by handle; and **the draw**,
   `nvnCommandBufferDrawArrays`, with the colour and depth clears.
 
