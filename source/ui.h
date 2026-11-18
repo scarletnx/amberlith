@@ -176,6 +176,9 @@ typedef struct {
     bool again;
     /// Y may run it again: the run was one the browser began.
     bool repeatable;
+    /// The program reads no pad (the mod, in a game's process): no key is shown, since none
+    /// would do anything, and the screen leaves by its countdown alone.
+    bool padless;
     /// Whether the screen owes a frame. Set by anything that moved, and stays set until a
     /// frame is actually drawn, which is what makes the very first one get drawn at all. The
     /// display clears it and sleeps otherwise, so a still screen costs an emulated processor
@@ -226,8 +229,9 @@ bool UiLeavesUnattended(uint64_t elapsed_ns, bool pressed);
 /// is up. What the screen counts down with.
 uint32_t UiUnattendedSecondsLeft(uint64_t elapsed_ns, bool pressed);
 
-/// Draws the countdown line above the band of the keys, or clears it for 0.
-void UiComposeCountdown(const UiFrame *frame, uint32_t seconds_left);
+/// Draws the countdown line above the band of the keys, or clears it for 0. @p padless: the
+/// program reads no pad, so the line asks for no press.
+void UiComposeCountdown(const UiFrame *frame, uint32_t seconds_left, bool padless);
 
 /// The buttons the screens know about. Named here rather than taken from the console's own
 /// header so that what each one does is a decision this build can check.
@@ -414,6 +418,9 @@ typedef struct {
     /// The mode file names the nvn family, which has no row: the screen says its window case is
     /// skipped in a run begun here, since this screen holds the window to the run's end.
     bool nvn_named;
+    /// The program reads no pad (the mod, in a game's process): the rows show what the mode
+    /// file chose, with no tabs and no keys, and the run begins when the countdown ends.
+    bool padless;
     /// The crash list's cases.
     uint32_t listed_count;
     const char *listed_suite[UI_START_LIST_MAX];
@@ -644,6 +651,8 @@ typedef struct {
     bool quick;
     /// B was pressed: the case under way ends and the rest are left out (ReportCancel).
     bool cancelling;
+    /// The program reads no pad (the mod, in a game's process): B is not offered.
+    bool padless;
 } UiProgress;
 
 /// How often, at most, the running screen is drawn between two steps' first frames.
