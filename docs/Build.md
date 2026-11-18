@@ -9,6 +9,17 @@ make
 
 `amberlith.nro` runs unchanged on a console and in an emulator; two reports compare only when the NRO is the same.
 
+The NRO links deko3d as scarletnx/deko3d has it, not the toolchain's 0.5.0: 0.5.0 writes the blend's color destination
+factor where the alpha one goes, copies images and blits from the wrong place in three cases, keeps command and code
+memory it should give back, and its zcull invalidation writes nothing; and it has no call for the render enable, a
+texture drawn with no program or transform feedback, which the NVN layer and the deko3d way of the nvn suite draw
+with. `tools/deko3d.sh` builds it into `build/deko3d` the first time make needs it (and after `make clean`): it clones
+scarletnx/deko3d at the commit it names and fincs/dekotools, the two tools deko3d's build turns its method and macro
+files with (`dekodef`, `dekomme`), builds the tools with meson and deko3d's library with devkitA64, so it needs the
+network then, git, meson, ninja, bison, flex and a C++ compiler for the machine. The NRO reads its headers and links
+its library before libnx's directories, where the toolchain's are. None of the fork's changes has run on a console
+yet.
+
 One shader, the bindless suite's four sample fetch, is built by uam with Mesa's f9d385d77716 on it: the toolchain's uam
 1.1.0 puts a multisample fetch's sample in the register the console reads the handle from. `tools/uam.sh` builds that
 uam into `build/uam` the first time make needs it (and after `make clean`): it clones scarletnx/uam at the commit it

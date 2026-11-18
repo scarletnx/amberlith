@@ -241,12 +241,14 @@ those two equations ignore the factors.
 The alpha channel has its own equation and factors, and wiring it to the colour ones is the
 classic way to get this unit wrong, so the table keeps them apart: by the equation and the source
 factor, never by the destination factor, which is the graphics library's limit.
-`dkCmdBufBindBlendStates` writes six registers per target and puts the colour destination factor
-in the last, the alpha destination one, so a state whose two destination factors differ reaches
-the hardware with both the same (deko3d 0.5.0, `source/maxwell/gpu_3d_state.cpp`; the other five
-words carry the fields they are named after). A case built on that difference would fail a machine
-that did nothing wrong, so the reference suite refuses one, and checks that some case still
-separates each part that does reach the registers. Whether the hardware then acts on them is left
+`dkCmdBufBindBlendStates` writes six registers per target and, in the toolchain's deko3d 0.5.0,
+puts the colour destination factor in the last, the alpha destination one, so a state whose two
+destination factors differ reaches the hardware with both the same (`source/maxwell/gpu_3d_state.cpp`;
+the other five words carry the fields they are named after). The NRO links scarletnx/deko3d, which
+writes the alpha factor there ([Build](../Build.md)); the cases were shaped while it did not, and a
+case built on that difference would fail an NRO built on 0.5.0 that did nothing wrong, so the
+reference suite still refuses one, and checks that some case still separates each part that does
+reach the registers. Whether the hardware then acts on them is left
 open too: separate alpha blending is switched on by the register just before those six, which no
 library call writes (nor its global twin), so a console and an emulator can disagree. Two notes on
 every run say whether the alpha channel runs an equation of its own and whether an alpha

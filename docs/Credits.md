@@ -7,8 +7,12 @@
   Mark 1.0; the repository has no licence file of its own.
 - **libnx**, https://github.com/switchbrew/libnx: the library every call to the console's services
   goes through. ISC licence, in its `LICENSE.md` (copyright 2017-2018 libnx Authors).
-- **deko3d**, https://github.com/devkitPro/deko3d: the graphics library the drawing suites use. zlib
-  licence, in its `LICENSE` (copyright 2018-2020 fincs).
+- **deko3d**, https://github.com/devkitPro/deko3d: the graphics library the drawing suites use, which
+  `tools/deko3d.sh` builds from scarletnx/deko3d (https://github.com/scarletnx/deko3d, its commit
+  d0e3243: devkitPro's master with fixes and calls from its forks and ours). zlib licence, in its
+  `LICENSE` (copyright 2018-2020 fincs). Its build runs **dekotools**
+  (https://github.com/fincs/dekotools, commit c15523c, GPL-3.0), `dekodef` and `dekomme`, on the
+  machine that builds; nothing of them is in the NRO.
 - **uam**, https://github.com/devkitPro/uam: the shader compiler, the toolchain's for every shader
   but the few `tools/uam.sh` builds from scarletnx/uam (https://github.com/scarletnx/uam: uam 1.1.0
   with two fixes of uniform block reads, Mesa's f9d385d77716

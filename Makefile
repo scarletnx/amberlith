@@ -20,6 +20,9 @@ PREFIX   := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
 CC       := $(PREFIX)gcc
 LIBNX    := $(DEVKITPRO)/libnx
 TOOLS    := $(DEVKITPRO)/tools/bin
+# deko3d as scarletnx/deko3d has it (tools/deko3d.sh), its headers and its library read before the toolchain's 0.5.0,
+# which libnx's own directories also hold. Its first build clones it.
+DEKO3D   := $(BUILD)/deko3d
 
 # What a loader reads out of the .nro's asset section before it will start the program. Without
 # one, at least one emulator refuses the file rather than running it, so the section is not
@@ -46,7 +49,7 @@ ARCH     := -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 # can never be reporting a stale binary's answer.
 CFLAGS   := $(ARCH) -g -O2 -ffunction-sections -fdata-sections -MMD -MP \
             -Wall -Wextra -Werror -Wno-unused-parameter \
-            -D__SWITCH__ -I$(LIBNX)/include -Isource -I$(BUILD) -I$(BUILD)/shaders \
+            -D__SWITCH__ -I$(DEKO3D)/include -I$(LIBNX)/include -Isource -I$(BUILD) -I$(BUILD)/shaders \
             $(NVNLAYER_CFLAGS)
 # --wrap on the abort is what lets GpuOpen report a failed bring-up instead of dying: the
 # graphics library answers a failed constructor by calling the runtime's abort, which never comes
@@ -63,7 +66,7 @@ LDFLAGS  := $(ARCH) -specs=$(LIBNX)/switch.specs -Wl,--gc-sections -g \
             -Wl,--undefined=amberlith_sdk_label
 # Order matters: the graphics library leans on the C runtime and on the maths library after it.
 # The maths one is not decoration, since building a sampler descriptor calls powf.
-LIBS     := -L$(LIBNX)/lib -ldeko3d -lnx -lm
+LIBS     := -L$(DEKO3D)/lib -L$(LIBNX)/lib -ldeko3d -lnx -lm
 
 # The shaders, named here and built by the rules further down.
 SHADER_DIR  := source/shaders
@@ -128,6 +131,16 @@ $(BUILD)/shaders/bindless_ms.frag.dksh: $(SHADER_DIR)/bindless_ms.frag.glsl $(UA
 	@mkdir -p $(dir $@)
 	$(UAM_FIXED) -s frag -o $@ $<
 
+# The library and its headers before the first object, every one of which reads deko3d.h. The script copies them over
+# the old only where they differ, so an object rebuilds when the header changed and the link when the library did,
+# not each time the script renews the stamp.
+$(DEKO3D)/deko3d.stamp: tools/deko3d.sh
+	tools/deko3d.sh $(DEKO3D)
+
+$(DEKO3D)/include/deko3d.h $(DEKO3D)/lib/libdeko3d.a: $(DEKO3D)/deko3d.stamp ;
+
+$(patsubst %.c,$(BUILD)/%.o,$(CFILES)): $(DEKO3D)/include/deko3d.h
+
 # One grouped target, because one run of bin2s produces both files: with a rule each, deleting
 # only the header leaves make with no recipe that makes it alone. Grouped targets need GNU make
 # 4.3 or newer. The alignment is what the graphics library's paired load of a program header
@@ -173,8 +186,8 @@ $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TARGET).elf: $(OFILES)
-	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@
+$(TARGET).elf: $(OFILES) $(DEKO3D)/lib/libdeko3d.a
+	$(CC) $(LDFLAGS) $(OFILES) $(LIBS) -o $@
 
 # Rebuilt when this file changes, so a title edited here cannot leave a stale one in the binary.
 $(TARGET).nacp: Makefile VERSION
