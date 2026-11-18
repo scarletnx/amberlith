@@ -15,7 +15,7 @@ set -eu
 [ $# -eq 1 ] || { echo "usage: tools/uam.sh DIR" >&2; exit 2; }
 dir=$1
 repo=https://github.com/scarletnx/uam.git
-commit=019b6939c8961dd6a72aeee0deb8efefac787fc2
+commit=8b152b6ebf5ba62de9e4d3f7cb3da2eeb4294dce
 here=$(cd "$(dirname "$0")" && pwd)
 stamp="$commit $(sha256sum < "$here/uam.sh" | cut -c1-16)"
 if [ -x "$dir/uam" ] && [ "$(cat "$dir/uam.stamp" 2>/dev/null)" = "$stamp" ]; then
