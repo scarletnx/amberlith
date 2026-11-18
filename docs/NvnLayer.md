@@ -70,7 +70,9 @@ layer is its types, its list of names
 and `NvnLoadProcs`: it defines no `nvnBootstrapLoader`, the program exports none (a second one in the process would
 be found in the driver's place), and the one `NvnLoadProcs` calls is the driver's, bound by the game's dynamic
 linker. `NvnLayerOwnProcs` gives nothing there and says why, and `NvnLayerError` is `""` after every NVN call, as
-under ScarletNX. The object sizes are still the build's `NVNLAYER_API`'s, so the program asks the driver its version
+under ScarletNX. `NvnLayerShaderControl` is there too ([Programs](#programs)), so a program made of uam's modules,
+compiled for NVN's layout (`uam --nvn`), is given to the game's driver as to ScarletNX's; and so are compute's
+dispatch and storage buffers, which NVN 55 has. The object sizes are still the build's `NVNLAYER_API`'s, so the program asks the driver its version
 before it makes an object.
 
 A game's driver has the names of its own API version, where the list has every version's. A name the driver
@@ -309,12 +311,16 @@ memory. `NvnLayerShaderControl` makes both from a DKSH:
   Every other byte is nought, unless `NvnLayerShaderCapture` then says what a capture takes of the stage's outputs
   (transform feedback): a one at 0x6ec, and for each of four capture buffers its stride at 0x6dc, its stream at
   0x6e4 and its groups' count at 0x6e8, a group being an output (the position, 0, or generic n, 0x20 + n) at 0xdc,
-  its first word at 0x2dc and how many at 0x4dc. The last 0x100 are the layer's own: the DKSH's header
-  with its one program's, which deko3d takes as a control section apart from the code, and the `DkShader` the API
-  55 build's `nvnProgramSetShaders` makes there, an NVN program object being too small for five of them.
+  its first word at 0x2dc and how many at 0x4dc. A compute stage's section says its workgroup's three sizes at
+  0x748, 0x74c and 0x750, its shared memory's bytes at 0x754 and its constants' bytes at 0x6fc, from its DKSH
+  program's words, and its program may start where the code area does. The last 0x100 are the layer's own: the
+  DKSH's header with its one program's, which deko3d takes as a control section apart from the code, and the
+  `DkShader` the API 55 build's `nvnProgramSetShaders` makes there, an NVN program object being too small for five
+  of them.
 
 So the graphics unit runs what uam compiled and ScarletNX translates the same bytes. A DKSH of more than one
-program, a compute program and a vertex program with a second entry point are refused.
+program and a vertex program with a second entry point are refused. A compute section is for a driver that runs
+compute, ScarletNX's or a game's: the layer's own build dispatches none.
 
 ### What a shader may use
 

@@ -405,6 +405,39 @@ static void TestControl(void) {
            "%u and winding 0x%x",
            (unsigned)Read(section, 0x738), (unsigned)Read(section, 0x73c),
            (unsigned)Read(section, 0x740), (unsigned)Read(section, 0x744));
+    // A compute program of 8 by 8 by 1 with 0x100 bytes of shared memory and 0x40 of constants,
+    // starting where the code area does: its workgroup, its shared memory and its constants'
+    // bytes where ScarletNX reads a compute section's.
+    Module(module, 5, 0x40u);
+    Write(module, 0x18 + 4, 0u);
+    Write(module, 0x18 + 24, 8u);
+    Write(module, 0x18 + 28, 8u);
+    Write(module, 0x18 + 32, 1u);
+    Write(module, 0x18 + 36, 0x100u);
+    NvnLayerClearError();
+    EXPECT(NvnLayerShaderControl(module, sizeof(module), section, &code), "a compute module: %s",
+           NvnLayerError());
+    EXPECT(ScarletNxTakes(section), "ScarletNX's conditions refuse the compute section");
+    EXPECT(Read(section, 0x714) == 5u && Read(section, 0x708) == 0u &&
+               Read(section, 0x700) == 0x200u && Read(section, 0x748) == 8u &&
+               Read(section, 0x74c) == 8u && Read(section, 0x750) == 1u &&
+               Read(section, 0x754) == 0x100u && Read(section, 0x6fc) == 0x40u,
+           "stage %u at 0x%x, constants at 0x%x of 0x%x bytes, a workgroup of %u by %u by %u and "
+           "0x%x bytes shared",
+           (unsigned)Read(section, 0x714), (unsigned)Read(section, 0x708),
+           (unsigned)Read(section, 0x700), (unsigned)Read(section, 0x6fc),
+           (unsigned)Read(section, 0x748), (unsigned)Read(section, 0x74c),
+           (unsigned)Read(section, 0x750), (unsigned)Read(section, 0x754));
+    // A graphics module writes none of those words.
+    Module(module, 1, 0x40u);
+    EXPECT(NvnLayerShaderControl(module, sizeof(module), section, &code) &&
+               Read(section, 0x748) == 0u && Read(section, 0x754) == 0u &&
+               Read(section, 0x6fc) == 0u,
+           "a fragment module's section has a workgroup of %u and 0x%x bytes shared and 0x%x of "
+           "constants",
+           (unsigned)Read(section, 0x748), (unsigned)Read(section, 0x754),
+           (unsigned)Read(section, 0x6fc));
+
     // A capture of a vertex stage's outputs, where ScarletNX reads it: the position's first
     // three words, two of generic output 0 and four of generic output 1 into buffer 0.
     Module(module, 0, 0);
@@ -448,7 +481,7 @@ static void TestControl(void) {
         { "a code section off a 0x100 boundary", 12, 0x2f0u, "0x2f0" },
         { "a code section past the module", 12, 0x400u, "0x400" },
         { "a program table past the control section", 16, 0xf0u, "0xf0" },
-        { "a compute program", 0x18, 5u, "type 5" },
+        { "a program of a stage NVN has not", 0x18, 6u, "type 6" },
         { "a program that starts before 0x30", 0x18 + 4, 0x20u, "0x20" },
         { "a program that starts past its code", 0x18 + 4, 0x300u, "0x300" },
         { "constants off a 0x100 boundary", 0x18 + 12, 0x180u, "0x180" },

@@ -27,7 +27,10 @@ endif
 ifeq ($(filter $(NVNLAYER_API),55 231),)
 $(error NVNLAYER_API=$(NVNLAYER_API) is not an API version the layer builds for: 55 or 231 (unset, it is 55))
 else ifeq ($(NVNLAYER_DRIVER),game)
-NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/game_driver.c
+# A game's driver: the lookup, the bodies of the names it lacks, and the programs' control
+# sections, which a program made of uam's modules gives that driver as it gives ScarletNX's.
+NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/game_driver.c \
+                    $(NVNLAYER_DIR)/source/api55_shader.c
 else ifeq ($(NVNLAYER_API),55)
 NVNLAYER_SOURCES := $(NVNLAYER_DIR)/source/layer.c $(NVNLAYER_DIR)/source/api55_deko3d.c \
                     $(NVNLAYER_DIR)/source/api55_draw.c $(NVNLAYER_DIR)/source/api55_shader.c \

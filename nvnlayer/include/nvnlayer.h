@@ -156,7 +156,7 @@ void NvnLayerSetGuard(NvnLayerGuard guard);
 typedef void (*NvnLayerFatalHook)(const char *name);
 void NvnLayerSetFatal(NvnLayerFatalHook hook);
 
-// ---- programs (the API 55 build)
+// ---- programs (the API 55 build, and a build for a game's own driver)
 
 #if NVN_LAYER_API < 231
 /// The bytes NvnLayerShaderControl writes: an NVN shader control section as ScarletNX reads one,

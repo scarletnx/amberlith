@@ -64,17 +64,20 @@ bool NvnLayerShaderControl(const void *dksh, size_t dksh_bytes, void *control,
     const uint32_t entry = Word(program + 4);
     const uint32_t constants_at = Word(program + 12);
     const uint32_t constants_bytes = Word(program + 16);
-    // NVN's stage numbers are the DKSH's program types, vertex 0 to tessellation evaluation 4.
-    if (type > (uint32_t)NVN_SHADER_STAGE_TESS_EVALUATION) {
-        LayerComplain("%s: a DKSH program of type %u, and the layer takes the graphics stages, 0 "
-                      "to %d: it runs no compute yet",
-                      WHAT, (unsigned)type, (int)NVN_SHADER_STAGE_TESS_EVALUATION);
+    // NVN's stage numbers are the DKSH's program types, vertex 0 to compute 5.
+    if (type > (uint32_t)NVN_SHADER_STAGE_COMPUTE) {
+        LayerComplain("%s: a DKSH program of type %u, where NVN's stages are 0 to %d", WHAT,
+                      (unsigned)type, (int)NVN_SHADER_STAGE_COMPUTE);
         return false;
     }
-    if (entry < 0x30u || entry >= code_bytes) {
+    const bool compute = type == (uint32_t)NVN_SHADER_STAGE_COMPUTE;
+    // A graphics program follows the 0x30 bytes before its header; ScarletNX takes a compute
+    // program from the start of the code area too, as an older SDK lays one out.
+    if ((!compute && entry < 0x30u) || entry >= code_bytes) {
         LayerComplain("%s: the program starts 0x%x bytes into a code section of 0x%x, where an "
-                      "NVN program starts 0x30 or more in",
-                      WHAT, (unsigned)entry, (unsigned)code_bytes);
+                      "NVN %s program starts %s in",
+                      WHAT, (unsigned)entry, (unsigned)code_bytes,
+                      compute ? "compute" : "graphics", compute ? "inside it" : "0x30 or more");
         return false;
     }
     if (type == (uint32_t)NVN_SHADER_STAGE_VERTEX && Word(program + 24) != 0u) {
@@ -110,6 +113,13 @@ bool NvnLayerShaderControl(const void *dksh, size_t dksh_bytes, void *control,
     if (type == (uint32_t)NVN_SHADER_STAGE_FRAGMENT) {
         // The DKSH's early_fragment_tests, the second byte of the fragment program's own words.
         section[LAYER_SECTION_AT_EARLY_TESTS] = program[25] != 0u ? 1u : 0u;
+    }
+    if (compute) {
+        for (uint32_t i = 0; i < 3u; ++i) {
+            Put(section, LAYER_SECTION_AT_BLOCK + 4u * i, Word(program + 24u + 4u * i));
+        }
+        Put(section, LAYER_SECTION_AT_SHARED, Word(program + 36));
+        Put(section, LAYER_SECTION_AT_CONSTANT_BYTES, constants_bytes);
     }
 
     if (type == (uint32_t)NVN_SHADER_STAGE_TESS_EVALUATION) {
