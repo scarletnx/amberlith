@@ -5,13 +5,7 @@
 
 // The API 55 build's command buffer past the binds and the draws: what a list reports to memory
 // (counters, values) and whether what follows is drawn at all, each as the deko3d commands that
-// do what NVN says, or, where deko3d has no command for it, as the engine methods themselves.
-
-// ---- engine methods deko3d has no command for
-
-// A method header: the method, its subchannel, how many words follow, and the mode that puts
-// each word in the next register (the 3D engine is subchannel 0).
-#define METHOD_INCREASING(method, count) ((uint32_t)(method) | (uint32_t)(count) << 16 | 1u << 29)
+// do what NVN says.
 
 /// A unit of the part of the command memory the layer keeps, LAYER_HANDLE_BYTES of it: its
 /// offset in that part, or -1 with a complaint naming @p what when the part is used up. What
@@ -128,27 +122,19 @@ uint64_t Nvnl_nvnDeviceGetCurrentTimestampInNanoseconds(const NVNdevice *device)
 
 // ---- whether what follows is drawn
 
-// The 3D engine's render enable, which deko3d never writes: an address in two words and a mode.
-// The two conditional modes compare the 64-bit words at the address and 16 bytes past it, the
-// counts of two counter reports one after the other, which is how NVN uses them.
-#define METHOD_RENDER_ENABLE 0x554u
-#define RENDER_FALSE 0u
-#define RENDER_TRUE 1u
-#define RENDER_IF_EQUAL 3u
-#define RENDER_IF_NOT_EQUAL 4u
-
-static void RenderEnable(NVNcommandBuffer *cmd, uint64_t address, uint32_t mode,
+// The render enable. The two conditional modes compare the 64-bit words at the address and 16 bytes
+// past it, the counts of two counter reports one after the other, which is how NVN uses them.
+static void RenderEnable(NVNcommandBuffer *cmd, uint64_t address, DkRenderEnableMode mode,
                          const char *what) {
     LayerCommandBuffer *const record = CmdOf(cmd, what);
     if (record != NULL) {
-        const uint32_t words[4] = { METHOD_INCREASING(METHOD_RENDER_ENABLE, 3),
-                                    (uint32_t)(address >> 32), (uint32_t)address, mode };
-        dkCmdBufReplayCmds(record->cmdbuf, words, 4);
+        dkCmdBufSetRenderEnable(record->cmdbuf, mode, address);
     }
 }
 
 void Nvnl_nvnCommandBufferSetRenderEnable(NVNcommandBuffer *cmd, NVNboolean enable) {
-    RenderEnable(cmd, 0u, enable ? RENDER_TRUE : RENDER_FALSE, "nvnCommandBufferSetRenderEnable");
+    RenderEnable(cmd, 0u, enable ? DkRenderEnableMode_Always : DkRenderEnableMode_Never,
+                 "nvnCommandBufferSetRenderEnable");
 }
 
 void Nvnl_nvnCommandBufferSetRenderEnableConditional(NVNcommandBuffer *cmd,
@@ -163,8 +149,9 @@ void Nvnl_nvnCommandBufferSetRenderEnableConditional(NVNcommandBuffer *cmd,
         return;
     }
     RenderEnable(cmd, address,
-                 mode == NVN_CONDITIONAL_RENDER_MODE_RENDER_IF_EQUAL ? RENDER_IF_EQUAL
-                                                                      : RENDER_IF_NOT_EQUAL,
+                 mode == NVN_CONDITIONAL_RENDER_MODE_RENDER_IF_EQUAL
+                     ? DkRenderEnableMode_IfEqual
+                     : DkRenderEnableMode_IfNotEqual,
                  "nvnCommandBufferSetRenderEnableConditional");
 }
 

@@ -493,9 +493,9 @@ expects. Exact tier.
   `nvnCommandBufferSetRenderEnableConditional` if equal and if not equal over two counts the processor wrote equal
   (their times differ), over two it wrote apart, and over the 256 and the 0 a list that finished before reported,
   then on again. The five under a word that holds are drawn, and the four others are left clear. NVN compares the
-  count at the address with the one 16 bytes on, as two reports lie; the layer sends the 3D engine's render enable
-  itself, which deko3d never writes. A clear under the render enable is not asked: no console has said here
-  whether it obeys.
+  count at the address with the one 16 bytes on, as two reports lie; the layer sets it with deko3d's
+  `dkCmdBufSetRenderEnable`, which the fork the NRO links has and deko3d 0.5.0 has not. A clear under the render
+  enable is not asked: no console has said here whether it obeys.
 
 ### The command buffer's memory and lists in lists
 
