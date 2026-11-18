@@ -34,6 +34,11 @@
 #define LAYER_SECTION_AT_TESS_SPACING 0x73cu
 #define LAYER_SECTION_AT_TESS_POINTS 0x740u
 #define LAYER_SECTION_AT_TESS_WINDING 0x744u
+// A compute stage's workgroup size, its shared memory's bytes and its constants' bytes, where
+// ScarletNX reads them (its nvn_object.c, stage_of).
+#define LAYER_SECTION_AT_BLOCK 0x748u
+#define LAYER_SECTION_AT_SHARED 0x754u
+#define LAYER_SECTION_AT_CONSTANT_BYTES 0x6fcu
 
 // What ScarletNX reads of the capture a stage's outputs go through, transform feedback (its
 // nvn_object.c, xfb_of): a byte that says the stage captures; for buffer i of four its stream,
@@ -51,7 +56,8 @@
 
 // A DKSH's header and its program's, in words (deko3d's source/dksh.h): the magic, the header's
 // bytes, the control and code sections' bytes, the programs' offset and count; then, for a
-// program, its type, entry point, registers, the constants' offset and bytes.
+// program, its type, entry point, registers, the constants' offset and bytes, and for a compute
+// program, from its seventh word, the workgroup's three sizes and its shared memory's bytes.
 #define LAYER_DKSH_MAGIC 0x48534b44u
 #define LAYER_DKSH_HEADER_WORDS 6u
 #define LAYER_DKSH_PROGRAM_WORDS 16u

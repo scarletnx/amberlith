@@ -12,7 +12,7 @@
 /// written in assembly (docs/NvnLayer.md, "The API version"), and nvnDeviceGetProcAddress, the
 /// lookup itself, which every build has whole.
 ///
-/// Three lists, by what each build of the layer does with them:
+/// Four lists, by what each build of the layer does with them:
 /// - NVN_LAYER_PROCS_BASE (with NVN_LAYER_PROCS_TEXTURE, NVN_LAYER_PROCS_POOL,
 ///   NVN_LAYER_PROCS_SYNC, NVN_LAYER_PROCS_SAMPLER, NVN_LAYER_PROCS_BUFFER,
 ///   NVN_LAYER_PROCS_WINDOW, NVN_LAYER_PROCS_COUNTER, NVN_LAYER_PROCS_RECORDING,
@@ -22,9 +22,9 @@
 ///   build gives each a body on deko3d; the API 231 build gives each its stopping body.
 /// - NVN_LAYER_PROCS_231 (with NVN_LAYER_PROCS_WINDOW_231, NVN_LAYER_PROCS_DEBUG_231,
 ///   NVN_LAYER_PROCS_PROGRAM_231, NVN_LAYER_PROCS_RAY_231 and NVN_LAYER_PROCS_DLSS_231, parts of
-///   it written apart): the
-///   functions only the API 231 build has, compute's among them, which
-///   NVN 55 has too and the deko3d build does not implement yet.
+///   it written apart): the functions only the API 231 build has.
+/// - NVN_LAYER_PROCS_COMPUTE: compute's, which NVN 55 has too: the API 231 build and a build for
+///   a game's own driver have them, and the deko3d build does not implement them yet.
 
 // What a texture, its builder and a view answer of themselves, and the levels of a texture.
 #define NVN_LAYER_PROCS_TEXTURE(X)                                                                \
@@ -1081,6 +1081,15 @@
 
 // The API 231 build's own: compute, storage buffers and images, the program builder, push
 // constants and mesh draws.
+// Compute: the dispatch and the storage buffers its programs read, which NVN 55 has too. The API
+// 231 build and a build for a game's own driver look them up; the deko3d build does not implement
+// them yet.
+#define NVN_LAYER_PROCS_COMPUTE(X)                                                                \
+    X(void, nvnCommandBufferBindStorageBuffer,                                                    \
+      (NVNcommandBuffer *cmd, NVNshaderStage stage, int index, NVNbufferAddress address,          \
+       size_t size))                                                                              \
+    X(void, nvnCommandBufferDispatchCompute, (NVNcommandBuffer *cmd, int x, int y, int z))
+
 #define NVN_LAYER_PROCS_231(X)                                                                    \
     X(NVNimageHandle, nvnDeviceGetImageHandle, (const NVNdevice *device, int id))                 \
     X(void, nvnTexturePoolRegisterImage,                                                          \
@@ -1092,9 +1101,6 @@
       (NVNprogramBuilder *builder, int count, const NVNshaderData *shaders))                      \
     X(NVNboolean, nvnProgramInitializeFromBuilder,                                                \
       (NVNprogram *program, const NVNprogramBuilder *builder))                                    \
-    X(void, nvnCommandBufferBindStorageBuffer,                                                    \
-      (NVNcommandBuffer *cmd, NVNshaderStage stage, int index, NVNbufferAddress address,          \
-       size_t size))                                                                              \
     X(void, nvnCommandBufferBindImage,                                                            \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int index, NVNimageHandle handle))            \
     X(void, nvnCommandBufferBindImages,                                                           \
@@ -1119,7 +1125,6 @@
     X(void, nvnCommandBufferBindSeparateSamplersDeferred,                                         \
       (NVNcommandBuffer *cmd, NVNshaderStage stage, int first, int count,                         \
        const NVNseparateSamplerHandle *handles))                                                  \
-    X(void, nvnCommandBufferDispatchCompute, (NVNcommandBuffer *cmd, int x, int y, int z))        \
     X(void, nvnCommandBufferPushGraphicsConstants,                                                \
       (NVNcommandBuffer *cmd, int table, int offset, int bytes, const void *data))                \
     X(void, nvnCommandBufferPushComputeConstants,                                                 \
@@ -1181,7 +1186,10 @@
     NVN_LAYER_PROCS_DLSS_231(X)
 
 #if NVN_LAYER_API >= 231
-#define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_231(X)
+#define NVN_LAYER_PROCS(X)                                                                        \
+    NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_COMPUTE(X) NVN_LAYER_PROCS_231(X)
+#elif defined(NVN_LAYER_GAME_DRIVER)
+#define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X) NVN_LAYER_PROCS_COMPUTE(X)
 #else
 #define NVN_LAYER_PROCS(X) NVN_LAYER_PROCS_BASE(X) NVN_LAYER_PROCS_DRAW(X)
 #endif
