@@ -443,8 +443,8 @@ texture drawn with no program through the layer's own NVN functions fills its qu
 
 ### A capture of what a vertex stage writes
 
-A seventh scene, for the NVN the program looks up alone as the sixth is: transform feedback, which deko3d has no
-call for and the layer lacks.
+A seventh scene, transform feedback: through deko3d's calls (scarletnx/deko3d's, which the NRO links: 0.5.0 has
+none), through the layer's own NVN functions, which are those calls, and through the NVN the program looks up.
 
 - the top row: the instanced scene's program draws cells 0, 1 and 2, one instance a draw, with its vertex
   stage's outputs captured into a buffer (`nvnCommandBufferBindTransformFeedbackBuffer`). The capture begins
@@ -461,9 +461,20 @@ under cell 2 clear; one that wrote nothing leaves the row clear. What the stage'
 said in its control section by `NvnLayerShaderCapture`, where a console's compiler writes it.
 
 The cases are **what a capture took of two draws, paused for a third between them, is drawn again a row down
-through the NVN the program looks up** and **the same capture into a buffer bound by the call that takes several
-is drawn again a row down** (`nvnCommandBufferBindTransformFeedbackBuffers`), both exact and skipped as
-`unavailable` where the layer answers.
+through deko3d**, **the same paused capture is drawn again a row down through the layer's own NVN functions**,
+**the same paused capture into a buffer bound by the layer's call that takes several is drawn again a row down**,
+**what a capture took of two draws, paused for a third between them, is drawn again a row down through the NVN
+the program looks up** and **the same capture into a buffer bound by the call that takes several is drawn again a
+row down** (`nvnCommandBufferBindTransformFeedbackBuffers`), all exact. On deko3d's way a pause and an end save the
+byte counts into the scene's control and a resume and the draw read them there; the layer keeps NVN's control.
+
+An eighth scene, for deko3d's way and the layer's, asks the same row of the capture alone: cells 0 and 2 drawn
+under one capture, cell 1 after it ended, and the twelve vertices it wrote drawn again by a draw of twelve, so no
+saved byte count is read back. The cases are **what a capture took of two draws through deko3d, drawn again as
+twelve vertices, is the two a row down** and **the same capture of two draws through the layer's own NVN
+functions, drawn again as twelve vertices, is the two a row down** (exact). Where this scene passes and the
+seventh fails, the layouts and the buffers are right and the byte counts are not: what the graphics unit saved,
+or the draw that reads them. None of deko3d's capture calls has run on a console yet.
 
 One shader binary serves every way because the scene's shaders keep to the layer's two rules ([The NVN
 layer](../NvnLayer.md#what-a-shader-may-use)): uniform blocks from `binding = 1`, and textures by the handle in the

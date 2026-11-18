@@ -289,6 +289,12 @@ typedef struct {
     ptrdiff_t copy_image_stride;
     /// The state NVN sets by itself and deko3d takes together with another's (api55_command.c).
     LayerDynamic dynamic;
+    /// Whether the capture layouts last bound are a program's (transform feedback), the stride
+    /// of their first buffer, and that stride when the last capture began, which a draw of what
+    /// it wrote divides the bytes by (api55_draw.c).
+    bool capturing;
+    uint32_t capture_stride;
+    uint32_t begun_stride;
 } LayerDraw;
 
 typedef struct {
@@ -303,6 +309,11 @@ typedef struct {
 /// @p index from its rectangle and its range (api55_command.c).
 void LayerBindRasterizer(const LayerCommandBuffer *record);
 void LayerBindViewport(const LayerCommandBuffer *record, int index);
+
+/// A unit of the part of the command memory the layer keeps, LAYER_HANDLE_BYTES of it: its
+/// offset in that part, or -1 with a complaint naming @p what when the part is used up. What
+/// goes there lives exactly as long as the list (api55_command.c).
+long LayerUnit(LayerCommandBuffer *record, const char *what);
 
 typedef struct {
     uint32_t magic;

@@ -60,6 +60,33 @@
 #define LAYER_SECTION_CAPTURE_BUFFERS 4
 #define LAYER_SECTION_GROUPS 0x80
 
+// The output a captured word comes from as the graphics unit numbers it, the output's attribute
+// address over four, which is how deko3d's transform feedback layout takes it
+// (DK_TFB_SLOT_POSITION and DK_TFB_SLOT_GENERIC, scarletnx/deko3d): the position's words from
+// 0x1c, generic output n's from 0x20 + 4 * n. A buffer takes at most 128 words a vertex.
+#define LAYER_CAPTURE_SLOT_POSITION(word) (0x1cu + (uint32_t)(word))
+#define LAYER_CAPTURE_SLOT_GENERIC(n, word) (0x20u + 4u * (uint32_t)(n) + (uint32_t)(word))
+#define LAYER_CAPTURE_WORDS 128
+
+/// What a section says one capture buffer takes of each vertex: the stride in bytes, the stream,
+/// and the output slot of each word, none when @p words is nought.
+typedef struct {
+    uint32_t stride;
+    uint32_t stream;
+    uint32_t words;
+    uint8_t slots[LAYER_CAPTURE_WORDS];
+} LayerCapture;
+
+/// Reads back what @p section, a section NvnLayerShaderControl wrote, says of its stage's
+/// capture (NvnLayerShaderCapture's bytes, where ScarletNX reads them too): whether it captures
+/// at all into @p captures, and what each of the four buffers takes into @p buffers. False, with
+/// the reason in NvnLayerError and @p what named, for a section the layer did not write, a group
+/// of an output that is neither the position nor a generic one or that runs past an output's
+/// four words, or more words a vertex than a buffer takes.
+bool LayerSectionCapture(const uint8_t *section,
+                         LayerCapture buffers[LAYER_SECTION_CAPTURE_BUFFERS], bool *captures,
+                         const char *what);
+
 // A DKSH's header and its program's, in words (deko3d's source/dksh.h): the magic, the header's
 // bytes, the control and code sections' bytes, the programs' offset and count; then, for a
 // program, its type, entry point, registers, the constants' offset and bytes, and for a compute

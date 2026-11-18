@@ -127,8 +127,8 @@ if (!nvn.nvnDeviceInitialize(&device, &builder)) { /* NvnLayerError() says why, 
   whatever its arguments: a pool of a native handle, a virtual memory pool and `nvnMemoryPoolMapVirtual`, a list that
   waits on an event (`nvnCommandBufferWaitEvent`) or adds to one (`nvnCommandBufferSignalEvent` in its add mode), as
   many draws as a word the graphics unit reads says (`nvnCommandBufferMultiDrawArraysIndirectCount` and
-  `MultiDrawElementsIndirectCount`), transform feedback (its two binds, its four steps and
-  `nvnCommandBufferDrawTransformFeedback`). A program that can do without tells that
+  `MultiDrawElementsIndirectCount`), and a capture resumed with no control (`nvnCommandBufferResumeTransformFeedback`
+  of 0: deko3d starts a capture over or from saved byte counts). A program that can do without tells that
   from a call it got wrong; Amberlith's cases skip as unavailable on it. Never under ScarletNX.
 - **`NvnLayerSetGuard(guard)`**: deko3d ends the program when it cannot make an object. A program that can turn
   that abort into a return (Amberlith's `AbortGuarded`, a linker wrap of `diagAbortWithResult`) gives the layer its
@@ -285,6 +285,15 @@ Five hundred and twenty seven functions, each recording the deko3d commands that
   (scarletnx/deko3d's: 0.5.0 has none), whose regions are NVN's, a corner's x and y and the other corner's, and
   whose handle is the layer's texture and sampler pair; an empty destination draws nothing, as ScarletNX's NVN
   reads NVN;
+- **transform feedback**, deko3d's calls (scarletnx/deko3d's: 0.5.0 has none): the capture a program's section
+  says (`NvnLayerShaderCapture`) is bound as deko3d's layouts with the program, from its last stage before the
+  rasterizer, and taken off for a program that captures nothing; the buffers, one or several; and the four steps
+  on NVN's control, which ScarletNX's NVN reads as buffer 0's stride and the bytes each of the four buffers took. A
+  begin writes the stride; a pause and an end save deko3d's byte counts into a unit of the layer's memory and copy
+  the four into the control, behind a full barrier, since a draw and a resume read the control as command data; a
+  resume copies them back into a unit and goes on from them; a pause or an end with
+  no control only stops. `nvnCommandBufferDrawTransformFeedback` draws buffer 0's bytes over the stride of the
+  last begin this command buffer recorded (deko3d takes it from the processor), and refuses a draw with none;
 - **the binds**: a program, each state, vertex buffers, uniform buffers, textures by handle; and **the draw**,
   `nvnCommandBufferDrawArrays`, with the colour and depth clears.
 

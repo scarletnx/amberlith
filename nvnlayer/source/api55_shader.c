@@ -205,3 +205,59 @@ bool NvnLayerShaderCapture(void *control, int buffer, const NvnLayerCaptureGroup
     section[LAYER_SECTION_AT_CAPTURES] = 1;
     return true;
 }
+
+bool LayerSectionCapture(const uint8_t *section,
+                         LayerCapture buffers[LAYER_SECTION_CAPTURE_BUFFERS], bool *captures,
+                         const char *what) {
+    if (section == NULL || Word(section + LAYER_SECTION_AT_MAGIC) != LAYER_SECTION_MAGIC) {
+        LayerComplain("%s: the stage's section at %p is not one NvnLayerShaderControl wrote", what,
+                      (const void *)section);
+        return false;
+    }
+    memset(buffers, 0, sizeof(LayerCapture) * LAYER_SECTION_CAPTURE_BUFFERS);
+    *captures = section[LAYER_SECTION_AT_CAPTURES] != 0u;
+    if (!*captures) {
+        return true;
+    }
+    for (uint32_t buffer = 0; buffer < LAYER_SECTION_CAPTURE_BUFFERS; ++buffer) {
+        LayerCapture *const into = &buffers[buffer];
+        const uint32_t at = buffer * LAYER_SECTION_GROUPS;
+        const uint32_t groups = section[LAYER_SECTION_AT_CAPTURE_GROUPS + buffer];
+        into->stride = (uint32_t)section[LAYER_SECTION_AT_CAPTURE_STRIDE + 2u * buffer] |
+                       (uint32_t)section[LAYER_SECTION_AT_CAPTURE_STRIDE + 2u * buffer + 1u] << 8;
+        into->stream = section[LAYER_SECTION_AT_CAPTURE_STREAM + buffer];
+        for (uint32_t group = 0; group < groups && group < LAYER_SECTION_GROUPS; ++group) {
+            const uint32_t output = section[LAYER_SECTION_AT_GROUP_OUTPUT + at + group];
+            const uint32_t first = section[LAYER_SECTION_AT_GROUP_FIRST + at + group];
+            const uint32_t count = section[LAYER_SECTION_AT_GROUP_COUNT + at + group];
+            const bool generic = output >= NVN_LAYER_CAPTURE_GENERIC(0) &&
+                                 output <= NVN_LAYER_CAPTURE_GENERIC(31);
+            if ((output != NVN_LAYER_CAPTURE_POSITION && !generic) || first > 3u ||
+                count > 4u - first) {
+                LayerComplain("%s: group %u of capture buffer %u takes %u words from word %u of "
+                              "output %u, where an output is the position, %d, or a generic "
+                              "one, %d to %d, and has four words",
+                              what, (unsigned)group, (unsigned)buffer, (unsigned)count,
+                              (unsigned)first, (unsigned)output, NVN_LAYER_CAPTURE_POSITION,
+                              NVN_LAYER_CAPTURE_GENERIC(0), NVN_LAYER_CAPTURE_GENERIC(31));
+                return false;
+            }
+            for (uint32_t word = first; word < first + count; ++word) {
+                if (into->words < LAYER_CAPTURE_WORDS) {
+                    into->slots[into->words] =
+                        (uint8_t)(generic ? LAYER_CAPTURE_SLOT_GENERIC(
+                                                output - NVN_LAYER_CAPTURE_GENERIC(0), word)
+                                          : LAYER_CAPTURE_SLOT_POSITION(word));
+                }
+                ++into->words;
+            }
+        }
+        if (into->words > LAYER_CAPTURE_WORDS) {
+            LayerComplain("%s: capture buffer %u takes %u words a vertex, where a buffer takes "
+                          "at most %d",
+                          what, (unsigned)buffer, (unsigned)into->words, LAYER_CAPTURE_WORDS);
+            return false;
+        }
+    }
+    return true;
+}

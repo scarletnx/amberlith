@@ -194,6 +194,10 @@ typedef struct {
     uint8_t handles[2][DRAW_PATH_HANDLE_BYTES];
     uint8_t dirty;
     int program;
+    /// The programs whose vertex stage is captured, and whether the capture layouts bound now
+    /// are one's.
+    bool capturing[DRAW_PATH_PROGRAMS];
+    bool capture_bound;
 } Deko3dPath;
 
 static Deko3dPath deko3d_path;
@@ -292,6 +296,7 @@ static void DkBegin(DrawPath *path) {
     path->way->depth(path, false, false);
     dk->dirty = 3;
     dk->program = -1;
+    dk->capture_bound = false;
 }
 
 static void DkClear(DrawPath *path, const float rgba[4]) {
@@ -315,6 +320,23 @@ static void DkDepth(DrawPath *path, bool test, bool write) {
     dkCmdBufBindDepthStencilState(Dk(path)->gpu.cmdbuf, &state);
 }
 
+/// What a capturing program's vertex stage gives each vertex in buffer 0: the groups the NVN
+/// ways write in its section, as deko3d's output slots, one word after the other.
+static DkTransformFeedbackLayout DkCaptureLayout(void) {
+    static const uint8_t GROUPS[DRAW_PATH_CAPTURE_GROUP_COUNT][3] = DRAW_PATH_CAPTURE_GROUPS;
+    DkTransformFeedbackLayout layout;
+    memset(&layout, 0, sizeof(layout));
+    for (uint32_t i = 0; i < DRAW_PATH_CAPTURE_GROUP_COUNT; ++i) {
+        for (uint32_t word = GROUPS[i][1]; word < (uint32_t)GROUPS[i][1] + GROUPS[i][2]; ++word) {
+            layout.varyings[layout.numVaryings++] =
+                (uint8_t)(GROUPS[i][0] == 0u ? DK_TFB_SLOT_POSITION(word)
+                                             : DK_TFB_SLOT_GENERIC(GROUPS[i][0] - 0x20u, word));
+        }
+    }
+    layout.stride = 4u * layout.numVaryings;
+    return layout;
+}
+
 static void DkUseProgram(DrawPath *path, int program) {
     Deko3dPath *const dk = Dk(path);
     if (program < 0 || (uint32_t)program >= dk->programs) {
@@ -322,6 +344,17 @@ static void DkUseProgram(DrawPath *path, int program) {
         return;
     }
     dk->program = program;
+    // A program's capture goes with it, as an NVN program's does: bound with one that captures,
+    // taken off for one that does not.
+    if (dk->capturing[program]) {
+        const DkTransformFeedbackLayout layout = DkCaptureLayout();
+        const DkTransformFeedbackLayout *const layouts[1] = { &layout };
+        dkCmdBufBindTransformFeedbackLayouts(dk->gpu.cmdbuf, layouts, 1);
+        dk->capture_bound = true;
+    } else if (dk->capture_bound) {
+        dkCmdBufBindTransformFeedbackLayouts(dk->gpu.cmdbuf, NULL, 0);
+        dk->capture_bound = false;
+    }
 }
 
 static void DkVertices(DrawPath *path, const DrawBuffer *vertices, uint32_t bytes) {
@@ -483,29 +516,48 @@ static void DkDrawTexture(DrawPath *path, int texture, const float destination[4
 
 static int DkProgramCapturing(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
                               const void *fragment_dksh, uint32_t fragment_bytes) {
-    (void)vertex_dksh;
-    (void)fragment_dksh;
-    DrawPathFail(path, "a program of %u and %u bytes whose vertex stage is captured: deko3d has "
-                       "no call for a capture",
-                 (unsigned)vertex_bytes, (unsigned)fragment_bytes);
-    return -1;
+    const int program = DkProgram(path, vertex_dksh, vertex_bytes, fragment_dksh, fragment_bytes);
+    if (program >= 0) {
+        Dk(path)->capturing[program] = true;
+    }
+    return program;
 }
 
 static void DkCaptureInto(DrawPath *path, const DrawBuffer *into, uint32_t bytes, bool several) {
-    (void)into;
+    // deko3d binds one buffer as it binds several.
     (void)several;
-    DrawPathFail(path, "%u bytes as a capture buffer: deko3d has no call for a capture",
-                 (unsigned)bytes);
+    const DkBufExtents extents = { into->address, bytes };
+    dkCmdBufBindTransformFeedbackBuffers(Dk(path)->gpu.cmdbuf, 0, &extents, 1);
 }
 
+// deko3d's capture keeps the bytes each buffer took in saved reports where the scene's control
+// is, DK_TRANSFORM_FEEDBACK_OFFSETS_SIZE of them: a pause and an end save them and stop, a resume
+// goes on from them, and a draw of what was captured reads buffer 0's.
 static void DkCapture(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control) {
-    (void)control;
-    DrawPathFail(path, "step %d of a capture: deko3d has no call for a capture", (int)step);
+    const DkCmdBuf cmdbuf = Dk(path)->gpu.cmdbuf;
+    switch (step) {
+    case DRAW_CAPTURE_BEGIN:
+        dkCmdBufBeginTransformFeedback(cmdbuf);
+        break;
+    case DRAW_CAPTURE_PAUSE:
+    case DRAW_CAPTURE_END:
+        dkCmdBufSaveTransformFeedbackOffsets(cmdbuf, control->address);
+        dkCmdBufEndTransformFeedback(cmdbuf);
+        break;
+    case DRAW_CAPTURE_RESUME:
+        dkCmdBufResumeTransformFeedback(cmdbuf, control->address);
+        break;
+    default:
+        DrawPathFail(path, "step %d of a capture, where a capture has steps 0 to 3", (int)step);
+        break;
+    }
 }
 
 static void DkDrawCaptured(DrawPath *path, const DrawBuffer *control) {
-    (void)control;
-    DrawPathFail(path, "a draw of what a capture wrote: deko3d has no call for a capture");
+    if (DkHandles(path)) {
+        dkCmdBufDrawTransformFeedback(Dk(path)->gpu.cmdbuf, DkPrimitive_Triangles,
+                                      DkCaptureLayout().stride, control->address, 0);
+    }
 }
 
 static void DkUpdate(DrawPath *path, const DrawBuffer *buffer, uint32_t buffer_bytes,

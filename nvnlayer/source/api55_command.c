@@ -7,10 +7,7 @@
 // (counters, values) and whether what follows is drawn at all, each as the deko3d commands that
 // do what NVN says.
 
-/// A unit of the part of the command memory the layer keeps, LAYER_HANDLE_BYTES of it: its
-/// offset in that part, or -1 with a complaint naming @p what when the part is used up. What
-/// goes there lives exactly as long as the list.
-static long Unit(LayerCommandBuffer *record, const char *what) {
+long LayerUnit(LayerCommandBuffer *record, const char *what) {
     LayerDraw *const draw = record->draw;
     if (draw->handle_used + LAYER_HANDLE_BYTES > draw->handle_size) {
         LayerComplain("%s: the quarter of the command memory the layer keeps, 0x%x bytes, is "
@@ -450,7 +447,7 @@ void Nvnl_nvnCommandBufferClearBuffer(NVNcommandBuffer *cmd, NVNbufferAddress ad
                       size, (unsigned long long)address);
         return;
     }
-    const long unit = Unit(record, "nvnCommandBufferClearBuffer");
+    const long unit = LayerUnit(record, "nvnCommandBufferClearBuffer");
     if (unit < 0) {
         return;
     }

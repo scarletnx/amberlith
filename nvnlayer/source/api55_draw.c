@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <stddef.h>
+
 #include "api55.h"
 
 // The API 55 build's drawing: programs, samplers, the texture and sampler pools, the state
@@ -157,6 +159,69 @@ NVNboolean LayerProgramSetShaders(NVNprogram *program, int count, const NVNshade
     return 1;
 }
 
+// ---- transform feedback, bound with the program
+
+_Static_assert(LAYER_SECTION_CAPTURE_BUFFERS == DK_NUM_TRANSFORM_FEEDBACK_BUFFERS &&
+                   LAYER_CAPTURE_WORDS == DK_MAX_TRANSFORM_FEEDBACK_VARYINGS,
+               "a section's capture buffers and their words are deko3d's");
+_Static_assert(LAYER_CAPTURE_SLOT_POSITION(3) == DK_TFB_SLOT_POSITION(3) &&
+                   LAYER_CAPTURE_SLOT_GENERIC(31, 3) == DK_TFB_SLOT_GENERIC(31, 3),
+               "a captured word's output slot is deko3d's");
+
+/// The section the layer keeps @p shader in (LayerProgramSetShaders), where the stage's capture
+/// is said.
+static const uint8_t *SectionOf(const DkShader *shader) {
+    return (const uint8_t *)(const void *)shader - offsetof(LayerControlTail, shader) -
+           LAYER_CONTROL_TAIL;
+}
+
+/// The capture of @p from's last stage before the rasterizer among @p stages, as NVN's program
+/// carries it: its layouts bound with the program, or a capture bound before taken off when the
+/// stage captures nothing. A bind of none of those stages leaves the capture as it was.
+static void BindCapture(LayerCommandBuffer *record, const LayerProgram *from, int stages) {
+    static const int LAST[3] = { NVN_SHADER_STAGE_GEOMETRY, NVN_SHADER_STAGE_TESS_EVALUATION,
+                                 NVN_SHADER_STAGE_VERTEX };
+    LayerDraw *const draw = record->draw;
+    const DkShader *last = NULL;
+    bool named = false;
+    for (int i = 0; i < 3 && last == NULL; ++i) {
+        if ((stages >> LAST[i] & 1) != 0) {
+            named = true;
+            last = from->shaders[LAST[i]];
+        }
+    }
+    if (!named) {
+        return;
+    }
+    LayerCapture buffers[LAYER_SECTION_CAPTURE_BUFFERS];
+    bool captures = false;
+    if (last != NULL &&
+        !LayerSectionCapture(SectionOf(last), buffers, &captures, "nvnCommandBufferBindProgram")) {
+        return;
+    }
+    if (!captures) {
+        if (draw->capturing) {
+            dkCmdBufBindTransformFeedbackLayouts(record->cmdbuf, NULL, 0);
+            draw->capturing = false;
+            draw->capture_stride = 0;
+        }
+        return;
+    }
+    DkTransformFeedbackLayout layouts[DK_NUM_TRANSFORM_FEEDBACK_BUFFERS];
+    const DkTransformFeedbackLayout *bound[DK_NUM_TRANSFORM_FEEDBACK_BUFFERS];
+    for (uint32_t i = 0; i < DK_NUM_TRANSFORM_FEEDBACK_BUFFERS; ++i) {
+        memset(&layouts[i], 0, sizeof(layouts[i]));
+        layouts[i].stride = buffers[i].stride;
+        layouts[i].stream = buffers[i].stream;
+        layouts[i].numVaryings = buffers[i].words;
+        memcpy(layouts[i].varyings, buffers[i].slots, buffers[i].words);
+        bound[i] = &layouts[i];
+    }
+    dkCmdBufBindTransformFeedbackLayouts(record->cmdbuf, bound, DK_NUM_TRANSFORM_FEEDBACK_BUFFERS);
+    draw->capturing = true;
+    draw->capture_stride = buffers[0].stride;
+}
+
 void Nvnl_nvnCommandBufferBindProgram(NVNcommandBuffer *cmd, const NVNprogram *program,
                                       int stages) {
     LayerCommandBuffer *const record = CmdOf(cmd, "nvnCommandBufferBindProgram");
@@ -185,6 +250,7 @@ void Nvnl_nvnCommandBufferBindProgram(NVNcommandBuffer *cmd, const NVNprogram *p
         }
     }
     dkCmdBufBindShaders(record->cmdbuf, mask, bound, count);
+    BindCapture(record, from, stages);
 }
 
 // ---- samplers
@@ -2147,66 +2213,171 @@ void Nvnl_nvnCommandBufferDrawTexture(NVNcommandBuffer *cmd, NVNtextureHandle ha
     dkCmdBufDrawTexture(record->cmdbuf, (DkResHandle)handle, &onto, &from);
 }
 
-// Transform feedback, which deko3d has no call for: the graphics unit takes it through
-// registers the layer does not write, so the layer lacks every part of it.
+// Transform feedback through deko3d's calls (scarletnx/deko3d's: 0.5.0 has none). NVN keeps a
+// capture's state in a control the program gives, which ScarletNX's NVN reads as buffer 0's stride
+// in its first word and the bytes each of the four buffers took in the four after it (its
+// xfb.c): a begin writes the stride, a pause and an end the bytes, and a resume and a draw of what
+// was captured read them. deko3d saves the bytes as four reports of 16 bytes, each buffer's in
+// its second word, so a pause and an end save them into a unit of the layer's memory and copy the
+// four words into the control, and a resume copies them back into a unit before deko3d reads it.
 
 void Nvnl_nvnCommandBufferBindTransformFeedbackBuffer(NVNcommandBuffer *cmd, int index,
                                                       NVNbufferAddress buffer, size_t size) {
-    (void)cmd;
-    LayerLack("nvnCommandBufferBindTransformFeedbackBuffer: 0x%zx bytes at 0x%llx as capture "
-              "buffer %d, and deko3d has no call for transform feedback",
-              size, (unsigned long long)buffer, index);
+    static const char *const WHAT = "nvnCommandBufferBindTransformFeedbackBuffer";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    if (index < 0 || index >= DK_NUM_TRANSFORM_FEEDBACK_BUFFERS || size > UINT32_MAX) {
+        LayerComplain("%s: 0x%zx bytes at 0x%llx as capture buffer %d, where the buffers are 0 "
+                      "to %d and a buffer is at most 0xffffffff bytes",
+                      WHAT, size, (unsigned long long)buffer, index,
+                      DK_NUM_TRANSFORM_FEEDBACK_BUFFERS - 1);
+        return;
+    }
+    const DkBufExtents extents = { buffer, (uint32_t)size };
+    dkCmdBufBindTransformFeedbackBuffers(record->cmdbuf, (uint32_t)index, &extents, 1);
 }
 
 void Nvnl_nvnCommandBufferBindTransformFeedbackBuffers(NVNcommandBuffer *cmd, int first,
                                                        int count,
                                                        const NVNbufferRange *ranges) {
-    (void)cmd;
-    (void)ranges;
-    LayerLack("nvnCommandBufferBindTransformFeedbackBuffers: %d capture buffers from buffer %d, "
-              "and deko3d has no call for transform feedback",
-              count, first);
+    static const char *const WHAT = "nvnCommandBufferBindTransformFeedbackBuffers";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    if (first < 0 || count < 0 || count > DK_NUM_TRANSFORM_FEEDBACK_BUFFERS - first ||
+        (count > 0 && ranges == NULL)) {
+        LayerComplain("%s: %d capture buffers from buffer %d, ranges at %p, where the buffers "
+                      "are 0 to %d",
+                      WHAT, count, first, (const void *)ranges,
+                      DK_NUM_TRANSFORM_FEEDBACK_BUFFERS - 1);
+        return;
+    }
+    DkBufExtents extents[DK_NUM_TRANSFORM_FEEDBACK_BUFFERS];
+    for (int i = 0; i < count; ++i) {
+        if (ranges[i].size > UINT32_MAX) {
+            LayerComplain("%s: 0x%llx bytes as capture buffer %d, where a buffer is at most "
+                          "0xffffffff bytes",
+                          WHAT, (unsigned long long)ranges[i].size, first + i);
+            return;
+        }
+        extents[i].addr = ranges[i].address;
+        extents[i].size = (uint32_t)ranges[i].size;
+    }
+    dkCmdBufBindTransformFeedbackBuffers(record->cmdbuf, (uint32_t)first, extents,
+                                         (uint32_t)count);
 }
 
 void Nvnl_nvnCommandBufferBeginTransformFeedback(NVNcommandBuffer *cmd,
                                                  NVNbufferAddress control) {
-    (void)cmd;
-    LayerLack("nvnCommandBufferBeginTransformFeedback: a capture begun with its control at "
-              "0x%llx, and deko3d has no call for transform feedback",
-              (unsigned long long)control);
+    static const char *const WHAT = "nvnCommandBufferBeginTransformFeedback";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    if (control == 0u) {
+        LayerComplain("%s: a capture begun with its control at 0x0, where the begin writes "
+                      "buffer 0's stride",
+                      WHAT);
+        return;
+    }
+    LayerDraw *const draw = record->draw;
+    dkCmdBufBeginTransformFeedback(record->cmdbuf);
+    dkCmdBufPushData(record->cmdbuf, control, &draw->capture_stride, 4u);
+    draw->begun_stride = draw->capture_stride;
+}
+
+/// A pause or an end: with a control, the bytes each buffer took saved and copied into it as
+/// NVN keeps them; with none, only the capture stopped, as a pause the program resumes with none.
+static void StopCapture(NVNcommandBuffer *cmd, NVNbufferAddress control, const char *what) {
+    LayerCommandBuffer *const record = CmdOf(cmd, what);
+    if (record == NULL) {
+        return;
+    }
+    if (control == 0u) {
+        dkCmdBufEndTransformFeedback(record->cmdbuf);
+        return;
+    }
+    const long unit = LayerUnit(record, what);
+    if (unit < 0) {
+        return;
+    }
+    const DkGpuAddr saved = record->draw->handle_memory + (uint64_t)unit;
+    dkCmdBufSaveTransformFeedbackOffsets(record->cmdbuf, saved);
+    dkCmdBufEndTransformFeedback(record->cmdbuf);
+    for (uint32_t buffer = 0; buffer < DK_NUM_TRANSFORM_FEEDBACK_BUFFERS; ++buffer) {
+        dkCmdBufCopyBuffer(record->cmdbuf, saved + 16u * buffer + 4u, control + 4u + 4u * buffer,
+                           4u);
+    }
+    // The copy engine runs beside the processor: a draw of what was captured and a resume read
+    // the control as command data, which only a full barrier holds back until the copies land.
+    dkCmdBufBarrier(record->cmdbuf, DkBarrier_Full, 0);
 }
 
 void Nvnl_nvnCommandBufferEndTransformFeedback(NVNcommandBuffer *cmd, NVNbufferAddress control) {
-    (void)cmd;
-    LayerLack("nvnCommandBufferEndTransformFeedback: a capture ended with its control at "
-              "0x%llx, and deko3d has no call for transform feedback",
-              (unsigned long long)control);
+    StopCapture(cmd, control, "nvnCommandBufferEndTransformFeedback");
 }
 
 void Nvnl_nvnCommandBufferPauseTransformFeedback(NVNcommandBuffer *cmd,
                                                  NVNbufferAddress control) {
-    (void)cmd;
-    LayerLack("nvnCommandBufferPauseTransformFeedback: a capture paused with its control at "
-              "0x%llx, and deko3d has no call for transform feedback",
-              (unsigned long long)control);
+    StopCapture(cmd, control, "nvnCommandBufferPauseTransformFeedback");
 }
 
 void Nvnl_nvnCommandBufferResumeTransformFeedback(NVNcommandBuffer *cmd,
                                                   NVNbufferAddress control) {
-    (void)cmd;
-    LayerLack("nvnCommandBufferResumeTransformFeedback: a capture resumed with its control at "
-              "0x%llx, and deko3d has no call for transform feedback",
-              (unsigned long long)control);
+    static const char *const WHAT = "nvnCommandBufferResumeTransformFeedback";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    if (control == 0u) {
+        LayerLack("%s: a capture resumed with its control at 0x0, where it goes on from the "
+                  "bytes the buffers hold, and deko3d starts a capture over or from saved bytes",
+                  WHAT);
+        return;
+    }
+    const long unit = LayerUnit(record, WHAT);
+    if (unit < 0) {
+        return;
+    }
+    const DkGpuAddr saved = record->draw->handle_memory + (uint64_t)unit;
+    for (uint32_t buffer = 0; buffer < DK_NUM_TRANSFORM_FEEDBACK_BUFFERS; ++buffer) {
+        dkCmdBufCopyBuffer(record->cmdbuf, control + 4u + 4u * buffer, saved + 16u * buffer + 4u,
+                           4u);
+    }
+    // The copies land before deko3d's resume has the graphics unit read the words.
+    dkCmdBufBarrier(record->cmdbuf, DkBarrier_Full, 0);
+    dkCmdBufResumeTransformFeedback(record->cmdbuf, saved);
 }
 
 void Nvnl_nvnCommandBufferDrawTransformFeedback(NVNcommandBuffer *cmd,
                                                 NVNdrawPrimitive primitive,
                                                 NVNbufferAddress control) {
-    (void)cmd;
-    LayerLack("nvnCommandBufferDrawTransformFeedback: primitive %d of as many vertices as the "
-              "capture with its control at 0x%llx wrote, and deko3d has no call for transform "
-              "feedback",
-              (int)primitive, (unsigned long long)control);
+    static const char *const WHAT = "nvnCommandBufferDrawTransformFeedback";
+    LayerCommandBuffer *const record = CmdOf(cmd, WHAT);
+    if (record == NULL) {
+        return;
+    }
+    // The stride is the begin's, which deko3d takes from the processor: NVN reads it from the
+    // control, which only the graphics unit has written by then.
+    const uint32_t stride = record->draw->begun_stride;
+    if (control == 0u || stride == 0u || (uint32_t)primitive > DkPrimitive_Patches) {
+        LayerComplain("%s: primitive %d of what the capture with its control at 0x%llx wrote, "
+                      "with a stride of %u from the last begin this command buffer recorded, "
+                      "where a control, a begin under a program that captures and a primitive "
+                      "of 0 to %d are needed",
+                      WHAT, (int)primitive, (unsigned long long)control, (unsigned)stride,
+                      (int)DkPrimitive_Patches);
+        return;
+    }
+    // Buffer 0's bytes are the control's second word, the second word of a 16-byte report deko3d
+    // reads at its start.
+    if (!FlushHandles(record, WHAT)) {
+        return;
+    }
+    dkCmdBufDrawTransformFeedback(record->cmdbuf, (DkPrimitive)primitive, stride, control, 0);
 }
 
 /// An indexed draw of @p count indices of @p type at @p indices, @p base_vertex added to each,

@@ -722,18 +722,23 @@ static bool DrawnDraw(DrawPath *path, char *why, size_t why_size) {
 
 // ---- a capture of what a vertex stage writes
 
-// The seventh scene, for the NVN the program looks up alone, as the sixth is: transform
-// feedback. The instanced scene's program draws cells 0, 1 and 2 of the top row, one instance a
-// draw, with its vertex stage's outputs captured: the capture begins before cell 0, is paused
-// for cell 1, resumed for cell 2 and ended. A captured vertex is a GpuVertex (the position the
-// stage wrote, its texture coordinate, its colour), so the capture buffer is then bound as the
-// vertices and drawn with as many vertices as the capture wrote, through one instance that
-// moves it down a row and gives it cell 7's colour: the bottom row holds cells 0 and 2 again,
-// and nothing under cell 1, which no capture took. A capture a pause does not stop paints under
-// cell 1, and one a resume does not start again leaves the place under cell 2 clear.
+// The seventh scene, the three ways: transform feedback. The instanced scene's program draws
+// cells 0, 1 and 2 of the top row, one instance a draw, with its vertex stage's outputs captured:
+// the capture begins before cell 0, is paused for cell 1, resumed for cell 2 and ended. A
+// captured vertex is a GpuVertex (the position the stage wrote, its texture coordinate, its
+// colour), so the capture buffer is then bound as the vertices and drawn with as many vertices
+// as the capture wrote, through one instance that moves it down a row and gives it cell 7's
+// colour: the bottom row holds cells 0 and 2 again, and nothing under cell 1, which no capture
+// took. A capture a pause does not stop paints under cell 1, and one a resume does not start
+// again leaves the place under cell 2 clear. The eighth, for deko3d's way and the layer's, is the
+// same row asked of the capture alone: cells 0 and 2 drawn under one capture, cell 1 after it
+// ended, and the twelve vertices it wrote drawn by a draw of twelve, so no saved byte counts are
+// read back.
 
 #define CAPTURE_BYTES 0x400u
-#define CAPTURE_CONTROL_BYTES 32u
+// NVN's control takes 20 bytes (a stride and four buffers' bytes, as ScarletNX's NVN reads it),
+// deko3d's saved byte counts 64 (DK_TRANSFORM_FEEDBACK_OFFSETS_SIZE).
+#define CAPTURE_CONTROL_BYTES 64u
 
 static void CaptureExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
     const uint32_t cell = x / INSTANCE_CELL_WIDTH;
@@ -765,7 +770,9 @@ static const char *CaptureLooksLike(const uint8_t pixel[4]) {
                                               : "nothing the scene draws";
 }
 
-static bool CaptureDrawBy(DrawPath *path, bool several, char *why, size_t why_size) {
+/// The capture scene; @p plain draws it without a pause, a resume or a draw of what the capture
+/// wrote, the eighth scene.
+static bool CaptureDrawBy(DrawPath *path, bool several, char *why, size_t why_size, bool plain) {
     const int program = DrawPathProgramCapturing(path, ShaderData(SHADER_SCENE_INSTANCED_VERT),
                                                  ShaderSize(SHADER_SCENE_INSTANCED_VERT),
                                                  ShaderData(SHADER_SCENE_FRAG),
@@ -818,14 +825,24 @@ static bool CaptureDrawBy(DrawPath *path, bool several, char *why, size_t why_si
     DrawPathCaptureInto(path, &captured, CAPTURE_BYTES, several);
     DrawPathCapture(path, DRAW_CAPTURE_BEGIN, &control);
     DrawPathDrawInstanced(path, NULL, 0, 6, 0, 1);
-    DrawPathCapture(path, DRAW_CAPTURE_PAUSE, &control);
-    DrawPathDrawInstanced(path, NULL, 0, 6, 1, 1);
-    DrawPathCapture(path, DRAW_CAPTURE_RESUME, &control);
-    DrawPathDrawInstanced(path, NULL, 0, 6, 2, 1);
-    DrawPathCapture(path, DRAW_CAPTURE_END, &control);
+    if (plain) {
+        DrawPathDrawInstanced(path, NULL, 0, 6, 2, 1);
+        DrawPathCapture(path, DRAW_CAPTURE_END, &control);
+        DrawPathDrawInstanced(path, NULL, 0, 6, 1, 1);
+    } else {
+        DrawPathCapture(path, DRAW_CAPTURE_PAUSE, &control);
+        DrawPathDrawInstanced(path, NULL, 0, 6, 1, 1);
+        DrawPathCapture(path, DRAW_CAPTURE_RESUME, &control);
+        DrawPathDrawInstanced(path, NULL, 0, 6, 2, 1);
+        DrawPathCapture(path, DRAW_CAPTURE_END, &control);
+    }
     DrawPathVertices(path, &captured, 12u * (uint32_t)sizeof(GpuVertex));
     DrawPathInstances(path, &again, sizeof(down));
-    DrawPathDrawCaptured(path, &control);
+    if (plain) {
+        DrawPathDrawInstanced(path, NULL, 0, 12, 0, 1);
+    } else {
+        DrawPathDrawCaptured(path, &control);
+    }
     if (!DrawPathEnd(path)) {
         snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
         return false;
@@ -834,11 +851,15 @@ static bool CaptureDrawBy(DrawPath *path, bool several, char *why, size_t why_si
 }
 
 static bool CaptureDraw(DrawPath *path, char *why, size_t why_size) {
-    return CaptureDrawBy(path, false, why, why_size);
+    return CaptureDrawBy(path, false, why, why_size, false);
 }
 
 static bool CaptureSeveralDraw(DrawPath *path, char *why, size_t why_size) {
-    return CaptureDrawBy(path, true, why, why_size);
+    return CaptureDrawBy(path, true, why, why_size, false);
+}
+
+static bool CapturePlainDraw(DrawPath *path, char *why, size_t why_size) {
+    return CaptureDrawBy(path, false, why, why_size, true);
 }
 
 /// A scene the suite draws down each way: what it asks of a way, how it draws, and what each of
@@ -874,6 +895,8 @@ static const Scene DRAWN = { false, 1, SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE *
                              DrawnExpected, RareLooksLike, DRAW_BINDS_SINGLE };
 static const Scene CAPTURE = { false, 0, 0, CaptureDraw, CaptureExpected, CaptureLooksLike,
                                DRAW_BINDS_SINGLE };
+static const Scene CAPTURE_PLAIN = { false,           0, 0, CapturePlainDraw, CaptureExpected,
+                                     CaptureLooksLike, DRAW_BINDS_SINGLE };
 static const Scene CAPTURE_SEVERAL = { false,           0, 0, CaptureSeveralDraw, CaptureExpected,
                                        CaptureLooksLike, DRAW_BINDS_SINGLE };
 static const Scene INSTANCED = { false,           0, 0, InstancedDraw, InstancedExpected,
@@ -998,6 +1021,21 @@ void NvnSceneFirst(void) {
     SceneCase(DRAW_PATH_LAYER, &DRAWN,
               "the same texture drawn with no program through the layer's own NVN functions "
               "fills its quarter");
+    SceneCase(DRAW_PATH_DEKO3D, &CAPTURE_PLAIN,
+              "what a capture took of two draws through deko3d, drawn again as twelve vertices, "
+              "is the two a row down");
+    SceneCase(DRAW_PATH_LAYER, &CAPTURE_PLAIN,
+              "the same capture of two draws through the layer's own NVN functions, drawn again "
+              "as twelve vertices, is the two a row down");
+    SceneCase(DRAW_PATH_DEKO3D, &CAPTURE,
+              "what a capture took of two draws, paused for a third between them, is drawn "
+              "again a row down through deko3d");
+    SceneCase(DRAW_PATH_LAYER, &CAPTURE,
+              "the same paused capture is drawn again a row down through the layer's own NVN "
+              "functions");
+    SceneCase(DRAW_PATH_LAYER, &CAPTURE_SEVERAL,
+              "the same paused capture into a buffer bound by the layer's call that takes "
+              "several is drawn again a row down");
 }
 
 void NvnSceneLast(void) {
