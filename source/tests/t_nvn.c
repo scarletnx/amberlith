@@ -22,8 +22,8 @@
 #include "../gpu.h"
 #include "../viewer.h"
 #else
-// A program loaded into a game (the layer's build for a game's own driver) has none of them
-// either: no deko3d whose abort a guard would turn, and no screen of its own.
+// A program loaded into a game (the layer's build for a game's own driver) has no deko3d whose
+// abort a guard would turn, and its screens are the mod's, on the mod's window.
 static bool AbortGuarded(void (*call)(void), uint32_t *result) {
     (void)result;
     call();
@@ -31,7 +31,7 @@ static bool AbortGuarded(void (*call)(void), uint32_t *result) {
 }
 
 static bool ViewerScreenUp(void) {
-    return false;
+    return NvnGameScreenUp();
 }
 #endif
 #endif

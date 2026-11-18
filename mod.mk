@@ -51,12 +51,12 @@ LDFLAGS  := $(ARCH) -g -shared -nostartfiles -Wl,-T,$(LIBNX)/switch.ld -Wl,--gc-
 LIBS     := -L$(LIBNX)/lib -lnx -lm -Wl,--start-group -lc -lsysbase -lgcc -Wl,--end-group
 
 # The engine (source/portable.txt), the card's device over the game's nn::fs, the nvn suite, the
-# mod's own start, frontend and platform, and the layer's loader. Less the libc family, which no
+# mod's own start, frontend, platform and screens, and the layer's loader. Less the libc family, which no
 # step here runs: its cases ask the C library for sockets and thread-local storage, and those
 # are libnx's start's to give.
 CFILES   := $(filter-out source/tests/t_libc.c,$(shell grep -v '^\#' source/portable.txt)) \
             source/sdk_card.c source/tests/t_nvn.c \
-            mod/start.c mod/frontend.c mod/host.c mod/platform.c $(NVNLAYER_SOURCES)
+            mod/start.c mod/frontend.c mod/host.c mod/platform.c mod/screen.c $(NVNLAYER_SOURCES)
 SFILES   := mod/header.s
 
 OFILES   := $(patsubst %.c,$(BUILD)/%.o,$(CFILES)) $(patsubst %.s,$(BUILD)/%.o,$(SFILES))

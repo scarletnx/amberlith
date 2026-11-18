@@ -6,6 +6,7 @@
 * [Building it](#building-it)
 * [What it asks of the game](#what-it-asks-of-the-game)
 * [The start](#the-start)
+  * [The screens](#the-screens)
 * [What it runs](#what-it-runs)
 * [The report](#the-report)
 * [On a console](#on-a-console)
@@ -76,15 +77,42 @@ own start and before the game's constructors and its main. From there:
 - the card is mounted as `sdmc` through the game's nn::fs and becomes the C library's `sdmc:` device;
 - the run goes as on every frontend ([Frontends](Frontends.md)): the mode file, the journal, the steps, the
   report;
-- the first of the nvn suite's window cases opens the mod's window, as the plain program has its own: nn::vi is
-  initialized, a layer of the mod's own is made on the default display, and the NVN window is made on its native
-  window as a game makes its own. It closes as the run ends. The mode file's `nowindow` keeps it closed and the
-  window cases unavailable, the game keeping its screen; a game whose SDK lacks one of the names, or a call that
-  fails, leaves them unavailable too, the line naming the name or the result;
+- the mod's window: nn::vi is initialized, a layer of the mod's own is made on the default display, and an NVN
+  window is made on its native window as a game makes its own. It closes as the run ends. The mode file's
+  `nowindow` keeps it closed and the game keeps its screen; a game whose SDK lacks one of the names, or a call that
+  fails, leaves no window, the report naming the name or the result;
+- a detailed run draws [the screens](#the-screens) there; a quick one, a script's, draws nothing, and the first of
+  the nvn suite's window cases opens the window for its own frames;
 - the process ends (`svcExitProcess`). The game never reaches its main: no memory of its own is in use, no device
   or queue of its own exists, and nothing has to be paused.
 
 One thread runs it all, so the C library's locks do nothing here.
+
+### The screens
+
+A detailed run shows the plain program's screens on the mod's window ([The screens](UI.md)), composed by the same
+code on the processor and copied into the window's texture through the game's NVN, on a device of their own:
+
+- the start screen, the rows as the mode file leaves them, for ten seconds;
+- the running screen, the step, the case and the counts as the cases go;
+- the results, the overview of the run, for ten seconds once the report is closed.
+
+A game's process gives the mod no pad, so no screen offers a key or a tab: the start screen says the run begins by
+itself, and the results that they close by themselves. The one thread that runs the cases draws the running screen,
+between cases only, so a long case leaves it still (the report says so). While the screens hold the window the nvn
+suite's window cases are skipped, as under the plain program's screen; `quick` in the mode file runs them, and
+`noprogress` keeps the running screen off with the window still held.
+
+Before the run the driver is asked its API version and given its memory, as the `mod` suite's cases below then say,
+and the screens come up only on a driver of this build's API that has every function they call. When they do not
+come up, a note says why and the run goes on without them, the window cases on the window:
+
+```
+screens: none, since the game's driver has no nvnWindowAcquireTexture, which the screens call; the nvn suite's window cases have the window
+```
+
+A game whose driver ends the process while the screens come up ends every launch there: `quick` or `nowindow` in the
+mode file runs without them.
 
 A card that cannot be mounted leaves no place for a report: the mod says so on the debug output, with each mount's
 result, and ends the process.

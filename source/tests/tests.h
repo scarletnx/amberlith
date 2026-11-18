@@ -308,6 +308,10 @@ void RunNvnInGame(void);
 /// failed with its result) when there is none. The mod's frontend (mod/frontend.c) has it.
 void *NvnGameWindow(const char **why);
 
+/// Whether the mod's screens hold that window: a detailed run's, from before its first step to
+/// after its results. The window cases are then skipped, as under the plain program's screen.
+bool NvnGameScreenUp(void);
+
 /// The nvn suite's scene (drawpath.h), judged alike down each way (sceneref.h): through deko3d
 /// and through the layer's own NVN functions, which RunNvn runs before anything looks the
 /// program's NVN up, and through the NVN the program looks up, once the suite's own objects are

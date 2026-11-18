@@ -5,8 +5,9 @@
 // run before the game's own main. Its NVN is the game's driver, looked up by name as the game
 // looks it up, so on a console the cases are answered by the console's own NVN, and under
 // ScarletNX by ScarletNX's at the game's API version. A window of its own on a layer the game's
-// nn::vi gives, for the window cases, unless the mode file says nowindow; no screens and no pad:
-// the run leaves when its report is closed, and the process ends with it.
+// nn::vi gives, unless the mode file says nowindow: a detailed run's screens are drawn there
+// through the game's NVN (screen.c), and a quick run leaves it to the window cases. No pad: every
+// screen is left by its countdown, and the process ends with the run.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +23,9 @@
 #include "platform.h"
 #include "report.h"
 #include "runner.h"
+#include "screen.h"
 #include "tests/tests.h"
+#include "ui.h"
 #include "version.h"
 
 static const char *const SUITE = "mod";
@@ -73,10 +76,12 @@ static void CardCase(void) {
                (unsigned)started->for_debug_rc, (unsigned)started->plain_rc);
 }
 
-static void VersionCase(void) {
-    static const char *const NAME =
-        "the game's driver answers its API version with no device, and it is one of this build's";
-    if (!ReportStart(SUITE, NAME)) {
+/// Asks the driver its API version with no device, once: the screens ask before the run, the
+/// case after. @p api_asked names where the answer came from, or which lookup gave none.
+static const char *api_asked;
+
+static void AskApiVersion(void) {
+    if (api_asked != NULL) {
         return;
     }
     NvnGenericProc (*const volatile bootstrap)(const char *) = nvnBootstrapLoader;
@@ -88,13 +93,23 @@ static void VersionCase(void) {
         integer(NULL, NVN_DEVICE_INFO_API_MAJOR_VERSION, &api_major);
         integer(NULL, NVN_DEVICE_INFO_API_MINOR_VERSION, &api_minor);
     }
+    api_asked = get == NULL       ? "the driver's nvnBootstrapLoader gave no nvnDeviceGetProcAddress"
+                : integer == NULL ? "the driver's lookup gave no nvnDeviceGetInteger"
+                                  : "nvnDeviceGetInteger(NULL)";
+}
+
+static void VersionCase(void) {
+    static const char *const NAME =
+        "the game's driver answers its API version with no device, and it is one of this build's";
+    if (!ReportStart(SUITE, NAME)) {
+        return;
+    }
+    AskApiVersion();
     CHECK_TRUE(SUITE, NAME, CHECK_EXACT, ApiIsThisBuilds(),
                "%s: API %d.%d, where this build has the objects of API %d to %d, so the nvn "
                "family is not run",
-               get == NULL       ? "the driver's nvnBootstrapLoader gave no nvnDeviceGetProcAddress"
-               : integer == NULL ? "the driver's lookup gave no nvnDeviceGetInteger"
-                                 : "nvnDeviceGetInteger(NULL)",
-               api_major, api_minor, NVN_LAYER_GAME_API_MAJOR_OLDEST, NVN_LAYER_API_MAJOR);
+               api_asked, api_major, api_minor, NVN_LAYER_GAME_API_MAJOR_OLDEST,
+               NVN_LAYER_API_MAJOR);
 }
 
 /// Says on the machine's log which of the game's functions is called next: one of them that
@@ -105,18 +120,29 @@ static void Calling(const char *function) {
     PlatformLog(said, (size_t)length);
 }
 
-// No nv::SetGraphicsDevtoolsAllocator: it is the debug layer's allocator, the suite's device asks
-// for no debug layer, and the one SDK it was called in here (12.3.9, under ScarletNX) aborted
-// inside it at this point of the start.
-static void GraphicsCase(void) {
-    static const char *const NAME =
-        "the driver is given its allocator and its memory before the first device";
-    if (!ReportStart(SUITE, NAME)) {
+/// What the driver was given before the first device, once: the screens' device is made before
+/// the run, the suite's in it, and the driver takes its memory one time only.
+static struct {
+    bool given;
+    bool oe;
+    bool allocator;
+    bool initialize;
+} graphics;
+
+// No nv::SetGraphicsDevtoolsAllocator: it is the debug layer's allocator, no device here asks for
+// the debug layer, and the one SDK it was called in here (12.3.9, under ScarletNX) aborted inside
+// it at this point of the start.
+static void GiveGraphics(void) {
+    if (graphics.given) {
         return;
     }
+    graphics.given = true;
     __typeof__(GameOeInitialize) *const volatile oe = GameOeInitialize;
     __typeof__(GameSetGraphicsAllocator) *const volatile allocator = GameSetGraphicsAllocator;
     __typeof__(GameInitializeGraphics) *const volatile initialize = GameInitializeGraphics;
+    graphics.oe = oe != NULL;
+    graphics.allocator = allocator != NULL;
+    graphics.initialize = initialize != NULL;
     if (oe != NULL) {
         Calling("nn::oe::Initialize");
         oe();
@@ -129,12 +155,21 @@ static void GraphicsCase(void) {
         Calling("nv::InitializeGraphics");
         initialize(graphics_memory, sizeof(graphics_memory));
     }
-    CHECK_TRUE(SUITE, NAME, CHECK_NONE, allocator != NULL && initialize != NULL,
+}
+
+static void GraphicsCase(void) {
+    static const char *const NAME =
+        "the driver is given its allocator and its memory before the first device";
+    if (!ReportStart(SUITE, NAME)) {
+        return;
+    }
+    GiveGraphics();
+    CHECK_TRUE(SUITE, NAME, CHECK_NONE, graphics.allocator && graphics.initialize,
                "the game's SDK has no %s%s%s, which a game calls before nvnDeviceInitialize",
-               allocator == NULL ? "nv::SetGraphicsAllocator" : "",
-               allocator == NULL && initialize == NULL ? " and no " : "",
-               initialize == NULL ? "nv::InitializeGraphics" : "");
-    if (oe == NULL) {
+               !graphics.allocator ? "nv::SetGraphicsAllocator" : "",
+               !graphics.allocator && !graphics.initialize ? " and no " : "",
+               !graphics.initialize ? "nv::InitializeGraphics" : "");
+    if (!graphics.oe) {
         ReportNote("mod: the game's SDK has no nn::oe::Initialize, and the mod went on without");
     }
 }
@@ -162,11 +197,14 @@ static bool taken_more;
 static const char *outside[OUTSIDE_CALLS];
 static size_t outside_count;
 static bool case_open;
+/// The watcher CaseWatch stands in for, the running screen's, which it passes each case on to.
+static ReportWatcher passed_on;
 
 /// The report's watcher while the suite runs: a case starts with nothing called yet.
 static void CaseWatch(const char *suite, const char *name, bool started) {
-    (void)suite;
-    (void)name;
+    if (passed_on != NULL) {
+        passed_on(suite, name, started);
+    }
     if (started) {
         NvnLayerMissedClear();
     }
@@ -343,10 +381,10 @@ static void NoteTaken(void) {
 
 // ---- the mod's window
 
-/// The window the mod opens for the nvn suite's window cases, as the plain program has its own: a
-/// layer of the mod's on the game's default display and the layer's native window, through the
-/// game's nn::vi. Opened on the first ask and kept to the run's end; the mode file's nowindow
-/// keeps it closed, and the game then keeps the screen.
+/// The window the mod opens for its screens, or in a run with none for the nvn suite's window
+/// cases, as the plain program has its own: a layer of the mod's on the game's default display
+/// and the layer's native window, through the game's nn::vi. Opened on the first ask and kept to
+/// the run's end; the mode file's nowindow keeps it closed, and the game then keeps the screen.
 static struct {
     bool wanted;
     bool asked;
@@ -455,11 +493,12 @@ static void RunInGame(void) {
     taken_cases = taken_count = outside_count = 0u;
     taken_more = false;
     NvnLayerSetFatal(LackedCalled);
-    const ReportWatcher watching = ReportSetWatcher(CaseWatch);
+    passed_on = ReportSetWatcher(CaseWatch);
     const ReportUnasked asking = ReportSetUnasked(CaseUnasked);
     RunNvnInGame();
     (void)ReportSetUnasked(asking);
-    (void)ReportSetWatcher(watching);
+    (void)ReportSetWatcher(passed_on);
+    passed_on = NULL;
     NvnLayerSetFatal(NULL);
     NoteTaken();
 }
@@ -521,6 +560,77 @@ static const RunnerFrontend FRONTEND = {
 
 static Runner runner;
 
+// ---- the screens
+
+bool NvnGameScreenUp(void) {
+    return ScreenIsUp();
+}
+
+/// The screens on the mod's window: the driver asked its version and given its memory, then the
+/// screens' device and window. False with the reason in a note; the run then goes on without
+/// them, and the nvn suite's window cases have the window.
+static bool ScreensUp(void) {
+    AskApiVersion();
+    if (!ApiIsThisBuilds()) {
+        ReportNote("screens: none, since %s gave API %d.%d, where this build has the objects of "
+                   "API %d to %d",
+                   api_asked, api_major, api_minor, NVN_LAYER_GAME_API_MAJOR_OLDEST,
+                   NVN_LAYER_API_MAJOR);
+        return false;
+    }
+    GiveGraphics();
+    if (!graphics.allocator || !graphics.initialize) {
+        ReportNote("screens: none, since the game's SDK has no %s, which a game calls before "
+                   "nvnDeviceInitialize",
+                   !graphics.allocator ? "nv::SetGraphicsAllocator" : "nv::InitializeGraphics");
+        return false;
+    }
+    const char *no_window = NULL;
+    void *const native = NvnGameWindow(&no_window);
+    if (native == NULL) {
+        ReportNote("screens: none, since %s", no_window);
+        return false;
+    }
+    Calling("nvnDeviceInitialize, for the screens");
+    char why[200];
+    if (!ScreenUp(native, why, sizeof(why))) {
+        ReportNote("screens: none, since %s; the nvn suite's window cases have the window", why);
+        return false;
+    }
+    ReportNote("screens: the start screen, the running screen and the results, on the mod's "
+               "window through the game's NVN; a game's process gives the mod no pad, so each "
+               "is left by its countdown");
+    return true;
+}
+
+/// The start screen, padless: the rows as the mode leaves them, its crash list, and the line on
+/// the nvn suite's window cases whenever the family runs, which in the mod is when no family is
+/// named.
+static void StartScreen(const RunMode *mode, uint32_t families, const char *heading) {
+    static UiStartInfo info;
+    memset(&info, 0, sizeof(info));
+    info.heading = heading;
+    info.families_present = FRONTEND.present;
+    info.nvn_named = (families & MODE_FAMILY_NVN) != 0u;
+    info.padless = true;
+    const CrashList *const listed = ReportCrashList();
+    for (uint32_t i = 0; i < listed->count && info.listed_count < UI_START_LIST_MAX; ++i) {
+        info.listed_suite[info.listed_count] = listed->entries[i].suite;
+        info.listed_name[info.listed_count] = listed->entries[i].name;
+        ++info.listed_count;
+    }
+    ScreenStart(&info, UiStartOpen(mode, FRONTEND.present));
+}
+
+/// A frame that did not reach the window, said once in the report.
+static void NoteScreenError(void) {
+    static bool said;
+    if (!said && ScreenError()[0] != '\0') {
+        said = true;
+        ReportNote("screens: a frame did not reach the window: %s", ScreenError());
+    }
+}
+
 int ModRun(const ModStart *start) {
     started = start;
     (void)RunnerInit(&runner, &FRONTEND);
@@ -531,24 +641,62 @@ int ModRun(const ModStart *start) {
     // run does on the console.
     RunMode mode = RunnerModeAtStart(&runner, &from_file);
     RunnerOpen(&runner, &mode);
+    window.wanted = !mode.no_window;
+    static char heading[96];
+    snprintf(heading, sizeof(heading), "Amberlith %s (%s)", AMBERLITH_VERSION, AMBERLITH_BUILD);
+    // A detailed run has the plain program's screens; a quick one, a script's, draws nothing.
+    const bool screens = mode.detailed && window.wanted && ScreensUp();
     if (runner.plan.start == JOURNAL_FRESH) {
+        if (screens) {
+            StartScreen(&mode, RunnerFamilies(&runner, &mode), heading);
+        }
         RunnerBeginJournal(&runner, &from_file, &mode);
     }
     const uint32_t families = RunnerFamilies(&runner, &mode);
     RunnerApplyMode(&runner, &mode);
     if (runner.plan.start == JOURNAL_FRESH) {
-        if (mode.detailed) {
-            ReportNote("detailed: the mod has no screens, so the run leaves once its report is "
-                       "closed, as a quick one does");
+        if (mode.detailed && !screens) {
+            ReportNote("detailed: the mod has no screens in this launch, so the run leaves once "
+                       "its report is closed, as a quick one does");
         }
         ReportNote("frontend: a module of a game, run before the game's main; the card by %s",
                    start->mounted_by);
         NoteHost();
     }
     const bool timing = !mode.no_timing;
-    window.wanted = !mode.no_window;
-    RunnerSteps(&runner, families, timing, NULL);
-    WindowClose();
+    uint32_t steps = 0;
+    for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); ++i) {
+        steps += STEPS[i].family == 0u || (families & STEPS[i].family) != 0u ? 1u : 0u;
+    }
+    ReportRetain(screens);
+    const bool progress = screens && !mode.no_progress;
+    if (progress) {
+        ScreenProgressBegin(heading, runner.run_directory, steps);
+        (void)ReportSetWatcher(ScreenProgressWatch);
+    }
+    RunnerSteps(&runner, families, timing, progress ? ScreenProgressStep : NULL);
+    if (progress) {
+        (void)ReportSetWatcher(NULL);
+        ScreenProgressEnd();
+    }
+    NoteScreenError();
     RunnerFinish(&runner, &mode, timing);
+    if (screens) {
+        // Last, and only now: the report is written, counted and closed. The one line that
+        // comes after the summary says the results left by themselves, as the plain program's
+        // do when nothing is pressed; here nothing can be.
+        static char results[96];
+        snprintf(results, sizeof(results), "%s%s%s", AMBERLITH_VERSION,
+                 mode.machine[0] != '\0' ? " on " : "", mode.machine);
+        ScreenResults(results);
+        ReportAppend(runner.report_path);
+        NoteScreenError();
+        ReportNote("detailed mode: the results closed by themselves %u seconds after the report "
+                   "closed: the mod reads no pad",
+                   (unsigned)(UI_UNATTENDED_NANOSECONDS / 1000000000ull));
+        ReportClose();
+    }
+    ScreenDown();
+    WindowClose();
     return ReportFailed() == 0 ? 0 : 1;
 }
