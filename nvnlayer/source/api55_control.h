@@ -25,6 +25,12 @@
 #define LAYER_SECTION_AT_BYTES 0x704u
 #define LAYER_SECTION_AT_PROGRAM 0x708u
 #define LAYER_SECTION_AT_STAGE 0x714u
+// Two words a game's driver holds every stage's section to before it takes a program: its
+// nvnProgramSetShaders (an API 55.8 driver of SDK 12.3.9) answers false unless the word at 0xc is
+// 0x120 and the one at 0x10 is 0xb. ScarletNX reads neither.
+#define LAYER_SECTION_AT_DRIVER_WORDS 0x00cu
+#define LAYER_SECTION_DRIVER_WORD_0 0x120u
+#define LAYER_SECTION_DRIVER_WORD_1 0xbu
 #define LAYER_SECTION_AT_EARLY_TESTS 0x718u
 // A tessellation evaluation stage's four declarations, each in the word GLSL names it by, as
 // ScarletNX reads them (its nvn_object.c, tess_of): the domain (triangles 4, quads 7, isolines

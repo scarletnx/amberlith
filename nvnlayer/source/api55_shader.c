@@ -106,6 +106,8 @@ bool NvnLayerShaderControl(const void *dksh, size_t dksh_bytes, void *control,
     Put(section, LAYER_SECTION_AT_MAGIC, LAYER_SECTION_MAGIC);
     Put(section, LAYER_SECTION_AT_ONE, 1u);
     Put(section, LAYER_SECTION_AT_FORMAT, LAYER_SECTION_FORMAT);
+    Put(section, LAYER_SECTION_AT_DRIVER_WORDS, LAYER_SECTION_DRIVER_WORD_0);
+    Put(section, LAYER_SECTION_AT_DRIVER_WORDS + 4u, LAYER_SECTION_DRIVER_WORD_1);
     Put(section, LAYER_SECTION_AT_CONSTANTS, constants);
     Put(section, LAYER_SECTION_AT_BYTES, code_bytes);
     Put(section, LAYER_SECTION_AT_PROGRAM, entry);
