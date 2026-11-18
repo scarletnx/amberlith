@@ -61,8 +61,8 @@ CFILES   := $(filter-out source/tests/t_libc.c,$(shell grep -v '^\#' source/port
 SFILES   := mod/header.s
 
 # The zooms' programs: the plain program's GLSL, and the NVN way's own (source/shaders-nvn), compiled
-# for NVN's layout of the driver's banks (uam --nvn, tools/uam/0003-nvn-layout.patch) by the uam the
-# plain program's build makes (Makefile, UAM_FIXED), in its tree, and turned into read-only data.
+# for NVN's layout of the driver's banks (scarletnx/uam's --nvn) by the uam the plain program's build
+# makes (Makefile, UAM_FIXED), in its tree, and turned into read-only data.
 UAM_FIXED  := build/uam/uam
 NVN_DKSH   := $(addprefix $(BUILD)/shaders/,fractal.comp.dksh fractal.frag.dksh fullscreen.vert.dksh \
                 fractal_show.frag.dksh)
@@ -85,7 +85,7 @@ $(BUILD)/version.h: FORCE
 FORCE:
 $(BUILD)/mod/frontend.o: $(BUILD)/version.h
 
-$(UAM_FIXED): tools/uam.sh $(wildcard tools/uam/*.patch)
+$(UAM_FIXED): tools/uam.sh
 	tools/uam.sh $(dir $@)
 
 $(BUILD)/shaders/%.comp.dksh: source/shaders/%.comp.glsl $(UAM_FIXED)

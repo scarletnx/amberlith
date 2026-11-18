@@ -12,9 +12,9 @@ make
 One shader, the bindless suite's four sample fetch, is built by uam with Mesa's f9d385d77716 on it: the toolchain's uam
 1.1.0 puts a multisample fetch's sample in the register the console reads the handle from. `tools/uam.sh` builds that
 uam into `build/uam` the first time make needs it (and after `make clean`): it clones scarletnx/uam at the commit it
-names (a clone already there, the toolchain's from before, is pointed at it and fetched), the toolchain's uam with the
-fix of a uniform block's vector read by a component worked out at run time (which uam 1.1.0 reads from the vector's
-first word), applies `tools/uam/*.patch`, and builds it with meson, so it needs the network then, git, meson, ninja,
+names (a clone already there, the toolchain's from before, is pointed at it and fetched), the toolchain's uam with that
+fix, the fix of a uniform block's vector read by a component worked out at run time (which uam 1.1.0 reads from the
+vector's first word) and `--nvn` (below), and builds it with meson, so it needs the network then, git, meson, ninja,
 bison, flex, Python 3 with mako, and a C and a C++ compiler for the machine. `tools/dksh-handles.py
 build/shaders/*.dksh` says where each multisample fetch reads its handle; the CI runs it after every build.
 
@@ -29,7 +29,7 @@ shader programs are assembled by `tools/sm86asm.py`. No release carries it.
 `make -f mod.mk`, with `DEVKITPRO` set as for the NRO, builds the probe as one more module of a game's program:
 `amberlith-mod/exefs/subsdk9` and `main.npdm` ([The probe as a mod of a game](Mod.md)). `make -f mod.mk check` then
 holds the module to `mod/imports.txt` (`tools/mod-imports.py`). Its fractal zooms' programs are the NRO's GLSL and
-`source/shaders-nvn/`'s, compiled by the uam the NRO's build makes, with `--nvn` (`tools/uam/0003-nvn-layout.patch`):
+`source/shaders-nvn/`'s, compiled by the uam the NRO's build makes, with `--nvn` (scarletnx/uam's):
 their buffers where NVN's driver keeps them, not where deko3d does. `tools/dksh-banks.py build-mod/shaders/*.dksh`
 says each read of the driver's banks outside NVN's tables; the CI runs it after every build. A release carries the
 mod as `amberlith-mod-<version>.zip` ([Releases](Releases.md)).
