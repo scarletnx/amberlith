@@ -184,8 +184,7 @@ Five hundred and twenty seven functions, each recording the deko3d commands that
   counters as deko3d's), a value, the counter's reset, and the device's two readings of the graphics unit's clock,
   a report's ticks turned into nanoseconds as deko3d turns them (625 over 384);
 - **the render enable**, which deko3d has no command for: the 3D engine's method itself (0x554: an address and a
-  mode), its words and the control list that names them written into the part of the command memory the layer
-  keeps, a unit of 0x200 bytes each, so they live as long as the list;
+  mode), its four words copied into the list by deko3d's `dkCmdBufReplayCmds`;
 - **what a command buffer says of its memory**: the sizes it was given; the command memory used, which is the
   layer's own part and what deko3d has written of the rest, found by the byte the layer fills that memory with
   as it hands it over (so the pool has to be one the processor reads), and the free as the rest; no control
