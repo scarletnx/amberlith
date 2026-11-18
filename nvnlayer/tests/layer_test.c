@@ -9,6 +9,9 @@
 #include <nvnlayer.h>
 
 #include "../source/layer.h"
+#if NVN_LAYER_API < 231
+#include "../source/api55_control.h"
+#endif
 
 // The layer's parts that touch no console, on the machine that builds: the shared part in both
 // API versions, the API 231 build's bodies, and the API 55 build's control sections. host.mk
@@ -451,6 +454,14 @@ static void TestControl(void) {
     static const NvnLayerCaptureGroup vertex[3] = { { NVN_LAYER_CAPTURE_POSITION, 0, 3 },
                                                     { NVN_LAYER_CAPTURE_GENERIC(0), 0, 2 },
                                                     { NVN_LAYER_CAPTURE_GENERIC(1), 0, 4 } };
+    {
+        LayerCapture none[LAYER_SECTION_CAPTURE_BUFFERS];
+        bool says = true;
+        EXPECT(LayerSectionCapture(section, none, &says, "the test") && !says &&
+                   none[0].words == 0u,
+               "a section with no capture reads back as capturing %d, %u words", (int)says,
+               (unsigned)none[0].words);
+    }
     NvnLayerClearError();
     EXPECT(NvnLayerShaderCapture(section, 0, vertex, 3), "a capture of three groups: %s",
            NvnLayerError());
@@ -464,6 +475,30 @@ static void TestControl(void) {
            "the groups' outputs are %u, %u, %u and their counts %u, %u, %u", section[0xdc],
            section[0xdd], section[0xde], section[0x4dc], section[0x4dd], section[0x4de]);
     EXPECT(ScarletNxTakes(section), "ScarletNX's conditions refuse the capturing section");
+    // What the API 55 build reads back of it for deko3d's layout: buffer 0's nine words as
+    // output slots, the position's from 0x1c and generic n's from 0x20 + 4 * n, and nothing of
+    // the other three buffers.
+    LayerCapture buffers[LAYER_SECTION_CAPTURE_BUFFERS];
+    bool captures = false;
+    static const uint8_t SLOTS[9] = { 0x1c, 0x1d, 0x1e, 0x20, 0x21, 0x24, 0x25, 0x26, 0x27 };
+    NvnLayerClearError();
+    EXPECT(LayerSectionCapture(section, buffers, &captures, "the test") && captures,
+           "the capture read back: %s", NvnLayerError());
+    EXPECT(buffers[0].stride == 36u && buffers[0].stream == 0u && buffers[0].words == 9u &&
+               memcmp(buffers[0].slots, SLOTS, sizeof(SLOTS)) == 0,
+           "buffer 0 reads back as a stride of %u, stream %u, %u words from slot 0x%x to 0x%x",
+           (unsigned)buffers[0].stride, (unsigned)buffers[0].stream, (unsigned)buffers[0].words,
+           buffers[0].slots[0], buffers[0].slots[8]);
+    EXPECT(buffers[1].words == 0u && buffers[2].words == 0u && buffers[3].words == 0u,
+           "buffers 1 to 3 read back as %u, %u and %u words", (unsigned)buffers[1].words,
+           (unsigned)buffers[2].words, (unsigned)buffers[3].words);
+    // A group a section holds that the layer never writes: the read refuses it with its words.
+    section[0x2dc] = 2u;
+    NvnLayerClearError();
+    EXPECT(!LayerSectionCapture(section, buffers, &captures, "the test") &&
+               strstr(NvnLayerError(), "3 words from word 2 of output 0") != NULL,
+           "a group of three words from word 2 read back: %s", NvnLayerError());
+    section[0x2dc] = 0u;
     static const NvnLayerCaptureGroup past[1] = { { NVN_LAYER_CAPTURE_POSITION, 2, 3 } };
     NvnLayerClearError();
     EXPECT(!NvnLayerShaderCapture(section, 0, past, 1) &&

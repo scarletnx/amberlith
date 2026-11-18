@@ -62,6 +62,13 @@ DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_siz
 /// @p own: the layer's own functions, not the ones the program looks up.
 DrawPath *DrawPathOpenNvn(const DrawPathSpec *spec, bool own, char *why, size_t why_size);
 
+/// What a capturing program's vertex stage gives each vertex, for both ways: the words of three
+/// outputs, each { output, first word, count }, output 0 the position and 0x20 + n generic output
+/// n (NVN_LAYER_CAPTURE_POSITION, NVN_LAYER_CAPTURE_GENERIC): the position's first three words,
+/// two of generic output 0 and four of generic output 1, which is a GpuVertex.
+#define DRAW_PATH_CAPTURE_GROUPS { { 0x00, 0, 3 }, { 0x20, 0, 2 }, { 0x21, 0, 4 } }
+#define DRAW_PATH_CAPTURE_GROUP_COUNT 3
+
 /// Where the texture handle of slot @p slot sits in a stage's handles, for both ways.
 #define DRAW_PATH_HANDLE_FIRST 0x20u
 #define DRAW_PATH_HANDLE_BYTES 0x200u

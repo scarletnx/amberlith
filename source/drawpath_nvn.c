@@ -292,9 +292,8 @@ static bool Stage(NvnPath *nv, const void *module, uint32_t bytes, const char *w
 /// capture takes of a vertex, a GpuVertex's nine numbers.
 static int ProgramOf(DrawPath *path, const void *vertex_dksh, uint32_t vertex_bytes,
                      const void *fragment_dksh, uint32_t fragment_bytes, bool capturing) {
-    static const NvnLayerCaptureGroup VERTEX[3] = { { NVN_LAYER_CAPTURE_POSITION, 0, 3 },
-                                                    { NVN_LAYER_CAPTURE_GENERIC(0), 0, 2 },
-                                                    { NVN_LAYER_CAPTURE_GENERIC(1), 0, 4 } };
+    static const NvnLayerCaptureGroup VERTEX[DRAW_PATH_CAPTURE_GROUP_COUNT] =
+        DRAW_PATH_CAPTURE_GROUPS;
     NvnPath *const nv = Nv(path);
     const uint32_t index = nv->program_count;
     if (index >= path->spec.programs) {
@@ -311,7 +310,8 @@ static int ProgramOf(DrawPath *path, const void *vertex_dksh, uint32_t vertex_by
             return -1;
         }
     }
-    if (capturing && !NvnLayerShaderCapture(nv->sections[index][0], 0, VERTEX, 3)) {
+    if (capturing && !NvnLayerShaderCapture(nv->sections[index][0], 0, VERTEX,
+                                            DRAW_PATH_CAPTURE_GROUP_COUNT)) {
         DrawPathFail(path, "the vertex stage's capture: %s", Why("refused"));
         return -1;
     }

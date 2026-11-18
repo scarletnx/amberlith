@@ -213,8 +213,8 @@ typedef struct {
 /// cannot write.
 ///
 /// uam says nothing of a capture, and a console's compiler writes it where this does, which is
-/// where ScarletNX reads it. The API 55 build's own bodies capture nothing (deko3d has no call
-/// for it), so only the NVN a program looks up captures.
+/// where ScarletNX reads it, and the API 55 build's nvnCommandBufferBindProgram too, which binds
+/// it as deko3d's transform feedback layout.
 bool NvnLayerShaderCapture(void *control, int buffer, const NvnLayerCaptureGroup *groups,
                            int count);
 #endif
