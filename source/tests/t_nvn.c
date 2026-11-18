@@ -451,9 +451,12 @@ static bool BringCopies(char *why, size_t why_size) {
     memset(&builder, 0, sizeof(builder));
     TextureBuilder(&builder, TARGET_SIZE, TARGET_SIZE, 0);
     const size_t size = RoundUp(nvn.nvn.nvnTextureBuilderGetStorageSize(&builder), POOL_PAGE);
+    // The processor writes and reads the first texture's texels too, through the pool's mapping:
+    // a game's driver (API 55.8) maps a pool with no processor access nowhere (nvnMemoryPoolMap
+    // answers NULL), so such a pool's texels are the graphics unit's alone.
     nvn.copy_pool_up =
         size != 0u && MakePool(&nvn.copy_pool, &nvn.copy_storage, 2u * size,
-                               NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
+                               NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);
     nvn.stage_pool_up =
         MakePool(&nvn.stage_pool, &nvn.stage_storage, 2u * TARGET_BYTES,
                  NVN_MEMORY_POOL_FLAGS_CPU_UNCACHED | NVN_MEMORY_POOL_FLAGS_GPU_CACHED);

@@ -232,7 +232,9 @@ and its count after a reset, and a new window builder's HDR metadata, with the w
   line carries them.
 - **texels the processor writes into a texture are what it and the graphics unit read back** (exact):
   `nvnTextureWriteTexels` of a 64x64 picture, `nvnTextureFlushTexels`, the graphics unit's copy of the texture
-  to the readback pool, `nvnTextureInvalidateTexels` and `nvnTextureReadTexels`: both readbacks, every byte.
+  to the readback pool, `nvnTextureInvalidateTexels` and `nvnTextureReadTexels`: both readbacks, every byte. The
+  copy textures' pool is one the processor reaches: a game's driver (API 55.8) maps a pool with no processor
+  access nowhere (`nvnMemoryPoolMap` answers NULL), and the texel calls go through that mapping.
 - **a part of a texture written and read with row strides keeps the bytes between rows** (exact): a 16 by 8 part
   at (8, 4), `nvnTextureWriteTexelsStrided` from rows 80 bytes apart and `nvnTextureReadTexelsStrided` into rows
   96 apart, the bytes between the destination's rows as they were.
