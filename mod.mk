@@ -51,15 +51,27 @@ LDFLAGS  := $(ARCH) -g -shared -nostartfiles -Wl,-T,$(LIBNX)/switch.ld -Wl,--gc-
 LIBS     := -L$(LIBNX)/lib -lnx -lm -Wl,--start-group -lc -lsysbase -lgcc -Wl,--end-group
 
 # The engine (source/portable.txt), the card's device over the game's nn::fs, the nvn suite, the
-# mod's own start, frontend, platform and screens, and the layer's loader. Less the libc family, which no
-# step here runs: its cases ask the C library for sockets and thread-local storage, and those
-# are libnx's start's to give.
+# fractal zooms' cases, the mod's own start, frontend, platform, screens and zooms' way through
+# NVN, and the layer's loader. Less the libc family, which no step here runs: its cases ask the C
+# library for sockets and thread-local storage, and those are libnx's start's to give.
 CFILES   := $(filter-out source/tests/t_libc.c,$(shell grep -v '^\#' source/portable.txt)) \
-            source/sdk_card.c source/tests/t_nvn.c \
-            mod/start.c mod/frontend.c mod/host.c mod/platform.c mod/screen.c $(NVNLAYER_SOURCES)
+            source/sdk_card.c source/tests/t_nvn.c source/fractalzoom.c \
+            mod/start.c mod/frontend.c mod/host.c mod/platform.c mod/screen.c mod/fractal_nvn.c \
+            $(NVNLAYER_SOURCES)
 SFILES   := mod/header.s
 
-OFILES   := $(patsubst %.c,$(BUILD)/%.o,$(CFILES)) $(patsubst %.s,$(BUILD)/%.o,$(SFILES))
+# The zooms' programs: the plain program's GLSL, and the NVN way's own (source/shaders-nvn), compiled
+# for NVN's layout of the driver's banks (uam --nvn, tools/uam/0003-nvn-layout.patch) by the uam the
+# plain program's build makes (Makefile, UAM_FIXED), in its tree, and turned into read-only data.
+UAM_FIXED  := build/uam/uam
+NVN_DKSH   := $(addprefix $(BUILD)/shaders/,fractal.comp.dksh fractal.frag.dksh fullscreen.vert.dksh \
+                fractal_show.frag.dksh)
+NVN_ASM    := $(BUILD)/shaders/blobs.s
+NVN_HDR    := $(BUILD)/shaders/mod_shaders.h
+NVN_OBJ    := $(BUILD)/shaders/blobs.o
+CFLAGS     += -I$(BUILD)/shaders
+
+OFILES   := $(patsubst %.c,$(BUILD)/%.o,$(CFILES)) $(patsubst %.s,$(BUILD)/%.o,$(SFILES)) $(NVN_OBJ)
 DFILES   := $(patsubst %.c,$(BUILD)/%.d,$(CFILES))
 
 .PHONY: all check clean FORCE
@@ -72,6 +84,36 @@ $(BUILD)/version.h: FORCE
 	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; fi
 FORCE:
 $(BUILD)/mod/frontend.o: $(BUILD)/version.h
+
+$(UAM_FIXED): tools/uam.sh $(wildcard tools/uam/*.patch)
+	tools/uam.sh $(dir $@)
+
+$(BUILD)/shaders/%.comp.dksh: source/shaders/%.comp.glsl $(UAM_FIXED)
+	@mkdir -p $(dir $@)
+	$(UAM_FIXED) --nvn -s comp -o $@ $<
+
+$(BUILD)/shaders/%.vert.dksh: source/shaders/%.vert.glsl $(UAM_FIXED)
+	@mkdir -p $(dir $@)
+	$(UAM_FIXED) --nvn -s vert -o $@ $<
+
+$(BUILD)/shaders/%.frag.dksh: source/shaders-nvn/%.frag.glsl $(UAM_FIXED)
+	@mkdir -p $(dir $@)
+	$(UAM_FIXED) --nvn -s frag -o $@ $<
+
+$(BUILD)/shaders/%.frag.dksh: source/shaders/%.frag.glsl $(UAM_FIXED)
+	@mkdir -p $(dir $@)
+	$(UAM_FIXED) --nvn -s frag -o $@ $<
+
+# One grouped target, as the NRO's: one run of bin2s makes both files.
+$(NVN_ASM) $(NVN_HDR) &: $(NVN_DKSH)
+	@mkdir -p $(dir $(NVN_ASM))
+	$(TOOLS)/bin2s -a 16 -H $(NVN_HDR) $^ > $(NVN_ASM)
+	@echo >> $(NVN_ASM)	# bin2s ends on a comment with no newline, and the assembler says so
+
+$(NVN_OBJ): $(NVN_ASM)
+	$(CC) $(ARCH) -c $< -o $@
+
+$(BUILD)/mod/fractal_nvn.o: $(NVN_HDR)
 
 # As the NRO's build (Makefile): the fluid reference rounds a multiply and the add after it apart.
 $(BUILD)/source/demo_fluidref.o: CFLAGS += -ffp-contract=off

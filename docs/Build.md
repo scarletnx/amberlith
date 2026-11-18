@@ -28,8 +28,11 @@ shader programs are assembled by `tools/sm86asm.py`. No release carries it.
 
 `make -f mod.mk`, with `DEVKITPRO` set as for the NRO, builds the probe as one more module of a game's program:
 `amberlith-mod/exefs/subsdk9` and `main.npdm` ([The probe as a mod of a game](Mod.md)). `make -f mod.mk check` then
-holds the module to `mod/imports.txt` (`tools/mod-imports.py`). It needs no uam, having no shader. No release
-carries it.
+holds the module to `mod/imports.txt` (`tools/mod-imports.py`). Its fractal zooms' programs are the NRO's GLSL and
+`source/shaders-nvn/`'s, compiled by the uam the NRO's build makes, with `--nvn` (`tools/uam/0003-nvn-layout.patch`):
+their buffers where NVN's driver keeps them, not where deko3d does. `tools/dksh-banks.py build-mod/shaders/*.dksh`
+says each read of the driver's banks outside NVN's tables; the CI runs it after every build. A release carries the
+mod as `amberlith-mod-<version>.zip` ([Releases](Releases.md)).
 
 ## The APK
 

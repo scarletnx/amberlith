@@ -128,12 +128,16 @@ under ScarletNX with the game recompiled unoptimized it alone took over ten minu
   from a 53.105 driver); the driver was given its allocator and 32 MiB of the module's data before the first
   device;
 - the `nvn` suite's looked up way, its window cases on the mod's own window (above);
-- the game scene, the Wimsy levels the mode file names, and the demos, each listed as skipped, `unavailable`, on
-  its first case, as the plain program names it: their frames are deko3d's and their programs uam's, and the mod has
-  neither, only the game's NVN.
+- the demo family's Mandelbrot and Julia zooms through the game's NVN, the plain program's cases, frames, times and
+  judge (`source/fractalzoom.c`), its GLSL compiled a second time for NVN's layout of the driver's banks (`uam --nvn`,
+  `tools/uam/0003-nvn-layout.patch`), so the graphics unit runs the same counting and colouring passes as under the
+  plain program; a frame is shown through the screens while they are up, and otherwise on the mod's window at twice
+  its size, by a third pass;
+- the game scene, the Wimsy levels the mode file names, and the fluid demos, each listed as skipped, `unavailable`,
+  on its first case, as the plain program names it: their frames are deko3d's, and the mod has only the game's NVN.
 
 ```
-{"type":"case","suite":"mandelbrot","name":"a graphics device with compute, the programs and a way to the display come up","result":"skip","reason":"unavailable","detail":"the demos draw through deko3d, which the mod has not: in a game's process it draws only through the game's NVN"}
+{"type":"case","suite":"fluid","name":"a graphics device, the fields' targets, the shaders and a way to the display come up","result":"skip","reason":"unavailable","detail":"the demos draw through deko3d, which the mod has not: in a game's process it draws only through the game's NVN"}
 ```
 
 A driver of another API major fails the second case with both numbers, and the nvn suite is not run: its objects

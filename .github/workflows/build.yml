@@ -118,6 +118,10 @@ jobs:
       # lists, exports nothing and holds nothing of libnx's start
       - name: Build the mod of a game and check what it asks of the game
         run: make -f mod.mk -j"$(nproc)" check
+      # The mod's zooms run through a game's NVN: their programs, compiled for NVN's layout (uam --nvn), read the
+      # driver's banks only where NVN's driver writes them
+      - name: Check the mod's programs read NVN's banks
+        run: python3 tools/dksh-banks.py build-mod/shaders/*.dksh
       # A release holds the three (publish.yml): the Switch 2 program and the mod name the build the NRO names
       - name: Check the Switch 2 program and the mod name the NRO's build
         run: |
