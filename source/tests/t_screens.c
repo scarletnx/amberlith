@@ -39,6 +39,8 @@ static const uint8_t PASSED[3] = { 0x4A, 0x70, 0x40 };
 static const uint8_t FAILED[3] = { 0xA5, 0x47, 0x3C };
 static const uint8_t SKIPPED[3] = { 0x8A, 0x6A, 0x2A };
 static const uint8_t CRASHED[3] = { 0x6E, 0x55, 0x85 };
+// The boxes of the tabs not chosen, on the head of the launcher's look.
+static const uint8_t TAB[3] = { 0xB4, 0xB0, 0x9C };
 
 // And the run's (the running, listening, pad and touch screens): the page, the ink, the soft and
 // the dim colours, and three of a result's.
@@ -1299,7 +1301,7 @@ static void CheckScreens(Fixture *f) {
         // The countdown: the foot's first row before and after it, and the rest of the frame
         // the same.
         const uint32_t before = CountLitIn(&frame, 0, 0, FRAME_WIDTH, TIP_TOP);
-        UiComposeCountdown(&frame, 7u);
+        UiComposeCountdown(&frame, 7u, false);
         unlabelled += CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED) > 500u
                           ? 0u
                           : 1u;
@@ -1446,6 +1448,129 @@ static void CheckStartNvn(Fixture *f) {
                (int)info.nvn_named, (unsigned)quiet, (unsigned)said,
                (unsigned)GlyphPixels(UI_START_NVN_SAID), (unsigned)outside_quiet,
                (unsigned)outside_said, (int)!all_leaves_it);
+}
+
+/// Pixels of @p colour inside each of @p keys' boxes on the foot, together.
+static uint32_t KeyCaps(const UiFrame *frame, const UiKey *keys, uint32_t count,
+                        const uint8_t colour[3]) {
+    uint32_t seen = 0;
+    for (uint32_t k = 0; k < count; ++k) {
+        const UiRect box = UiFootKey(FRAME_WIDTH, FRAME_HEIGHT, keys, count, k);
+        seen += CountColour(frame, box.x, box.y, box.x + box.width, box.y + box.height, colour);
+    }
+    return seen;
+}
+
+/// A program that reads no pad (the mod, in a game's process): the start screen, the running
+/// screen and the results draw no key and no tab, and say in words that nothing is to be pressed
+/// where the plain program's ask for a press; with the flag off each is the plain program's.
+static void CheckPadless(Fixture *f) {
+    const UiFrame frame = { f->pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
+    // The start screen, as the mod has it: the nvn family alone.
+    UiStartInfo info;
+    memset(&info, 0, sizeof(info));
+    info.heading = "Amberlith 0.2.0 (test)";
+    info.families_present = MODE_FAMILY_NVN;
+    info.nvn_named = true;
+    const RunMode plain_mode = ModeFromText("");
+    const UiStartState state = UiStartOpen(&plain_mode, MODE_FAMILY_NVN);
+    UiKey keys[UI_FOOT_KEYS];
+    const uint32_t start_keys = UiStartKeys(keys);
+    // The tabs' row, left of the program's name and above the line under the head.
+    const uint32_t tabs_left = FRAME_WIDTH / 2u;
+    const uint32_t tabs_bottom = UI_TABS_TOP + UI_BUTTON_HEIGHT;
+    UiComposeStart(&frame, &info, state, 7u);
+    const uint32_t start_caps = KeyCaps(&frame, keys, start_keys, BACKGROUND);
+    const uint32_t start_tabs = CountColour(&frame, 0, UI_TABS_TOP, tabs_left, tabs_bottom, TAB);
+    info.padless = true;
+    UiComposeStart(&frame, &info, state, 7u);
+    DumpFrame(&frame, "40-start-padless");
+    const uint32_t padless_caps = KeyCaps(&frame, keys, start_keys, BACKGROUND);
+    const uint32_t padless_tabs = CountColour(&frame, 0, UI_TABS_TOP, tabs_left, tabs_bottom, TAB);
+    static const char START_SAID[] =
+        "Nothing to press: the run begins in 7 s as the mode file says";
+    const uint32_t start_said = CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
+    CHECK_TRUE(SUITE, "with no pad to read, the start screen draws no tab and no key, and says its "
+                      "run begins by itself",
+               CHECK_NONE,
+               start_caps > 100u && padless_caps == 0u && start_tabs > 1000u &&
+                   padless_tabs == 0u && start_said == GlyphPixels(START_SAID),
+               "the keys' caps lit %u with a pad and %u without; the tabs %u and %u; the line %u "
+               "of %u pixels",
+               (unsigned)start_caps, (unsigned)padless_caps, (unsigned)start_tabs,
+               (unsigned)padless_tabs, (unsigned)start_said, (unsigned)GlyphPixels(START_SAID));
+
+    // The running screen: B is not offered.
+    UiProgress progress;
+    memset(&progress, 0, sizeof(progress));
+    progress.heading = info.heading;
+    progress.folder = "sdmc:/amberlith/runs/test";
+    progress.step = 3u;
+    progress.steps = 3u;
+    progress.step_name = "nvn";
+    progress.suite = "nvn";
+    progress.name = "a clear reads back";
+    progress.case_number = 4u;
+    progress.passed = 12u;
+    static const UiKey CANCEL[1] = { { "B", "cancel, back to the start", 0 } };
+    UiComposeProgress(&frame, &progress);
+    const uint32_t cancel_cap = KeyCaps(&frame, CANCEL, 1u, RUN_PAGE);
+    progress.padless = true;
+    UiComposeProgress(&frame, &progress);
+    DumpFrame(&frame, "41-running-padless");
+    const uint32_t padless_cap = KeyCaps(&frame, CANCEL, 1u, RUN_PAGE);
+    static const char RUN_SAID[] = "Nothing to press: the results come up when the run ends";
+    const uint32_t run_said = CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, RUN_SOFT);
+    CHECK_TRUE(SUITE, "with no pad to read, the running screen offers no B and says the results "
+                      "come up by themselves",
+               CHECK_NONE,
+               cancel_cap > 20u && padless_cap == 0u && run_said == GlyphPixels(RUN_SAID),
+               "B's cap lit %u with a pad and %u without; the line %u of %u pixels",
+               (unsigned)cancel_cap, (unsigned)padless_cap, (unsigned)run_said,
+               (unsigned)GlyphPixels(RUN_SAID));
+
+    // The results: an overview whose first group all passed, which with a pad says A opens it.
+    UiRun *const run = (UiRun *)calloc(1, sizeof(UiRun));
+    if (run == NULL) {
+        CHECK_TRUE(SUITE, "with no pad to read, the results draw no key and no hint to press, "
+                          "and count down in words",
+                   CHECK_NONE, false, "no memory for a run of %zu bytes", sizeof(UiRun));
+        return;
+    }
+    // Records of its own: the fixture's run points into the fixture's, and checks after this
+    // one read it.
+    static ReportRecord records[2];
+    Fill(&records[0], "selfcheck", "the report's own lines", "exact", REPORT_PASS, "", -1);
+    Fill(&records[1], "nvn", "the window comes up", "none", REPORT_SKIP,
+         "the program's screen holds the window", -1);
+    UiRunIndex(run, records, 2u, 2u);
+    run->heading = "0.2.0 on test";
+    UiState results = UiStart(run);
+    const uint32_t results_keys = UiResultsKeys(run, results, keys);
+    UiCompose(&frame, run, results, NULL);
+    const uint32_t results_caps = KeyCaps(&frame, keys, results_keys, BACKGROUND);
+    const uint32_t hinted = CountColour(&frame, 0, UI_BODY_TOP, FRAME_WIDTH, BODY_BOTTOM, SOFT);
+    results.padless = true;
+    UiCompose(&frame, run, results, NULL);
+    const uint32_t padless_results = KeyCaps(&frame, keys, results_keys, BACKGROUND);
+    const uint32_t unhinted = CountColour(&frame, 0, UI_BODY_TOP, FRAME_WIDTH, BODY_BOTTOM, SOFT);
+    UiComposeCountdown(&frame, 6u, true);
+    DumpFrame(&frame, "42-results-padless");
+    static const char HINT[] = "A opens the list of its cases";
+    static const char COUNT_SAID[] = "Nothing to press: this closes by itself in 6 s";
+    const uint32_t count_said = CountColour(&frame, 0, TIP_TOP, FRAME_WIDTH, TIP_BOTTOM, SKIPPED);
+    free(run);
+    CHECK_TRUE(SUITE, "with no pad to read, the results draw no key and no hint to press, "
+                      "and count down in words",
+               CHECK_NONE,
+               results_keys > 0u && results_caps > 100u && padless_results == 0u &&
+                   hinted - unhinted == GlyphPixels(HINT) &&
+                   count_said == GlyphPixels(COUNT_SAID),
+               "%u keys, their caps lit %u with a pad and %u without; the hint's pixels %u of %u; "
+               "the countdown %u of %u",
+               (unsigned)results_keys, (unsigned)results_caps, (unsigned)padless_results,
+               (unsigned)(hinted - unhinted), (unsigned)GlyphPixels(HINT), (unsigned)count_said,
+               (unsigned)GlyphPixels(COUNT_SAID));
 }
 
 /// The start screen: shown only with something to choose, X for the crash list and Y for
@@ -2792,7 +2917,7 @@ static void CheckTouch(Fixture *f) {
     UiTap back = TapKey(keys, count, "B");
     const UiState backed = UiTapStep(after, &back, run, FRAME_WIDTH, FRAME_HEIGHT);
     UiCompose(&frame, run, backed, NULL);
-    UiComposeCountdown(&frame, 9u);
+    UiComposeCountdown(&frame, 9u, false);
     count = UiResultsKeys(run, backed, keys);
     const bool group_bar = KeysDrawn(&frame, keys, count);
     UiTap one_box = TapKey(keys, count, "B");
@@ -2963,6 +3088,7 @@ void RunSupportScreens(void) {
     CheckStartWimsy(f);
     CheckStartNvn(f);
     CheckStartMenu(f);
+    CheckPadless(f);
     CheckResumeScreen(f);
     CheckProgress(f);
     CheckCrashed(f);

@@ -274,6 +274,9 @@ support	a line says what its case said its expected value comes from, else its s
 support	a card an edenprobe build left runs from its folder whole until an Amberlith build has run on it	judge	none	-	host
 support	the start screen draws Wimsy as Amberlith under its rows, clear of them and of the tip	judge	none	-	host
 support	the word nowindow keeps the mod's window closed and nothing else	judge	none	-	host
+support	with no pad to read, the start screen draws no tab and no key, and says its run begins by itself	judge	none	-	host
+support	with no pad to read, the running screen offers no B and says the results come up by themselves	judge	none	-	host
+support	with no pad to read, the results draw no key and no hint to press, and count down in words	judge	none	-	host
 reference	clip space origin is the middle of the target	judge	none	-	nro,ounce,host
 reference	clip space plus y is the top of the target	judge	none	-	nro,ounce,host
 reference	clip space minus y is the bottom of the target	judge	none	-	nro,ounce,host

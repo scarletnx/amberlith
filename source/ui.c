@@ -1661,8 +1661,9 @@ static void DrawCaseLine(const UiFrame *frame, uint32_t x, uint32_t y, const Rep
 }
 
 /// Under the overview's list: what the selected group holds, its failures first, then what the
-/// program ended inside, then its skips.
-static void ComposePreview(const UiFrame *frame, const UiRun *run, uint32_t index, uint32_t y) {
+/// program ended inside, then its skips. @p padless: no press is offered.
+static void ComposePreview(const UiFrame *frame, const UiRun *run, uint32_t index, uint32_t y,
+                           bool padless) {
     const UiGroup *const group = &run->groups[index];
     char text[96];
     uint32_t x = Say(frame, MARGIN, y, TEXT, group->suite);
@@ -1683,7 +1684,9 @@ static void ComposePreview(const UiFrame *frame, const UiRun *run, uint32_t inde
     } else {
         snprintf(text, sizeof(text), "all %u passed", (unsigned)group->count);
         SayFitted(frame, x, y, PASSED, text);
-        Say(frame, MARGIN, y + LINE, DIM, "A opens the list of its cases");
+        if (!padless) {
+            Say(frame, MARGIN, y + LINE, DIM, "A opens the list of its cases");
+        }
         return;
     }
 
@@ -1702,7 +1705,8 @@ static void ComposePreview(const UiFrame *frame, const UiRun *run, uint32_t inde
             continue;
         }
         if (listed + 1u == room && wanted > room) {
-            snprintf(text, sizeof(text), "and %u more: A opens the list",
+            snprintf(text, sizeof(text),
+                     padless ? "and %u more" : "and %u more: A opens the list",
                      (unsigned)(wanted - listed));
             Say(frame, MARGIN, y + (listed + 1u) * LINE, DIM, text);
             break;
@@ -1799,7 +1803,7 @@ static void ResultsHead(const UiFrame *frame, const UiRun *run, UiState state) {
 static void ResultsFoot(const UiFrame *frame, const UiRun *run, UiState state, const char *tip,
                         const uint8_t *tip_colour) {
     UiKey keys[UI_FOOT_KEYS];
-    const uint32_t count = UiResultsKeys(run, state, keys);
+    const uint32_t count = state.padless ? 0u : UiResultsKeys(run, state, keys);
     Foot(frame, tip, tip_colour, keys, count);
 }
 
@@ -1874,7 +1878,7 @@ static void ComposeOverview(const UiFrame *frame, const UiRun *run, UiState stat
     const uint32_t below = UI_BODY_BOTTOM(frame->height) - PREVIEW_LINES * LINE;
     DrawPane(frame, below - 8u, UI_BODY_BOTTOM(frame->height));
     DrawMore(frame, first > 0u, first + rows < total, below - 8u);
-    ComposePreview(frame, run, state.group, below);
+    ComposePreview(frame, run, state.group, below, state.padless);
     ResultsFoot(frame, run, state, text, tip_colour);
 }
 
@@ -2133,7 +2137,7 @@ static void DrawCountdown(const UiFrame *frame, const char *line) {
     }
 }
 
-void UiComposeCountdown(const UiFrame *frame, uint32_t seconds_left) {
+void UiComposeCountdown(const UiFrame *frame, uint32_t seconds_left, bool padless) {
     if (frame == NULL || frame->pixels == NULL || frame->width < UI_MIN_WIDTH ||
         frame->height < UI_MIN_HEIGHT || seconds_left == 0u) {
         return;
@@ -2143,9 +2147,14 @@ void UiComposeCountdown(const UiFrame *frame, uint32_t seconds_left) {
     const uint32_t y = UI_FOOT_TOP(frame->height);
     FillRect(frame, EDGE + 14u, y + 4u, frame->width - 2u * EDGE - 16u, CH + 2u, BACKGROUND);
     char line[128];
-    snprintf(line, sizeof(line),
-             "Nothing pressed yet: this closes by itself in %u s; a button or a touch keeps it",
-             (unsigned)seconds_left);
+    if (padless) {
+        snprintf(line, sizeof(line), "Nothing to press: this closes by itself in %u s",
+                 (unsigned)seconds_left);
+    } else {
+        snprintf(line, sizeof(line),
+                 "Nothing pressed yet: this closes by itself in %u s; a button or a touch keeps it",
+                 (unsigned)seconds_left);
+    }
     BigFit(frame, EDGE + 3u * CW, y + 6u, frame->width - EDGE - CW, SKIPPED, line);
 }
 
@@ -2531,7 +2540,10 @@ static void ComposeStartBody(const UiFrame *frame, const UiStartInfo *info, UiSt
     name[0] = (char)(name[0] >= 'a' && name[0] <= 'z' ? name[0] - 'a' + 'A' : name[0]);
     uint32_t y = Box(frame, x, UI_BODY_TOP, width, START_HELP_HEIGHT, name, NULL, NULL);
     char what[160];
-    if (state.cursor == UI_START_ROW_RETRY) {
+    if (info->padless && state.cursor == UI_START_ROW_BEGIN) {
+        snprintf(what, sizeof(what),
+                 "It begins by itself when the countdown ends, as the rows say");
+    } else if (state.cursor == UI_START_ROW_RETRY) {
         snprintf(what, sizeof(what), "The crash list's %u case%s again; X turns it from any row",
                  (unsigned)info->listed_count, info->listed_count == 1u ? "" : "s");
     } else {
@@ -2541,7 +2553,9 @@ static void ComposeStartBody(const UiFrame *frame, const UiStartInfo *info, UiSt
     const uint32_t columns = (width - CW) / CW;
     y += TextWrapped(frame, x + CW / 2u, y, SC, CH, TEXT, what, columns, 3u) * CH + 4u;
     TextWrapped(frame, x + CW / 2u, y, SC, CH, DIM,
-                "The judge and the cpu suite run whatever is chosen", columns, 2u);
+                info->padless ? "The judge runs whatever the mode file says"
+                              : "The judge and the cpu suite run whatever is chosen",
+                columns, 2u);
     if (info->nvn_named) {
         // Said where the person sees it before the run: the case's skip line says it after.
         const UiRect box = UiStartNvnBox(frame->width);
@@ -2589,10 +2603,15 @@ void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState 
         UiText(frame, 0, 0, 1, TEXT, "frame too small");
         return;
     }
-    Head(frame, UI_TAB_START, "AMBERLITH  /  START", info->heading);
+    // A program that reads no pad has no tab to go to: the title stands where the tabs are.
+    Head(frame, info->padless ? UI_TABS : UI_TAB_START, "AMBERLITH  /  START", info->heading);
     char tip[160];
     const uint8_t *colour = TEXT;
-    if (seconds_left > 0u) {
+    if (info->padless) {
+        snprintf(tip, sizeof(tip), "Nothing to press: the run begins in %u s as the mode file says",
+                 (unsigned)seconds_left);
+        colour = SKIPPED;
+    } else if (seconds_left > 0u) {
         snprintf(tip, sizeof(tip),
                  "Nothing pressed yet: the run begins in %u s as the mode file says; a button or "
                  "a touch keeps this",
@@ -2602,7 +2621,7 @@ void UiComposeStart(const UiFrame *frame, const UiStartInfo *info, UiStartState 
         snprintf(tip, sizeof(tip), "Choose what runs, then begin it, or L/R to the suites");
     }
     UiKey keys[UI_FOOT_KEYS];
-    const uint32_t count = UiStartKeys(keys);
+    const uint32_t count = info->padless ? 0u : UiStartKeys(keys);
     ComposeStartBody(frame, info, state, tip, colour, keys, count);
 }
 
@@ -2973,6 +2992,8 @@ void UiComposeProgress(const UiFrame *frame, const UiProgress *progress) {
              NULL, 0u);
     } else if (progress->quick) {
         Foot(frame, "Nothing to press: the program leaves when the run ends", DIM, NULL, 0u);
+    } else if (progress->padless) {
+        Foot(frame, "Nothing to press: the results come up when the run ends", DIM, NULL, 0u);
     } else {
         Foot(frame, "The results come up when the run ends", DIM, CANCEL, 1u);
     }
@@ -4481,7 +4502,7 @@ void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBro
         if (state->waiting != UI_ASK_NONE) {
             JudgeQuestion(frame, state, info);
         }
-        UiComposeCountdown(frame, info->seconds_left);
+        UiComposeCountdown(frame, info->seconds_left, false);
         return;
     }
     char title[48];
@@ -4497,7 +4518,7 @@ void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBro
     if (state->tab == UI_TAB_START && info->start != NULL) {
         snprintf(tip, sizeof(tip), "Begin the run: the families on, whole, in a run of its own");
         ComposeStartBody(frame, info->start, state->start, tip, tip_colour, keys, count);
-        UiComposeCountdown(frame, info->seconds_left);
+        UiComposeCountdown(frame, info->seconds_left, false);
         return;
     }
     switch (state->tab) {
@@ -4520,7 +4541,7 @@ void UiComposeBrowse(const UiFrame *frame, const UiBrowseInfo *info, const UiBro
     } else {
         Foot(frame, tip, tip_colour, keys, count);
     }
-    UiComposeCountdown(frame, info->seconds_left);
+    UiComposeCountdown(frame, info->seconds_left, false);
 }
 
 bool UiBrowsePick(const UiBrowseState *state, const UiBrowseInfo *info, UiPick *pick) {
