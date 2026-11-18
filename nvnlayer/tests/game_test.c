@@ -253,7 +253,56 @@ static void TestOwn(void) {
     NvnLayerSetFatal(NULL);
 }
 
+/// Every object type a program makes in storage of nvn/nvn.h's size holds what a game's driver
+/// writes of it: the bytes its SetDefaults or Initialize stores, as scarletnx/tools/nvn_census.py
+/// --footprints measured them in an API 55.8 driver of SDK 12.3.9. A type smaller than that is
+/// written past its end on that driver, as a sampler was (0x40 written into 0x30): the object
+/// after it in the program's memory was overwritten, and a pool's first word with it.
+static void TestFootprints(void) {
+    static const struct {
+        const char *type;
+        size_t size;
+        size_t written;
+    } TYPES[] = {
+        { "NVNblendState", sizeof(NVNblendState), 0x8 },
+        { "NVNbuffer", sizeof(NVNbuffer), 0x30 },
+        { "NVNbufferBuilder", sizeof(NVNbufferBuilder), 0x28 },
+        { "NVNchannelMaskState", sizeof(NVNchannelMaskState), 0x4 },
+        { "NVNcolorState", sizeof(NVNcolorState), 0x4 },
+        { "NVNcommandBuffer", sizeof(NVNcommandBuffer), 0xa0 },
+        { "NVNdepthStencilState", sizeof(NVNdepthStencilState), 0x8 },
+        { "NVNdeviceBuilder", sizeof(NVNdeviceBuilder), 0x18 },
+        { "NVNevent", sizeof(NVNevent), 0x28 },
+        { "NVNeventBuilder", sizeof(NVNeventBuilder), 0x10 },
+        { "NVNmemoryPool", sizeof(NVNmemoryPool), 0x100 },
+        { "NVNmemoryPoolBuilder", sizeof(NVNmemoryPoolBuilder), 0x40 },
+        { "NVNmultisampleState", sizeof(NVNmultisampleState), 0x18 },
+        { "NVNpolygonState", sizeof(NVNpolygonState), 0x4 },
+        { "NVNprogram", sizeof(NVNprogram), 0x80 },
+        { "NVNqueue", sizeof(NVNqueue), 0x1780 },
+        { "NVNqueueBuilder", sizeof(NVNqueueBuilder), 0x3c },
+        { "NVNsampler", sizeof(NVNsampler), 0x40 },
+        { "NVNsamplerBuilder", sizeof(NVNsamplerBuilder), 0x30 },
+        { "NVNsamplerPool", sizeof(NVNsamplerPool), 0x20 },
+        { "NVNsync", sizeof(NVNsync), 0x38 },
+        { "NVNtexture", sizeof(NVNtexture), 0x70 },
+        { "NVNtextureBuilder", sizeof(NVNtextureBuilder), 0x68 },
+        { "NVNtexturePool", sizeof(NVNtexturePool), 0x20 },
+        { "NVNtextureView", sizeof(NVNtextureView), 0x10 },
+        { "NVNvertexAttribState", sizeof(NVNvertexAttribState), 0x4 },
+        { "NVNvertexStreamState", sizeof(NVNvertexStreamState), 0x8 },
+        { "NVNwindow", sizeof(NVNwindow), 0x148 },
+        { "NVNwindowBuilder", sizeof(NVNwindowBuilder), 0x30 },
+    };
+    for (size_t i = 0; i < sizeof(TYPES) / sizeof(TYPES[0]); ++i) {
+        EXPECT(TYPES[i].size >= TYPES[i].written,
+               "%s is 0x%zx bytes, and an API 55.8 driver writes 0x%zx of it", TYPES[i].type,
+               TYPES[i].size, TYPES[i].written);
+    }
+}
+
 int main(void) {
+    TestFootprints();
     TestLoad();
     TestLacking();
     TestMissed();
