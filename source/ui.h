@@ -415,8 +415,9 @@ typedef struct {
     const char *heading;
     /// The families this build has; a row for one it lacks cannot be turned on.
     uint32_t families_present;
-    /// The mode file names the nvn family, which has no row: the screen says its window case is
-    /// skipped in a run begun here, since this screen holds the window to the run's end.
+    /// The nvn family runs, which has no row: on the plain program when the mode file names it,
+    /// in the mod when no family is named. The screen says its window case is skipped in a run
+    /// begun here, since this screen holds the window to the run's end.
     bool nvn_named;
     /// The program reads no pad (the mod, in a game's process): the rows show what the mode
     /// file chose, with no tabs and no keys, and the run begins when the countdown ends.
