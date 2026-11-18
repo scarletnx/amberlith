@@ -701,29 +701,12 @@ static void BindSharedState(GpuContext *gpu) {
     dkCmdBufSetDepthBounds(gpu->cmdbuf, false, 0.0f, 1.0f);
 }
 
-// The control lists GpuRawMethods hands the library: one header naming one command entry, the
-// entry, and a return, which is the shape deko3d's own lists take (source/dk_ctrlcmd.h,
-// CtrlCmdHeader and CtrlCmdGpfifoEntry, deko3d 350f2b0). The queue walks them when the list is
-// submitted, so they only have to outlive the submit; a new list starts them over.
-#define RAW_LISTS 64u
-typedef struct {
-    uint64_t header;      // type 3 (GpfifoList) in bits 0-7, one entry in bits 32-63
-    uint64_t entry_iova;  // CtrlCmdGpfifoEntry: where the words are
-    uint32_t entry_words; // how many
-    uint32_t entry_flags; // none: prefetch allowed, no kick
-    uint64_t end;         // type 0 (Return)
-} RawCtrlList;
-_Static_assert(sizeof(RawCtrlList) == 32, "a raw control list is four 64-bit words");
-static RawCtrlList raw_lists[RAW_LISTS];
-static uint32_t raw_lists_used;
-
 void GpuBeginPass(GpuContext *gpu) {
     if (gpu == NULL || !gpu->ready) {
         return;
     }
 
     dkCmdBufClear(gpu->cmdbuf);
-    raw_lists_used = 0;
 
     // Only the caches that hold copies of memory somebody else wrote. The level two cache is
     // deliberately left out: it holds the render target the previous pass wrote, and dropping
@@ -741,7 +724,6 @@ void GpuBeginList(GpuContext *gpu) {
         return;
     }
     dkCmdBufClear(gpu->cmdbuf);
-    raw_lists_used = 0;
     BindTarget(gpu, NULL, 0, 0);
     BindSharedState(gpu);
 }
@@ -1306,22 +1288,6 @@ bool GpuRawMethods(GpuContext *gpu, const uint32_t *words, uint32_t count) {
     if (gpu == NULL || !gpu->ready || words == NULL || count == 0u) {
         return false;
     }
-    if (raw_lists_used == RAW_LISTS) {
-        return Complain(gpu, "a list asked for more raw command blocks than gpu.c keeps");
-    }
-    DkGpuAddr address = 0;
-    void *const destination = GpuAllocData(gpu, count * 4u, 4u, &address);
-    if (destination == NULL) {
-        return Complain(gpu, "the scratch block ran out of room for raw command words");
-    }
-    memcpy(destination, words, count * 4u);
-
-    RawCtrlList *const list = &raw_lists[raw_lists_used++];
-    list->header = 3u | ((uint64_t)1u << 32);
-    list->entry_iova = address;
-    list->entry_words = count;
-    list->entry_flags = 0u;
-    list->end = 0u;
-    dkCmdBufCallList(gpu->cmdbuf, (DkCmdList)(uintptr_t)list);
+    dkCmdBufReplayCmds(gpu->cmdbuf, words, count);
     return true;
 }

@@ -304,10 +304,8 @@ void GpuBindPositions(GpuContext *gpu, const DkShader *vertex_shader,
 /// recorded before and after them.
 ///
 /// For the registers the library never writes (the index buffer limit) and the methods it never
-/// sends (the instanced vertex array draw). The words are copied into scratch and reached with a
-/// call into a one-entry control list built the way the library builds its own (deko3d
-/// source/dk_ctrlcmd.h), so the list must be submitted before the next GpuBeginPass or
-/// GpuBeginList, which reuse that storage. False with a sentence in `failure` when out of room.
+/// sends (the instanced vertex array draw). The library copies the words into the list
+/// (dkCmdBufReplayCmds). False only for a context that is not up, or no words.
 bool GpuRawMethods(GpuContext *gpu, const uint32_t *words, uint32_t count);
 
 /// The four bytes of the pixel at @p x, @p y in the buffer a readback returned.

@@ -17,9 +17,7 @@
   licence for uam's own files (copyright 2018-2020 fincs), Mesa's MIT for `mesa-imported/`, both in
   its `LICENSE`.
 
-- **deko3d's internals and its compute example**: `source/gpu.c` `GpuRawMethods` builds a one-entry
-  control list in the shape of deko3d's `source/dk_ctrlcmd.h` (`CtrlCmdHeader`,
-  `CtrlCmdGpfifoEntry`), and `source/rawref.c` encodes method headers the way its
+- **deko3d's internals and its compute example**: `source/rawref.c` encodes method headers the way its
   `source/maxwell/command.h` does, with the method numbers of `source/maxwell/engine_3d.def`
   (deko3d 350f2b0, zlib licence). The order suite's pattern, a dispatch, a primitives barrier and
   a draw of what it wrote, is switch-examples' `deko_examples/source/Example09_SimpleCompute.cpp`

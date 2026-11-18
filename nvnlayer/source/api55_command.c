@@ -13,18 +13,6 @@
 // each word in the next register (the 3D engine is subchannel 0).
 #define METHOD_INCREASING(method, count) ((uint32_t)(method) | (uint32_t)(count) << 16 | 1u << 29)
 
-// deko3d's control list for words of the program's own (its source/dk_ctrlcmd.h): one header
-// naming one command entry, the entry, and a return.
-typedef struct {
-    uint64_t header;      // type 3 (a list of entries) in bits 0-7, one entry in bits 32-63
-    uint64_t entry_iova;  // where the words are, for the graphics unit
-    uint32_t entry_words; // how many
-    uint32_t entry_flags; // none
-    uint64_t end;         // type 0 (return)
-} RawList;
-_Static_assert(sizeof(RawList) == 32, "a raw control list is four 64-bit words");
-#define RAW_WORDS_MAX ((LAYER_HANDLE_BYTES - (uint32_t)sizeof(RawList)) / 4u)
-
 /// A unit of the part of the command memory the layer keeps, LAYER_HANDLE_BYTES of it: its
 /// offset in that part, or -1 with a complaint naming @p what when the part is used up. What
 /// goes there lives exactly as long as the list.
@@ -41,31 +29,6 @@ static long Unit(LayerCommandBuffer *record, const char *what) {
     const long at = (long)draw->handle_used;
     draw->handle_used += LAYER_HANDLE_BYTES;
     return at;
-}
-
-/// Records @p count engine words into @p record's list. The words and the control list that
-/// names them go in a unit of the layer's memory, which the queue reads them from when the
-/// list is submitted.
-static bool RawMethods(LayerCommandBuffer *record, const uint32_t *words, uint32_t count,
-                       const char *what) {
-    LayerDraw *const draw = record->draw;
-    if (count == 0u || count > RAW_WORDS_MAX) {
-        LayerComplain("%s: %u engine words, where a unit of the layer's memory holds 1 to %u",
-                      what, (unsigned)count, (unsigned)RAW_WORDS_MAX);
-        return false;
-    }
-    const long unit = Unit(record, what);
-    if (unit < 0) {
-        return false;
-    }
-    uint8_t *const at = draw->handle_cpu + unit;
-    const RawList list = { 3u | (uint64_t)1u << 32,
-                           draw->handle_memory + (uint64_t)unit + sizeof(RawList), count, 0u,
-                           0u };
-    memcpy(at, &list, sizeof(list));
-    memcpy(at + sizeof(list), words, (size_t)count * 4u);
-    dkCmdBufCallList(record->cmdbuf, (DkCmdList)(uintptr_t)at);
-    return true;
 }
 
 // ---- counters and what a list reports
@@ -180,7 +143,7 @@ static void RenderEnable(NVNcommandBuffer *cmd, uint64_t address, uint32_t mode,
     if (record != NULL) {
         const uint32_t words[4] = { METHOD_INCREASING(METHOD_RENDER_ENABLE, 3),
                                     (uint32_t)(address >> 32), (uint32_t)address, mode };
-        RawMethods(record, words, 4, what);
+        dkCmdBufReplayCmds(record->cmdbuf, words, 4);
     }
 }
 
