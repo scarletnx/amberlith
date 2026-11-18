@@ -2087,10 +2087,13 @@ static void TextureSelfCase(const char *name) {
           nvn.nvn.nvnTextureGetDepthStencilMode(&small), NVN_TEXTURE_DEPTH_STENCIL_MODE_DEPTH);
     Gives(why, sizeof(why), "the texture's storage size, its builder's",
           nvn.nvn.nvnTextureGetStorageSize(&small), (long long)size);
-    Gives(why, sizeof(why), "the levels texture's address, its pool's and its offset",
-          (long long)nvn.nvn.nvnTextureGetTextureAddress(&nvn.levels),
-          (long long)(nvn.nvn.nvnMemoryPoolGetBufferAddress(&nvn.levels_pool) +
-                      (uint64_t)nvn.levels_offset));
+    // Where a texture is: a game's driver gives a pool's textures a GPU address of their own, apart
+    // from its buffers' (its nvnTextureInitialize asks the pool for it), so only two textures of
+    // one pool tell their offsets apart, and none is the buffer address plus its offset.
+    Gives(why, sizeof(why), "the levels texture's address past the small one's, both of one pool",
+          (long long)(nvn.nvn.nvnTextureGetTextureAddress(&nvn.levels) -
+                      nvn.nvn.nvnTextureGetTextureAddress(&small)),
+          (long long)nvn.levels_offset);
     Gives(why, sizeof(why), "whether two textures of one builder at one place are the same",
           nvn.nvn.nvnTextureCompare(&small, &twin), 1);
     Gives(why, sizeof(why), "whether the levels texture is the same as the small one",
