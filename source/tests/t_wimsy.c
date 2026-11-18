@@ -1647,23 +1647,30 @@ static void RunLevel(void) {
                     }
                 }
                 if (level >= 3u && ReportStart(SUITE, peek_name)) {
-                    uint8_t want[4];
-                    WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL, render.peek_wrong_at,
-                                      0u, 0u, want);
+                    // The first wrong texel only when there is one: a frame and bytes for none
+                    // would read as a failure of the peek.
+                    char peek[128] = "";
+                    if (render.peek_wrong != 0u) {
+                        uint8_t want[4];
+                        WimsyComputeTexel(WIMSY_PEEK_TEXTURE, WIMSY_PEEK_LEVEL,
+                                          render.peek_wrong_at, 0u, 0u, want);
+                        snprintf(peek, sizeof(peek),
+                                 "; the first, frame %u, read %02x %02x %02x %02x where the "
+                                 "program stored %02x %02x %02x %02x",
+                                 (unsigned)render.peek_wrong_at, render.peek_got[0],
+                                 render.peek_got[1], render.peek_got[2], render.peek_got[3],
+                                 want[0], want[1], want[2], want[3]);
+                    }
                     CHECK_TRUE(SUITE, peek_name, CHECK_EXACT,
                                render.peeked == frames && render.peek_wrong == 0u &&
                                    render.screens_read == judged_count &&
                                    render.screens_wrong == 0u,
-                               "%u of %u frames read back, %u of them another texel; the first, "
-                               "frame %u, read %02x %02x %02x %02x where the program stored %02x "
-                               "%02x %02x %02x; %u of %u judged frames read back whole, %u texels "
-                               "of them not what the processor works out%s%s",
+                               "%u of %u frames read back, %u of them another texel%s; %u of %u "
+                               "judged frames read back whole, %u texels of them not what the "
+                               "processor works out%s%s",
                                (unsigned)render.peeked, (unsigned)frames,
-                               (unsigned)render.peek_wrong, (unsigned)render.peek_wrong_at,
-                               render.peek_got[0], render.peek_got[1], render.peek_got[2],
-                               render.peek_got[3], want[0], want[1], want[2], want[3],
-                               (unsigned)render.screens_read, (unsigned)judged_count,
-                               (unsigned)render.screens_wrong,
+                               (unsigned)render.peek_wrong, peek, (unsigned)render.screens_read,
+                               (unsigned)judged_count, (unsigned)render.screens_wrong,
                                render.screens_wrong != 0u ? ": " : "", render.screens_first);
                 }
                 if (timing) {
