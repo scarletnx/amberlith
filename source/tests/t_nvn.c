@@ -1155,7 +1155,9 @@ static void UnfencedCase(const char *name) {
 }
 
 /// NVN's two calls between its syncs and OpenGL's, in a program that has no OpenGL: both fail,
-/// and neither writes what it would have made.
+/// and neither writes what it would have made. A game's driver (API 55.8) makes the sync's status
+/// 4 when no OpenGL is in the process: its nvnSyncInitializeFromFencedGLSync asks for the OpenGL
+/// interop the process registered (a global, nought here) and stores 4 when there is none.
 static void NoOpenGlCase(const char *name) {
     if (!ReportStart(SUITE, name)) {
         return;
@@ -1167,7 +1169,7 @@ static void NoOpenGlCase(const char *name) {
     const NVNboolean made =
         nvn.nvn.nvnSyncInitializeFromFencedGLSync(&from_opengl, &nvn.device, 1u, &status);
     Gives(why, sizeof(why), "whether a sync was made from OpenGL sync 1", made, 0);
-    Gives(why, sizeof(why), "the status of making it", status, 1);
+    Gives(why, sizeof(why), "the status of making it", status, 4);
     static _Alignas(8) NVNsync sync;
     if (!nvn.nvn.nvnSyncInitialize(&sync, &nvn.device)) {
         ReportCase(SUITE, name, CHECK_NONE, false, Why("nvnSyncInitialize answered false"));
@@ -1179,8 +1181,9 @@ static void NoOpenGlCase(const char *name) {
     Gives(why, sizeof(why), "the result of making an OpenGL sync from a sync", created, 4);
     Gives(why, sizeof(why), "whether the OpenGL sync's place kept what it held",
           opengl == 0x5a5a5a5a5a5a5a5aull, 1);
-    CHECK_TRUE(SUITE, name, CHECK_EXACT, why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
-               why[0] != '\0' ? why : NvnLayerError());
+    CHECK_TRUE_FROM(SUITE, name, CHECK_EXACT, REPORT_FROM_DRIVER,
+                    why[0] == '\0' && NvnLayerError()[0] == '\0', "%s",
+                    why[0] != '\0' ? why : NvnLayerError());
 }
 
 /// A pool is of storage or of a native handle, the one its builder was given last: a handle
