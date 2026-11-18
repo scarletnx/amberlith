@@ -24,7 +24,8 @@ jobs:
   # The NRO in devkitPro's container, pinned by its tag and its digest so every build uses one toolchain:
   # devkitA64 r29.2 (GCC 15.2), libnx 4.12.0, deko3d 0.5.0, uam 1.1.0, switch-tools 1.13.1. A newer image is a
   # change of its own, its build checked like any other. uam 1.1.0 with Mesa's fix of a multisample fetch's registers
-  # and of a uniform vector's run-time component, scarletnx/uam, is built here (tools/uam.sh)
+  # and of a uniform vector's run-time component, scarletnx/uam, is built here (tools/uam.sh), and so is the deko3d
+  # the NRO links, scarletnx/deko3d's (tools/deko3d.sh)
   nro:
     name: NRO (devkitA64)
     runs-on: ubuntu-26.04
@@ -72,8 +73,19 @@ jobs:
             build/uam/uam
             build/uam/uam.stamp
           key: uam-${{ hashFiles('tools/uam.sh') }}
-      - name: Install what builds uam
-        if: steps.uam.outputs.cache-hit != 'true'
+      # The deko3d the NRO links (tools/deko3d.sh), kept the same way while its script stays the same
+      - name: Keep the fork's deko3d
+        id: deko3d
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/deko3d/lib
+            build/deko3d/include
+            build/deko3d/deko3d.stamp
+          key: deko3d-${{ hashFiles('tools/deko3d.sh') }}
+      # deko3d's build tools (dekotools) build with the same as uam
+      - name: Install what builds uam and deko3d's tools
+        if: steps.uam.outputs.cache-hit != 'true' || steps.deko3d.outputs.cache-hit != 'true'
         run: |
           apt-get update > /dev/null
           apt-get install -y --no-install-recommends meson ninja-build bison flex python3-mako g++ > /dev/null

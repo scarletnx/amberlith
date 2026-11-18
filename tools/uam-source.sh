@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# tools/uam-source.sh SRC REPO COMMIT: SRC as a clone of REPO checked out at COMMIT, for tools/uam.sh. A clone already
-# there is pointed at REPO and fetched when it lacks COMMIT: one made before the pin moved to scarletnx/uam is the
-# toolchain's, devkitPro/uam, which has none of the fork's commits.
+# tools/uam-source.sh SRC REPO COMMIT: SRC as a clone of REPO checked out at COMMIT, for tools/uam.sh and for the two
+# sources tools/deko3d.sh builds. A clone already there is pointed at REPO and fetched when it lacks COMMIT: one made
+# before the pin moved to scarletnx/uam is the toolchain's, devkitPro/uam, which has none of the fork's commits.
 set -eu
 [ $# -eq 3 ] || { echo "usage: tools/uam-source.sh SRC REPO COMMIT" >&2; exit 2; }
 src=$1
