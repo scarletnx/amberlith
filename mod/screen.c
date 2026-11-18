@@ -364,6 +364,11 @@ static void Present(void) {
     }
     const NVNcopyRegion whole = { 0, 0, 0, (int)SCREEN_WIDTH, (int)SCREEN_HEIGHT, 1 };
     NVNcommandBuffer *const command = &g_screen.command;
+    // The whole of the command buffer's memory again: a game's driver never takes back what it
+    // handed out, and runs out (fractal_nvn.c says how it ended). The last frame was waited for.
+    g_screen.nvn.nvnCommandBufferAddCommandMemory(command, &g_screen.command_pool, 0,
+                                                  COMMAND_BYTES);
+    g_screen.nvn.nvnCommandBufferAddControlMemory(command, g_screen.control, CONTROL_BYTES);
     g_screen.nvn.nvnCommandBufferBeginRecording(command);
     g_screen.nvn.nvnCommandBufferSetCopyRowStride(command, 0);
     g_screen.nvn.nvnCommandBufferCopyBufferToTexture(
