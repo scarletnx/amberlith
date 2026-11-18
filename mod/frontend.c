@@ -27,6 +27,7 @@
 #include "tests/tests.h"
 #include "ui.h"
 #include "version.h"
+#include "wimsyref.h"
 
 static const char *const SUITE = "mod";
 
@@ -535,14 +536,81 @@ static void StepDone(const char *name) {
     }
 }
 
+// ---- the demos, which the mod lists as skipped
+//
+// Each demo's first case, as the plain program names it, skipped with why: its frames are
+// deko3d's and its programs uam's, and in a game's process the mod has only the game's NVN.
+
+static const char *const NO_DEMO =
+    "the demos draw through deko3d, which the mod has not: in a game's process it draws only "
+    "through the game's NVN";
+
+/// The game family's levels the mode file names (RunMode.levels).
+static uint32_t levels;
+
+static void SkipGameScene(void) {
+    ReportSkip("game", "a graphics device, a way to the display, the renderer and the card's file "
+               "come up",
+               REPORT_REASON_UNAVAILABLE, NO_DEMO);
+}
+
+static void SkipWimsy(void) {
+    for (uint32_t level = 0; level < WIMSY_LEVELS; ++level) {
+        if ((levels & (1u << level)) == 0u) {
+            continue;
+        }
+        char name[96];
+        snprintf(name, sizeof(name),
+                 "level %u, %s: a graphics device and a way to the display come up",
+                 (unsigned)level, WimsyLevelName(level));
+        ReportSkip("wimsy", name, REPORT_REASON_UNAVAILABLE, NO_DEMO);
+    }
+}
+
+static void SkipZoom(const char *suite) {
+    ReportSkip(suite,
+               "a graphics device with compute, the programs and a way to the display come up",
+               REPORT_REASON_UNAVAILABLE, NO_DEMO);
+}
+
+static void SkipMandelbrot(void) {
+    SkipZoom("mandelbrot");
+}
+
+static void SkipJulia(void) {
+    SkipZoom("julia");
+}
+
+static void SkipFluidScene(const char *suite) {
+    ReportSkip(suite, "a graphics device, the fields' targets, the shaders and a way to the "
+               "display come up",
+               REPORT_REASON_UNAVAILABLE, NO_DEMO);
+}
+
+static void SkipFluid(void) {
+    SkipFluidScene("fluid");
+}
+
+static void SkipFluidAlias(void) {
+    SkipFluidScene("fluid-alias");
+}
+
 // The judge first and always, as on every frontend, less its reference step: that one holds the
 // drawing suites' references, which no case here is judged by, and under a recompiler that made
 // the game unoptimized it alone took over ten minutes. Then the nvn family, which runs when the
-// file names no family: the mod's own cases and the nvn suite's looked up way.
+// file names no family: the mod's own cases and the nvn suite's looked up way. Then the game and
+// demo families, each run only when named, as on the plain program: their demos listed as
+// skipped, in the plain program's order.
 static const RunnerStep STEPS[] = {
     { "selfcheck", RunSelfcheck, 0, false, false },
     { "support", RunSupportSteps, 0, false, false },
     { "nvn", RunInGame, MODE_FAMILY_NVN, false, true },
+    { "game", SkipGameScene, MODE_FAMILY_GAME, false, false },
+    { "wimsy", SkipWimsy, MODE_FAMILY_GAME, false, false },
+    { "mandelbrot", SkipMandelbrot, MODE_FAMILY_DEMO, false, false },
+    { "julia", SkipJulia, MODE_FAMILY_DEMO, false, false },
+    { "fluid", SkipFluid, MODE_FAMILY_DEMO, false, false },
+    { "fluid-alias", SkipFluidAlias, MODE_FAMILY_DEMO, false, false },
 };
 
 static const RunnerFrontend FRONTEND = {
@@ -553,8 +621,8 @@ static const RunnerFrontend FRONTEND = {
     .hash = AMBERLITH_HASH,
     .steps = STEPS,
     .step_count = sizeof(STEPS) / sizeof(STEPS[0]),
-    .present = MODE_FAMILY_NVN,
-    .asked = 0u,
+    .present = MODE_FAMILY_NVN | MODE_FAMILY_GAME | MODE_FAMILY_DEMO,
+    .asked = MODE_FAMILY_GAME | MODE_FAMILY_DEMO,
     .step_done = StepDone,
 };
 
@@ -664,6 +732,7 @@ int ModRun(const ModStart *start) {
         NoteHost();
     }
     const bool timing = !mode.no_timing;
+    levels = mode.levels;
     uint32_t steps = 0;
     for (size_t i = 0; i < sizeof(STEPS) / sizeof(STEPS[0]); ++i) {
         steps += STEPS[i].family == 0u || (families & STEPS[i].family) != 0u ? 1u : 0u;

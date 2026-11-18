@@ -119,18 +119,22 @@ result, and ends the process.
 
 ## What it runs
 
-The judge's selfcheck and support steps, then the `nvn` family, which runs when the mode file names no family. The
-judge's reference step is left out: it holds the drawing suites' references, which no case here is judged by, and
+The judge's selfcheck and support steps, then the `nvn` family, which runs when the mode file names no family, then
+the `game` and `demo` families when the mode file names them. The judge's reference step is left out: it holds the drawing suites' references, which no case here is judged by, and
 under ScarletNX with the game recompiled unoptimized it alone took over ten minutes.
 
 - the `mod` suite, three cases of the mod's own: the card came through the game's SDK; the driver answers its API
   version with no device, and it is one whose objects this build has (53 to 55: `nvn/nvn.h`'s types were taken
   from a 53.105 driver); the driver was given its allocator and 32 MiB of the module's data before the first
   device;
-- the `nvn` suite's looked up way, its window cases on the mod's own window (above).
+- the `nvn` suite's looked up way, its window cases on the mod's own window (above);
+- the game scene, the Wimsy levels the mode file names, and the demos, each listed as skipped, `unavailable`, on
+  its first case, as the plain program names it: their frames are deko3d's and their programs uam's, and the mod has
+  neither, only the game's NVN.
 
-The demo family is the plain program's alone: its frames are deko3d's and its programs uam's, and the mod has
-neither, only the game's NVN.
+```
+{"type":"case","suite":"mandelbrot","name":"a graphics device with compute, the programs and a way to the display come up","result":"skip","reason":"unavailable","detail":"the demos draw through deko3d, which the mod has not: in a game's process it draws only through the game's NVN"}
+```
 
 A driver of another API major fails the second case with both numbers, and the nvn suite is not run: its objects
 would be made in storage of another size.
