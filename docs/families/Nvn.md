@@ -632,7 +632,11 @@ hashes set is the driver's, and ScarletNX keeps none.
   precision each way (`SetSubpixelPrecisionBias`); with it off the ring is clear again.
 - **a conservative quad dilated by half a pixel reaches the pixels a third of one away**: two quads 1.3 pixels
   inside their cells, conservative: with no dilation the ring is clear, and with
-  `nvnCommandBufferSetConservativeRasterDilate` of 0.5 the cell is full.
+  `nvnCommandBufferSetConservativeRasterDilate` of 0.5 the cell is full. A game's driver hands the dilation to
+  the graphics unit in quarter pixels, so a console fills the ring. A runtime on Vulkan needs a device that
+  overestimates by more than it must: RADV (an RX 6700 XT) has conservative rasterization but
+  `maxExtraPrimitiveOverestimationSize` 0, so ScarletNX passes the case before and fails this one there, the
+  dilated quad's ring clear; lavapipe has no conservative rasterization, and both fail.
 - **a line of width four is four rows of pixels**: `nvnCommandBufferSetLineWidth` and one level line along the
   boundary between two rows, from 8 pixels in to 8 from the far side. Half way along it is four rows thick, from
   one to three rows above the boundary, and every pixel between its ends is judged against those rows. Which of
