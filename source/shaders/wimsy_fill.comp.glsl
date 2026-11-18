@@ -20,11 +20,12 @@ layout (std140, binding = 0) uniform Params
 void main()
 {
     uvec2 at = gl_GlobalInvocationID.xy;
-    if (at.x >= p.seed.w || at.y >= p.seed.w) {
-        return;
+    // Inside the test rather than after an early return, which uam compiles to a PRET and RET:
+    // a translator without PRET drops the pipeline (the geometry family's square twins judge it).
+    if (at.x < p.seed.w && at.y < p.seed.w) {
+        uint r = (at.x * 5u + p.seed.z * 3u + p.seed.x * 16u) & 255u;
+        uint g = (at.y * 7u + p.seed.z + p.seed.y * 32u) & 255u;
+        uint b = ((at.x ^ at.y) * 9u + p.seed.x * 8u + p.seed.z * 2u) & 255u;
+        imageStore(img, ivec2(at), vec4(float(r), float(g), float(b), 255.0) / 255.0);
     }
-    uint r = (at.x * 5u + p.seed.z * 3u + p.seed.x * 16u) & 255u;
-    uint g = (at.y * 7u + p.seed.z + p.seed.y * 32u) & 255u;
-    uint b = ((at.x ^ at.y) * 9u + p.seed.x * 8u + p.seed.z * 2u) & 255u;
-    imageStore(img, ivec2(at), vec4(float(r), float(g), float(b), 255.0) / 255.0);
 }

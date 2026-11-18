@@ -276,7 +276,9 @@ level too coarse, no depth bias or 16 bits of depth.
 
 What the heavy levels' screens show is held twice. A compute texel is a whole number worked
 out from its place, its texture, its level and the frame (`WimsyComputeTexel`), stored as the
-normalised value that byte is, and a chain's last target is its clear and eleven squares, the
+normalised value that byte is (the program stores inside its test of the texel's place rather
+than after an early return, which uam compiles to a PRET that Eden's translator drops the pipeline
+over; the geometry family's square twins judge PRET), and a chain's last target is its clear and eleven squares, the
 later over the earlier (`WimsyChainTexel`). One more case a heavy level reads them back: a texel
 each frame, and on the five judged frames every level of every compute texture and every chain's
 last target whole, each texel held to those bytes; the copies are a list of their own after the
