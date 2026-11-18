@@ -7,7 +7,7 @@
 
 A multisample TLD.B (0xdd in the top byte, bit 50 set) takes its handle in Rb and the sample in the register after it,
 the order Mesa's compilers give since f9d385d77716 ("nouveau/codegen: Handle/indirect goes before sample index"); uam
-1.1.0 gave the other one (tools/uam/0001-handle-before-sample-index.patch). The handle comes from a constant buffer,
+1.1.0 gave the other one (scarletnx/uam has Mesa's commit). The handle comes from a constant buffer,
 so the last load from one before the fetch (LDC, or MOV of c[]) into Rb or Rb + 1 has to be the one into Rb. One line
 for each such fetch; the status is 1 when one reads its handle from the wrong register or no load names either, 2 when
 a file holds no DKSH module. Straight-line programs: the load is looked for in program order, not along branches.

@@ -10,10 +10,10 @@
 - **deko3d**, https://github.com/devkitPro/deko3d: the graphics library the drawing suites use. zlib
   licence, in its `LICENSE` (copyright 2018-2020 fincs).
 - **uam**, https://github.com/devkitPro/uam: the shader compiler, the toolchain's for every shader
-  but one, which `tools/uam.sh` builds from scarletnx/uam (https://github.com/scarletnx/uam, its
-  commit 5a5afc2 and two fixes of uniform block reads) with `tools/uam/0001-*.patch`, Mesa's
-  f9d385d77716 (https://gitlab.freedesktop.org/mesa/mesa/-/commit/f9d385d77716, MIT, part of Mesa's
-  merge request 24327) on uam's copy of nouveau's codegen, and `0002-*.patch` on its build. zlib
+  but the few `tools/uam.sh` builds from scarletnx/uam (https://github.com/scarletnx/uam: uam 1.1.0
+  with two fixes of uniform block reads, Mesa's f9d385d77716
+  (https://gitlab.freedesktop.org/mesa/mesa/-/commit/f9d385d77716, MIT, part of Mesa's merge request
+  24327) on uam's copy of nouveau's codegen, a build without distutils and `--nvn`). zlib
   licence for uam's own files (copyright 2018-2020 fincs), Mesa's MIT for `mesa-imported/`, both in
   its `LICENSE`.
 

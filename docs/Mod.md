@@ -129,10 +129,10 @@ under ScarletNX with the game recompiled unoptimized it alone took over ten minu
   device;
 - the `nvn` suite's looked up way, its window cases on the mod's own window (above);
 - the demo family's Mandelbrot and Julia zooms through the game's NVN, the plain program's cases, frames, times and
-  judge (`source/fractalzoom.c`), its GLSL compiled a second time for NVN's layout of the driver's banks (`uam --nvn`,
-  `tools/uam/0003-nvn-layout.patch`), so the graphics unit runs the same counting and colouring passes as under the
-  plain program; a frame is shown through the screens while they are up, and otherwise on the mod's window at twice
-  its size, by a third pass;
+  judge (`source/fractalzoom.c`), its GLSL compiled a second time for NVN's layout of the driver's banks
+  (scarletnx/uam's `--nvn`), so the graphics unit runs the same counting and colouring passes as under the plain
+  program; a frame is shown through the screens while they are up, and otherwise on the mod's window at twice its size,
+  by a third pass;
 - the game scene, the Wimsy levels the mode file names, and the fluid demos, each listed as skipped, `unavailable`,
   on its first case, as the plain program names it: their frames are deko3d's, and the mod has only the game's NVN.
 

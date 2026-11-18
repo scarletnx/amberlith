@@ -9,10 +9,10 @@ A program run through a game's NVN reads what that driver keeps in its constant 
 buffer table, 16 bytes an entry (vertex 0x110, tessellation control 0x210, tessellation evaluation 0x310, geometry
 0x410, fragment 0x510), and for a compute program its dispatch size at 0x200, its uniform buffer table from 0x210 and
 its storage buffer table from 0x310; in bank 2 the texture handles; and uniform block binding b in bank 3 + b
-(tools/uam/0003-nvn-layout.patch says where ScarletNX reads the layout). A program compiled for deko3d's layout reads bank 0 elsewhere (its storage buffers at 0xb0 of a
-vertex program, 0x730 of a fragment program, 0x140 of a compute one) and its first uniform block from bank 2, which
-under NVN hold other things. One line for each read of bank 0 outside its stage's NVN tables and each read of bank 2;
-the status is 1 when there is one, 2 when a file holds no DKSH module.
+(ScarletNX reads the same layout from a game). A program compiled for deko3d's layout reads bank 0 elsewhere (its
+storage buffers at 0xb0 of a vertex program, 0x730 of a fragment program, 0x140 of a compute one) and its first uniform
+block from bank 2, which under NVN hold other things. One line for each read of bank 0 outside its stage's NVN tables
+and each read of bank 2; the status is 1 when there is one, 2 when a file holds no DKSH module.
 
 The reads are those an instruction names: an LDC (0xef90) and every instruction of the constant operand forms (top
 nibble 0x4: bank in bits 34-38, the offset over four in bits 20-33).
