@@ -223,11 +223,13 @@ and its count after a reset, and a new window builder's HDR metadata, with the w
   one.
 - **a texture says its swizzle, storage and address, and is the same as its twin alone** (exact): two 16x16
   textures from one builder at one place: the swizzle the builder had, the builder's storage size, the levels
-  texture's address (its pool's and its offset), `nvnTextureCompare` for the twins and against the levels
-  texture, a view offset of nought for no view. Of a driver's own account three things are held to ScarletNX's
-  reading of a driver: raw storage class 2 for a colour format, a sparse tile of noughts for a texture that is
-  not sparse, and the width and height NVIDIA's surface starts with. The storage classes, the ZCull sizes and the
-  stride are asked and compared with nothing: a failing line carries them.
+  texture's address past the small one's at the start of the same pool (its offset: a game's driver maps a pool's
+  textures apart from its buffers, so a texture's address is not its pool's buffer address plus its offset),
+  `nvnTextureCompare` for the twins and against the levels texture, a view offset of nought for no view. Of a
+  driver's own account three things are held to ScarletNX's reading of a driver: raw storage class 2 for a colour
+  format, a sparse tile of noughts for a texture that is not sparse, and the width and height NVIDIA's surface
+  starts with. The storage classes, the ZCull sizes and the stride are asked and compared with nothing: a failing
+  line carries them.
 - **texels the processor writes into a texture are what it and the graphics unit read back** (exact):
   `nvnTextureWriteTexels` of a 64x64 picture, `nvnTextureFlushTexels`, the graphics unit's copy of the texture
   to the readback pool, `nvnTextureInvalidateTexels` and `nvnTextureReadTexels`: both readbacks, every byte.
