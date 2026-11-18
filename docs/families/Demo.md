@@ -77,7 +77,10 @@ anything else that binds the same blocks and runs the same programs (`source/fra
 
 1. a dispatch of `fractal.comp.glsl`, 80 by 45 groups of 8 by 8 invocations, one a pixel of the 640 by 360 target,
    with the frame's block as uniform buffer 0 and the counts, a word a pixel, as storage buffer 0. Each invocation
-   iterates z = z * z + c until |z| passes 2 or the frame's iterations are spent, and stores how many it took;
+   iterates z = z * z + c until |z| passes 2 or the frame's iterations are spent, and stores how many it took. The
+   program's whole body sits inside the test of the pixel's place rather than after an early return, which uam
+   compiles to a PRET and a RET: Eden's shader translator drops a pipeline with a PRET, and the geometry family's
+   square twins judge that apart ([Graphics](Graphics.md)), so a zoom that fails is about the zoom;
 2. once those stores are visible to the fragments (deko3d: `DkBarrier_Primitives` with the shader caches dropped, the
    order suite's pattern), a draw of three vertices with no attributes, `fullscreen.vert.glsl` and
    `fractal.frag.glsl`, the same two buffers bound to the fragment stage, into the 640 by 360 RGBA8 target: each
