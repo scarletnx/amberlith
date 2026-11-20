@@ -60,7 +60,7 @@ _2 families, 3 suites, 67 cases: 63 with a judge (exact 56, position 7; expected
 ### GPU and NVN
 
 <!-- counts: category gpu -->
-_5 families, 52 suites, 1262 cases: 1049 with a judge (exact 957, ulp 56, position 23, level 2, bound 11; expected from the driver 16, astcenc 43, another reference 115, the specification 875), 207 without one, 6 not yet seen judged._
+_5 families, 52 suites, 1265 cases: 1052 with a judge (exact 960, ulp 56, position 23, level 2, bound 11; expected from the driver 16, astcenc 43, another reference 115, the specification 878), 207 without one, 6 not yet seen judged._
 <!-- /counts -->
 
 - **[Graphics](./families/Graphics.md)** - the drawing suites, clear to tex8k, and

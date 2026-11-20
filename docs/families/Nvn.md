@@ -11,6 +11,7 @@
   * [The binds that take several, and the deferred ones](#the-binds-that-take-several-and-the-deferred-ones)
   * [A uniform buffer updated inside the list](#a-uniform-buffer-updated-inside-the-list)
   * [Instanced draws, and draws that read their numbers](#instanced-draws-and-draws-that-read-their-numbers)
+  * [The forms of the draws that read their numbers](#the-forms-of-the-draws-that-read-their-numbers)
   * [The draw deko3d has none of](#the-draw-deko3d-has-none-of)
   * [A texture drawn with no program, through deko3d and the layer](#a-texture-drawn-with-no-program-through-deko3d-and-the-layer)
   * [A capture of what a vertex stage writes](#a-capture-of-what-a-vertex-stage-writes)
@@ -26,8 +27,8 @@
 <!-- counts: family nvn -->
 | Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| nvn | 215 | 200 | 0 | 11 | 0 | 0 | 189 | 9 | 6 |
-| **All** | **215** | **200** | **0** | **11** | **0** | **0** | **189** | **9** | **6** |
+| nvn | 218 | 203 | 0 | 11 | 0 | 0 | 192 | 9 | 6 |
+| **All** | **218** | **203** | **0** | **11** | **0** | **0** | **192** | **9** | **6** |
 <!-- /counts -->
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
@@ -413,6 +414,36 @@ numbers, are each in its cell**, **the same eight instances through the layer's 
 cell** and **the same eight instances through the NVN the program looks up are each in its cell** (exact). A draw
 that starts at instance nought draws the first two cells again and leaves its own the clear colour; a failing
 case says whose colour the first wrong pixel has.
+
+### The forms of the draws that read their numbers
+
+A scene of eight cells, four across and two down, each a form of the draws whose numbers (count, instances, first
+vertex or index, base vertex, base instance) are in a buffer the graphics unit reads. In every cell a red quad is
+drawn and then a green one over it, so a cell its form drew whole is green, a cell whose last draw was left out is
+red, and a cell nothing drew keeps the clear colour. A runtime that keeps the numbers on the graphics unit cannot
+read a count to turn the form into what its own unit draws: it has to do that there too
+(`DrawPathShape`, `DrawPathRestart`).
+
+- cell 0: quads of vertices, both quads one draw's eight vertices (`nvnCommandBufferDrawArraysIndirect`,
+  `NVN_DRAW_PRIMITIVE_QUADS`);
+- cell 1: quads of two byte indices, from the second index of their buffer and through a base vertex
+  (`nvnCommandBufferDrawElementsIndirect`);
+- cells 2 and 3: quads of vertices and of indices as many draws as a word says, three draws' numbers (red, green,
+  red) of which the word says two (`nvnCommandBufferMultiDrawArraysIndirectCount`,
+  `nvnCommandBufferMultiDrawElementsIndirectCount`): through the NVN the program looks up alone, deko3d having no
+  such draw, and the clear colour through the other two ways;
+- cell 4: 65537 quads of two byte indices in one draw, the red quad 65536 times and then the green one;
+- cell 5: 65537 quads of vertices in one draw, the same;
+- cell 6: triangles of one byte indices;
+- cell 7: one strip of two byte indices that an index of 64 restarts (`nvnCommandBufferSetPrimitiveRestart`). After
+  the green quad's strip come two more indices with a restart before and after each: restarted they draw nothing,
+  and a runtime that takes the 64 for a vertex draws a red triangle over half the cell with them, once each way
+  round, so it shows whichever face is culled.
+
+The cases are **draws that read their numbers through deko3d, in the forms a runtime has to convert, each leave
+their cell green**, **the same draws that read their numbers through the layer's own NVN functions each leave
+their cell green** and **draws that read their numbers through the NVN the program looks up, counted ones too,
+each leave their cell green** (exact). No console has drawn them yet.
 
 ### The draw deko3d has none of
 

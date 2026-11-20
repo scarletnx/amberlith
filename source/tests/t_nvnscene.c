@@ -567,6 +567,207 @@ static bool InstancedDraw(DrawPath *path, char *why, size_t why_size) {
     return true;
 }
 
+// ---- the draws that read their numbers, in every form
+
+// The forms scene: the draws whose numbers the graphics unit reads, each form in a cell of four
+// across and two down, and in every cell a red quad and then a green one over it, so a cell the
+// form drew whole is green, one whose last draw was left out is red, and one nothing drew keeps
+// the clear colour. A runtime that keeps these draws' numbers on the graphics unit has to turn
+// each form into what its own unit draws without reading them:
+//   cell 0  quads of vertices, the two quads one draw's eight vertices;
+//   cell 1  quads of two byte indices, from the second index of their buffer through a base vertex;
+//   cell 2  quads of vertices, as many draws as a word says: red, green and red again, of which
+//           the word says two (the counted scene alone, for the NVN the program looks up);
+//   cell 3  the same by two byte indices (the counted scene alone);
+//   cell 4  65537 quads of two byte indices in one draw, the red quad 65536 times and then the
+//           green one;
+//   cell 5  65537 quads of vertices in one draw, the same;
+//   cell 6  triangles of one byte indices;
+//   cell 7  one strip of two byte indices that an index of 64 restarts, which is no vertex of the
+//           two quads: after the green quad's strip come two more indices with a restart around
+//           each, no triangle, and a runtime that takes the 64 for a vertex draws a red triangle
+//           over half the cell with them.
+// Without the count the two counted cells keep the clear colour, which is the scene deko3d and
+// the layer can draw.
+
+#define FORM_CELLS 8u
+#define FORM_CELL_WIDTH (SCENE_SIZE / 4u)
+#define FORM_CELL_HEIGHT (SCENE_SIZE / 2u)
+#define FORM_MANY 65537u
+// The cells' vertices, eight each; then the restart strip's red triangle; then the 65537 quads.
+#define FORM_RESTART 64u
+#define FORM_SMALL (FORM_CELLS * 8u + 3u)
+#define FORM_VERTICES (FORM_SMALL + FORM_MANY * 4u)
+#define FORM_DATA_BYTES                                                                          \
+    (FORM_VERTICES * (uint32_t)sizeof(GpuVertex) + FORM_MANY * 4u * 2u + 0x4000u)
+static const uint8_t FORM_RED[4] = { 0xe0, 0x18, 0x28, 0xff };
+static const uint8_t FORM_GREEN[4] = { 0x18, 0xd0, 0x48, 0xff };
+
+static void FormsExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    (void)x;
+    (void)y;
+    memcpy(out, FORM_GREEN, 4);
+}
+
+static void FormsPlainExpected(uint32_t x, uint32_t y, uint8_t out[4]) {
+    const uint32_t cell = (y / FORM_CELL_HEIGHT) * 4u + x / FORM_CELL_WIDTH;
+    memcpy(out, cell == 2u || cell == 3u ? SCENE_CLEAR : FORM_GREEN, 4);
+}
+
+static const char *FormsLooksLike(const uint8_t pixel[4]) {
+    if (memcmp(pixel, FORM_GREEN, 4) == 0) {
+        return "a green quad, where no form draws";
+    }
+    if (memcmp(pixel, FORM_RED, 4) == 0) {
+        return "red: the form's green quad was not drawn over it, or a restart index was taken "
+               "for a vertex";
+    }
+    return memcmp(pixel, SCENE_CLEAR, 4) == 0 ? "the clear colour: the form drew nothing"
+                                              : "nothing the scene draws";
+}
+
+/// The four corners of @p cell's quad in @p colour, around it: top left, top right, bottom
+/// right, bottom left.
+static void FormCorners(GpuVertex out[4], uint32_t cell, const uint8_t colour[4]) {
+    static const uint8_t CORNERS[4] = { 0, 1, 2, 5 };
+    const uint32_t x0 = (cell % 4u) * FORM_CELL_WIDTH, y0 = (cell / 4u) * FORM_CELL_HEIGHT;
+    GpuVertex quad[6];
+    Quad(quad, x0, y0, x0 + FORM_CELL_WIDTH, y0 + FORM_CELL_HEIGHT, 0.5f, colour);
+    for (uint32_t k = 0; k < 4u; ++k) {
+        out[k] = quad[CORNERS[k]];
+    }
+}
+
+static bool FormsDrawBy(DrawPath *path, bool counted, char *why, size_t why_size) {
+    const int program = DrawPathProgram(path, ShaderData(SHADER_SCENE_VERT),
+                                        ShaderSize(SHADER_SCENE_VERT),
+                                        ShaderData(SHADER_SCENE_FRAG),
+                                        ShaderSize(SHADER_SCENE_FRAG));
+    DrawBuffer vertices, move, paint, shorts, many, bytes, strip, count;
+    // The numbers: cells 0, 1, 4, 5, 6 and 7 a draw each, cells 2 and 3 three draws each.
+    DrawBuffer numbers[FORM_CELLS];
+    bool ok = program >= 0 &&
+              DrawPathAlloc(path, FORM_VERTICES * (uint32_t)sizeof(GpuVertex), &vertices) &&
+              DrawPathAlloc(path, (uint32_t)sizeof(Move), &move) &&
+              DrawPathAlloc(path, (uint32_t)sizeof(Paint), &paint) &&
+              DrawPathAlloc(path, 9u * 2u, &shorts) &&
+              DrawPathAlloc(path, FORM_MANY * 4u * 2u, &many) && DrawPathAlloc(path, 12u, &bytes) &&
+              DrawPathAlloc(path, 15u * 2u, &strip) && DrawPathAlloc(path, 4u, &count);
+    for (uint32_t i = 0; ok && i < FORM_CELLS; ++i) {
+        ok = DrawPathAlloc(path, 3u * 20u, &numbers[i]);
+    }
+    if (!ok) {
+        snprintf(why, why_size, "building the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    // Every cell's red corners and then its green ones; the red triangle a restart index taken
+    // for a vertex would draw over the top right half of cell 7; cell 5's 65536 red quads and its
+    // green one.
+    GpuVertex *const corners = vertices.bytes;
+    for (uint32_t cell = 0; cell < FORM_CELLS; ++cell) {
+        FormCorners(corners + cell * 8u, cell, FORM_RED);
+        FormCorners(corners + cell * 8u + 4u, cell, FORM_GREEN);
+    }
+    GpuVertex red[4], green[4];
+    FormCorners(red, 7, FORM_RED);
+    corners[FORM_RESTART] = red[0];
+    corners[FORM_RESTART + 1u] = red[1];
+    corners[FORM_RESTART + 2u] = red[2];
+    FormCorners(red, 5, FORM_RED);
+    FormCorners(green, 5, FORM_GREEN);
+    for (uint32_t i = 0; i < FORM_MANY * 4u; ++i) {
+        corners[FORM_SMALL + i] = i < (FORM_MANY - 1u) * 4u ? red[i & 3u] : green[i & 3u];
+    }
+    // Two byte indices of a cell's eight vertices, after one index that is no draw's.
+    uint16_t eight[9] = { 0xdead, 0, 1, 2, 3, 4, 5, 6, 7 };
+    memcpy(shorts.bytes, eight, sizeof(eight));
+    uint16_t *const repeated = many.bytes;
+    for (uint32_t i = 0; i < FORM_MANY * 4u; ++i) {
+        repeated[i] = (uint16_t)((i & 3u) + (i < (FORM_MANY - 1u) * 4u ? 0u : 4u));
+    }
+    static const uint8_t triangles[12] = { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 };
+    memcpy(bytes.bytes, triangles, sizeof(triangles));
+    // Cell 7's vertices by their own numbers, each quad a strip (top left, top right, bottom
+    // left, bottom right) and the restart index after each; then the red triangle's other two
+    // corners, a restart before and after each, so restarted they are strips of one vertex, and
+    // taken for a vertex the index makes the triangle with them, once each way round.
+    static const uint16_t strips[15] = { 56,           57,
+                                         59,           58,
+                                         FORM_RESTART, 60,
+                                         61,           63,
+                                         62,           FORM_RESTART,
+                                         FORM_RESTART + 1u, FORM_RESTART,
+                                         FORM_RESTART + 2u, FORM_RESTART,
+                                         FORM_RESTART + 1u };
+    memcpy(strip.bytes, strips, sizeof(strips));
+    // The count, the instances, the first vertex and the base instance; for indices the first
+    // index, the base vertex and the base instance.
+    static const uint32_t cell0[4] = { 8, 1, 0, 0 };
+    static const uint32_t cell1[5] = { 8, 1, 1, 8, 0 };
+    static const uint32_t cell2[3][4] = { { 4, 1, 16, 0 }, { 4, 1, 20, 0 }, { 4, 1, 16, 0 } };
+    static const uint32_t cell3[3][5] = { { 4, 1, 1, 24, 0 }, { 4, 1, 5, 24, 0 }, { 4, 1, 1, 24, 0 } };
+    static const uint32_t cell4[5] = { FORM_MANY * 4u, 1, 0, 32, 0 };
+    static const uint32_t cell5[4] = { FORM_MANY * 4u, 1, FORM_SMALL, 0 };
+    static const uint32_t cell6[5] = { 12, 1, 0, 48, 0 };
+    static const uint32_t cell7[5] = { 15, 1, 0, 0, 0 };
+    static const uint32_t two = 2;
+    memcpy(numbers[0].bytes, cell0, sizeof(cell0));
+    memcpy(numbers[1].bytes, cell1, sizeof(cell1));
+    memcpy(numbers[2].bytes, cell2, sizeof(cell2));
+    memcpy(numbers[3].bytes, cell3, sizeof(cell3));
+    memcpy(numbers[4].bytes, cell4, sizeof(cell4));
+    memcpy(numbers[5].bytes, cell5, sizeof(cell5));
+    memcpy(numbers[6].bytes, cell6, sizeof(cell6));
+    memcpy(numbers[7].bytes, cell7, sizeof(cell7));
+    memcpy(count.bytes, &two, sizeof(two));
+    const Move still = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+    const Paint flat = { { 1.0f, 1.0f, 1.0f, 1.0f }, { PAINT_VERTEX, 0, 0, 0 } };
+    memcpy(move.bytes, &still, sizeof(still));
+    memcpy(paint.bytes, &flat, sizeof(flat));
+
+    const float clear[4] = { (float)SCENE_CLEAR[0] / 255.0f, (float)SCENE_CLEAR[1] / 255.0f,
+                             (float)SCENE_CLEAR[2] / 255.0f, (float)SCENE_CLEAR[3] / 255.0f };
+    const DrawElements by_shorts = { true, DRAW_INDEX_U16, &shorts };
+    const DrawElements by_many = { true, DRAW_INDEX_U16, &many };
+    const DrawElements by_bytes = { true, DRAW_INDEX_U8, &bytes };
+    const DrawElements by_strip = { true, DRAW_INDEX_U16, &strip };
+    DrawPathBegin(path);
+    DrawPathClear(path, clear);
+    DrawPathUseProgram(path, program);
+    DrawPathVertices(path, &vertices, FORM_VERTICES * (uint32_t)sizeof(GpuVertex));
+    DrawPathUniform(path, DRAW_STAGE_VERTEX, 0, &move, sizeof(Move));
+    DrawPathUniform(path, DRAW_STAGE_FRAGMENT, 0, &paint, sizeof(Paint));
+    DrawPathShape(path, DRAW_SHAPE_QUADS);
+    DrawPathDrawIndirect(path, NULL, &numbers[0]);
+    DrawPathDrawIndirect(path, &by_shorts, &numbers[1]);
+    if (counted) {
+        DrawPathDrawIndirectCount(path, NULL, &numbers[2], &count, 3, 16);
+        DrawPathDrawIndirectCount(path, &by_shorts, &numbers[3], &count, 3, 20);
+    }
+    DrawPathDrawIndirect(path, &by_many, &numbers[4]);
+    DrawPathDrawIndirect(path, NULL, &numbers[5]);
+    DrawPathShape(path, DRAW_SHAPE_TRIANGLES);
+    DrawPathDrawIndirect(path, &by_bytes, &numbers[6]);
+    DrawPathShape(path, DRAW_SHAPE_TRIANGLE_STRIP);
+    DrawPathRestart(path, true, FORM_RESTART);
+    DrawPathDrawIndirect(path, &by_strip, &numbers[7]);
+    DrawPathRestart(path, false, 0);
+    DrawPathShape(path, DRAW_SHAPE_TRIANGLES);
+    if (!DrawPathEnd(path)) {
+        snprintf(why, why_size, "drawing the scene: %s", DrawPathFailure(path));
+        return false;
+    }
+    return true;
+}
+
+static bool FormsDraw(DrawPath *path, char *why, size_t why_size) {
+    return FormsDrawBy(path, false, why, why_size);
+}
+
+static bool FormsCountedDraw(DrawPath *path, char *why, size_t why_size) {
+    return FormsDrawBy(path, true, why, why_size);
+}
+
 // ---- the draw deko3d has none of
 
 // The sixth scene, for the NVN the program looks up alone: deko3d has no draw of as many draws
@@ -872,35 +1073,42 @@ typedef struct {
     void (*expected)(uint32_t x, uint32_t y, uint8_t out[4]);
     const char *(*looks_like)(const uint8_t pixel[4]);
     DrawBinds binds;
+    /// Bytes of vertices and buffers past what every scene gets, for the scene that needs them.
+    uint32_t data_bytes;
 } Scene;
 
 static const Scene FIVE_DRAWS = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
-                                  Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_SINGLE };
+                                  Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_SINGLE, 0 };
 static const Scene WRAPPED = { false, WRAP_QUADS,
                                WRAP_QUADS * WRAP_TEXTURE_SIZE * WRAP_TEXTURE_SIZE * 4u, WrapDraw,
-                               WrapExpected, WrapLooksLike, DRAW_BINDS_SINGLE };
+                               WrapExpected, WrapLooksLike, DRAW_BINDS_SINGLE, 0 };
 static const Scene INDEXED = { false, 0, 0, IndexedDraw, IndexedExpected, IndexedLooksLike,
-                               DRAW_BINDS_SINGLE };
+                               DRAW_BINDS_SINGLE, 0 };
 // The first scene again, the NVN ways binding its buffers and textures through other calls.
 static const Scene FIVE_PLURAL = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
-                                   Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_PLURAL };
+                                   Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_PLURAL, 0 };
 static const Scene FIVE_DEFERRED = { true, 2, 2u * SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
-                                     Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_DEFERRED };
+                                     Draw, SceneExpected, SceneLooksLike, DRAW_BINDS_DEFERRED, 0 };
 static const Scene UPDATED = { false, 0, 0, UpdatedDraw, IndexedExpected, IndexedLooksLike,
-                               DRAW_BINDS_SINGLE };
+                               DRAW_BINDS_SINGLE, 0 };
 static const Scene RARE = { false, 1,           SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u,
                             RareDraw, RareExpected, RareLooksLike,
-                            DRAW_BINDS_SINGLE };
+                            DRAW_BINDS_SINGLE, 0 };
 static const Scene DRAWN = { false, 1, SCENE_TEXTURE_SIZE * SCENE_TEXTURE_SIZE * 4u, DrawnDraw,
-                             DrawnExpected, RareLooksLike, DRAW_BINDS_SINGLE };
+                             DrawnExpected, RareLooksLike, DRAW_BINDS_SINGLE, 0 };
 static const Scene CAPTURE = { false, 0, 0, CaptureDraw, CaptureExpected, CaptureLooksLike,
-                               DRAW_BINDS_SINGLE };
+                               DRAW_BINDS_SINGLE, 0 };
 static const Scene CAPTURE_PLAIN = { false,           0, 0, CapturePlainDraw, CaptureExpected,
-                                     CaptureLooksLike, DRAW_BINDS_SINGLE };
+                                     CaptureLooksLike, DRAW_BINDS_SINGLE, 0 };
 static const Scene CAPTURE_SEVERAL = { false,           0, 0, CaptureSeveralDraw, CaptureExpected,
-                                       CaptureLooksLike, DRAW_BINDS_SINGLE };
+                                       CaptureLooksLike, DRAW_BINDS_SINGLE, 0 };
 static const Scene INSTANCED = { false,           0, 0, InstancedDraw, InstancedExpected,
-                                 InstancedLooksLike, DRAW_BINDS_SINGLE };
+                                 InstancedLooksLike, DRAW_BINDS_SINGLE, 0 };
+static const Scene FORMS = { false, 0, 0, FormsDraw, FormsPlainExpected, FormsLooksLike,
+                             DRAW_BINDS_SINGLE, FORM_DATA_BYTES };
+static const Scene FORMS_COUNTED = { false,          0,                 0,              FormsCountedDraw,
+                                     FormsExpected, FormsLooksLike, DRAW_BINDS_SINGLE,
+                                     FORM_DATA_BYTES };
 
 /// One way's case: @p scene drawn down @p kind and every pixel judged.
 static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
@@ -915,7 +1123,7 @@ static void SceneCase(DrawPathKind kind, const Scene *scene, const char *name) {
     spec.programs = 1;
     spec.textures = scene->textures;
     // A page more where the way lends one as shader scratch memory.
-    spec.data_bytes = scene->binds == DRAW_BINDS_PLURAL ? 0x6000u : 0x4000u;
+    spec.data_bytes = (scene->binds == DRAW_BINDS_PLURAL ? 0x6000u : 0x4000u) + scene->data_bytes;
     spec.texture_bytes = scene->texture_bytes;
     spec.binds = scene->binds;
     spec.command_bytes = 0x10000u;
@@ -1015,6 +1223,12 @@ void NvnSceneFirst(void) {
     SceneCase(DRAW_PATH_LAYER, &INSTANCED,
               "the same eight instances through the layer's own NVN functions are each in "
               "its cell");
+    SceneCase(DRAW_PATH_DEKO3D, &FORMS,
+              "draws that read their numbers through deko3d, in the forms a runtime has to "
+              "convert, each leave their cell green");
+    SceneCase(DRAW_PATH_LAYER, &FORMS,
+              "the same draws that read their numbers through the layer's own NVN functions "
+              "each leave their cell green");
     SceneCase(DRAW_PATH_DEKO3D, &DRAWN,
               "a texture drawn with no program through deko3d fills its quarter, four pixels a "
               "texel");
@@ -1060,6 +1274,9 @@ void NvnSceneLast(void) {
     SceneCase(DRAW_PATH_NVN, &INSTANCED,
               "the same eight instances through the NVN the program looks up are each in its "
               "cell");
+    SceneCase(DRAW_PATH_NVN, &FORMS_COUNTED,
+              "draws that read their numbers through the NVN the program looks up, counted "
+              "ones too, each leave their cell green");
     SceneCase(DRAW_PATH_NVN, &RARE,
               "a texture drawn with no program and as many draws as a word says, through the "
               "NVN the program looks up, are each in its place");

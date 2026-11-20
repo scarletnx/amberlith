@@ -571,18 +571,27 @@ static void NvDrawInstanced(DrawPath *path, const DrawElements *elements, uint32
     }
 }
 
+static const NVNdrawPrimitive NV_SHAPES[] = { NVN_DRAW_PRIMITIVE_TRIANGLES,
+                                              NVN_DRAW_PRIMITIVE_QUADS,
+                                              NVN_DRAW_PRIMITIVE_TRIANGLE_STRIP };
+
 static void NvDrawIndirect(DrawPath *path, const DrawElements *elements,
                            const DrawBuffer *numbers) {
     NvnPath *const nv = Nv(path);
     if (elements != NULL && elements->indexed) {
-        nv->nvn.nvnCommandBufferDrawElementsIndirect(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+        nv->nvn.nvnCommandBufferDrawElementsIndirect(&nv->command, NV_SHAPES[path->shape],
                                                     NV_INDEX_TYPES[elements->type],
                                                     elements->indices->address,
                                                     numbers->address);
     } else {
-        nv->nvn.nvnCommandBufferDrawArraysIndirect(&nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES,
+        nv->nvn.nvnCommandBufferDrawArraysIndirect(&nv->command, NV_SHAPES[path->shape],
                                                   numbers->address);
     }
+}
+
+static void NvRestart(DrawPath *path, bool on, uint32_t index) {
+    NvnPath *const nv = Nv(path);
+    nv->nvn.nvnCommandBufferSetPrimitiveRestart(&nv->command, on ? 1 : 0, (int)index);
 }
 
 static void NvDrawIndirectCount(DrawPath *path, const DrawElements *elements,
@@ -591,12 +600,12 @@ static void NvDrawIndirectCount(DrawPath *path, const DrawElements *elements,
     NvnPath *const nv = Nv(path);
     if (elements != NULL && elements->indexed) {
         nv->nvn.nvnCommandBufferMultiDrawElementsIndirectCount(
-            &nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES, NV_INDEX_TYPES[elements->type],
+            &nv->command, NV_SHAPES[path->shape], NV_INDEX_TYPES[elements->type],
             elements->indices->address, numbers->address, count->address, (int)most,
             (ptrdiff_t)stride);
     } else {
         nv->nvn.nvnCommandBufferMultiDrawArraysIndirectCount(
-            &nv->command, NVN_DRAW_PRIMITIVE_TRIANGLES, numbers->address, count->address,
+            &nv->command, NV_SHAPES[path->shape], numbers->address, count->address,
             (int)most, (ptrdiff_t)stride);
     }
 }
@@ -793,7 +802,7 @@ static const DrawPathWay NVN_WAY = {
     NvUseProgram, NvVertices, NvUniform, NvBindTexture, NvDraw,  NvEnd,   NvRead,
     NvDrawIndexed, NvUpdate, NvInstances, NvDrawInstanced, NvDrawIndirect,
     NvDrawIndirectCount, NvDrawTexture, NvProgramCapturing, NvCaptureInto, NvCapture,
-    NvDrawCaptured,
+    NvDrawCaptured, NvRestart,
 };
 
 /// The steps of the bring-up, in order; false with the step in @p why.

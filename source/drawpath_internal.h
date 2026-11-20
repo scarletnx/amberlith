@@ -44,6 +44,7 @@ typedef struct {
     void (*capture_into)(DrawPath *path, const DrawBuffer *into, uint32_t bytes, bool several);
     void (*capture)(DrawPath *path, DrawCaptureStep step, const DrawBuffer *control);
     void (*draw_captured)(DrawPath *path, const DrawBuffer *control);
+    void (*restart)(DrawPath *path, bool on, uint32_t index);
 } DrawPathWay;
 
 /// What every way starts with: its functions, what it was asked for and its failure.
@@ -51,6 +52,8 @@ struct DrawPath {
     const DrawPathWay *way;
     DrawPathSpec spec;
     char failure[256];
+    /// What the draws that read their numbers draw (DrawPathShape), triangles until a scene says.
+    DrawShape shape;
 };
 
 /// Keeps the first failure since the way came up, as the report wants the cause and not what
