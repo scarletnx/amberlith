@@ -2252,6 +2252,8 @@ nvn	four quads drawn through deko3d from one uniform buffer updated before each 
 nvn	the same four quads of an updated uniform buffer through the layer's own NVN functions are each its own colour	nvn	exact	spec	nro
 nvn	eight instances of a quad drawn through deko3d, by instanced draws and by draws that read their numbers, are each in its cell	nvn	exact	spec	nro
 nvn	the same eight instances through the layer's own NVN functions are each in its cell	nvn	exact	spec	nro
+nvn	draws that read their numbers through deko3d, in the forms a runtime has to convert, each leave their cell green	nvn	exact	spec	nro
+nvn	the same draws that read their numbers through the layer's own NVN functions each leave their cell green	nvn	exact	spec	nro
 nvn	the samples counter reports a quad's 256 pixels and none after a reset, through the layer's own NVN functions	nvn	exact	spec	nro
 nvn	two values a list reports are in memory once it has run, through the layer's own NVN functions	nvn	exact	spec	nro
 nvn	two timestamp reports hold no count and times between the device's clock before and after, through the layer's own NVN functio	nvn	exact	spec	nro
@@ -2405,6 +2407,7 @@ nvn	the scene of five draws bound through the looked up calls that take several 
 nvn	the scene of five draws bound through the looked up deferred calls holds what the processor works out	nvn	exact	spec	nro
 nvn	the same four quads of an updated uniform buffer through the NVN the program looks up are each its own colour	nvn	exact	spec	nro
 nvn	the same eight instances through the NVN the program looks up are each in its cell	nvn	exact	spec	nro
+nvn	draws that read their numbers through the NVN the program looks up, counted ones too, each leave their cell green	nvn	exact	spec	nro
 nvn	a texture drawn with no program and as many draws as a word says, through the NVN the program looks up, are each in its place	nvn	exact	spec	nro
 nvn	what a capture took of two draws, paused for a third between them, is drawn again a row down through the NVN the program looks	nvn	exact	spec	nro
 nvn	the same capture into a buffer bound by the call that takes several is drawn again a row down	nvn	exact	spec	nro

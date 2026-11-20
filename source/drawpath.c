@@ -130,6 +130,14 @@ void DrawPathDrawIndirect(DrawPath *path, const DrawElements *elements,
     path->way->draw_indirect(path, elements, numbers);
 }
 
+void DrawPathShape(DrawPath *path, DrawShape shape) {
+    path->shape = shape;
+}
+
+void DrawPathRestart(DrawPath *path, bool on, uint32_t index) {
+    path->way->restart(path, on, index);
+}
+
 void DrawPathDrawIndirectCount(DrawPath *path, const DrawElements *elements,
                                const DrawBuffer *numbers, const DrawBuffer *count, uint32_t most,
                                uint32_t stride) {
@@ -472,6 +480,9 @@ static void DkDrawInstanced(DrawPath *path, const DrawElements *elements, uint32
     }
 }
 
+static const DkPrimitive DK_SHAPES[] = { DkPrimitive_Triangles, DkPrimitive_Quads,
+                                         DkPrimitive_TriangleStrip };
+
 static void DkDrawIndirect(DrawPath *path, const DrawElements *elements,
                            const DrawBuffer *numbers) {
     Deko3dPath *const dk = Dk(path);
@@ -481,10 +492,14 @@ static void DkDrawIndirect(DrawPath *path, const DrawElements *elements,
     if (elements != NULL && elements->indexed) {
         dkCmdBufBindIdxBuffer(dk->gpu.cmdbuf, DK_INDEX_FORMATS[elements->type],
                               elements->indices->address);
-        dkCmdBufDrawIndexedIndirect(dk->gpu.cmdbuf, DkPrimitive_Triangles, numbers->address);
+        dkCmdBufDrawIndexedIndirect(dk->gpu.cmdbuf, DK_SHAPES[path->shape], numbers->address);
     } else {
-        dkCmdBufDrawIndirect(dk->gpu.cmdbuf, DkPrimitive_Triangles, numbers->address);
+        dkCmdBufDrawIndirect(dk->gpu.cmdbuf, DK_SHAPES[path->shape], numbers->address);
     }
+}
+
+static void DkRestart(DrawPath *path, bool on, uint32_t index) {
+    dkCmdBufSetPrimitiveRestart(Dk(path)->gpu.cmdbuf, on, index);
 }
 
 static void DkDrawIndirectCount(DrawPath *path, const DrawElements *elements,
@@ -591,7 +606,7 @@ static const DrawPathWay DEKO3D_WAY = {
     DkUseProgram, DkVertices, DkUniform, DkBindTexture, DkDraw,  DkEnd,   DkRead,
     DkDrawIndexed, DkUpdate, DkInstances, DkDrawInstanced, DkDrawIndirect,
     DkDrawIndirectCount, DkDrawTexture, DkProgramCapturing, DkCaptureInto, DkCapture,
-    DkDrawCaptured,
+    DkDrawCaptured, DkRestart,
 };
 
 DrawPath *DrawPathOpenDeko3d(const DrawPathSpec *spec, char *why, size_t why_size) {

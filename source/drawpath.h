@@ -197,6 +197,18 @@ void DrawPathDrawInstanced(DrawPath *path, const DrawElements *elements, uint32_
 /// instance).
 void DrawPathDrawIndirect(DrawPath *path, const DrawElements *elements,
                           const DrawBuffer *numbers);
+/// What the draws that read their numbers make of their vertices or indices, from this call on:
+/// triangles as the list starts, quads of four (around the quad, as the graphics unit's own
+/// quads go), or one strip of triangles.
+typedef enum {
+    DRAW_SHAPE_TRIANGLES = 0,
+    DRAW_SHAPE_QUADS = 1,
+    DRAW_SHAPE_TRIANGLE_STRIP = 2,
+} DrawShape;
+void DrawPathShape(DrawPath *path, DrawShape shape);
+/// With @p on, an index equal to @p index is no vertex: it ends the strip, and the next index
+/// starts another. Off as the list starts.
+void DrawPathRestart(DrawPath *path, bool on, uint32_t index);
 /// As many of the draws whose numbers are @p stride bytes apart at @p numbers as the word at
 /// @p count says, @p most at the most, the graphics unit reading the word. NVN's alone: the
 /// deko3d way fails it, deko3d having no such draw.
