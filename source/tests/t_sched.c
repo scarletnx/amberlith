@@ -27,7 +27,7 @@ static const char *const STARTS = "threads start on the core and at the priority
 
 static uint8_t stacks[THREADS_MAX][STACK_SIZE] __attribute__((aligned(0x1000)));
 static Thread threads[THREADS_MAX];
-static bool made[THREADS_MAX], started[THREADS_MAX];
+static bool made[THREADS_MAX], raw[THREADS_MAX], started[THREADS_MAX];
 static SchedTrace trace;
 static Mutex first, second;
 // Set with atomic stores and read with atomic loads, from threads on three cores.
@@ -169,12 +169,15 @@ static void Yielder(void *arg) {
     Mark(SCHED_DONE);
 }
 
+// The two threads whose first step is the verdict, made raw: the step comes with nothing before it.
 static void Behind(void *arg) {
     Mark(SCHED_OTHER_RAN);
+    svcExitThread();
 }
 
 static void Started(void *arg) {
     Mark(SCHED_RAN);
+    svcExitThread();
 }
 
 static void Alone(void *arg) {
@@ -191,6 +194,7 @@ static bool Make(uint32_t i, ThreadFunc entry, int priority, int core, uint32_t 
     }
     Result rc = threadCreate(&threads[i], entry, NULL, stacks[i], STACK_SIZE, priority, core);
     made[i] = R_SUCCEEDED(rc);
+    raw[i] = false;
     const char *step = "threadCreate";
     if (made[i] && mask != (1u << core)) {
         step = "svcSetThreadCoreMask";
@@ -203,6 +207,23 @@ static bool Make(uint32_t i, ThreadFunc entry, int priority, int core, uint32_t 
         return false;
     }
     return true;
+}
+
+/// A thread of the kernel's alone, on @p core, that enters @p entry and leaves by svcExitThread.
+/// libnx's own run its entry first, which loops, and takes a lock of every thread's.
+static bool MakeRaw(uint32_t i, ThreadFunc entry, int priority, int core) {
+    if (trace.failure[0] != '\0') {
+        return false;
+    }
+    const Result rc = svcCreateThread(&threads[i].handle, (void *)entry, NULL,
+                                      stacks[i] + STACK_SIZE, priority, core);
+    made[i] = raw[i] = R_SUCCEEDED(rc);
+    if (!made[i]) {
+        snprintf(trace.failure, sizeof(trace.failure),
+                 "svcCreateThread for a thread of %d on core %d failed: 0x%x", priority, core,
+                 (unsigned)rc);
+    }
+    return made[i];
 }
 
 static bool Start(uint32_t i) {
@@ -226,8 +247,7 @@ static void WaitFor(SchedStep step, uint32_t ms) {
     }
 }
 
-/// Nothing of the case before: no thread, no step, no flag.
-static void Clear(void) {
+static void Begin(void) {
     SchedReset(&trace);
     memset(made, 0, sizeof(made));
     memset(started, 0, sizeof(started));
@@ -235,10 +255,6 @@ static void Clear(void) {
     mutexInit(&first);
     mutexInit(&second);
     watch_start = armGetSystemTick();
-}
-
-static void Begin(void) {
-    Clear();
     if (Make(0, Watchdog, SCHED_PRIORITY_WATCH, SCHED_WATCH_CORE, 1u << SCHED_WATCH_CORE)) {
         Start(0);
     }
@@ -281,7 +297,11 @@ static void End(void) {
     WaitExit(0u, 1u);
     for (uint32_t i = 0; i < THREADS_MAX; ++i) {
         if (made[i]) {
-            threadClose(&threads[i]);
+            if (raw[i]) {
+                svcCloseHandle(threads[i].handle);
+            } else {
+                threadClose(&threads[i]);
+            }
             made[i] = false;
         }
     }
@@ -346,7 +366,7 @@ static void RunMigration(void) {
 static void RunYield(void) {
     Begin();
     if (Make(1, Yielder, SCHED_PRIORITY_WAITER, SCHED_CASE_CORE, SCHED_YIELD_CORES) &&
-        Make(2, Behind, 50, SCHED_CASE_CORE, CORE_ONE) && Start(1)) {
+        MakeRaw(2, Behind, 50, SCHED_CASE_CORE) && Start(1)) {
         WaitFor(SCHED_RAN, 100u);
         if (Start(2)) {
             Store(&ready);
@@ -364,11 +384,9 @@ static void RunYield(void) {
     End();
 }
 
-// No watchdog: there is no loop to end, and libnx's threads take one lock of its on their way to
-// their entry, where the watchdog's, starting, could stop the one started here.
 static void RunStart(void) {
-    Clear();
-    if (Make(1, Started, 43, SCHED_MAIN_CORE, 1u << SCHED_MAIN_CORE) && Start(1)) {
+    Begin();
+    if (MakeRaw(1, Started, 43, SCHED_MAIN_CORE) && Start(1)) {
         Mark(SCHED_RETURNED);
     }
     End();
