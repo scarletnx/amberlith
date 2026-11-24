@@ -77,9 +77,9 @@ none needs a person, a server or sound:
 | family | suites | what they ask |
 |---|---|---|
 | `libc` | libc, system, socket ([libc](families/Libc.md)); bionic | the C library as every frontend has it; then bionic's own words for what the standard leaves open, the loader, `mmap`, `/proc/self`, signals, properties |
-| `graphics` | gles | EGL, and GLES 1.1, 2 and 3 drawing read back by pixels |
+| `graphics` | gles | EGL, and GLES 1.1, 2 and 3 drawing read back by pixels; a surface and a context destroyed while another thread has them |
 | `net` | net | Java sockets on loopback, and names that never resolve, in Java and through bionic's resolver |
-| `jni` | jni | `JNI_OnLoad`, both bindings, `FindClass` from two kinds of thread, strings, exceptions, arrays, calls |
+| `jni` | jni | `JNI_OnLoad`, both bindings, `FindClass` from two kinds of thread, strings, exceptions, arrays, calls; what threads that ran native code leave when they end |
 | `framework` | framework, resources | the framework's Java API an app calls, and its resources: strings, plurals, typed values, binary XML, a layout, assets |
 
 The Java cases report through the engine: each says it starts before its work and how it ended after, so a case

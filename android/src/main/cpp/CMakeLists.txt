@@ -19,7 +19,7 @@ file(STRINGS "${root}/source/portable.txt" portable REGEX "^[^#]")
 list(TRANSFORM portable PREPEND "${root}/")
 
 add_library(amberlith SHARED ${portable} frontend.c platform_android.c probe.c bionic.c jni_cases.c
-                             gles.c net.c)
+                             thread_end.c gles.c net.c)
 target_include_directories(amberlith PRIVATE "${root}/source")
 target_compile_definitions(amberlith PRIVATE AMBERLITH_VERSION="${AMBERLITH_VERSION}"
                            AMBERLITH_BUILD="${AMBERLITH_BUILD}" AMBERLITH_HASH="${AMBERLITH_HASH}")
@@ -29,4 +29,4 @@ target_compile_options(amberlith PRIVATE -std=c11 -Wall -Wextra -Werror -Wno-unu
 # builds it (demo_fluidref.h)
 set_source_files_properties("${root}/source/demo_fluidref.c" PROPERTIES COMPILE_OPTIONS
                             -ffp-contract=off)
-target_link_libraries(amberlith PRIVATE EGL GLESv3 log m dl)
+target_link_libraries(amberlith PRIVATE EGL GLESv3 android log m dl)

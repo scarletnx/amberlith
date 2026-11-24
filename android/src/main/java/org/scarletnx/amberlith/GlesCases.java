@@ -75,4 +75,29 @@ final class GlesCases {
             return Outcome.check("00ff00ff", NativeLib.gl1ClearRead());
         }
     }
+
+    /**
+     * EGL keeps a destroyed surface and context until no thread has them current: the thread that does goes on drawing
+     * on its own pixels beside a new surface, and 24 threads that end with theirs current leave room for the next.
+     */
+    static final class DestroyedElsewhere implements Case {
+        private static final int LEFT = 24;
+
+        @Override public Outcome run(Env env) throws Throwable {
+            String got = NativeLib.glDestroyedElsewhere();
+            int left = 0;
+            String why = "";
+            for (int i = 0; i < LEFT && why.isEmpty(); ++i) {
+                String[] said = {""};
+                Thread t = new Thread(() -> said[0] = NativeLib.glLeaveCurrent());
+                t.start();
+                t.join();
+                why = said[0].isEmpty() ? NativeLib.glDestroyLeft() : said[0];
+                if (why.isEmpty()) ++left;
+            }
+            return Outcome.check("destroyed 1 1|the holder's ff0000ff 00ff00ff, error 0x0, released 1|the other's 0000ffff|left current "
+                + LEFT + "|a clear ff0000ff ff0000ff", got + "|left current " + left + (why.isEmpty() ? "" : ": " + why) + "|a clear "
+                + NativeLib.glClearRead());
+        }
+    }
 }

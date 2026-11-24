@@ -65,6 +65,7 @@ final class Suites {
         def("exceptions cross JNI both ways with their class and message", "exact", "JniCases$Exceptions"),
         def("array elements copy back, a critical region writes, direct buffers both ways", "exact", "JniCases$ArraysAndBuffers"),
         def("Call*Method passes mixed arguments in variadic and array forms", "exact", "JniCases$Calls"),
+        def("what threads that ran native code held is given back when they end", "bound", "JniCases$ThreadsGiveBack"),
     };
 
     private static final Def[] BIONIC = {
@@ -88,6 +89,7 @@ final class Suites {
         def("a bad shader fails to compile with a log, a bad enum is GL_INVALID_ENUM once", "exact", "GlesCases$Errors"),
         def("a GLES 3 context renders integer shader math into a texture framebuffer", "exact", "GlesCases$Gl3Framebuffer"),
         def("a GLES 1.1 clear reads back", "exact", "GlesCases$Gl1ClearRead"),
+        def("a surface and a context destroyed while another thread has them draw until it lets go", "exact", "GlesCases$DestroyedElsewhere"),
     };
 
     private static Def[] of(String suite) {
