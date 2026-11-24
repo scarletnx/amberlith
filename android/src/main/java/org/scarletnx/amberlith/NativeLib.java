@@ -34,6 +34,14 @@ final class NativeLib {
     static native String registered(); // by RegisterNatives in JNI_OnLoad
     static native String byName();     // by its JNI name
 
+    // the threads that ran native code and ended
+    static native void threadEndsStart();
+    static native void threadEndsFill();
+    static native int threadEndsAttached(int count);
+    static native void threadEndsWait();
+    static native void threadEndsMark();
+    static native String threadEndsLeft();
+
     // GLES
     static native String eglInit();
     static native String glClearRead();
@@ -44,6 +52,9 @@ final class NativeLib {
     static native String glErrors();
     static native String gl3Framebuffer();
     static native String gl1ClearRead();
+    static native String glDestroyedElsewhere();
+    static native String glLeaveCurrent();
+    static native String glDestroyLeft();
 
     // bionic's resolver
     static native String resolve(String host);

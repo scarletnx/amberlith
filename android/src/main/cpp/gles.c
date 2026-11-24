@@ -7,6 +7,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES3/gl3.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -307,4 +308,91 @@ JNIEXPORT jstring JNICALL PROBE_FN(gl1ClearRead)(JNIEnv* env, jclass cls) {
     unsigned a = pixel(8, 8);
     gl_end(&g);
     return probe_string(env, "%08x", a);
+}
+
+/* a thread that keeps its surface and context current while another destroys them, step by step */
+typedef struct {
+    pthread_mutex_t lock;
+    pthread_cond_t moved;
+    int step; /* 1: it cleared, 2: they are destroyed */
+    Gl gl;
+    bool begun, released;
+    unsigned before, after;
+    GLenum error;
+} Holder;
+
+static void holder_step(Holder* h, int step, bool wait) {
+    pthread_mutex_lock(&h->lock);
+    if (!wait) {
+        h->step = step;
+        pthread_cond_broadcast(&h->moved);
+    }
+    while (wait && h->step < step) pthread_cond_wait(&h->moved, &h->lock);
+    pthread_mutex_unlock(&h->lock);
+}
+
+static void clear(float r, float g, float b) {
+    glClearColor(r, g, b, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+static void* hold(void* arg) {
+    Holder* h = arg;
+    h->begun = gl_begin(&h->gl, 2);
+    if (h->begun) {
+        clear(1, 0, 0);
+        glFinish();
+    }
+    holder_step(h, 1, false);
+    holder_step(h, 2, true);
+    if (!h->begun) return NULL;
+    h->before = pixel(8, 8);
+    clear(0, 1, 0);
+    h->after = pixel(8, 8);
+    h->error = glGetError();
+    h->released = eglMakeCurrent(h->gl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    return NULL;
+}
+
+JNIEXPORT jstring JNICALL PROBE_FN(glDestroyedElsewhere)(JNIEnv* env, jclass cls) {
+    (void)cls;
+    Holder h = {.lock = PTHREAD_MUTEX_INITIALIZER, .moved = PTHREAD_COND_INITIALIZER};
+    pthread_t t;
+    if (pthread_create(&t, NULL, hold, &h)) return (*env)->NewStringUTF(env, "pthread_create failed");
+    holder_step(&h, 1, true);
+    int surface = 0, context = 0;
+    unsigned other = 0;
+    Gl g;
+    bool begun = false;
+    if (h.begun) {
+        surface = eglDestroySurface(h.gl.display, h.gl.surface) == EGL_TRUE;
+        context = eglDestroyContext(h.gl.display, h.gl.context) == EGL_TRUE;
+        begun = gl_begin(&g, 2);
+        if (begun) clear(0, 0, 1);
+    }
+    holder_step(&h, 2, false);
+    pthread_join(t, NULL);
+    if (!h.begun) return (*env)->NewStringUTF(env, h.gl.error);
+    if (!begun) return (*env)->NewStringUTF(env, g.error);
+    other = pixel(8, 8);
+    gl_end(&g);
+    return probe_string(env, "destroyed %d %d|the holder's %08x %08x, error 0x%x, released %d|the other's %08x", surface, context,
+                        h.before, h.after, h.error, h.released, other);
+}
+
+/* the last thread's, which ended with them current */
+static Gl g_left;
+
+JNIEXPORT jstring JNICALL PROBE_FN(glLeaveCurrent)(JNIEnv* env, jclass cls) {
+    (void)cls;
+    if (!gl_begin(&g_left, 2)) return (*env)->NewStringUTF(env, g_left.error);
+    clear(1, 0, 0);
+    return (*env)->NewStringUTF(env, "");
+}
+
+JNIEXPORT jstring JNICALL PROBE_FN(glDestroyLeft)(JNIEnv* env, jclass cls) {
+    (void)cls;
+    if (!eglDestroyContext(g_left.display, g_left.context)) return probe_string(env, "eglDestroyContext error 0x%x", eglGetError());
+    if (!eglDestroySurface(g_left.display, g_left.surface)) return probe_string(env, "eglDestroySurface error 0x%x", eglGetError());
+    return (*env)->NewStringUTF(env, "");
 }

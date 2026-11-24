@@ -4,6 +4,8 @@ package org.scarletnx.amberlith;
 
 import java.nio.ByteBuffer;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /** JNI as ART gives it to an app's native code. */
 final class JniCases {
@@ -76,6 +78,49 @@ final class JniCases {
         @Override public Outcome run(Env env) {
             String s = "1 -2 3.5 4.25 five true x -6 7 8.125 9.5";
             return Outcome.check(s + "|" + s + "|1.25", NativeLib.calls());
+        }
+    }
+
+    /**
+     * Java's threads and native ones that attach, each with everything a thread keeps filled (thread_end.c): 64 of the
+     * first alive at once and 16 of the second, in ten rounds. The first two set up what stays (a malloc arena, a
+     * cached stack); after the others the process is as it was, no dead thread takes a signal, and no thread found
+     * another's key value, thread-local or errno.
+     */
+    static final class ThreadsGiveBack implements Case {
+        private static final int ROUNDS = 10, MARK = 2, JAVA = 64, ATTACHED = 16;
+
+        @Override public Outcome run(Env env) throws Throwable {
+            NativeLib.threadEndsStart();
+            for (int round = 0; round < ROUNDS; ++round) {
+                if (round == MARK) NativeLib.threadEndsMark();
+                CountDownLatch filled = new CountDownLatch(JAVA), end = new CountDownLatch(1);
+                Thread[] threads = new Thread[JAVA];
+                for (int i = 0; i < JAVA; ++i) {
+                    threads[i] = new Thread(() -> {
+                        NativeLib.threadEndsFill();
+                        filled.countDown();
+                        try {
+                            end.await();
+                        } catch (InterruptedException e) {
+                            // it ends all the same
+                        }
+                    }, "amberlith-ends");
+                    threads[i].start();
+                }
+                boolean all = filled.await(60, TimeUnit.SECONDS);
+                int attached = NativeLib.threadEndsAttached(ATTACHED);
+                end.countDown();
+                for (Thread t : threads) t.join();
+                if (!all || attached != ATTACHED)
+                    return Outcome.fail("round " + round + ": " + (JAVA - filled.getCount()) + " of " + JAVA + " Java threads and "
+                        + attached + " of " + ATTACHED + " native ones ran within 60 s");
+                NativeLib.threadEndsWait();
+            }
+            int n = ROUNDS * (JAVA + ATTACHED);
+            return Outcome.check(n + " threads, 0 still listed|no thread to a signal " + n + "|loopers " + n
+                + "|stale key 0, thread-local 0, errno 0|epoll sets given back|address space given back|resident memory given back",
+                NativeLib.threadEndsLeft());
         }
     }
 }
