@@ -220,45 +220,75 @@ static void CheckMigration(void) {
                moved, waited, same, said);
 }
 
-static void Yielded(int32_t p0, int32_t p1, int32_t p2, int32_t alone0, int32_t alone1) {
+static void Yielded(int32_t p0, int32_t p1, int32_t freed, int32_t p2, int32_t alone0,
+                    int32_t alone1) {
     SchedReset(&t);
     At(SCHED_RAN, 0);
-    At(SCHED_OTHER_RAN, 1);
     SchedValue(&t, SCHED_CORE_P0, p0);
     SchedValue(&t, SCHED_CORE_P1, p1);
+    At(SCHED_YIELDED, 1);
+    SchedValue(&t, SCHED_CORE_FREED, freed);
+    At(SCHED_OTHER_RAN, 2);
     SchedValue(&t, SCHED_CORE_P2, p2);
-    At(SCHED_DONE, 2);
+    At(SCHED_DONE, 3);
     SchedValue(&t, SCHED_CORE_ALONE0, alone0);
     SchedValue(&t, SCHED_CORE_ALONE1, alone1);
 }
 
 static void CheckYield(void) {
-    // The scheduler reden ports: an idle core takes the yielder as soon as a thread waits behind
+    // The scheduler reden ports: core 0, once idle, takes the yielder, which has a thread behind
     // it, and svcSleepThread(-1) alone leaves it where it is.
-    Yielded(2, 2, 2, 1, 1);
+    Yielded(1, 1, 0, 0, 1, 1);
     const bool ported = Judge(SCHED_YIELD) &&
                         answers == (2u << (2u * SCHED_Q3) | 2u << (2u * SCHED_Q2)) &&
-                        strstr(said, "it was on core 2 (Q3 B), on core 2 after svcSleepThread(0), "
-                                     "on 2 after svcSleepThread(-1); alone, svcSleepThread(-1) "
-                                     "took it from core 1 to 1 (Q2 B)") != NULL;
+                        strstr(said, "it was on core 1, and on core 1 after svcSleepThread(0); with "
+                                     "core 0 idle, on core 0 (Q3 B), and on 0 after "
+                                     "svcSleepThread(-1); alone, svcSleepThread(-1) took it from "
+                                     "core 1 to 1 (Q2 B); ran 0.0, yielded 0.1, other ran 0.2, "
+                                     "done 0.3") != NULL;
     char ported_said[480];
     memcpy(ported_said, said, sizeof(said));
     // The handback's reading: it stays until it yields, and -1 always moves it.
-    Yielded(1, 1, 0, 1, 2);
+    Yielded(1, 1, 1, 0, 1, 2);
     const bool asked = Judge(SCHED_YIELD) &&
                        answers == (1u << (2u * SCHED_Q3) | 1u << (2u * SCHED_Q2));
     // svcSleepThread(0) moving the thread is the failure.
-    Yielded(1, 2, 2, 1, 1);
+    Yielded(1, 0, 0, 0, 1, 1);
     const bool moved = !Judge(SCHED_YIELD) &&
-                       strstr(said, "svcSleepThread(0) moved the thread from core 1 to core 2") ==
+                       strstr(said, "svcSleepThread(0) moved the thread from core 1 to core 0") ==
                            said;
-    // A core outside the three, or the yielder never done.
-    Yielded(1, 1, 3, 1, 1);
-    const bool outside = !Judge(SCHED_YIELD);
+    // So is giving the core to the thread of 50 behind it, though it came back to it.
+    Yielded(1, 1, 1, 1, 1, 1);
+    t.order[SCHED_OTHER_RAN] = 0u;
+    t.order[SCHED_YIELDED] = 0u;
+    At(SCHED_OTHER_RAN, 1);
+    At(SCHED_YIELDED, 2);
+    const bool gave = !Judge(SCHED_YIELD) &&
+                      strstr(said, "svcSleepThread(0) of the thread of 44 gave core 1 to the "
+                                   "thread of 50 behind it") == said;
+    // The same order with the yielder on core 0 all along: core 1 was the other thread's.
+    for (uint32_t i = SCHED_CORE_P0; i <= SCHED_CORE_P2; ++i) {
+        SchedValue(&t, (SchedValueId)i, 0);
+    }
+    const bool elsewhere = Judge(SCHED_YIELD);
+    // A core outside its mask, or outside the three alone, the other thread or the yielder never
+    // done.
+    Yielded(1, 1, 1, 2, 1, 1);
+    bool outside = !Judge(SCHED_YIELD);
+    Yielded(1, 1, 1, 1, 1, 3);
+    outside &= !Judge(SCHED_YIELD);
+    Yielded(1, 1, 1, 1, 1, 1);
+    t.order[SCHED_OTHER_RAN] = 0u;
+    const bool never = !Judge(SCHED_YIELD) && strstr(said, "never ran") != NULL;
+    Yielded(1, 1, 1, 1, 1, 1);
+    t.order[SCHED_DONE] = 0u;
+    const bool unfinished = !Judge(SCHED_YIELD) && strstr(said, "did not finish") != NULL;
     CHECK_TRUE(SUITE, "sched: svcSleepThread(0) must keep the core, and the cores answer Q2 and Q3",
-               CHECK_NONE, ported && asked && moved && outside,
-               "ported \"%.200s\"; asked %d, moved %d, outside %d", ported_said, asked, moved,
-               outside);
+               CHECK_NONE, ported && asked && moved && gave && elsewhere && outside && never &&
+                               unfinished,
+               "ported \"%.230s\"; asked %d, moved %d, gave %d, elsewhere %d, outside %d, never "
+               "%d, unfinished %d",
+               ported_said, asked, moved, gave, elsewhere, outside, never, unfinished);
 }
 
 static void CheckNote(void) {

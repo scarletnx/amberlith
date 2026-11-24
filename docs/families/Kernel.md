@@ -46,7 +46,8 @@ watchdog runs on core 2 at priority 40, sleeping a millisecond at a time; after 
 every loop to stop, and the case fails and goes on. The main thread, which waits blocked for the
 threads to exit, is put on core 0 for the whole family and back where it was after: it runs at 44
 there, and a thread spinning at a better priority on its core would starve it. No spinning thread
-ever shares a core with the main thread or the watchdog, and every loop ends when the flag it
+ever shares a core with the main thread (which spins itself, alone on core 0, while the yield of
+the sixth case is read) or the watchdog, and every loop ends when the flag it
 reads is set or the watchdog says stop, so a machine without one of the rules fails a case rather
 than hang the run. The main thread waits for each thread up to a second past the watchdog; every
 thread is closed at the end of its case, passed or failed. A thread that never exits keeps its
@@ -57,7 +58,8 @@ No case is in the hang table for that reason.
 The mutexes are libnx's `Mutex`, which marks its owner in the word it waits on and blocks in
 `svcArbitrateLock`, so a thread waiting for one is a kernel waiter its owner can inherit from. The
 priorities are the ones the hang showed: the waiter 44, the spinner 45, the owner 46; a thread
-that preempts is 43, the end of a chain 50; the first case says if any of them is refused.
+that preempts is 43, the end of a chain and the thread behind the one that yields 50; the first case
+says if any of them is refused.
 
 Each thread notes the steps it takes, with the system counter, in one trace (`SchedTrace` in
 `source/schedref.h`, written with atomic stores); `SchedJudge` reads it once all of them exited.
@@ -78,7 +80,13 @@ no flag before the watchdog (1000 ms): the owner (46) never ran after its sleep 
 | a thread that becomes ready at a better priority takes the core from one spinning | the spinner (45); a thread of 43 sleeps 10 ms, then sets the flag | the flag before the watchdog; the line says how long after the sleep began | R2 |
 | the owner goes back to its own priority when it hands the mutex over | as the first case | the mutex changes hands before the watchdog, the spinner sees the flag before the owner runs again, and the owner then reads 46 | R1; Q1 |
 | a thread behind a spinning one moves to an idle core of its mask | the spinner (45); a thread of 46 with mask 0 to 2 and core 1 ideal reads its core and sets the flag | the flag before the watchdog, read on core 0 or 2 | R3 |
-| svcSleepThread(0) leaves the thread on its core | a thread of 44, mask 0 to 2, spins until a thread of 50 (core 1 only) is ready behind it; then reads its core, svcSleepThread(0), its core, svcSleepThread(-1), its core; then alone, its core, svcSleepThread(-1), its core | its core is the same before and after svcSleepThread(0), every core read is 0 to 2, and the thread of 50 runs | Q2, Q3 |
+| svcSleepThread(0) leaves the thread on its core | a thread of 44, mask 0 and 1, spins until a thread of 50 (core 1 only) is ready behind it, with the main thread spinning on core 0: no core of its mask is idle; then reads its core, svcSleepThread(0), its core; then, the main thread blocked, its core until it changes or for 20 ms, svcSleepThread(-1), its core; then alone, mask 0 to 2, its core, svcSleepThread(-1), its core | its core is the same before and after svcSleepThread(0), the thread of 50 did not run before that call was back, every core read is in its mask, and the thread of 50 runs | Q2, Q3 |
+
+What moves the thread of the sixth case has to be the yield alone. The kernel moves a running
+thread with another ready behind it to a core of its mask that falls idle, whatever the thread calls
+meanwhile (Q3 B), and two cores change hands around the case: the main thread leaves core 0 as it
+blocks, and the watchdog takes and leaves core 2 every millisecond. So the main thread keeps core 0
+until the yield is read, and core 2 is out of the thread's mask.
 
 Cases 1, 2 and 4 need R2 as well as R1: whatever happens on a core while a thread spins there
 without a supervisor call, another core or a timer has to take the core from it. When the
@@ -90,14 +98,14 @@ preemption case fails, they cannot tell R1 apart, and their lines say which step
   priority it runs at (44), B its own (46). The owner reads it right after its sleep, while the
   waiter waits; the fourth case's line says which.
 - **Q2.** `svcSleepThread(-1)` alone on a core, with idle cores in the mask: A the thread moves, B
-  it stays (it only moves when its core has another thread ready). The last case's alone half says.
+  it stays (it only moves when its core has another thread ready). The sixth case's alone half says.
 - **Q3.** A thread running on a core where another is ready, with an idle core in its mask:
   A it stays until it yields; B an idle core
   takes it at once, with no yield, which is what the scheduler reden ports does
   (`k_scheduler.cpp:284-308`, an idle core migrates the top thread of a core that has a next one).
-  Under B, the thread of the last case is already on core 0 or 2 when it first reads its core, so
-  `svcSleepThread(0)` has nothing to keep it from; the case passes under either answer as long as
-  that call does not move it, and its line says which answer fit.
+  The sixth case's thread reads it after its `svcSleepThread(0)`: the main thread blocks, core 0
+  falls idle, and the thread watches its core for 20 ms. The case passes under either answer, and
+  its line says which one fit.
 
 One note after the family adds up the answers of the cases that passed:
 
@@ -135,10 +143,10 @@ read in the code, not run.
 The `reference` suite holds `source/schedref.c` on traces made to order, eight cases in both
 builds: what each case leaves on a machine with the rules and on one without each of them (the
 owner never waking, the waiter never getting the core, a chain one level deep, the sleeper never
-back, the thread of 46 waiting behind the spinner, `svcSleepThread(0)` moving the thread), Q1 to Q3
-from the cores and priorities read, a case that could not set up, and the note. Mutations of the
-order test, the owner's drop back, the yield check, the migrated core and the Q3 answer each fail
-it.
+back, the thread of 46 waiting behind the spinner, `svcSleepThread(0)` moving the thread or giving
+its core to the thread of 50), Q1 to Q3 from the cores and priorities read, a case that could not
+set up, and the note. Mutations of the order test, the owner's drop back, the yield checks, the
+migrated core and the Q3 answer each fail it.
 
 ## svc
 

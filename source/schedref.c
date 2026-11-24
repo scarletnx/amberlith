@@ -60,7 +60,7 @@ const char *SchedCaseName(SchedCaseId id) {
 
 static const char *const STEP_NAMES[SCHED_STEPS] = {
     "held", "tail held", "asks the tail", "spinning", "asked", "woke", "got", "flag set",
-    "flag seen", "stopped", "unlocked", "sleeps", "ran", "other ran", "done", "watchdog",
+    "flag seen", "stopped", "unlocked", "sleeps", "ran", "yielded", "other ran", "done", "watchdog",
 };
 
 /// Every step that happened, in the order it did, with its time from the first in ms.
@@ -224,33 +224,42 @@ bool SchedJudge(SchedCaseId id, const SchedTrace *t, char *out, size_t size, uin
         break;
     }
     case SCHED_YIELD: {
-        int32_t c[5];
+        // Its cores with the thread of 50 behind it, then alone, when its mask is every core.
+        int32_t c[6];
         bool known = true;
-        for (uint32_t i = 0; i < 5u; ++i) {
+        for (uint32_t i = 0; i < 6u; ++i) {
             const SchedValueId v = (SchedValueId)(SCHED_CORE_P0 + i);
+            const uint32_t mask = v < SCHED_CORE_ALONE0 ? SCHED_YIELD_CORES : SCHED_ALL_CORES;
             c[i] = Has(t, v) ? t->value[v] : -1;
-            known &= c[i] >= 0 && c[i] <= 2;
+            known &= c[i] >= 0 && c[i] <= 2 && (mask >> c[i] & 1u) != 0u;
         }
         if (!SchedBefore(t, SCHED_DONE, SCHED_WATCHDOG) || !known) {
             snprintf(out, size,
                      "the thread that yields did not finish before the watchdog, or read a core "
-                     "outside 0 to 2: %d, %d, %d, alone %d, %d; %s",
-                     (int)c[0], (int)c[1], (int)c[2], (int)c[3], (int)c[4], line);
+                     "outside its mask: %d, %d, %d, %d, alone %d, %d; %s",
+                     (int)c[0], (int)c[1], (int)c[2], (int)c[3], (int)c[4], (int)c[5], line);
         } else if (c[1] != c[0]) {
             snprintf(out, size, "svcSleepThread(0) moved the thread from core %d to core %d; %s",
                      (int)c[0], (int)c[1], line);
+        } else if (c[0] == SCHED_CASE_CORE && SchedBefore(t, SCHED_OTHER_RAN, SCHED_YIELDED)) {
+            snprintf(out, size,
+                     "svcSleepThread(0) of the thread of 44 gave core %d to the thread of 50 "
+                     "behind it; %s",
+                     SCHED_CASE_CORE, line);
         } else if (!SchedHappened(t, SCHED_OTHER_RAN)) {
             snprintf(out, size, "the thread of 50 waiting on core %d never ran; %s",
                      SCHED_CASE_CORE, line);
         } else {
             passed = true;
-            *answers |= Bit(SCHED_Q3, c[0] != SCHED_CASE_CORE) | Bit(SCHED_Q2, c[4] == c[3]);
+            *answers |= Bit(SCHED_Q3, c[2] != c[1]) | Bit(SCHED_Q2, c[5] == c[4]);
             snprintf(out, size,
-                     "with a thread of 50 waiting behind it on core %d it was on core %d (Q3 %s), "
-                     "on core %d after svcSleepThread(0), on %d after svcSleepThread(-1); alone, "
-                     "svcSleepThread(-1) took it from core %d to %d (Q2 %s); %s",
-                     SCHED_CASE_CORE, (int)c[0], c[0] != SCHED_CASE_CORE ? "B" : "A", (int)c[1],
-                     (int)c[2], (int)c[3], (int)c[4], c[4] == c[3] ? "B" : "A", line);
+                     "with a thread of 50 waiting behind it on core %d it was on core %d, and on "
+                     "core %d after svcSleepThread(0); with core %d idle, on core %d (Q3 %s), and "
+                     "on %d after svcSleepThread(-1); alone, svcSleepThread(-1) took it from core "
+                     "%d to %d (Q2 %s); %s",
+                     SCHED_CASE_CORE, (int)c[0], (int)c[1], SCHED_MAIN_CORE, (int)c[2],
+                     c[2] != c[1] ? "B" : "A", (int)c[3], (int)c[4], (int)c[5],
+                     c[5] == c[4] ? "B" : "A", line);
         }
         break;
     }
