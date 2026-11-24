@@ -31,7 +31,7 @@ static bool made[THREADS_MAX], started[THREADS_MAX];
 static SchedTrace trace;
 static Mutex first, second;
 // Set with atomic stores and read with atomic loads, from threads on three cores.
-static uint32_t flag, stop, ready, finished;
+static uint32_t flag, stop, ready, yielded, finished;
 static uint64_t watch_start;
 // A thread of an earlier case never exited: its core may still be taken, and its stack too.
 static bool stuck;
@@ -143,14 +143,27 @@ static void Mover(void *arg) {
     Mark(SCHED_FLAG_SET);
 }
 
-// Keeps its core until the thread behind it is ready, then yields both ways.
+// Keeps its core until the thread behind it is ready, then yields with no core of its mask idle:
+// what moves it there is the yield, and not the scheduler, which moves a running thread with
+// another ready behind it to a core that falls idle. Then it lets the main thread leave core 0,
+// to see that move, and yields the other way.
 static void Yielder(void *arg) {
     Mark(SCHED_RAN);
     while (!Load(&ready) && !Load(&stop)) {
     }
-    SchedValue(&trace, SCHED_CORE_P0, Core());
+    const int32_t core = Core();
+    SchedValue(&trace, SCHED_CORE_P0, core);
     svcSleepThread(YieldType_WithoutCoreMigration);
     SchedValue(&trace, SCHED_CORE_P1, Core());
+    Mark(SCHED_YIELDED);
+    Store(&yielded);
+    const uint64_t left = armGetSystemTick();
+    int32_t now = Core();
+    while (now == core && !Load(&stop) &&
+           armTicksToNs(armGetSystemTick() - left) < SCHED_MOVE_MS * 1000000ull) {
+        now = Core();
+    }
+    SchedValue(&trace, SCHED_CORE_FREED, now);
     svcSleepThread(YieldType_WithCoreMigration);
     SchedValue(&trace, SCHED_CORE_P2, Core());
     Mark(SCHED_DONE);
@@ -213,7 +226,7 @@ static void Begin(void) {
     SchedReset(&trace);
     memset(made, 0, sizeof(made));
     memset(started, 0, sizeof(started));
-    flag = stop = ready = finished = 0;
+    flag = stop = ready = yielded = finished = 0;
     mutexInit(&first);
     mutexInit(&second);
     watch_start = armGetSystemTick();
@@ -323,11 +336,15 @@ static void RunMigration(void) {
 
 static void RunYield(void) {
     Begin();
-    if (Make(1, Yielder, SCHED_PRIORITY_WAITER, SCHED_CASE_CORE, SCHED_ALL_CORES) &&
+    if (Make(1, Yielder, SCHED_PRIORITY_WAITER, SCHED_CASE_CORE, SCHED_YIELD_CORES) &&
         Make(2, Behind, 50, SCHED_CASE_CORE, CORE_ONE) && Start(1)) {
         WaitFor(SCHED_RAN, 100u);
         if (Start(2)) {
             Store(&ready);
+            // Core 0 stays taken until the yield is read: the main thread blocked would leave it
+            // idle, and the scheduler would move the yielder there in the middle of it.
+            while (!Load(&yielded) && !Load(&stop)) {
+            }
         }
     }
     // The same thread again, alone: nothing else ready on its core.

@@ -23,16 +23,21 @@ extern "C" {
 /// holds an idle core runs there rather than wait behind its core's owner.
 
 /// Every thread of a case runs on this core, alone in its mask unless the case says otherwise;
-/// the watchdog runs on its own; the main thread, which waits blocked, stays on core 0. None of
+/// the watchdog runs on its own; the main thread, which waits blocked (but in case 6, where it
+/// holds its core while the yield is read), stays on core 0. None of
 /// the three cores the program has ever holds a spinning thread and the watchdog together.
 #define SCHED_CASE_CORE 1
 #define SCHED_WATCH_CORE 2
 #define SCHED_MAIN_CORE 0
 #define SCHED_ALL_CORES 0x7u
+/// The cores of the thread that yields (case 6): its own and the main thread's, which spins there
+/// until the yields are read. The watchdog's wakes are then none of its business.
+#define SCHED_YIELD_CORES 0x3u
 
 #define SCHED_PRIORITY_WATCH 40
 /// The waiter, the spinner and the owner of cases 1, 2 and 4: 44, 45 and 46. The thread that
-/// preempts (case 3) is 43, the end of the chain (case 2) 50.
+/// preempts (case 3) is 43, the end of the chain (case 2) and the thread behind the one that yields
+/// (case 6) 50.
 #define SCHED_PRIORITY_WAITER 44
 #define SCHED_PRIORITY_SPINNER 45
 #define SCHED_PRIORITY_OWNER 46
@@ -42,6 +47,8 @@ extern "C" {
 #define SCHED_WATCH_MS 1000u
 #define SCHED_HOLD_MS 50u
 #define SCHED_SLEEP_MS 10u
+/// How long the thread that yields watches whether the core the main thread left takes it (Q3).
+#define SCHED_MOVE_MS 20u
 /// The console's system counter.
 #define SCHED_TICKS_PER_MS 19200u
 
@@ -59,6 +66,7 @@ typedef enum {
     SCHED_UNLOCKED,    ///< the owner runs again after handing its mutex over
     SCHED_SLEEPS,      ///< the sleeper goes to sleep
     SCHED_RAN,         ///< the thread that moves (case 5) or yields (case 6) runs
+    SCHED_YIELDED,     ///< the thread that yields is back from svcSleepThread(0)
     SCHED_OTHER_RAN,   ///< the thread waiting behind the one that yields runs
     SCHED_DONE,        ///< the thread that yields is done
     SCHED_WATCHDOG,    ///< the watchdog ended the wait
@@ -71,6 +79,7 @@ typedef enum {
     SCHED_CORE_MOVED,      ///< the core the thread of case 5 ran on
     SCHED_CORE_P0,         ///< case 6: the core once the other thread waits behind it
     SCHED_CORE_P1,         ///< after svcSleepThread(0)
+    SCHED_CORE_FREED,      ///< once the main thread left core 0 idle (Q3)
     SCHED_CORE_P2,         ///< after svcSleepThread(-1)
     SCHED_CORE_ALONE0,     ///< alone, before svcSleepThread(-1)
     SCHED_CORE_ALONE1,     ///< and after it
