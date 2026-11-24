@@ -42,18 +42,18 @@ of a mutex a thread of 44 wanted both waited, and cores 1 and 2 sat idle. The th
 ## How a case runs
 
 Every thread of a case runs on core 1, alone in its mask unless the case says otherwise. A
-watchdog runs on core 2 at priority 40, sleeping a millisecond at a time; after a second it tells
-every loop to stop, and the case fails and goes on. The main thread, which waits blocked for the
-threads to exit, is put on core 0 for the whole family and back where it was after: it runs at 44
-there, and a thread spinning at a better priority on its core would starve it. No spinning thread
-ever shares a core with the main thread (which spins itself, alone on core 0, while the yield of
-the sixth case is read) or the watchdog, and every loop ends when the flag it
-reads is set or the watchdog says stop, so a machine without one of the rules fails a case rather
-than hang the run. The main thread waits for each thread up to a second past the watchdog; every
-thread is closed at the end of its case, passed or failed. A thread that never exits keeps its
-stack and its handle, the case says so, and the rest of the family is skipped: none is expected
-to, since every thread that waits on a mutex waits for one whose owner runs once the loops stop.
-No case is in the hang table for that reason.
+watchdog runs on core 2 at priority 40 (but in the last case, which has no loop), sleeping a
+millisecond at a time; after a second it tells every loop to stop, and the case fails and goes on.
+The main thread, which waits blocked for the threads to exit, is put on core 0 for the whole
+family and back where it was after: it runs at 44 there, and a thread spinning at a better
+priority on its core would starve it. No spinning thread ever shares a core with the main thread
+(which spins itself, alone on core 0, while the yield of the sixth case is read) or the watchdog,
+and every loop ends when the flag it reads is set or the watchdog says stop, so a machine without
+one of the rules fails a case rather than hang the run. The main thread waits for each thread up
+to a second past the watchdog; every thread is closed at the end of its case, passed or failed. A
+thread that never exits keeps its stack and its handle, the case says so, and the rest of the
+family is skipped: none is expected to, since every thread that waits on a mutex waits for one
+whose owner runs once the loops stop. No case is in the hang table for that reason.
 
 The mutexes are libnx's `Mutex`, which marks its owner in the word it waits on and blocks in
 `svcArbitrateLock`, so a thread waiting for one is a kernel waiter its owner can inherit from. The
