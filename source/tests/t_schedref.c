@@ -291,6 +291,31 @@ static void CheckYield(void) {
                ported_said, asked, moved, gave, elsewhere, outside, never, unfinished);
 }
 
+static void CheckStart(void) {
+    SchedReset(&t);
+    At(SCHED_RAN, 0);
+    At(SCHED_RETURNED, 1);
+    const bool first = Judge(SCHED_START) &&
+                       strcmp(said, "the thread of 43 ran on the caller's core before "
+                                    "svcStartThread returned to it, at 44; ran 0.0, returned "
+                                    "0.1") == 0;
+    char first_said[480];
+    memcpy(first_said, said, sizeof(said));
+    // The start only asks for the thread, which comes when it can.
+    SchedReset(&t);
+    At(SCHED_RETURNED, 0);
+    At(SCHED_RAN, 3);
+    const bool late = !Judge(SCHED_START) &&
+                      strstr(said, "svcStartThread returned 0.3 ms before the thread of 43 it "
+                                   "started on the caller's core ran") == said;
+    SchedReset(&t);
+    At(SCHED_RETURNED, 0);
+    const bool never = !Judge(SCHED_START) && strstr(said, "never ran") != NULL;
+    CHECK_TRUE(SUITE, "sched: a better thread started on the caller's core must run before the call returns",
+               CHECK_NONE, first && late && never, "first \"%.160s\"; late %d, never %d",
+               first_said, late, never);
+}
+
 static void CheckNote(void) {
     SchedReset(&t);
     snprintf(t.failure, sizeof(t.failure), "threadCreate for a thread of 43 on core 1 failed");
@@ -322,5 +347,6 @@ void RunReferenceSched(void) {
     CheckBase();
     CheckMigration();
     CheckYield();
+    CheckStart();
     CheckNote();
 }

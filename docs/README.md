@@ -50,7 +50,7 @@ one without compares nothing: a device that opens, a shader that loads, a time i
 ### CPU and kernel
 
 <!-- counts: category cpu -->
-_2 families, 3 suites, 67 cases: 63 with a judge (exact 56, position 7; expected from another reference 46, the specification 17), 2 without one, 2 not yet seen judged._
+_2 families, 3 suites, 68 cases: 64 with a judge (exact 56, position 8; expected from another reference 46, the specification 18), 2 without one, 2 not yet seen judged._
 <!-- /counts -->
 
 - **[The processor](./families/Cpu.md)** - cpu, the processor's instructions held to the architecture's answers
@@ -117,7 +117,7 @@ _1 family, 6 suites, 36 cases: 0 with a judge, 36 without one._
 ### The judge and the tools
 
 <!-- counts: category tools -->
-_3 suites, 820 cases: the probe's own code held to its references, before every run._
+_3 suites, 821 cases: the probe's own code held to its references, before every run._
 <!-- /counts -->
 
 - **[The judge](./families/Judge.md)** - selfcheck, support and reference: the probe's own code held to its
