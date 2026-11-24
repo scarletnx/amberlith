@@ -36,8 +36,8 @@ extern "C" {
 
 #define SCHED_PRIORITY_WATCH 40
 /// The waiter, the spinner and the owner of cases 1, 2 and 4: 44, 45 and 46. The thread that
-/// preempts (case 3) is 43, the end of the chain (case 2) and the thread behind the one that yields
-/// (case 6) 50.
+/// preempts (case 3) and the one the main thread starts on its own core (case 7) are 43, the end
+/// of the chain (case 2) and the thread behind the one that yields (case 6) 50.
 #define SCHED_PRIORITY_WAITER 44
 #define SCHED_PRIORITY_SPINNER 45
 #define SCHED_PRIORITY_OWNER 46
@@ -65,10 +65,11 @@ typedef enum {
     SCHED_STOPPED,     ///< the spinner stopped at the watchdog's word instead
     SCHED_UNLOCKED,    ///< the owner runs again after handing its mutex over
     SCHED_SLEEPS,      ///< the sleeper goes to sleep
-    SCHED_RAN,         ///< the thread that moves (case 5) or yields (case 6) runs
+    SCHED_RAN,         ///< the thread that moves (case 5), yields (case 6) or was started (case 7) runs
     SCHED_YIELDED,     ///< the thread that yields is back from svcSleepThread(0)
     SCHED_OTHER_RAN,   ///< the thread waiting behind the one that yields runs
     SCHED_DONE,        ///< the thread that yields is done
+    SCHED_RETURNED,    ///< the main thread is back from svcStartThread (case 7)
     SCHED_WATCHDOG,    ///< the watchdog ended the wait
     SCHED_STEPS
 } SchedStep;
@@ -113,6 +114,7 @@ typedef enum {
     SCHED_BASE,
     SCHED_MIGRATE,
     SCHED_YIELD,
+    SCHED_START,
     SCHED_CASES
 } SchedCaseId;
 

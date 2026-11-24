@@ -620,6 +620,7 @@ reference	sched: preemption gives the time the core changed hands, or that it ne
 reference	sched: the owner's drop back is read from the order, and Q1 from its priority	judge	none	-	nro,ounce,host
 reference	sched: migration passes on an idle core and fails behind the spinner	judge	none	-	nro,ounce,host
 reference	sched: svcSleepThread(0) must keep the core, and the cores answer Q2 and Q3	judge	none	-	nro,ounce,host
+reference	sched: a better thread started on the caller's core must run before the call returns	judge	none	-	nro,ounce,host
 reference	sched: a case that could not run says why, and the note adds the cases up	judge	none	-	nro,ounce,host
 reference	binder: both of reden's layouts pass, and a history must be newest first	judge	none	-	nro,ounce,host
 reference	binder: a reply in no known layout fails with its bytes	judge	none	-	nro,ounce,host
@@ -1781,6 +1782,7 @@ sched	a thread that becomes ready at a better priority takes the core from one s
 sched	the owner goes back to its own priority when it hands the mutex over	kernel	position	spec	nro
 sched	a thread behind a spinning one moves to an idle core of its mask	kernel	position	spec	nro
 sched	svcSleepThread(0) leaves the thread on its core	kernel	position	spec	nro
+sched	a thread started at a better priority on the caller's core runs before svcStartThread returns	kernel	position	spec	nro
 svc	two events open and a handle is closed	kernel	none	-	nro
 svc	svcWaitSynchronization with no handles sleeps out its timeout and answers TimedOut	kernel	exact	reference	nro
 svc	svcWaitSynchronization with no handles and a timeout of 0 answers TimedOut	kernel	exact	reference	nro

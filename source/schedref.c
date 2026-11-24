@@ -52,6 +52,7 @@ static const char *const CASE_NAMES[SCHED_CASES] = {
     "the owner goes back to its own priority when it hands the mutex over",
     "a thread behind a spinning one moves to an idle core of its mask",
     "svcSleepThread(0) leaves the thread on its core",
+    "a thread started at a better priority on the caller's core runs before svcStartThread returns",
 };
 
 const char *SchedCaseName(SchedCaseId id) {
@@ -60,7 +61,8 @@ const char *SchedCaseName(SchedCaseId id) {
 
 static const char *const STEP_NAMES[SCHED_STEPS] = {
     "held", "tail held", "asks the tail", "spinning", "asked", "woke", "got", "flag set",
-    "flag seen", "stopped", "unlocked", "sleeps", "ran", "yielded", "other ran", "done", "watchdog",
+    "flag seen", "stopped", "unlocked", "sleeps", "ran", "yielded", "other ran", "done", "returned",
+    "watchdog",
 };
 
 /// Every step that happened, in the order it did, with its time from the first in ms.
@@ -260,6 +262,23 @@ bool SchedJudge(SchedCaseId id, const SchedTrace *t, char *out, size_t size, uin
                      SCHED_CASE_CORE, (int)c[0], (int)c[1], SCHED_MAIN_CORE, (int)c[2],
                      c[2] != c[1] ? "B" : "A", (int)c[3], (int)c[4], (int)c[5],
                      c[5] == c[4] ? "B" : "A", line);
+        }
+        break;
+    }
+    case SCHED_START: {
+        if (!SchedHappened(t, SCHED_RAN)) {
+            snprintf(out, size, "the thread of 43 the main thread started on its own core never "
+                     "ran; %s", line);
+        } else if (!SchedBefore(t, SCHED_RAN, SCHED_RETURNED)) {
+            Ms(a, sizeof(a), SchedTenths(t, SCHED_RETURNED, SCHED_RAN));
+            snprintf(out, size,
+                     "svcStartThread returned %s ms before the thread of 43 it started on the "
+                     "caller's core ran, and the caller runs at 44; %s",
+                     a, line);
+        } else {
+            passed = true;
+            snprintf(out, size, "the thread of 43 ran on the caller's core before svcStartThread "
+                     "returned to it, at 44; %s", line);
         }
         break;
     }

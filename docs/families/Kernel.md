@@ -12,9 +12,9 @@
 <!-- counts: family kernel -->
 | Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| sched | 7 | 6 | 0 | 0 | 0 | 0 | 6 | 1 | 0 |
+| sched | 8 | 7 | 0 | 0 | 0 | 0 | 7 | 1 | 0 |
 | svc | 22 | 21 | 0 | 0 | 21 | 0 | 0 | 1 | 0 |
-| **All** | **29** | **27** | **0** | **0** | **21** | **0** | **6** | **2** | **0** |
+| **All** | **30** | **28** | **0** | **0** | **21** | **0** | **7** | **2** | **0** |
 <!-- /counts -->
 
 Two suites. The first, sched, is the kernel's scheduler as a program sees it: threads of chosen
@@ -24,9 +24,9 @@ file](../ModeFile.md)), since no console has yet shown that its cases never hang
 has no row for it, and a file that names it keeps it whatever the screen changes.
 
 - **sched**: one says threads start on the core and at the priority asked (none
-  tier); the six after it each run a handful of threads and judge the order they ran in
+  tier); the seven after it each run a handful of threads and judge the order they ran in
   (position tier: which came first is the verdict, the time it took is not). If the first fails,
-  the six are skipped as `depends`.
+  the seven are skipped as `depends`.
 
 A game hung at boot under a machine whose kernel lacked two of these rules: a thread spinning
 with no supervisor call on core 0, at 45, held the core while a thread of 43 and the owner (46)
@@ -58,8 +58,8 @@ No case is in the hang table for that reason.
 The mutexes are libnx's `Mutex`, which marks its owner in the word it waits on and blocks in
 `svcArbitrateLock`, so a thread waiting for one is a kernel waiter its owner can inherit from. The
 priorities are the ones the hang showed: the waiter 44, the spinner 45, the owner 46; a thread
-that preempts is 43, the end of a chain and the thread behind the one that yields 50; the first case
-says if any of them is refused.
+that preempts, or that the main thread starts on its own core, is 43, the end of a chain and the
+thread behind the one that yields 50; the first case says if any of them is refused.
 
 Each thread notes the steps it takes, with the system counter, in one trace (`SchedTrace` in
 `source/schedref.h`, written with atomic stores); `SchedJudge` reads it once all of them exited.
@@ -81,6 +81,7 @@ no flag before the watchdog (1000 ms): the owner (46) never ran after its sleep 
 | the owner goes back to its own priority when it hands the mutex over | as the first case | the mutex changes hands before the watchdog, the spinner sees the flag before the owner runs again, and the owner then reads 46 | R1; Q1 |
 | a thread behind a spinning one moves to an idle core of its mask | the spinner (45); a thread of 46 with mask 0 to 2 and core 1 ideal reads its core and sets the flag | the flag before the watchdog, read on core 0 or 2 | R3 |
 | svcSleepThread(0) leaves the thread on its core | a thread of 44, mask 0 and 1, spins until a thread of 50 (core 1 only) is ready behind it, with the main thread spinning on core 0: no core of its mask is idle; then reads its core, svcSleepThread(0), its core; then, the main thread blocked, its core until it changes or for 20 ms, svcSleepThread(-1), its core; then alone, mask 0 to 2, its core, svcSleepThread(-1), its core | its core is the same before and after svcSleepThread(0), the thread of 50 did not run before that call was back, every core read is in its mask, and the thread of 50 runs | Q2, Q3 |
+| a thread started at a better priority on the caller's core runs before svcStartThread returns | the main thread (44, core 0) starts a thread of 43 on core 0 | the thread of 43 ran before the main thread was back from `svcStartThread` | R2 |
 
 What moves the thread of the sixth case has to be the yield alone. The kernel moves a running
 thread with another ready behind it to a core of its mask that falls idle, whatever the thread calls
@@ -133,6 +134,10 @@ read in the code, not run.
   not running, and failing that the running thread of a core that has another ready
   (`k_scheduler.cpp:249-311`): a thread behind the spinner moves (R3), and so does a running thread
   with a thread behind it (Q3 B).
+- The started thread: `svcStartThread` makes it runnable under the scheduler's lock (`KThread::Run`,
+  `k_thread.cpp:1154`), which as it is let go of switches the calling core to its best thread
+  (`KScheduler::EnableScheduling`, `k_scheduler.cpp:61-79`), so a better one runs before the caller is
+  back.
 - Q2: `svcSleepThread` with 0, -1 and -2 yields without migration, with migration and to any
   thread (`svc/svc_thread.cpp:133-138`); the yield with migration puts the thread at the back of
   its queue and pulls a suggested thread from another core onto its own
@@ -140,13 +145,14 @@ read in the code, not run.
 
 ## The judge, pinned
 
-The `reference` suite holds `source/schedref.c` on traces made to order, eight cases in both
+The `reference` suite holds `source/schedref.c` on traces made to order, nine cases in both
 builds: what each case leaves on a machine with the rules and on one without each of them (the
 owner never waking, the waiter never getting the core, a chain one level deep, the sleeper never
 back, the thread of 46 waiting behind the spinner, `svcSleepThread(0)` moving the thread or giving
-its core to the thread of 50), Q1 to Q3 from the cores and priorities read, a case that could not
-set up, and the note. Mutations of the order test, the owner's drop back, the yield checks, the
-migrated core and the Q3 answer each fail it.
+its core to the thread of 50, `svcStartThread` returning before the thread it started ran), Q1 to
+Q3 from the cores and priorities read, a case that could not set up, and the note. Mutations of the
+order test, the owner's drop back, the yield checks, the start check, the migrated core and the Q3
+answer each fail it.
 
 ## svc
 

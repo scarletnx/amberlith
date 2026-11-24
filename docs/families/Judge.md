@@ -8,8 +8,8 @@ family reports can be believed without them.
 |---|--:|--:|--:|--:|
 | selfcheck | 16 | 16 | 16 | 16 |
 | support | 254 | 237 | 237 | 253 |
-| reference | 550 | 546 | 546 | 550 |
-| **All** | **820** | **799** | **799** | **819** |
+| reference | 551 | 547 | 547 | 551 |
+| **All** | **821** | **800** | **800** | **820** |
 <!-- /counts -->
 
 - **selfcheck**, no hardware involved. That two neighbouring floats measure one unit
@@ -179,7 +179,7 @@ family reports can be believed without them.
     targets, a prompt waiting out a finger already down, the first prompt's four outcomes, a tap
     within 48 pixels, two ids for two fingers, a drag's direction and id, the lift, and the note
     (see [The touch suite](Touch.md));
-  - eight on the kernel family's judge, `source/schedref.c`, on traces made to order: what each
+  - nine on the kernel family's judge, `source/schedref.c`, on traces made to order: what each
     case leaves with the scheduler's rules and without each of them, and the answers to Q1 to Q3
     (see [The kernel family](Kernel.md));
   - three on the display family's judge, `source/binderref.c`, on reply parcels built word by word:

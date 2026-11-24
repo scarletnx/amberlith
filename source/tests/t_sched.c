@@ -173,6 +173,10 @@ static void Behind(void *arg) {
     Mark(SCHED_OTHER_RAN);
 }
 
+static void Started(void *arg) {
+    Mark(SCHED_RAN);
+}
+
 static void Alone(void *arg) {
     SchedValue(&trace, SCHED_CORE_ALONE0, Core());
     svcSleepThread(YieldType_WithCoreMigration);
@@ -355,8 +359,16 @@ static void RunYield(void) {
     End();
 }
 
+static void RunStart(void) {
+    Begin();
+    if (Make(1, Started, 43, SCHED_MAIN_CORE, 1u << SCHED_MAIN_CORE) && Start(1)) {
+        Mark(SCHED_RETURNED);
+    }
+    End();
+}
+
 static void (*const RUN[SCHED_CASES])(void) = {
-    RunInheritance, RunChain, RunPreemption, RunInheritance, RunMigration, RunYield,
+    RunInheritance, RunChain, RunPreemption, RunInheritance, RunMigration, RunYield, RunStart,
 };
 
 // ---- the bring-up
