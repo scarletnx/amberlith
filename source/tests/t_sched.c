@@ -226,7 +226,8 @@ static void WaitFor(SchedStep step, uint32_t ms) {
     }
 }
 
-static void Begin(void) {
+/// Nothing of the case before: no thread, no step, no flag.
+static void Clear(void) {
     SchedReset(&trace);
     memset(made, 0, sizeof(made));
     memset(started, 0, sizeof(started));
@@ -234,6 +235,10 @@ static void Begin(void) {
     mutexInit(&first);
     mutexInit(&second);
     watch_start = armGetSystemTick();
+}
+
+static void Begin(void) {
+    Clear();
     if (Make(0, Watchdog, SCHED_PRIORITY_WATCH, SCHED_WATCH_CORE, 1u << SCHED_WATCH_CORE)) {
         Start(0);
     }
@@ -359,8 +364,10 @@ static void RunYield(void) {
     End();
 }
 
+// No watchdog: there is no loop to end, and libnx's threads take one lock of its on their way to
+// their entry, where the watchdog's, starting, could stop the one started here.
 static void RunStart(void) {
-    Begin();
+    Clear();
     if (Make(1, Started, 43, SCHED_MAIN_CORE, 1u << SCHED_MAIN_CORE) && Start(1)) {
         Mark(SCHED_RETURNED);
     }
