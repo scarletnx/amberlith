@@ -1269,6 +1269,13 @@ coherence	a device opens for the rewritten programs and vertices	graphics	none	-
 coherence	a fragment program the processor rewrote between two lists draws as the new one	graphics	exact	spec	nro
 coherence	a fragment program the copy engine rewrote in the middle of a list draws as the new one after it	graphics	exact	spec	nro
 coherence	vertices the copy engine wrote between two draws of a list reach the second	graphics	exact	spec	nro
+coherence	a device opens for the targets the processor reads	graphics	none	-	nro
+coherence	a target a list drew holds its texels where the processor reads them	graphics	exact	spec	nro
+coherence	a part drawn on a target after the processor read it is there at its next read	graphics	exact	spec	nro
+coherence	two parts drawn on a target, the processor reading between, are there at its third read	graphics	exact	spec	nro
+coherence	two parts drawn on a target, the processor reading between, are there for the copy engine	graphics	exact	spec	nro
+coherence	a part drawn on a target beside one the processor read is there at its own read	graphics	exact	spec	nro
+coherence	a part drawn on a target beside one the processor read is there for the copy engine	graphics	exact	spec	nro
 fmath	graphics device opens with a float target	graphics	none	-	nro
 fmath	the float shader loads	graphics	none	-	nro
 fmath	the uniform buffer has somewhere to live	graphics	none	-	nro

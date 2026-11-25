@@ -72,7 +72,7 @@ tex8k's compressed textures as their formats' suites say; bcn's arrays, which ju
 | coverage | 23 | 21 | 0 | 0 | 0 | 0 | 21 | 2 | 0 |
 | msaa | 7 | 5 | 0 | 0 | 0 | 0 | 5 | 2 | 0 |
 | texture | 12 | 5 | 0 | 0 | 0 | 0 | 5 | 7 | 0 |
-| coherence | 25 | 19 | 0 | 0 | 0 | 0 | 19 | 6 | 0 |
+| coherence | 32 | 25 | 0 | 0 | 0 | 0 | 25 | 7 | 0 |
 | fmath | 31 | 27 | 0 | 0 | 0 | 0 | 27 | 4 | 0 |
 | order | 23 | 19 | 0 | 0 | 0 | 0 | 19 | 4 | 0 |
 | queue | 5 | 4 | 0 | 0 | 0 | 0 | 4 | 1 | 0 |
@@ -103,7 +103,7 @@ tex8k's compressed textures as their formats' suites say; bcn's arrays, which ju
 | blit2d | 5 | 4 | 0 | 0 | 0 | 0 | 4 | 1 | 0 |
 | copy | 19 | 18 | 0 | 0 | 0 | 0 | 18 | 1 | 0 |
 | tex8k | 56 | 46 | 0 | 0 | 24 | 0 | 22 | 10 | 0 |
-| **All** | **859** | **743** | **0** | **0** | **158** | **0** | **585** | **116** | **0** |
+| **All** | **866** | **749** | **0** | **0** | **158** | **0** | **591** | **117** | **0** |
 <!-- /counts -->
 
 ## clear
@@ -531,7 +531,7 @@ conversion lands on. In an emulator a failure points at its format table (`textu
 ## coherence
 
 <!-- counts: suite coherence -->
-**25 cases**: 19 with a judge (exact 19; expected from the specification 19), 6 without one.
+**32 cases**: 25 with a judge (exact 25; expected from the specification 25), 7 without one.
 <!-- /counts -->
 
 The none tier says the device, the shaders, the images and their starting texels came up, and
@@ -558,7 +558,7 @@ wait on the queue only where the processor touches the memory, since a wait anyw
 hide the fault the suite is there to find. Every expectation comes from one image model,
 `source/coherref.c`, pinned by the reference suite.
 
-Last, on a device of its own, code and vertices rewritten in place, each target half judged whole:
+Then, on a device of its own, code and vertices rewritten in place, each target half judged whole:
 a fragment program the processor rewrites at its address between two lists, and one the copy
 engine rewrites in the middle of a list behind a full barrier and the shader cache's invalidation,
 both drawing as the new program after (`const_red.frag.glsl`'s code overwritten by
@@ -568,6 +568,21 @@ vertices the copy engine writes between two draws of one list, which the second 
 ScarletNX's shader invalidation and pass break tests hold its renderer to these. In an emulator a
 failure points at a shader cache keyed by address that misses the rewrite, or at a buffer cache
 that serves the second draw what the first one read.
+
+And last, on one more device, targets in memory the processor reaches, which it reads through its
+own pointer after the queue's wait, texel by texel by the block linear rule, as a game reads the
+picture of a save or the object under a cursor. A list draws a target whole and the processor reads
+it; a list then draws over a part of it, and it is read again, by the processor or by the copy
+engine; a second part after that read; and a part of a target beside the one the processor read,
+which it never asked for. No list after the first covers the target, so nothing starts it afresh.
+The vertices lie beside the targets in one stretch of 2 MiB, as in a game's pool: where a machine
+lets the host's graphics unit use the guest's memory in place (ScarletNX's dma-buf regions), the
+targets' pages are in what it uses. Each pass of a timed run has targets of its own in that
+stretch, so the verdict pass's are ones no read has touched. In an emulator a failure points at
+what it made of the processor's read: the pages it opened for it, or its own copy into them, taken
+for a write of the processor's, and the target loaded again from the list before, over what was
+drawn since. The readbacks by the copy engine say the pixels are gone from the target itself, not
+from its memory alone.
 
 ## fmath
 

@@ -39,7 +39,8 @@
 // library also drops these caches on every queue flush (Queue::postSubmitFlush); the explicit
 // invalidation stays, since it is what the pattern asks of a program and what an emulator acts on.
 //
-// Last, on a device of its own, programs and vertices rewritten in place (below, RewriteCases).
+// Last, each on a device of its own, programs and vertices rewritten in place (below,
+// RewriteCases), and targets the processor reads through its own pointer (ReadCases).
 //
 // Sampling is nearest, one texel of a 32 by 32 texture per pixel, so every pixel centre is a
 // texel centre, half a texel from any edge. Drawn contents are quads on whole pixels, the
@@ -178,10 +179,11 @@ static void Quad(GpuVertex out[6], uint32_t size, uint32_t x0, uint32_t y0, uint
     out[5] = Corner(left, bottom, 0.0f, 1.0f, colour);
 }
 
-/// Records one draw of the cells in @p mask onto whatever target is bound, @p size square,
-/// which is what CohPaintCells models. The seed rides in the vertex red, as seed / 255.
-static bool PaintCells(Suite *s, uint32_t seed, uint32_t mask, uint32_t size) {
-    GpuVertex vertices[6u * 16u];
+/// The two triangles of each cell in @p mask of a @p size square target, which is what
+/// CohPaintCells models, and how many vertices they are. The seed rides in the vertex red, as
+/// seed / 255.
+static uint32_t CellVertices(GpuVertex out[6u * 16u], uint32_t seed, uint32_t mask,
+                             uint32_t size) {
     uint32_t count = 0;
     const uint32_t cell_size = size / 4u;
     const uint8_t carrier[4] = { (uint8_t)seed, 0, 0, 0 };
@@ -191,9 +193,16 @@ static bool PaintCells(Suite *s, uint32_t seed, uint32_t mask, uint32_t size) {
         }
         const uint32_t x0 = (cell % 4u) * cell_size;
         const uint32_t y0 = (cell / 4u) * cell_size;
-        Quad(&vertices[count], size, x0, y0, x0 + cell_size, y0 + cell_size, carrier);
+        Quad(&out[count], size, x0, y0, x0 + cell_size, y0 + cell_size, carrier);
         count += 6u;
     }
+    return count;
+}
+
+/// Records one draw of the cells in @p mask onto whatever target is bound, @p size square.
+static bool PaintCells(Suite *s, uint32_t seed, uint32_t mask, uint32_t size) {
+    GpuVertex vertices[6u * 16u];
+    const uint32_t count = CellVertices(vertices, seed, mask, size);
     return GpuDrawTriangles(&s->gpu, &s->vertex, &s->pattern, vertices, count);
 }
 
@@ -1108,7 +1117,252 @@ static void RewriteCases(void) {
     GpuClose(&r->gpu);
 }
 
+// ---- targets the processor reads from memory
+
+// A target in memory the processor reaches. A list draws on it, the queue is waited for, and the
+// processor reads its texels through its own pointer, with no copy between, as a game reads the
+// picture of a save, the object under a cursor or the brightness of a scene. A later list then
+// draws over a part of it, and it is read again. Every list after the first draws a part alone:
+// one over the whole target would give a machine that keeps its pixels apart from its memory a
+// fresh start, and hide what it made of the processor's read.
+//
+// In an emulator that read is what brings the pixels to memory: the pages are trapped when the
+// list ends, and the target is copied there when the processor touches them. One that then takes
+// its own copy, or the pages it opened, for a write of the processor's loads the target again
+// from the list before, over what was drawn since: the part is gone from the processor's next
+// read, and from the target itself, which the copy engine's readbacks show. A target beside the
+// one read stands for the pages opened with it, whose own pixels the processor never asked for.
+//
+// The vertices lie beside the targets, in one stretch of 2 MiB: a game's pool holds both, and a
+// machine that lets the host's graphics unit use the guest's memory in place does it by such a
+// stretch (ScarletNX's dma-buf regions are whole ones), whose pages it traps another way than the
+// rest. The draws fetch their vertices there, the first one included.
+//
+// The synchronisation is the suite's: dkQueueWaitIdle, whose fence writes the caches back, and
+// nothing else, since the block is uncached to the processor. One gob a block, as the block linear
+// texture above, whose rule the processor's read of the copy engine's texels pins.
+
+#define READ_STRETCH (2u * 1024u * 1024u)
+#define READ_VERTICES (64u * 1024u)
+// Eight targets of 16 KiB and their vertices, a pass of the suite's: a target no pass before
+// touched is the one the processor has not read yet. Ten passes (docs/TimePerCase.md) fit the
+// stretch, and an eleventh starts again.
+#define READ_TARGETS 8u
+#define READ_TARGET_BYTES (TARGET_SIZE * TARGET_SIZE * 4u)
+#define READ_AREA (READ_VERTICES + READ_TARGETS * READ_TARGET_BYTES)
+#define READ_AREAS (READ_STRETCH / READ_AREA)
+#define READ_LISTS 3u
+// The cells the second part covers.
+#define CORNER_CELLS ((1u << 0) | (1u << 3) | (1u << 12) | (1u << 15))
+
+typedef struct {
+    GpuContext gpu;
+    DkShader vertex;
+    DkShader pattern;
+    uint8_t *vertices; ///< what is left of this pass's vertices in the block
+    DkGpuAddr vertices_gpu;
+    uint32_t vertices_left;
+} Reads;
+
+/// A target of the cases below, where the processor finds its first byte, and what it holds after
+/// each list that drew on it.
+typedef struct {
+    DkImage image;
+    const uint8_t *bytes;
+    CohImage held[READ_LISTS];
+    uint32_t lists;
+} ReadTarget;
+
+static bool MakeReadTarget(Reads *r, ReadTarget *t) {
+    DkImageLayout layout;
+    uint8_t *bytes = NULL;
+    if (!GpuCreateImage(&r->gpu, &t->image, &layout, DkImageFormat_RGBA8_Unorm, TARGET_SIZE,
+                        TARGET_SIZE, DkImageFlags_UsageRender | DkImageFlags_CustomTileSize,
+                        DkTileSize_OneGob, &bytes)) {
+        return false;
+    }
+    if (dkImageLayoutGetSize(&layout) != READ_TARGET_BYTES) {
+        snprintf(r->gpu.failure, sizeof(r->gpu.failure), "a target is %u bytes, not %u",
+                 (unsigned)dkImageLayoutGetSize(&layout), (unsigned)READ_TARGET_BYTES);
+        return false;
+    }
+    t->bytes = bytes;
+    t->lists = 0;
+    return true;
+}
+
+/// Records the cells in @p mask of @p t in pattern @p seed, their vertices beside the targets.
+/// The target's first list clears it whole before.
+static bool DrawOn(Reads *r, ReadTarget *t, uint32_t seed, uint32_t mask) {
+    GpuVertex cells[6u * 16u];
+    const uint32_t count = CellVertices(cells, seed, mask, TARGET_SIZE);
+    const uint32_t bytes = count * (uint32_t)sizeof(GpuVertex);
+    if (bytes > r->vertices_left || t->lists == READ_LISTS) {
+        snprintf(r->gpu.failure, sizeof(r->gpu.failure),
+                 "%u bytes of vertices for %u left, after %u of %u lists", (unsigned)bytes,
+                 (unsigned)r->vertices_left, (unsigned)t->lists, (unsigned)READ_LISTS);
+        return false;
+    }
+    memcpy(r->vertices, cells, bytes);
+    GpuSetTarget(&r->gpu, &t->image, TARGET_SIZE, TARGET_SIZE);
+    CohImage *const after = &t->held[t->lists];
+    if (t->lists == 0u) {
+        dkCmdBufClearColorFloat(r->gpu.cmdbuf, 0, DkColorMask_RGBA, 1.0f, 0.0f, 1.0f, 0.0f);
+        CohImageInit(after, TARGET_SIZE, TARGET_SIZE);
+        CohFill(after, COH_SENTINEL);
+    } else {
+        *after = t->held[t->lists - 1u];
+    }
+    GpuBindVertices(&r->gpu, &r->vertex, &r->pattern, r->vertices_gpu, bytes);
+    dkCmdBufDraw(r->gpu.cmdbuf, DkPrimitive_Triangles, count, 1, 0, 0);
+    // The next draw's vertices go after these, which nothing rewrites.
+    r->vertices += bytes;
+    r->vertices_gpu += bytes;
+    r->vertices_left -= bytes;
+    ++t->lists;
+    return CohPaintCells(after, seed, mask);
+}
+
+/// A list of one draw on @p t, and the wait for it.
+static bool DrawAndWait(Reads *r, ReadTarget *t, uint32_t seed, uint32_t mask) {
+    GpuBeginPass(&r->gpu);
+    const bool drawn = DrawOn(r, t, seed, mask);
+    GpuSubmit(&r->gpu);
+    return drawn && r->gpu.ready;
+}
+
+/// The target's texels as the processor finds them in its memory, packed in row order.
+static const uint8_t *ReadThroughPointer(const ReadTarget *t) {
+    static uint8_t seen[READ_TARGET_BYTES];
+    // Volatile: a read whose result the case throws away still has to happen.
+    const volatile uint8_t *const bytes = t->bytes;
+    for (uint32_t y = 0; y < TARGET_SIZE; ++y) {
+        for (uint32_t x = 0; x < TARGET_SIZE * 4u; ++x) {
+            seen[y * TARGET_SIZE * 4u + x] =
+                bytes[CohBlockLinearOffset(x, y, TARGET_SIZE * 4u, 1u)];
+        }
+    }
+    return seen;
+}
+
+/// Judges what @p t holds after its last list, read by the processor or, with @p copied, by the
+/// copy engine. A wrong pixel that holds what an earlier list left is counted apart.
+static void JudgeTarget(Reads *r, const char *name, ReadTarget *t, bool drawn, bool copied) {
+    if (!drawn || !r->gpu.ready) {
+        ReportCase(SUITE, name, CHECK_NONE, false,
+                   r->gpu.failure[0] != '\0' ? r->gpu.failure : "a draw was not recorded");
+        return;
+    }
+    const CohImage *olds[READ_LISTS];
+    for (uint32_t i = 0; i + 1u < t->lists; ++i) {
+        olds[i] = &t->held[i];
+    }
+    JudgeStale(name,
+               copied ? GpuReadBackImage(&r->gpu, &t->image, TARGET_SIZE, TARGET_SIZE)
+                      : ReadThroughPointer(t),
+               &t->held[t->lists - 1u], olds, t->lists - 1u);
+}
+
+/// Draws a target whole, then @p parts parts of it, the processor reading it after each list but
+/// the last, whose read is the one judged.
+static void DrawnInParts(Reads *r, const char *name, uint32_t parts, bool copied) {
+    static ReadTarget target;
+    static const struct {
+        uint32_t seed;
+        uint32_t mask;
+    } PARTS[READ_LISTS - 1u] = { { COH_SEED_READ_PART, MIDDLE_CELLS },
+                                 { COH_SEED_READ_PART_AFTER, CORNER_CELLS } };
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    bool drawn = MakeReadTarget(r, &target) &&
+                 DrawAndWait(r, &target, COH_SEED_READ_WHOLE, ALL_CELLS);
+    for (uint32_t part = 0; drawn && part < parts; ++part) {
+        ReadThroughPointer(&target);
+        drawn = DrawAndWait(r, &target, PARTS[part].seed, PARTS[part].mask);
+    }
+    JudgeTarget(r, name, &target, drawn, copied);
+}
+
+/// Two targets side by side, both drawn whole in one list; the processor reads the first alone,
+/// a list draws a part of the second, and the second is read and judged.
+static void DrawnBesideARead(Reads *r, const char *name, bool copied) {
+    static ReadTarget read;
+    static ReadTarget beside;
+    if (!ReportStart(SUITE, name)) {
+        return;
+    }
+    bool drawn = MakeReadTarget(r, &read) && MakeReadTarget(r, &beside);
+    if (drawn) {
+        GpuBeginPass(&r->gpu);
+        drawn = DrawOn(r, &read, COH_SEED_READ_WHOLE, ALL_CELLS) &&
+                DrawOn(r, &beside, COH_SEED_BESIDE_WHOLE, ALL_CELLS);
+        GpuSubmit(&r->gpu);
+    }
+    if (drawn) {
+        ReadThroughPointer(&read);
+        drawn = DrawAndWait(r, &beside, COH_SEED_BESIDE_PART, MIDDLE_CELLS);
+    }
+    JudgeTarget(r, name, &beside, drawn, copied);
+}
+
+static void ReadCases(void) {
+    static const char *const OPEN = "a device opens for the targets the processor reads";
+    if (!ReportStart(SUITE, OPEN)) {
+        return;
+    }
+    static Reads reads;
+    Reads *const r = &reads;
+    memset(r, 0, sizeof(*r));
+    GpuSpec spec;
+    GpuSpecDefaults(&spec, TARGET_SIZE, TARGET_SIZE);
+    spec.code_size = 32u * 1024u;
+    // Twice a stretch, so a whole aligned one lies inside wherever the block lands.
+    spec.cpu_image_size = 2u * READ_STRETCH;
+    const bool ok =
+        GpuOpenSpec(&r->gpu, &spec) &&
+        GpuLoadShader(&r->gpu, &r->vertex, ShaderData(SHADER_COMMON_VERT),
+                      ShaderSize(SHADER_COMMON_VERT)) &&
+        GpuLoadShader(&r->gpu, &r->pattern, ShaderData(SHADER_PATTERN_FRAG),
+                      ShaderSize(SHADER_PATTERN_FRAG));
+    CHECK_TRUE(SUITE, OPEN, CHECK_NONE, ok, "%s", r->gpu.failure);
+    if (!ok) {
+        GpuClose(&r->gpu);
+        return;
+    }
+    // This pass's area of the block's aligned stretch: its vertices, then its targets.
+    static uint32_t passes;
+    uint8_t *const block = (uint8_t *)dkMemBlockGetCpuAddr(r->gpu.cpu_image_memory);
+    const uint32_t area =
+        (READ_STRETCH - (uint32_t)((uintptr_t)block % READ_STRETCH)) % READ_STRETCH +
+        passes++ % READ_AREAS * READ_AREA;
+    r->vertices = block + area;
+    r->vertices_gpu = dkMemBlockGetGpuAddr(r->gpu.cpu_image_memory) + area;
+    r->vertices_left = READ_VERTICES;
+    r->gpu.cpu_image_used = area + READ_VERTICES;
+
+    DrawnInParts(r, "a target a list drew holds its texels where the processor reads them", 0,
+                 false);
+    DrawnInParts(r, "a part drawn on a target after the processor read it is there at its next "
+                    "read",
+                 1, false);
+    DrawnInParts(r, "two parts drawn on a target, the processor reading between, are there at its "
+                    "third read",
+                 2, false);
+    DrawnInParts(r, "two parts drawn on a target, the processor reading between, are there for "
+                    "the copy engine",
+                 2, true);
+    DrawnBesideARead(r, "a part drawn on a target beside one the processor read is there at its "
+                        "own read",
+                     false);
+    DrawnBesideARead(r, "a part drawn on a target beside one the processor read is there for the "
+                        "copy engine",
+                     true);
+    GpuClose(&r->gpu);
+}
+
 void RunCoherence(void) {
     Caches();
     RewriteCases();
+    ReadCases();
 }

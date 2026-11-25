@@ -20,7 +20,7 @@ judge no machine, so the last line leaves them out.
 |---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | CPU and kernel | [The processor](Cpu.md) | 1 | 38 | 36 | 0 | 0 | 25 | 0 | 11 | 0 | 2 |
 | CPU and kernel | [Kernel](Kernel.md) | 2 | 30 | 28 | 0 | 0 | 21 | 0 | 7 | 2 | 0 |
-| GPU and NVN | [Graphics](Graphics.md) | 44 | 859 | 743 | 0 | 0 | 158 | 0 | 585 | 116 | 0 |
+| GPU and NVN | [Graphics](Graphics.md) | 44 | 866 | 749 | 0 | 0 | 158 | 0 | 591 | 117 | 0 |
 | GPU and NVN | [nvn](Nvn.md) | 1 | 218 | 203 | 0 | 11 | 0 | 0 | 192 | 9 | 6 |
 | GPU and NVN | [nvn2](Nvn2.md) | 1 | 34 | 31 | 0 | 5 | 0 | 0 | 26 | 3 | 0 |
 | GPU and NVN | [Game](Game.md) | 2 | 87 | 34 | 0 | 0 | 0 | 0 | 34 | 53 | 0 |
@@ -36,7 +36,7 @@ judge no machine, so the last line leaves them out.
 | Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 35 |
 | Speed | [Pace](Pace.md) | 6 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 |
 | The judge and the tools | [The judge](Judge.md) | 3 | 821 | - | - | - | - | - | - | - | - |
-| **On a machine** | | **118** | **1666** | **1322** | **0** | **16** | **210** | **117** | **979** | **269** | **75** |
+| **On a machine** | | **118** | **1673** | **1328** | **0** | **16** | **210** | **117** | **985** | **270** | **75** |
 <!-- /counts -->
 
 - **[The judge](./Judge.md)** - selfcheck, support and reference, no hardware involved
