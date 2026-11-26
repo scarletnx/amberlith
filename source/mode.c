@@ -321,6 +321,8 @@ static void TakeMachine(RunMode *mode, const char *value, size_t length) {
 /// Takes the suite after `skip=`, @p length bytes of it: kept, lower case and in the order of the
 /// names, when a suite can be called that and there is room, quoted in the mode line otherwise.
 static void TakeSkip(RunMode *mode, const char *value, size_t length) {
+    // The judge's suites, which every run runs first: no verdict after them stands without them
+    static const char *const JUDGE[] = { "selfcheck", "support", "reference" };
     char name[MODE_SKIP_NAME_MAX + 1u];
     bool good = length >= 1u && length <= MODE_SKIP_NAME_MAX && IsLetter(value[0]);
     for (size_t i = 0; good && i < length; ++i) {
@@ -328,8 +330,14 @@ static void TakeSkip(RunMode *mode, const char *value, size_t length) {
         good = IsLetter(c) || (c >= '0' && c <= '9') || c == '-';
         name[i] = (char)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
     }
+    bool judge = false;
     if (good) {
         name[length] = '\0';
+        for (size_t i = 0; i < sizeof(JUDGE) / sizeof(JUDGE[0]); ++i) {
+            judge = judge || strcmp(name, JUDGE[i]) == 0;
+        }
+    }
+    if (good && !judge) {
         size_t at = 0;
         while (at < mode->skip_count && strcmp(mode->skip[at], name) < 0) {
             ++at;
@@ -347,7 +355,8 @@ static void TakeSkip(RunMode *mode, const char *value, size_t length) {
         }
     }
     mode->skip_was_refused = true;
-    mode->skip_refused_full = good;
+    mode->skip_refused_full = good && !judge;
+    mode->skip_refused_judge = judge;
     const size_t quoted = length < MODE_SKIP_NAME_MAX ? length : MODE_SKIP_NAME_MAX;
     for (size_t i = 0; i < quoted; ++i) {
         const unsigned char c = (unsigned char)value[i];
@@ -628,7 +637,11 @@ static void DescribeSkips(char *out, size_t out_size, const RunMode *mode) {
         return;
     }
     size_t used = strlen(out);
-    if (mode->skip_refused_full) {
+    if (mode->skip_refused_judge) {
+        snprintf(out + used, out_size - used,
+                 "; skip=%s is the judge's, which every run runs: the run leaves out ",
+                 mode->skip_refused);
+    } else if (mode->skip_refused_full) {
         snprintf(out + used, out_size - used,
                  "; skip=%s is one past the %u suites skip= takes: the run leaves out ",
                  mode->skip_refused, (unsigned)MODE_SKIPS_MAX);

@@ -1801,6 +1801,12 @@ static void CheckSkipWord(void) {
           0u },
         { "skip=8k", "; skip=8k is not a suite name", 0u },
         { "skip=abcdefghijklmnopq", "; skip=abcdefghijklmnop... is not a suite name", 0u },
+        { "skip=tex8k skip=Reference",
+          "; suites left out by skip=: tex8k; skip=Reference is the judge's, which every run runs: "
+          "the run leaves out tex8k",
+          1u },
+        { "skip=selfcheck",
+          "; skip=selfcheck is the judge's, which every run runs: the run leaves out none", 0u },
         { "skip=a skip=b skip=c skip=d skip=e",
           "; suites left out by skip=: a b c d; skip=e is one past the 4 suites skip= takes: the "
           "run leaves out a b c d",

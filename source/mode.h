@@ -126,8 +126,8 @@ extern "C" {
 /// leaves out, each case a skip with the reason `asked` (report.h): a person's way to keep a suite
 /// that harms the machine out of every run, where the crash list is the machine's own evidence. A
 /// suite name is 1 to MODE_SKIP_NAME_MAX letters, digits and dashes, read in any case; anything
-/// else, or one past MODE_SKIPS_MAX, is refused and said in the mode line with the suites in
-/// effect.
+/// else, one past MODE_SKIPS_MAX, or a suite of the judge's (selfcheck, support, reference), which
+/// every run runs, is refused and said in the mode line with the suites in effect.
 ///
 /// Families choose which suites beyond the judge run. None named means every family this build has
 /// but audio, demo, display, game, kernel, music, pace, pad, service and video. The judge itself
@@ -332,9 +332,11 @@ typedef struct {
     uint32_t skip_count;
     char skip[MODE_SKIPS_MAX][MODE_SKIP_NAME_MAX + 1u];
     /// The last `skip=` refused, as written and cut to fit, for the mode line: a name no suite can
-    /// have, or, with skip_refused_full, a good one past MODE_SKIPS_MAX. The ones before it stay.
+    /// have, with skip_refused_full a good one past MODE_SKIPS_MAX, or with skip_refused_judge a
+    /// suite of the judge's, which every run runs. The ones before it stay.
     bool skip_was_refused;
     bool skip_refused_full;
+    bool skip_refused_judge;
     char skip_refused[MODE_SKIP_NAME_MAX + 1u];
     bool skip_refused_cut;
     /// The game scene's and the demos' frames: `frames=<n>` when the file has a good one, the last
