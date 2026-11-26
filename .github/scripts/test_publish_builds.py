@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """publish-builds.py against fake_github.py's fake gh and fake Discord: which Build runs are published; a nightly
-prerelease with the NRO, the APK and the two ExeFS zips and their checksums, named after the commit's VERSION and the
+prerelease with the NRO, the APK, the VPK and the two ExeFS zips and their checksums, named after the commit's VERSION and the
 commit, kept to the newest N, never one older than the newest, its files and notes copied to the "nightly" prerelease
 whose tag follows it, and nothing said on Discord; a version tag's release named after its version alone, the latest,
 and its Discord message, or a notice without the webhook; an artifact that is missing, is no NRO, or a zip that holds
@@ -43,21 +43,27 @@ def exefs(files, folder=True):
 
 OUNCE = exefs({"exefs/main": MODULE, "exefs/main.npdm": DESCRIPTOR})
 MOD = exefs({"exefs/subsdk9": MODULE, "exefs/main.npdm": DESCRIPTOR})
+# the Vita's program, a SELF, and its title's details, an SFO, as vita.mk packs them
+VPK = exefs(
+    {"sce_sys/param.sfo": b"\x00PSF" + b"\0" * 12 + b"the title", "eboot.bin": b"SCE\x00" + b"\0" * 12 + b"a SELF"},
+    folder=False,
+)
 
 
 def named(stem):
-    """the four files of a release or a run named after stem (a version, or a version and a commit), as build.yml and
+    """the five files of a release or a run named after stem (a version, or a version and a commit), as build.yml and
     publish-builds.py name them"""
     return {
         "nro": f"amberlith-{stem}.nro",
         "apk": f"amberlith-{stem}.apk",
+        "vpk": f"amberlith-{stem}.vpk",
         "ounce": f"amberlith-ounce-{stem}.zip",
         "mod": f"amberlith-mod-{stem}.zip",
     }
 
 
 def files(stem):
-    """every asset of a release named after stem: the four files and their checksums, sorted"""
+    """every asset of a release named after stem: the five files and their checksums, sorted"""
     return sorted(name + more for name in named(stem).values() for more in ("", ".sha256"))
 
 
@@ -146,14 +152,15 @@ class Publish(unittest.TestCase):
     def find(self, tag):
         return next((r for r in self.world.state()["releases"] if r["tag_name"] == tag), None)
 
-    def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK, ounce=OUNCE, mod=MOD, version="0.2.0"):
-        """the folder the workflow downloads into: the NRO, the APK and the two zips, named after the version and the
+    def artifacts(self, name, commit, data=NRO, as_file=False, apk=APK, ounce=OUNCE, mod=MOD, version="0.2.0", vpk=VPK):
+        """the folder the workflow downloads into: the NRO, the APK, the VPK and the two zips, named after the version and the
         commit, each in a folder named after its artifact, or at its path; a dict for a file is the files a download
         that unpacked it leaves in that folder"""
         artifact = named(f"{version}-{commit[:7]}")
         for file, content in (
             (artifact["nro"], data),
             (artifact["apk"], apk),
+            (artifact["vpk"], vpk),
             (artifact["ounce"], ounce),
             (artifact["mod"], mod),
         ):
@@ -197,8 +204,9 @@ class Publish(unittest.TestCase):
         ounce=OUNCE,
         mod=MOD,
         version="0.2.0",
+        vpk=VPK,
     ):
-        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk, ounce, mod, version)
+        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk, ounce, mod, version, vpk)
         args = [
             "--kind",
             kind,
@@ -273,13 +281,14 @@ class Publish(unittest.TestCase):
         body = made["body"]
         name = named(self.stem)
         # each file as it was built, its checksum and its row
-        for kind, built in (("nro", NRO), ("apk", APK), ("ounce", OUNCE), ("mod", MOD)):
+        for kind, built in (("nro", NRO), ("apk", APK), ("vpk", VPK), ("ounce", OUNCE), ("mod", MOD)):
             self.assertEqual(data[name[kind]].encode("latin-1"), built)
             built_digest = hashlib.sha256(built).hexdigest()
             self.assertEqual(data[f"{name[kind]}.sha256"], f"{built_digest}  {name[kind]}\n")
             self.assertIn(f"| [{name[kind]}]({where}/{name[kind]}) | 0.0 MB | `{built_digest}` |", body)
         self.assertIn(
-            f"`sha256sum -c {name['nro']}.sha256 {name['apk']}.sha256 {name['ounce']}.sha256 {name['mod']}.sha256`",
+            f"`sha256sum -c {name['nro']}.sha256 {name['apk']}.sha256 {name['vpk']}.sha256 {name['ounce']}.sha256 "
+            f"{name['mod']}.sha256`",
             body,
         )
         self.assertIn(f"- \\[ci\\] its title ([#5](https://github.com/{REPO}/pull/5))", body)
@@ -348,6 +357,25 @@ class Publish(unittest.TestCase):
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("is no APK: no PK\\x03\\x04 at byte 0", done.stderr)
         self.assertIsNone(self.find(self.tag))
+
+    def test_a_vpk_without_the_vitas_program_stops(self):
+        for vpk, said in (
+            (b"<html>Not Found</html>", f"amberlith-{self.stem}.vpk of run 41 is no VPK: no PK\\x03\\x04 at byte 0"),
+            (
+                exefs({"eboot.bin": b"SCE\x00 a SELF"}, folder=False),
+                f"amberlith-{self.stem}.vpk of run 41 holds eboot.bin, not the VPK's eboot.bin, sce_sys/param.sfo",
+            ),
+            (
+                exefs({"eboot.bin": b"\x7fELF an ELF", "sce_sys/param.sfo": b"\x00PSF"}, folder=False),
+                f'eboot.bin in amberlith-{self.stem}.vpk of run 41 starts with "\\x7fELF", not the SCE\\x00 a VPK\'s '
+                "eboot.bin starts with",
+            ),
+        ):
+            with self.subTest(said):
+                done = self.publish("nightly", self.sha, vpk=vpk)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn(said, done.stderr)
+                self.assertIsNone(self.find(self.tag))
 
     def test_a_missing_zip_stops(self):
         done = self.publish("nightly", self.sha, mod=None)
@@ -478,12 +506,15 @@ class Publish(unittest.TestCase):
         self.assertEqual(len(posts), 1)
         message = posts[0]["body"]["embeds"][0]
         self.assertEqual(message["title"], "Amberlith v0.2.0")
-        self.assertEqual([f["name"] for f in message["fields"]], ["NRO", "APK", "Switch 2", "Mod", "Source", "Since"])
+        self.assertEqual(
+            [f["name"] for f in message["fields"]], ["NRO", "APK", "VPK", "Switch 2", "Mod", "Source", "Since"]
+        )
         self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.nro", message["fields"][0]["value"])
         self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.apk", message["fields"][1]["value"])
-        self.assertIn("/releases/download/v0.2.0/amberlith-ounce-0.2.0.zip", message["fields"][2]["value"])
-        self.assertIn("/releases/download/v0.2.0/amberlith-mod-0.2.0.zip", message["fields"][3]["value"])
-        self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][5]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.vpk", message["fields"][2]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-ounce-0.2.0.zip", message["fields"][3]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-mod-0.2.0.zip", message["fields"][4]["value"])
+        self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][6]["value"])
         self.assertIn(hashlib.sha256(NRO).hexdigest(), message["description"])
         self.assertEqual(posts[0]["body"]["allowed_mentions"], {"parse": []})
         # its build again: the files replaced, nothing said twice
@@ -538,8 +569,8 @@ class Workflows(unittest.TestCase):
         downloads = [
             step for step in steps((WORKFLOWS / "publish.yml").read_text()) if "actions/download-artifact@" in step
         ]
-        # the four files of a release (publish-builds.py's FILES)
-        self.assertEqual((len(uploads), len(downloads)), (4, 4))
+        # the five files of a release (publish-builds.py's FILES)
+        self.assertEqual((len(uploads), len(downloads)), (5, 5))
         for step in uploads:
             self.assertRegex(step, r"(?m)^\s+archive: false$", "build.yml uploads each file itself")
         for step in downloads:

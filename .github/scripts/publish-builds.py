@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Publish a Build run's NRO, APK and ExeFS folders as a release, and say so on Discord.
+"""Publish a Build run's NRO, APK, VPK and ExeFS folders as a release, and say so on Discord.
 
     .github/scripts/publish-builds.py plan --repo OWNER/REPO
     .github/scripts/publish-builds.py publish --repo OWNER/REPO --kind nightly|release --run ID --sha SHA [--tag TAG]
@@ -14,12 +14,12 @@ the run whose files publish takes (kind, run, sha, short, tag, stem), when there
 - a push to main that built becomes the prerelease nightly-<date>-<commit>, never the latest, only the newest N
   nightlies staying; the prerelease "nightly" takes its files and notes, its tag moved to that commit.
 A pull request's run is not published: its files are the run's artifacts, which build.yml links from the pull request.
-Nothing is built: the NRO, the APK and the two ExeFS folders are the run's artifacts amberlith-<stem>.nro,
-amberlith-<stem>.apk, amberlith-ounce-<stem>.zip (the probe as a Switch 2 program) and amberlith-mod-<stem>.zip (the
-probe as a mod of a game), <stem> the commit's VERSION and its first 7 digits (0.18.0-0123abc), which the workflow
+Nothing is built: the NRO, the APK, the VPK and the two ExeFS folders are the run's artifacts amberlith-<stem>.nro,
+amberlith-<stem>.apk, amberlith-<stem>.vpk, amberlith-ounce-<stem>.zip (the probe as a Switch 2 program) and
+amberlith-mod-<stem>.zip (the probe as a mod of a game), <stem> the commit's VERSION and its first 7 digits (0.18.0-0123abc), which the workflow
 downloads into DIR between the two. A nightly holds them under those names, a version's release as amberlith-0.18.0.nro
 and so on, each with its .sha256 beside it, which sha256sum -c reads. A zip holds its ExeFS folder, exefs/, with
-exactly the files that program's loader reads.
+exactly the files that program's loader reads, and the VPK the Vita's program and its param.sfo.
 
 Discord: a version's release gets a message on DISCORD_WEBHOOK_RELEASES's channel, the NRO linked with its size, and
 the changes since the version before; without the webhook nothing is posted, and the run says so. gh reads and writes
@@ -60,16 +60,18 @@ VERSION = re.compile(r"v\d[0-9A-Za-z.+-]*")
 # what the file VERSION holds: a version tag's version, without the v
 RELEASE = re.compile(r"\d[0-9A-Za-z.+-]*")
 ROLLING = "nightly"
-# Where every NRO says what it is: the header's magic, after the first 16 bytes; an APK, a zip, at its start; a module
-# an NSO's, a descriptor an NPDM's
+# Where every NRO says what it is: the header's magic, after the first 16 bytes; an APK and a VPK, zips, at their start;
+# a module an NSO's, a descriptor an NPDM's, the Vita's program a SELF's and its title's details an SFO's
 MAGIC, AT = b"NRO0", 16
 ZIP = b"PK\x03\x04"
 NSO, NPDM = b"NSO0", b"META"
+SELF, SFO = b"SCE\x00", b"\x00PSF"
 # A run's files in the order a release lists them: the kind (notes.KINDS), what an error and a Discord message call it,
 # its magic and where, and for a zip every file its ExeFS folder holds with that file's magic
 FILES = (
     ("nro", "NRO", "NRO", MAGIC, AT, None),
     ("apk", "APK", "APK", ZIP, 0, None),
+    ("vpk", "VPK", "VPK", ZIP, 0, {"eboot.bin": SELF, "sce_sys/param.sfo": SFO}),
     ("ounce", "Switch 2 program", "Switch 2", ZIP, 0, {"exefs/main": NSO, "exefs/main.npdm": NPDM}),
     ("mod", "mod of a game", "Mod", ZIP, 0, {"exefs/subsdk9": NSO, "exefs/main.npdm": NPDM}),
 )
@@ -272,8 +274,9 @@ class Publisher(Hub):
         for member, magic in sorted(members.items()):
             if found[member][: len(magic)] != magic:
                 head = found[member][: len(magic)].decode("latin-1").encode("unicode_escape").decode()
+                said = magic.decode("latin-1").encode("unicode_escape").decode()
                 raise RuntimeError(
-                    f'{member} in {name} of run {run} starts with "{head}", not the {magic.decode()} a '
+                    f'{member} in {name} of run {run} starts with "{head}", not the {said} a '
                     f"{kind}'s {member.rsplit('/', 1)[-1]} starts with"
                 )
 
