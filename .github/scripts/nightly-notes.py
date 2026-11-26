@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""A release's file names, title and notes: the NRO, the APK and the two ExeFS folders, named after the version (and a
+"""A release's file names, title and notes: the NRO, the APK, the VPK and the two ExeFS folders, named after the version (and a
 nightly's after its commit too), with their sizes and SHA-256, where to read how to run them, what changed since the
 previous release, and where the source is, which the GPL asks for beside the binary. publish-builds.py beside it takes
 them for each nightly and each version.
@@ -15,11 +15,12 @@ import re
 import subprocess
 
 SERVER = "https://github.com"
-# What a release holds, in this order: the NRO, the APK and two ExeFS folders zipped, each with its checksum beside it
+# What a release holds, in this order: the NRO, the APK, the VPK and two ExeFS folders zipped, each with its checksum beside it
 # in the form sha256sum -c reads; each kind's name before the version, its ending after it
 KINDS = {
     "nro": ("amberlith", ".nro"),
     "apk": ("amberlith", ".apk"),
+    "vpk": ("amberlith", ".vpk"),
     "ounce": ("amberlith-ounce", ".zip"),
     "mod": ("amberlith-mod", ".zip"),
 }
@@ -28,6 +29,7 @@ SUM = ".sha256"
 RUNS = {
     "nro": "runs on the console and under an emulator",
     "apk": "runs on Android and on ScarletNX's Android layer",
+    "vpk": "runs on a Vita, in Vita3K and in ScarletNX's Vita runtime",
     "ounce": "holds an ExeFS folder, the probe as a Switch 2 program, which ScarletNX runs",
     "mod": (
         "holds an ExeFS folder, the probe as a mod of a game, in the game's mods folder on a console with Atmosphere, "
@@ -121,7 +123,7 @@ def download(url, sha, where, built):
         "Emulator",
         "Console",
         "Android",
-        *(name for kind, name in (("ounce", "Ounce"), ("mod", "Mod")) if kind in kinds),
+        *(name for kind, name in (("vpk", "Vita"), ("ounce", "Ounce"), ("mod", "Mod")) if kind in kinds),
     ]
     linked_documents = [f"[{name}.md]({url}/blob/{sha}/docs/{name}.md)" for name in documents]
     return [
@@ -160,6 +162,14 @@ def source(tree, built):
                 "the libraries every Android device has."
             ]
             if "apk" in kinds
+            else []
+        ),
+        *(
+            [
+                "- The VPK was built with the VitaSDK .github/workflows/build.yml names, and links its C library and "
+                "the system's stubs; the gxm suite draws with vita2d's compiled shaders (MIT)."
+            ]
+            if "vpk" in kinds
             else []
         ),
         *(
