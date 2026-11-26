@@ -257,7 +257,9 @@ static void CheckRehearsal(void) {
                ReportPassed(), failed, ReportFailed(), records, records_after, paths.image);
 }
 
-#ifndef __SWITCH__
+// The host build's alone (AMBERLITH_HOST): the one whose log a case can read back, and whose C
+// library has dup2, which the Vita's newlib lacks.
+#ifdef AMBERLITH_HOST
 // The probe line CheckSelfTimed writes, and the time it carries.
 #define SELF_TIMED_US 4321u
 static const char *const SELF_TIMED = "a case that times itself goes out with its own time, here "
@@ -388,7 +390,7 @@ void RunSupportPerf(void) {
     CheckSampling();
     CheckLines();
     CheckRehearsal();
-#ifndef __SWITCH__
+#ifdef AMBERLITH_HOST
     // Where the log is standard output alone: Android's is logcat, which a case cannot read back
     if (PlatformLogIsStandardOutput()) {
         CheckSelfTimed();
