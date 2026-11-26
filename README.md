@@ -18,6 +18,8 @@ The newest version is on [its release](https://github.com/scarletnx/amberlith/re
 - In an emulator: open the NRO.
 - On Android, or ScarletNX's Android layer: the APK, `android/` ([On Android](docs/Android.md)), the same engine
   with Android's own cases beside the ones every machine runs.
+- On a Vita, in Vita3K or in ScarletNX's Vita runtime: the VPK, `vita/` ([On the Vita](docs/Vita.md)), the same engine
+  with the Vita's GPU cases beside the ones every machine runs.
 
 Without a mode file the start screen asks what to run, and its L and R open the browser, where a person runs a suite,
 a single case or a demo at a time ([The browser](docs/UI.md)); `sdmc:/amberlith/mode` chooses instead
@@ -35,6 +37,7 @@ export DEVKITPRO=/opt/devkitpro
 make                                  # amberlith.nro
 make -f host.mk host-run              # the judge and the tools' tests, on this machine
 gradle -p android assembleDebug       # the APK, with ANDROID_HOME and a JDK 17 or newer
+make -f vita.mk                       # the VPK, with VITASDK set (docs/Vita.md)
 make run EMULATOR=/path/to/emulator   # a quick run, started again after a crash
 ```
 

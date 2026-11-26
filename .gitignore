@@ -4,6 +4,7 @@
 /amberlith.nro
 /amberlith.nacp
 /amberlith-host-report.jsonl
+/amberlith-host-reference.jsonl
 /tools/__pycache__/
 /.github/scripts/__pycache__/
 /tools/vklayer/libVkLayer_amberlith_masquerade.so
@@ -19,3 +20,4 @@
 /build-mod/
 /amberlith-mod.elf
 /amberlith-mod/
+/build-vita/

@@ -40,6 +40,7 @@ ORIGIN = """static const struct { const char *suite; ReportFrom from; } ORIGINS[
     { "framework", REPORT_FROM_SPEC },
     { "bionic", REPORT_FROM_SPEC },
     { "mod", REPORT_FROM_SPEC },
+    { "gxm", REPORT_FROM_SPEC },
 };
 """
 
