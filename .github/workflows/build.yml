@@ -217,6 +217,54 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  # The VPK (docs/Vita.md) with VitaSDK's build of 2026-10-15, held to its release's hash: a newer one is a change
+  # of its own, as the NRO's image is. vita.mk fetches vita2d's four shader programs, held to vita/shaders.sha256
+  vpk:
+    name: VPK (Vita)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    env:
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      VITASDK_URL: https://github.com/vitasdk/autobuilds/releases/download/sdk-snapshot-20261015.850.1/vitasdk-x86_64-linux-gnu-2026-10-15_05-01-16.tar.bz2
+      VITASDK_SHA256: 801f483928523fe63547faf58a7dfdaca7482b26c33af0064acea96a906f7662
+    steps:
+      # The commit itself and its whole history, for the version tags the build describes itself from, as the NRO's
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+      - name: Name the builds
+        id: name
+        run: |
+          version=$(cat VERSION)
+          [[ $version =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "::error::VERSION holds \"$version\", not a version"; exit 1; }
+          echo "stem=$version-${SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Install VitaSDK
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/vitasdk.tar.bz2" "$VITASDK_URL"
+          echo "$VITASDK_SHA256  $RUNNER_TEMP/vitasdk.tar.bz2" | sha256sum -c -
+          tar xjf "$RUNNER_TEMP/vitasdk.tar.bz2" -C "$RUNNER_TEMP"
+          echo "VITASDK=$RUNNER_TEMP/vitasdk" >> "$GITHUB_ENV"
+      - name: Build the VPK
+        run: make -f vita.mk -j"$(nproc)"
+      # The program names this commit, clean, as the NRO's version.h does: what a report from it opens with
+      - name: Check the VPK names its commit
+        run: |
+          set -euo pipefail
+          hash=$(git describe --always --dirty --abbrev=7 --exclude='*')
+          case $hash in ''|*-dirty) echo "::error::the build names its commit \"$hash\""; exit 1 ;; esac
+          unzip -l build-vita/amberlith.vpk | grep -E ' eboot.bin$' > /dev/null ||
+            { echo "::error::the VPK has no eboot.bin"; exit 1; }
+          grep -aq "$hash" build-vita/amberlith.elf || { echo "::error::amberlith.elf does not name $hash"; exit 1; }
+          cp build-vita/amberlith.vpk "amberlith-${{ steps.name.outputs.stem }}.vpk"
+      # Not zipped: the artifact is the VPK itself, named after it
+      - uses: actions/upload-artifact@v7
+        with:
+          path: amberlith-${{ steps.name.outputs.stem }}.vpk
+          archive: false
+          if-no-files-found: error
+
   # The judge, the screens and the tools' tests on the machine itself (docs/Build.md), and the tests of
   # .github/scripts: a nightly is published only when they pass
   host:
@@ -230,14 +278,14 @@ jobs:
       - name: Run them
         run: make -f host.mk -j"$(nproc)" host-run
 
-  # A pull request's NRO and APK, linked from a comment on it that each run rewrites, as soon as they are built
+  # A pull request's NRO, APK and VPK, linked from a comment on it that each run rewrites, as soon as they are built
   # (.github/scripts/pr-builds.sh). A pull request from a fork gets a token that may not write, so it gets none
   links:
     name: Links to the builds
     if: >-
       !cancelled() && github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    needs: [nro, apk]
+    needs: [nro, apk, vpk]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:

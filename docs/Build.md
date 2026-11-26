@@ -1,5 +1,15 @@
 # Build
 
+## Index
+
+* [The NRO](#the-nro)
+* [The Switch 2 ExeFS](#the-switch-2-exefs)
+* [The mod of a game](#the-mod-of-a-game)
+* [The APK](#the-apk)
+* [The Vita's VPK](#the-vitas-vpk)
+* [The host build](#the-host-build)
+* [Commit messages](#commit-messages)
+
 ## The NRO
 
 ```sh
@@ -53,6 +63,15 @@ gradle -p android assembleDebug -Pamberlith.out=/tmp/amberlith-apk
 
 With the Android SDK in `ANDROID_HOME` and a JDK 17 or newer in `JAVA_HOME`; what it needs and where the APK lands is
 in [On Android](Android.md#build-it).
+
+## The Vita's VPK
+
+```sh
+VITASDK=$HOME/vitasdk make -f vita.mk
+```
+
+`build-vita/amberlith.vpk`; what it needs, the shader programs it fetches and how it runs are in
+[On the Vita](Vita.md#build-it).
 
 ## The host build
 

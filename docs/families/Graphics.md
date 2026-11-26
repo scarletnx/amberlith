@@ -46,6 +46,7 @@
 * [blit2d](#blit2d)
 * [copy](#copy)
 * [tex8k](#tex8k)
+* [gxm](#gxm)
 * [What a console run settles](#what-a-console-run-settles)
 * [Where reden falls short](#where-reden-falls-short)
 
@@ -1590,6 +1591,20 @@ unit and sampled where it was written. Its sixteen texels fetched must give the 
 (its two endpoints, red and blue, which every decoder gives exactly); a host that
 takes a volume that large for no texture reads zeros (ScarletNX's big volume test). It skips as
 unavailable where `vram=` says the machine is short, as the textures do.
+
+## gxm
+
+The Vita's GPU through sceGxm, the Vita frontend's own suite ([On the Vita](../Vita.md)): `vita/gxm.c`, brought up as
+the SDK's samples do, with vita2d's clear and texture programs. Every edge lies on a pixel's boundary and every texel
+is sampled at a pixel's centre, so every correct rasteriser and sampler gives the same pixels, at whatever scale a
+machine draws inside (ScarletNX's `resolution`): tier exact, from this program's reading of sceGxm.
+
+- **A render target drawn into reads back its background, square and corner**: a 64 by 64 target cleared to one
+  colour, a 32 by 24 rectangle of another and an 8 by 8 corner of a third, read back from its memory.
+- **The render target sampled as a texture copies onto the display's buffer texel for pixel**: the target as a linear
+  texture, nearest, on a quad its size at the top left of a 960 by 544 buffer cleared to black.
+- **The display's buffer shown reads back the copy and its black around it**: the buffer given to
+  `sceDisplaySetFrameBuf`, a second of vblanks, and read back.
 
 ## What a console run settles
 

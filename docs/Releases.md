@@ -40,7 +40,8 @@ named as a nightly's, `amberlith-<version>-<commit>.nro`, `.apk`, `amberlith-oun
   pinned by tag and digest, checked to name its own commit, clean, and uploaded as the run's artifact, and in the same
   job the Switch 2 program and the mod, each checked to name the NRO's build and uploaded as its ExeFS folder
   zipped; the APK with the runner's Gradle, JDK 21 and Android SDK, its native library checked to name the same
-  commit, and uploaded the same way; then `make -f host.mk host-run`. Each artifact is named after `VERSION` and the
+  commit, and uploaded the same way; the VPK with VitaSDK's build of 2026-10-15, held to its hash, its program checked
+  to name the same commit, and uploaded the same way ([On the Vita](Vita.md)); then `make -f host.mk host-run`. Each artifact is named after `VERSION` and the
   commit, and a `VERSION` that is no version stops the build. A tag must be `v` and `VERSION`, or the build stops. A
   newer push to a pull request cancels its older build.
 - **`publish.yml`**, after a Build run of a push passes: for `main`, the prerelease `nightly-<date>-<commit>` (never

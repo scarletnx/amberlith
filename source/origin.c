@@ -145,6 +145,9 @@ static const struct {
     { "acc", REPORT_FROM_SPEC },
     { "friend", REPORT_FROM_SPEC },
     // What the C standard and POSIX define; libm's table is worked out at 100 digits.
+    // The Vita's GPU (vita/gxm.c): pixels this program drew where every correct rasteriser and sampler
+    // puts them, from sceGxm's documented behaviour.
+    { "gxm", REPORT_FROM_SPEC },
     { "libc", REPORT_FROM_SPEC },
     { "system", REPORT_FROM_SPEC },
     { "socket", REPORT_FROM_SPEC },
