@@ -146,44 +146,115 @@ static uint64_t LaneMask(unsigned bits) {
     return bits >= 64u ? ~0ull : (1ull << bits) - 1u;
 }
 
-static __int128 SignedLane(uint64_t value, unsigned bits) {
+// A lane's arithmetic is wider than 64 bits: a signed 128-bit integer, the compiler's where it has one, else two
+// 64-bit words (a 32-bit machine's, the Vita's), with the same answers. CPUREF_NO_INT128 builds the words anywhere,
+// which the host run does to hold them to the same reference (host.mk).
+#if defined(__SIZEOF_INT128__) && !defined(CPUREF_NO_INT128)
+typedef __int128 I128;
+static I128 I128Of(int64_t v) { return v; }
+static I128 I128OfUnsigned(uint64_t v) { return (I128)v; }
+static I128 I128Add(I128 a, I128 b) { return a + b; }
+static I128 I128Neg(I128 a) { return -a; }
+static I128 I128Shl(I128 a, unsigned n) { return a * ((I128)1 << n); }
+static I128 I128Sar(I128 a, unsigned n) { return a >> n; }
+static I128 I128MulInt(I128 a, int64_t k) { return a * k; }
+static I128 I128Mul64(int64_t a, int64_t b) { return (I128)a * b; }
+static bool I128Less(I128 a, I128 b) { return a < b; }
+static bool I128IsZero(I128 a) { return a == 0; }
+static uint64_t I128Low(I128 a) { return (uint64_t)a; }
+#else
+typedef struct {
+    uint64_t lo;
+    uint64_t hi; // the sign is its top bit
+} I128;
+static I128 I128Of(int64_t v) { return (I128){ (uint64_t)v, v < 0 ? ~0ull : 0u }; }
+static I128 I128OfUnsigned(uint64_t v) { return (I128){ v, 0u }; }
+static I128 I128Add(I128 a, I128 b) {
+    const uint64_t lo = a.lo + b.lo;
+    return (I128){ lo, a.hi + b.hi + (lo < a.lo ? 1u : 0u) };
+}
+static I128 I128Neg(I128 a) { return I128Add((I128){ ~a.lo, ~a.hi }, I128Of(1)); }
+static I128 I128Shl(I128 a, unsigned n) {
+    if (n == 0u) {
+        return a;
+    }
+    if (n >= 64u) {
+        return (I128){ 0u, a.lo << (n - 64u) };
+    }
+    return (I128){ a.lo << n, (a.hi << n) | (a.lo >> (64u - n)) };
+}
+// Toward minus infinity, as the native type's shift on this compiler.
+static I128 I128Sar(I128 a, unsigned n) {
+    const uint64_t fill = (a.hi >> 63) != 0u ? ~0ull : 0u;
+    if (n == 0u) {
+        return a;
+    }
+    if (n >= 64u) {
+        const uint64_t lo = n == 64u ? a.hi : (a.hi >> (n - 64u)) | (fill << (128u - n));
+        return (I128){ lo, fill };
+    }
+    return (I128){ (a.lo >> n) | (a.hi << (64u - n)), (a.hi >> n) | (fill << (64u - n)) };
+}
+// The 128-bit product of two unsigned 64-bit words, from their 32-bit halves.
+static I128 Unsigned128(uint64_t a, uint64_t b) {
+    const uint64_t a0 = a & 0xffffffffu, a1 = a >> 32, b0 = b & 0xffffffffu, b1 = b >> 32;
+    const uint64_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
+    const uint64_t middle = (p00 >> 32) + (p01 & 0xffffffffu) + (p10 & 0xffffffffu);
+    return (I128){ (p00 & 0xffffffffu) | (middle << 32), p11 + (p01 >> 32) + (p10 >> 32) + (middle >> 32) };
+}
+// a times k, modulo 2^128 as the native type's product is.
+static I128 I128MulInt(I128 a, int64_t k) {
+    I128 p = Unsigned128(a.lo, (uint64_t)k);
+    p.hi += a.hi * (uint64_t)k + (k < 0 ? 0u - a.lo : 0u);
+    return p;
+}
+static I128 I128Mul64(int64_t a, int64_t b) { return I128MulInt(I128Of(a), b); }
+static bool I128Less(I128 a, I128 b) { return a.hi != b.hi ? (int64_t)a.hi < (int64_t)b.hi : a.lo < b.lo; }
+static bool I128IsZero(I128 a) { return a.lo == 0u && a.hi == 0u; }
+static uint64_t I128Low(I128 a) { return a.lo; }
+#endif
+
+// A lane's value, sign-extended from its width.
+static int64_t Signed64(uint64_t value, unsigned bits) {
     const uint64_t lane = value & LaneMask(bits);
     const uint64_t sign = 1ull << (bits - 1u);
-    return (__int128)(int64_t)((lane ^ sign) - sign);
+    return (int64_t)((lane ^ sign) - sign);
 }
+static I128 SignedLane(uint64_t value, unsigned bits) { return I128Of(Signed64(value, bits)); }
 
 // SignedSatQ and UnsignedSatQ: x clamped to what @p bits hold, as a lane's bit pattern.
-static uint64_t Saturate(__int128 x, unsigned bits, bool is_unsigned, bool *saturated) {
-    const __int128 most = is_unsigned ? (__int128)LaneMask(bits) : ((__int128)1 << (bits - 1u)) - 1;
-    const __int128 least = is_unsigned ? 0 : -((__int128)1 << (bits - 1u));
-    if (x > most) {
+static uint64_t Saturate(I128 x, unsigned bits, bool is_unsigned, bool *saturated) {
+    const I128 most = is_unsigned ? I128OfUnsigned(LaneMask(bits))
+                                  : I128Add(I128Shl(I128Of(1), bits - 1u), I128Of(-1));
+    const I128 least = is_unsigned ? I128Of(0) : I128Neg(I128Shl(I128Of(1), bits - 1u));
+    if (I128Less(most, x)) {
         *saturated = true;
         x = most;
-    } else if (x < least) {
+    } else if (I128Less(x, least)) {
         *saturated = true;
         x = least;
     }
-    return (uint64_t)x & LaneMask(bits);
+    return I128Low(x) & LaneMask(bits);
 }
 
 uint64_t CpuRefRoundingShiftLane(uint64_t value, int shift, unsigned esize, bool is_unsigned,
                                  bool *saturated) {
     *saturated = false;
-    const __int128 x = is_unsigned ? (__int128)(value & LaneMask(esize)) : SignedLane(value, esize);
-    __int128 shifted;
+    const I128 x = is_unsigned ? I128OfUnsigned(value & LaneMask(esize)) : SignedLane(value, esize);
+    I128 shifted;
     if (shift >= 0) {
         // Any non-zero lane shifted by its width or more is out of range: saturate it.
-        if (x == 0) {
-            shifted = 0;
+        if (I128IsZero(x)) {
+            shifted = I128Of(0);
         } else if (shift >= (int)esize) {
-            shifted = x < 0 ? -((__int128)1 << 100) : ((__int128)1 << 100);
+            shifted = I128Less(x, I128Of(0)) ? I128Neg(I128Shl(I128Of(1), 100u)) : I128Shl(I128Of(1), 100u);
         } else {
-            shifted = x * ((__int128)1 << shift);
+            shifted = I128Shl(x, (unsigned)shift);
         }
     } else {
         // (x + 2^(n-1)) >> n is zero for every lane once n passes the lane's width.
         const unsigned n = (unsigned)-shift;
-        shifted = n > esize ? 0 : (x + ((__int128)1 << (n - 1u))) >> n;
+        shifted = n > esize ? I128Of(0) : I128Sar(I128Add(x, I128Shl(I128Of(1), n - 1u)), n);
     }
     return Saturate(shifted, esize, is_unsigned, saturated);
 }
@@ -192,34 +263,34 @@ uint64_t CpuRefShiftLane(uint64_t value, int shift, unsigned esize, unsigned op,
     const bool is_unsigned = (op & CPU_SHL_UNSIGNED) != 0u;
     const bool saturating = (op & CPU_SHL_SATURATING) != 0u;
     *saturated = false;
-    const __int128 x = is_unsigned ? (__int128)(value & LaneMask(esize)) : SignedLane(value, esize);
-    __int128 shifted;
+    const I128 x = is_unsigned ? I128OfUnsigned(value & LaneMask(esize)) : SignedLane(value, esize);
+    I128 shifted;
     if (shift >= 0) {
-        if (x == 0) {
-            shifted = 0;
+        if (I128IsZero(x)) {
+            shifted = I128Of(0);
         } else if (shift >= (int)esize) {
             // Every bit has left the lane: nought, or, saturating, past either end.
             if (!saturating) {
                 return 0;
             }
-            shifted = x < 0 ? -((__int128)1 << 100) : ((__int128)1 << 100);
+            shifted = I128Less(x, I128Of(0)) ? I128Neg(I128Shl(I128Of(1), 100u)) : I128Shl(I128Of(1), 100u);
         } else {
-            shifted = x * ((__int128)1 << shift);
+            shifted = I128Shl(x, (unsigned)shift);
         }
     } else {
         const unsigned n = (unsigned)-shift;
         if ((op & CPU_SHL_ROUNDING) != 0u) {
             // (x + 2^(n-1)) >> n is nought for every lane once n passes the lane's width.
-            shifted = n > esize ? 0 : (x + ((__int128)1 << (n - 1u))) >> n;
+            shifted = n > esize ? I128Of(0) : I128Sar(I128Add(x, I128Shl(I128Of(1), n - 1u)), n);
         } else {
             // Toward minus infinity; past the lane's width only the sign is left.
-            shifted = x >> (n > 127u ? 127u : n);
+            shifted = I128Sar(x, n > 127u ? 127u : n);
         }
     }
     if (saturating) {
         return Saturate(shifted, esize, is_unsigned, saturated);
     }
-    return (uint64_t)shifted & LaneMask(esize);
+    return I128Low(shifted) & LaneMask(esize);
 }
 
 uint32_t CpuRefCrc32(uint32_t crc, uint64_t data, unsigned bytes, bool castagnoli) {
@@ -240,12 +311,12 @@ uint64_t CpuRefDoublingMultiplyLane(uint64_t acc, uint64_t a, uint64_t b, unsign
     bool sum_saturated = false;
     const unsigned wide = 2u * esize;
     const uint64_t product =
-        Saturate(2 * SignedLane(a, esize) * SignedLane(b, esize), wide, false, &product_saturated);
+        Saturate(I128Shl(I128Mul64(Signed64(a, esize), Signed64(b, esize)), 1u), wide, false, &product_saturated);
     if (accumulate == 0) {
         *saturated = product_saturated;
         return product;
     }
-    const __int128 sum = SignedLane(acc, wide) + accumulate * SignedLane(product, wide);
+    const I128 sum = I128Add(SignedLane(acc, wide), I128MulInt(SignedLane(product, wide), accumulate));
     const uint64_t result = Saturate(sum, wide, false, &sum_saturated);
     *saturated = product_saturated || sum_saturated;
     return result;
@@ -255,8 +326,8 @@ uint64_t CpuRefRoundingNarrow(uint64_t value, unsigned esize, unsigned shift, bo
                               bool result_unsigned, bool *saturated) {
     *saturated = false;
     const unsigned wide = 2u * esize;
-    const __int128 x = source_unsigned ? (__int128)(value & LaneMask(wide)) : SignedLane(value, wide);
-    return Saturate((x + ((__int128)1 << (shift - 1u))) >> shift, esize, result_unsigned, saturated);
+    const I128 x = source_unsigned ? I128OfUnsigned(value & LaneMask(wide)) : SignedLane(value, wide);
+    return Saturate(I128Sar(I128Add(x, I128Shl(I128Of(1), shift - 1u)), shift), esize, result_unsigned, saturated);
 }
 
 const uint64_t CPU_RSHL_VALUE[4][2] = {

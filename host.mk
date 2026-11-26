@@ -22,6 +22,10 @@ LAYERTEST := build-host/nvnlayer-test-55 build-host/nvnlayer-test-231 \
              build-host/nvnlayer-test-game-55 build-host/nvnlayer-test-game-231
 LAYERFLAGS := -std=c11 -Wall -Wextra -Werror -Wno-unused-parameter -O1 -g -Invnlayer/include
 
+# The host build again with the processor reference's 128-bit integers in two 64-bit words, as a
+# machine with no __int128 builds it (the Vita's ARM32): its reference suite gives the same answers.
+HOSTWORDS := build-host/amberlith-host-words
+
 # What the mod reads of the SDK module of the game it is loaded in (mod/host.c), on bytes the
 # test makes.
 MODTEST := build-host/mod-host-test
@@ -31,7 +35,7 @@ MODTEST := build-host/mod-host-test
 # Where the fluid demo's budgets come from, measured on the processor (tools/fluid-envelope.c).
 FLUIDTOOL := build-host/fluid-envelope
 
-host: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
+host: $(HOSTOUT) $(HOSTWORDS) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
 
 build-host/nvnlayer-test-55: nvnlayer/tests/layer_test.c nvnlayer/source/layer.c \
                              nvnlayer/source/api55_shader.c $(wildcard nvnlayer/source/*.h) \
@@ -65,6 +69,13 @@ build-host/%.o: source/%.c
 $(HOSTOUT): $(HOSTOBJ)
 	$(HOSTCC) $(HOSTFLAGS) $(HOSTOBJ) -lm -pthread -o $@
 
+build-host/cpuref-words.o: source/cpuref.c
+	@mkdir -p $(dir $@)
+	$(HOSTCC) $(HOSTFLAGS) -DCPUREF_NO_INT128 -c $< -o $@
+
+$(HOSTWORDS): $(filter-out build-host/cpuref.o,$(HOSTOBJ)) build-host/cpuref-words.o
+	$(HOSTCC) $(HOSTFLAGS) $^ -lm -pthread -o $@
+
 $(FLUIDTOOL): tools/fluid-envelope.c build-host/demo_fluidref.o
 	$(HOSTCC) $(HOSTFLAGS) $^ -lm -o $@
 
@@ -75,9 +86,10 @@ $(FLUIDTOOL): tools/fluid-envelope.c build-host/demo_fluidref.o
 # scripts in .github/scripts, against a fake GitHub and a fake Discord, and the APK's runners,
 # against a fake adb and a fake ScarletNX driver. The fluid demo's budgets are measured between
 # them, on the early frames and a default run's 600.
-host-run: $(HOSTOUT) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
+host-run: $(HOSTOUT) $(HOSTWORDS) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
 	./$(HOSTOUT)
 	cd / && exec $(CURDIR)/$(HOSTOUT)
+	./$(HOSTWORDS) reference
 	./build-host/nvnlayer-test-55
 	./build-host/nvnlayer-test-231
 	./build-host/nvnlayer-test-game-55
