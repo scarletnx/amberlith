@@ -828,6 +828,8 @@ reference	pace: the integer loop leaves the sums worked out apart	judge	none	-	n
 reference	pace: the floating point loop leaves the sums worked out apart	judge	none	-	nro,ounce,host
 reference	pace: the vector loop leaves the sums worked out apart	judge	none	-	nro,ounce,host
 reference	pace: the memory walk reads every slot once before it is back at its start	judge	none	-	nro,ounce,host
+reference	libc: the tied sort hands over ids 0 to 15, four to a key, marks from 0xa0	judge	none	-	host
+reference	libc: the tied sort judge takes the ties in any order and refuses a torn, lost or unsorted record	judge	none	-	host
 cpu	clz counts each of sixteen 8-bit lanes	cpu	exact	spec	nro
 cpu	clz counts each of eight 16-bit lanes	cpu	exact	spec	nro
 cpu	clz counts each of four 32-bit lanes	cpu	exact	spec	nro
@@ -2078,6 +2080,7 @@ libc	qsort orders sixteen integers and bsearch finds each	libc	exact	spec	nro,ho
 libc	setjmp returns twice, with longjmp's value, and 1 for 0	libc	exact	spec	nro,host
 libc	gmtime_r and strftime write a fixed time in the C locale	libc	exact	spec	nro,host
 libc	libm is within 1 ulp of the correctly rounded results	libc	ulp	spec	nro,host
+libc	qsort sorts three-byte records by a key four share, each record whole and kept once	libc	exact	spec	host
 system	four threads add under one mutex, a key's destructor runs for each, each keeps its own thread-local	libc	exact	spec	nro,host
 system	the monotonic clock moves forward over a 20 ms sleep	libc	exact	spec	nro,host
 socket	a TCP socket listens on loopback, connects and echoes	libc	exact	spec	nro,host

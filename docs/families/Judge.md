@@ -8,8 +8,8 @@ family reports can be believed without them.
 |---|--:|--:|--:|--:|
 | selfcheck | 16 | 16 | 16 | 16 |
 | support | 254 | 237 | 237 | 253 |
-| reference | 551 | 547 | 547 | 551 |
-| **All** | **821** | **800** | **800** | **820** |
+| reference | 553 | 547 | 547 | 553 |
+| **All** | **823** | **800** | **800** | **822** |
 <!-- /counts -->
 
 - **selfcheck**, no hardware involved. That two neighbouring floats measure one unit
@@ -127,6 +127,10 @@ family reports can be believed without them.
     the sentence a line carries, against answers worked out by hand; and what the integer, the
     floating point and the vector loop and the memory walk leave, against `tools/pace-expect.py`,
     which restates them in Python and runs the floating point loop in doubles beside whole numbers;
+  - two on the libc family's tied sort, `source/libcref.c`: the records the case hands qsort, and
+    its judge on a stable order and on one with the ties reversed, which both pass, and on a
+    record torn between two, an id that is none of them, one lost to its neighbour copied twice
+    and the records left as they came, each refused with its sentence;
   - thirty six on the astc suite's answers: the ASTC reference decoder, `source/astcref.c`, held
     block by block to hashes of what ARM's decoder (astcenc) makes of the same twenty six blocks,
     three of them to texels worked out by hand as well, its

@@ -23,6 +23,7 @@
 
 #include "../check.h"
 #include "../libcmath.h"
+#include "../libcref.h"
 #include "../netref.h"
 #include "../platform.h"
 #include "../report.h"
@@ -172,6 +173,28 @@ static void Sort(void) {
                values[2], values[3], values[14], values[15], found);
 }
 
+static int CompareKeys(const void *a, const void *b) {
+    const uint8_t x = ((const LibcRecord *)a)->key;
+    const uint8_t y = ((const LibcRecord *)b)->key;
+    return (x > y) - (x < y);
+}
+
+static void Ties(void) {
+    static const char *const NAME =
+        "qsort sorts three-byte records by a key four share, each record whole and kept once";
+    if (!ReportStart(LIBC, NAME)) {
+        return;
+    }
+    // Which of four records with one key comes first is the library's choice, so the judge takes
+    // any order of them (libcref.c).
+    LibcRecord records[LIBC_TIED_RECORDS];
+    LibcTiedRecords(records);
+    qsort(records, LIBC_TIED_RECORDS, sizeof(records[0]), CompareKeys);
+    char said[160];
+    const bool passed = LibcJudgeTiedSort(records, said, sizeof(said));
+    CHECK_TRUE(LIBC, NAME, CHECK_EXACT, passed, "%s", said);
+}
+
 static jmp_buf jump;
 
 static void JumpBack(int value) {
@@ -294,6 +317,7 @@ void RunLibc(void) {
     Parse();
     Strings();
     Sort();
+    Ties();
     Jumps();
     Dates();
     Libm();
