@@ -12,6 +12,10 @@
   `vita/shaders.sha256`. MIT licence, in its `LICENSE` (copyright 2015 Sergi Granell, xerpi).
 - **libctru**, https://github.com/devkitPro/libctru: the library every call to the 3DS's services goes through
   (`3ds.mk`), as devkitPro's devkitARM container holds it. zlib licence, in its `README.md`.
+- **libnds** and **calico**, https://github.com/devkitPro/libnds and https://github.com/devkitPro/calico: the DS's
+  library and the system under it, with calico's ARM7 program the NDS carries (`nds.mk`), as devkitPro's devkitARM
+  container holds them. libnds under the zlib licence, in its `libnds_license.txt`; calico under the Zope Public
+  License 2.1, in its `COPYING`.
 - **libnx**, https://github.com/switchbrew/libnx: the library every call to the console's services
   goes through. ISC licence, in its `LICENSE.md` (copyright 2017-2018 libnx Authors).
 - **deko3d**, https://github.com/devkitPro/deko3d: the graphics library the drawing suites use, which

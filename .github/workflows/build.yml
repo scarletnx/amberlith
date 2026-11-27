@@ -313,6 +313,53 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  # The NDS (docs/DS.md) in the same devkitARM container as the 3DSX: libnds 2.0.2, calico 1.2.0, ndstool 2.3.1. The
+  # link fails when the program and its data pass the ARM9's 3.5 MiB, which is the check of what fits
+  nds:
+    name: NDS (devkitARM)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    container: devkitpro/devkitarm:20260610@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVKITPRO: /opt/devkitpro
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      # The commit itself and its whole history, for the version tags the build describes itself from, as the NRO's
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+      # The container's root reads a checkout the runner's user owns, which git refuses: the build would name itself
+      # "unknown"
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Name the builds
+        id: name
+        run: |
+          version=$(cat VERSION)
+          [[ $version =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "::error::VERSION holds \"$version\", not a version"; exit 1; }
+          echo "stem=$version-${SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Build the NDS
+        run: make -f nds.mk -j"$(nproc)"
+      # The program names this commit, clean, as the NRO's version.h does: what a report from it opens with
+      - name: Check the NDS names its commit
+        run: |
+          set -euo pipefail
+          hash=$(git describe --always --dirty --abbrev=7 --exclude='*')
+          case $hash in ''|*-dirty) echo "::error::the build names its commit \"$hash\""; exit 1 ;; esac
+          [ "$(head -c 9 build-nds/amberlith.nds)" = AMBERLITH ] || { echo "::error::amberlith.nds's header does not name it"; exit 1; }
+          grep -aq "$hash" build-nds/amberlith.elf || { echo "::error::amberlith.elf does not name $hash"; exit 1; }
+          cp build-nds/amberlith.nds "amberlith-${{ steps.name.outputs.stem }}.nds"
+      # Not zipped: the artifact is the NDS itself, named after it
+      - uses: actions/upload-artifact@v7
+        with:
+          path: amberlith-${{ steps.name.outputs.stem }}.nds
+          archive: false
+          if-no-files-found: error
+
   # The judge, the screens and the tools' tests on the machine itself (docs/Build.md), and the tests of
   # .github/scripts: a nightly is published only when they pass
   host:
@@ -326,14 +373,14 @@ jobs:
       - name: Run them
         run: make -f host.mk -j"$(nproc)" host-run
 
-  # A pull request's NRO, APK, VPK and 3DSX, linked from a comment on it that each run rewrites, as soon as they are
-  # built (.github/scripts/pr-builds.sh). A pull request from a fork gets a token that may not write, so it gets none
+  # A pull request's NRO, APK, VPK, 3DSX and NDS, linked from a comment on it that each run rewrites, as soon as they
+  # are built (.github/scripts/pr-builds.sh). A pull request from a fork gets a token that may not write, so it gets none
   links:
     name: Links to the builds
     if: >-
       !cancelled() && github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    needs: [nro, apk, vpk, three-ds]
+    needs: [nro, apk, vpk, three-ds, nds]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
