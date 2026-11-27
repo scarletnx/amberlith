@@ -103,10 +103,10 @@ change; a fix to a commit already pushed is a commit of its own.
 
 ## C by target
 
-The Vita frontend (`vita/`) and the 3DS and DS frontends are C23 (`-std=c23`), written by
-[Code style](docs/CodeStyle.md): `static_assert`, `[[...]]`, `alignas`, `nullptr`, `= {0}` over `memset`, no
-undefined or implementation-defined behaviour, one `g_<file>` global a file, no pointer kept in data, one allocation
-an owner. Everything else is C11: `host.mk`, the NRO, the ExeFS and the mod, Android and `tools/vklayer`. Do not move
+The Vita frontend (`vita/`) and the 3DS and DS frontends are C23 (`-std=c23`; the DS `-std=gnu23` for its library's
+headers), written by [Code style](docs/CodeStyle.md): `static_assert`, `[[...]]`, `alignas`, `nullptr`, `= {0}` over
+`memset`, no undefined or implementation-defined behaviour, one `g_<file>` global a file, no pointer kept in data, one
+allocation an owner. Everything else is C11: `host.mk`, the NRO, the ExeFS and the mod, Android and `tools/vklayer`. Do not move
 the rest of the repo to C23 until that is asked.
 
 ## Never
