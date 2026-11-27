@@ -40,7 +40,7 @@ for v in timeout stall launches; do
 done
 case $mode in *"'"*) echo "run-adb: --mode $mode has a quote, which the device's shell would read" >&2; exit 2 ;; esac
 [ -f "$apk" ] || { echo "run-adb: no APK at $apk" >&2; exit 2; }
-adb() { "${ADB:-adb}" -s "$serial" "$@"; }
+adb() { command "${ADB:-adb}" -s "$serial" "$@"; } # command: the adb on PATH when ADB is unset, not this function
 log() { echo "run-adb: $(date +%H:%M:%S) $*"; }
 
 state=$(adb get-state 2>&1)
@@ -89,7 +89,7 @@ trap 'exit 1' INT TERM
 
 # the log from its last line on: what the device logged before this run stays out of DIR. Not through adb(): $! must be
 # the reader itself, which the cleanup ends, not a subshell that leaves it running
-"${ADB:-adb}" -s "$serial" logcat -v threadtime -T 1 > "$out/logcat.txt" 2>&1 &
+command "${ADB:-adb}" -s "$serial" logcat -v threadtime -T 1 > "$out/logcat.txt" 2>&1 &
 logcat_pid=$!
 log "installing $apk on $serial"
 installed=1
