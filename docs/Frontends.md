@@ -76,7 +76,8 @@ before the family existed.
 
 ## A new frontend
 
-1. A build that compiles `source/portable.txt` with its compiler, `-std=c11 -Wall -Wextra -Werror`, and its own
+1. A build that compiles `source/portable.txt` with its compiler, `-std=c11 -Wall -Wextra -Werror` or a later
+   standard (the Vita's `vita.mk` takes `-std=c23`, the engine unchanged under it, [On the Vita](Vita.md)), and its own
    sources beside them, and names its build as the Makefile does (`AMBERLITH_VERSION`, `AMBERLITH_BUILD`,
    `AMBERLITH_HASH`, [Versions](Versions.md)).
 2. `platform_<name>.c` with `PlatformLog`, `PlatformError`, and the sockets and the surface for the suites it runs.
