@@ -8,8 +8,8 @@ family reports can be believed without them.
 |---|--:|--:|--:|--:|
 | selfcheck | 16 | 16 | 16 | 16 |
 | support | 254 | 243 | 237 | 253 |
-| reference | 570 | 550 | 547 | 570 |
-| **All** | **840** | **809** | **800** | **839** |
+| reference | 574 | 550 | 547 | 574 |
+| **All** | **844** | **809** | **800** | **843** |
 <!-- /counts -->
 
 - **selfcheck**, no hardware involved. That two neighbouring floats measure one unit
