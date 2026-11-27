@@ -266,7 +266,7 @@ static void CheckCommands(void) {
                two == COMMANDS_TWO_SLOTS_HASH && nv12 == COMMANDS_NV12_OUT_HASH &&
                    VicCommands(tiny, 8u, &FAKE, 1u, false, FAKE_SYNCPT) == 0u,
                "two slots 0x%08x (0x%08x), NV12 0x%08x (0x%08x), or a short buffer was not refused",
-               two, COMMANDS_TWO_SLOTS_HASH, nv12, COMMANDS_NV12_OUT_HASH);
+               (unsigned)two, COMMANDS_TWO_SLOTS_HASH, (unsigned)nv12, COMMANDS_NV12_OUT_HASH);
 }
 
 static void CheckModel(void) {

@@ -31,9 +31,10 @@ static void PointRects(void) {
     CHECK_TRUE(SUITE, "points of size 1, 3, 4 and 8 cover their squares of pixels", CHECK_NONE,
                SameRect(one, 10, 10, 11, 11) && SameRect(three, 41, 9, 44, 12) &&
                    SameRect(four, 14, 42, 18, 46) && SameRect(eight, 40, 40, 48, 48),
-               "size 1 %d,%d-%d,%d; 3 %d,%d-%d,%d; 4 %d,%d-%d,%d; 8 %d,%d-%d,%d", one.x0, one.y0,
-               one.x1, one.y1, three.x0, three.y0, three.x1, three.y1, four.x0, four.y0, four.x1,
-               four.y1, eight.x0, eight.y0, eight.x1, eight.y1);
+               "size 1 %d,%d-%d,%d; 3 %d,%d-%d,%d; 4 %d,%d-%d,%d; 8 %d,%d-%d,%d", (int)one.x0,
+               (int)one.y0, (int)one.x1, (int)one.y1, (int)three.x0, (int)three.y0, (int)three.x1,
+               (int)three.y1, (int)four.x0, (int)four.y0, (int)four.x1, (int)four.y1,
+               (int)eight.x0, (int)eight.y0, (int)eight.x1, (int)eight.y1);
     // A size 1 point on a pixel corner, or an even one on a centre, puts centres on its edges.
     CHECK_TRUE(SUITE, "the fixed suite's points put no pixel centre on an edge", CHECK_NONE,
                FixedPointEdgeFree(10.5, 10.5, 1.0) && FixedPointEdgeFree(42.5, 10.5, 3.0) &&
@@ -64,9 +65,10 @@ static void Projections(void) {
                    SameRect(negated, 8, 40, 24, 56) && SameRect(swapped, 40, 40, 56, 56),
                "plain %d,%d-%d,%d; positive scale %d,%d-%d,%d; NegativeY %d,%d-%d,%d; swapped "
                "%d,%d-%d,%d",
-               plain.x0, plain.y0, plain.x1, plain.y1, mirrored.x0, mirrored.y0, mirrored.x1,
-               mirrored.y1, negated.x0, negated.y0, negated.x1, negated.y1, swapped.x0,
-               swapped.y0, swapped.x1, swapped.y1);
+               (int)plain.x0, (int)plain.y0, (int)plain.x1, (int)plain.y1, (int)mirrored.x0,
+               (int)mirrored.y0, (int)mirrored.x1, (int)mirrored.y1, (int)negated.x0,
+               (int)negated.y0, (int)negated.x1, (int)negated.y1, (int)swapped.x0,
+               (int)swapped.y0, (int)swapped.x1, (int)swapped.y1);
 }
 
 static void Faces(void) {

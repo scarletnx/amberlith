@@ -277,23 +277,25 @@ static void CheckHarmony(void) {
                         continue;
                     }
                     Expect(&t, InKey(s, cell->note), "%s seed %u row %u channel %u plays note %u, "
-                           "out of the key", s->name, seed, row, ch, cell->note);
+                           "out of the key", s->name, (unsigned)seed, (unsigned)row, (unsigned)ch,
+                           cell->note);
                     if (role == MUSIC_ROLE_PAD) {
                         Expect(&t, OnChord(s, chord, cell->note), "%s seed %u row %u: pad note "
-                               "%u is not on degree %u's triad", s->name, seed, row, cell->note,
-                               chord + 1u);
+                               "%u is not on degree %u's triad", s->name, (unsigned)seed, (unsigned)row,
+                               cell->note, (unsigned)(chord + 1u));
                     }
                     if (role == MUSIC_ROLE_LEAD) {
                         Expect(&t,
                                cell->note >= s->range[MUSIC_RANGE_LEAD][0] &&
                                    cell->note <= s->range[MUSIC_RANGE_LEAD][1],
-                               "%s seed %u row %u: lead note %u outside %u to %u", s->name, seed,
-                               row, cell->note, s->range[MUSIC_RANGE_LEAD][0],
+                               "%s seed %u row %u: lead note %u outside %u to %u", s->name,
+                               (unsigned)seed, (unsigned)row, cell->note, s->range[MUSIC_RANGE_LEAD][0],
                                s->range[MUSIC_RANGE_LEAD][1]);
                         Expect(&t, row % 8u != 0u || OnChord(s, chord, cell->note),
                                "%s seed %u row %u: the lead's strong beat %u is not on degree "
                                "%u's triad",
-                               s->name, seed, row, cell->note, chord + 1u);
+                               s->name, (unsigned)seed, (unsigned)row, cell->note,
+                               (unsigned)(chord + 1u));
                     }
                 }
             }
@@ -327,8 +329,8 @@ static void CheckForm(void) {
                    g_song.form_count > 1u && g_song.form[0] == MUSIC_PART_INTRO && a &&
                        g_song.bars == g_song.form_count * MUSIC_SECTION_BARS,
                    "%s seed %u: %u sections, the first part %u, %s A, %u bars", s->name,
-                   seed + 1u, g_song.form_count, g_song.form[0], a ? "with an" : "no",
-                   g_song.bars);
+                   (unsigned)(seed + 1u), (unsigned)g_song.form_count, g_song.form[0],
+                   a ? "with an" : "no", (unsigned)g_song.bars);
             // The next pass: no intro in its form.
             MusicComposeBar(&composer, bar);
             bool intro = false;
@@ -336,12 +338,12 @@ static void CheckForm(void) {
                 intro = intro || composer.form[i] == MUSIC_PART_INTRO;
             }
             Expect(&t, composer.pass == 1u && !intro, "%s seed %u: pass %u after the first, %s",
-                   s->name, seed + 1u, composer.pass, intro ? "with an intro" : "no intro");
+                   s->name, (unsigned)(seed + 1u), (unsigned)composer.pass, intro ? "with an intro" : "no intro");
         }
         Compose((MusicTrack)track, 1u);
         const uint64_t again = SongHash();
         Expect(&t, same == 0u && again == hashes[0], "%s: %u pairs of 64 seeds composed the same "
-               "pass; seed 1 composed %016llx twice and %016llx once", s->name, same,
+               "pass; seed 1 composed %016llx twice and %016llx once", s->name, (unsigned)same,
                (unsigned long long)hashes[0], (unsigned long long)again);
     }
     Report("each seed composes a song of its own, 64 seeds 64 first passes, a seed twice the "
@@ -377,7 +379,8 @@ static void CheckRoles(void) {
                     const MusicCell *d = &line[channel[MUSIC_ROLE_DRUMS]];
                     const MusicPatch *p = d->patch != 0u ? &MUSIC_PATCHES[d->patch - 1u] : NULL;
                     Expect(&t, !Sounds(d) || (p != NULL && p->note == d->note),
-                           "%s seed %u row %u: the kit plays note %u on %s", s->name, seed, row,
+                           "%s seed %u row %u: the kit plays note %u on %s", s->name, (unsigned)seed,
+                           (unsigned)row,
                            d->note, p != NULL ? p->name : "no patch");
                 }
                 if (channel[MUSIC_ROLE_ECHO] >= 0 && Sounds(&line[channel[MUSIC_ROLE_ECHO]])) {
@@ -391,7 +394,7 @@ static void CheckRoles(void) {
                                was->volume == e->volume + s->echo_drop,
                            "%s seed %u row %u: the echo plays %u at %u, the lead %u rows before "
                            "%u at %u",
-                           s->name, seed, row, e->note, e->volume, s->echo_rows,
+                           s->name, (unsigned)seed, (unsigned)row, e->note, e->volume, s->echo_rows,
                            was != NULL ? was->note : 0u, was != NULL ? was->volume : 0u);
                 }
                 if (channel[MUSIC_ROLE_DOUBLE] >= 0) {
@@ -401,7 +404,7 @@ static void CheckRoles(void) {
                                           lead->note == d->note &&
                                           d->effect == MUSIC_FX_SLIDE_UP),
                            "%s seed %u row %u (part %u): the double plays %u, the lead %u",
-                           s->name, seed, row, part, d->note, lead != NULL ? lead->note : 0u);
+                           s->name, (unsigned)seed, (unsigned)row, part, d->note, lead != NULL ? lead->note : 0u);
                 }
                 if (channel[MUSIC_ROLE_HARMONY] >= 0) {
                     const MusicCell *h = &line[channel[MUSIC_ROLE_HARMONY]];
@@ -410,13 +413,13 @@ static void CheckRoles(void) {
                                ((part == MUSIC_PART_B || part == MUSIC_PART_CLIMAX) &&
                                 lead != NULL && Sounds(lead) && h->note < lead->note),
                            "%s seed %u row %u (part %u): the harmony plays %u, the lead %u",
-                           s->name, seed, row, part, h->note, lead != NULL ? lead->note : 0u);
+                           s->name, (unsigned)seed, (unsigned)row, part, h->note, lead != NULL ? lead->note : 0u);
                 }
                 if (channel[MUSIC_ROLE_CRASH] >= 0) {
                     const MusicCell *c = &line[channel[MUSIC_ROLE_CRASH]];
                     Expect(&t, !Sounds(c) || row % MUSIC_BAR_ROWS == 0u,
                            "%s seed %u row %u: the cymbal strikes off a bar's first beat",
-                           s->name, seed, row);
+                           s->name, (unsigned)seed, (unsigned)row);
                 }
             }
         }
