@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/iosupport.h>
 #include <sys/stat.h>
 
 #include "mode.h"
@@ -61,6 +62,11 @@ static struct {
         .asked = 0u,
     },
 };
+
+// The default device when no card mounts: no operation, so every file call fails with an error.
+// With no device at all a path names none, and devkitARM's mkdir indexes its device table with that
+// -1 (its open checks for it), which ended the program on its first mkdir.
+static const devoptab_t NO_CARD = { .name = "nocard", .structSize = 0 };
 
 static void Progress(uint32_t number, const char *name, bool timed) {
     printf("%2lu %s\n", (unsigned long)number, name);
@@ -111,6 +117,14 @@ int main(void) {
             "amberlith: no card the C library can write; the report is on the log alone";
         PlatformLog(said, sizeof(said) - 1u);
         printf("no card: the report is on the log alone\n");
+        const int device = AddDevice(&NO_CARD);
+        if (device < 0) {
+            static const char full[] = "amberlith: the device table took no device for the run "
+                                       "with no card; a file call may end it";
+            PlatformLog(full, sizeof(full) - 1u);
+        } else {
+            setDefaultDevice(device);
+        }
     }
     // The root and its scratch folder: the C library's place for temporary files, which the
     // support suite writes its checks in, since the DS has no /tmp
