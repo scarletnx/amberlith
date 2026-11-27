@@ -65,7 +65,8 @@ Before a pull request, for each C23 file it adds or changes:
 
 - it builds with its frontend's compiler at `-std=c23 -Wall -Wextra -Werror`, and again with `-pedantic-errors`,
   which refuses a GNU extension ISO C23 has a form for;
-- `grep -nE '\bNULL\b|__attribute__|_Static_assert|_Noreturn|__atomic_|__sync_|\(void\)[a-z_]+;'` over it finds
-  nothing;
+- `python3 tools/c23-style.py` finds none of the spellings C23 has a form for (`NULL`, `__attribute__`,
+  `_Static_assert`, `_Noreturn`, the GCC atomic builtins, `(void)name;`, a local zeroed with `memset`); `make -f
+  host.mk host-run` runs it on every C23 frontend's files, so the CI does too;
 - a `memset(&x, 0, sizeof x)` of a local, a loose `static` beside a file's `g_<file>`, and a pointer kept in data are
   read for in the diff, as no compiler flags them.
