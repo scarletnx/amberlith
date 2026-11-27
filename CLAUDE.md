@@ -62,7 +62,7 @@ the ScarletNX pull request's body. The case binds ScarletNX's CI once a release 
 | VPK | `make -f vita.mk` | `VITASDK` set ([On the Vita](docs/Vita.md)) |
 
 The mode file chooses what runs ([Mode file](docs/ModeFile.md)); `quick all` runs every family that needs nobody.
-In ScarletNX: `scripts/edenprobe.py run --runtime <build>/scarletnx --nro amberlith-<version>.nro --out <folder>
+In ScarletNX: `scripts/amberlith.py run --runtime <build>/scarletnx --nro amberlith-<version>.nro --out <folder>
 --mode "<words>"`, headless, in its own folders.
 
 The CI (`.github/workflows/build.yml`) builds the NRO, the ExeFS and the mod, the APK and the VPK, runs the host build,
@@ -77,7 +77,7 @@ a desktop GPU's: download the artifact of two or three runs of the job and keep 
 ScarletNX's script, in a clone of test-references:
 
 ```sh
-python3 <scarletnx>/scripts/edenprobe.py baseline run1/baseline.txt run2/baseline.txt -o amberlith/linux-x86_64.txt
+python3 <scarletnx>/scripts/amberlith.py baseline run1/baseline.txt run2/baseline.txt -o amberlith/linux-x86_64.txt
 ```
 
 A machine's timing baselines are Amberlith's own `baseline=` and `compare=` words ([Baselines](docs/Baseline.md)).
