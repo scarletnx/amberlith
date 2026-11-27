@@ -2095,6 +2095,15 @@ static void CheckFrontendFamilies(void) {
                console_said, android_right ? "right" : "wrong", android_said);
 }
 
+/// @p name under the scratch corner, whole, into @p out: false when it does not fit. A path cut
+/// short names a folder whose parent is not there, so nothing is made under it; the corner is
+/// long where TMPDIR is an app's cache folder on a desktop (Android's layer of an emulator keeps
+/// an app's data in the user's own folders).
+static bool ScratchPath(char *out, size_t out_size, const char *name) {
+    const int written = snprintf(out, out_size, "%s/%s", Scratch(), name);
+    return written > 0 && (size_t)written < out_size;
+}
+
 /// The runner's paths under a frontend's root, and a root too long for them refused.
 static void CheckRunnerRoot(void) {
     // A root one character longer than the runner holds, then one under the support suite's corner.
@@ -2106,14 +2115,14 @@ static void CheckRunnerRoot(void) {
     memset(&frontend, 0, sizeof(frontend));
     frontend.root = too_long;
     const bool refused = !RunnerInit(&runner, &frontend);
-    char root[RUNNER_ROOT_MAX];
-    snprintf(root, sizeof(root), "%.100s/runner-root", Scratch());
+    char root[RUNNER_ROOT_MAX + 1u];
+    const bool fits = ScratchPath(root, sizeof(root), "runner-root");
     frontend.root = root;
     char mode_path[RUNNER_ROOT_MAX + 8u];
     char crashes[RUNNER_ROOT_MAX + 16u];
     snprintf(mode_path, sizeof(mode_path), "%s/mode", root);
     snprintf(crashes, sizeof(crashes), "%s/crashes", root);
-    const bool named = RunnerInit(&runner, &frontend) && strcmp(runner.mode_path, mode_path) == 0 &&
+    const bool named = fits && RunnerInit(&runner, &frontend) && strcmp(runner.mode_path, mode_path) == 0 &&
                        strcmp(runner.crash_list_path, crashes) == 0 &&
                        strstr(runner.runs_directory, "/runner-root/runs") != NULL &&
                        strstr(runner.last_run_path, "/runner-root/last-run") != NULL &&
@@ -2121,8 +2130,9 @@ static void CheckRunnerRoot(void) {
     (void)rmdir(root);
     CHECK_TRUE(SUITE, "the runner names its files under a frontend's root, and refuses one too long",
                CHECK_NONE, refused && named,
-               "a root of %u characters %s; under %.80s the mode file is %.100s, the crash list %.100s, "
-               "runs %.100s",
+               "%sa root of %u characters %s; under %.80s the mode file is %.100s, the crash list %.100s, "
+               "runs %.60s",
+               fits ? "" : "the scratch corner is too long for a root; ",
                (unsigned)(RUNNER_ROOT_MAX + 1u), refused ? "refused" : "taken", root,
                runner.mode_path, runner.crash_list_path, runner.runs_directory);
 }
@@ -2149,11 +2159,11 @@ static void CheckOldRoot(void) {
                      ? 1u
                      : 0u;
     }
-    char root[RUNNER_ROOT_MAX];
-    char old[RUNNER_ROOT_MAX];
+    char root[RUNNER_ROOT_MAX + 1u];
+    char old[RUNNER_ROOT_MAX + 1u];
     char path[RUNNER_ROOT_MAX + 16u];
-    snprintf(root, sizeof(root), "%.100s/amberlith-root", Scratch());
-    snprintf(old, sizeof(old), "%.100s/edenprobe-root", Scratch());
+    const bool root_fits = ScratchPath(root, sizeof(root), "amberlith-root");
+    const bool fits = ScratchPath(old, sizeof(old), "edenprobe-root") && root_fits;
     (void)mkdir(old, 0777);
     snprintf(path, sizeof(path), "%s/mode", old);
     FILE *mode = fopen(path, "w");
@@ -2169,12 +2179,12 @@ static void CheckOldRoot(void) {
     memset(&frontend, 0, sizeof(frontend));
     frontend.root = root;
     frontend.old_root = old;
-    const bool took_old = RunnerInit(&runner, &frontend) && runner.root_choice == RUNNER_ROOT_OLD &&
+    const bool took_old = fits && RunnerInit(&runner, &frontend) && runner.root_choice == RUNNER_ROOT_OLD &&
                           strcmp(runner.root, old) == 0 && strcmp(RunnerRootInUse(), old) == 0 &&
                           strncmp(runner.mode_path, old, strlen(old)) == 0;
     snprintf(path, sizeof(path), "%s/runs", root);
     (void)mkdir(path, 0777);
-    const bool took_root = RunnerInit(&runner, &frontend) &&
+    const bool took_root = fits && RunnerInit(&runner, &frontend) &&
                            runner.root_choice == RUNNER_ROOT_NEW_BESIDE_OLD &&
                            strcmp(runner.root, root) == 0 && strcmp(RunnerRootInUse(), root) == 0;
     (void)rmdir(path);
@@ -2188,9 +2198,10 @@ static void CheckOldRoot(void) {
                "a card an edenprobe build left runs from its folder whole until an Amberlith build "
                "has run on it",
                CHECK_NONE, rules == sizeof(RULES) / sizeof(RULES[0]) && took_old && took_root,
-               "%u of %u rules right; with edenprobe's mode file and only a scratch folder in the "
+               "%s%u of %u rules right; with edenprobe's mode file and only a scratch folder in the "
                "root, %s; with runs/ in the root, %s",
-               rules, (unsigned)(sizeof(RULES) / sizeof(RULES[0])),
+               fits ? "" : "the scratch corner is too long for a root; ", rules,
+               (unsigned)(sizeof(RULES) / sizeof(RULES[0])),
                took_old ? "the old folder" : "not the old folder",
                took_root ? "the root" : "not the root");
 }

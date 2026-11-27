@@ -11,7 +11,7 @@
 // the ones that check this program's own judgement and what it writes around a verdict, so a
 // change to any of them can be proven wrong in a second with no emulator in the loop. "reference"
 // runs the reference suite alone, which the build with the processor reference's 128-bit integers
-// in two words runs (host.mk).
+// in two words runs (host.mk), and "support" the support suite alone.
 int main(int argc, char **argv) {
     if (argc > 1 && strcmp(argv[1], "reference") == 0) {
         ReportOpen("amberlith-host-reference.jsonl");
@@ -19,6 +19,17 @@ int main(int argc, char **argv) {
         ReportSummary();
         ReportClose();
         printf("reference: passed=%zu failed=%zu\n", ReportPassed(), ReportFailed());
+        return ReportFailed() == 0 && ReportPassed() > 0 ? 0 : 1;
+    }
+    // "support" runs the support suite alone, which host.mk runs again with a TMPDIR as long as an
+    // app's cache folder on a desktop, where the suite's scratch corner goes past 100 characters.
+    if (argc > 1 && strcmp(argv[1], "support") == 0) {
+        ReportOpen("amberlith-host-support.jsonl");
+        ReportRetain(true);
+        RunSupport();
+        ReportSummary();
+        ReportClose();
+        printf("support: passed=%zu failed=%zu\n", ReportPassed(), ReportFailed());
         return ReportFailed() == 0 && ReportPassed() > 0 ? 0 : 1;
     }
     ReportOpen("amberlith-host-report.jsonl");
