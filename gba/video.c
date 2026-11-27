@@ -40,6 +40,10 @@
 #define VIDEO_IRQ_LYC 80u
 // The frames the V-Blank and V-Counter interrupts are counted over
 #define VIDEO_IRQ_FRAMES 4u
+// The runs of identical reads the poll keeps: a line has five or so (its line, the H-Blank flag
+// both ways, the V-Blank and V-Counter flags), two frames some 2300; a run past the room ends the
+// poll
+#define VIDEO_RUNS_MAX 4096u
 
 static const char *const SUITE = "gbavideo";
 
@@ -71,6 +75,9 @@ typedef enum {
 
 static struct {
     GbaVideoPoll poll;
+    // The poll as it was read: each status, and how many reads in a row gave it
+    uint32_t run_status[VIDEO_RUNS_MAX];
+    uint32_t run_reads[VIDEO_RUNS_MAX];
     // What the interrupt handlers count, by line
     volatile uint32_t irq_lines[GBAVIDEO_LINES];
     volatile uint32_t irq_past;
@@ -174,14 +181,33 @@ static void Lines(void) {
     SetLyc(VIDEO_POLL_LYC);
     g_video.poll = (GbaVideoPoll){ .lyc = VIDEO_POLL_LYC };
     const bool began = WaitFrameStart();
-    uint32_t previous = 0x10000u;
-    while (began && g_video.poll.wraps < 2u && g_video.poll.samples < VIDEO_READS_MAX) {
+    // The reads only counted while they run, and kept as runs of identical ones: a read that does
+    // more misses an H-Blank, which lasts 226 cycles
+    uint32_t runs = 0;
+    uint32_t wraps = 0;
+    uint32_t reads = 0;
+    uint32_t last = Status();
+    uint32_t same = 1;
+    while (began && wraps < 2u && runs < VIDEO_RUNS_MAX && reads < VIDEO_READS_MAX) {
         const uint32_t status = Status();
-        GbaVideoPollAdd(&g_video.poll, status, previous);
-        previous = status >> 16;
+        ++reads;
+        if (status == last) {
+            ++same;
+            continue;
+        }
+        wraps += (status >> 16) < (last >> 16) ? 1u : 0u;
+        g_video.run_status[runs] = last;
+        g_video.run_reads[runs++] = same;
+        last = status;
+        same = 1;
     }
     *GBA_DISPSTAT = dispstat;
     REG_IME = ime;
+    uint32_t previous = 0x10000u;
+    for (uint32_t i = 0; i < runs; ++i) {
+        GbaVideoPollAdd(&g_video.poll, g_video.run_status[i], previous, g_video.run_reads[i]);
+        previous = g_video.run_status[i] >> 16;
+    }
     for (uint32_t i = 0; i < 4u; ++i) {
         if (!started[i]) {
             continue;
@@ -273,7 +299,10 @@ static bool CountIrqs(irqMASK mask, IntFn handler, uint32_t frames, bool from_vb
     const uint16_t ime = REG_IME;
     REG_IME = 0;
     irqSet(mask, handler);
+    // libgba's irqEnable and irqDisable turn the master enable on as they end: off again here, or
+    // the interrupts raised before the window are counted in it
     irqEnable((int)mask);
+    REG_IME = 0;
     for (uint32_t i = 0; i < GBAVIDEO_LINES; ++i) {
         g_video.irq_lines[i] = 0;
     }
@@ -286,10 +315,11 @@ static bool CountIrqs(irqMASK mask, IntFn handler, uint32_t frames, bool from_vb
         came = from_vblank ? WaitRise(GBA_STATUS_VBLANK, false) : WaitFrameStart();
     }
     REG_IME = 0;
+    irqSet(mask, nullptr);
     if (mask != IRQ_VBLANK) {
         irqDisable((int)mask);
+        REG_IME = 0;
     }
-    irqSet(mask, nullptr);
     REG_IF = (uint16_t)mask;
     REG_IME = ime;
     for (uint32_t i = 0; i < GBAVIDEO_LINES; ++i) {
@@ -301,7 +331,8 @@ static bool CountIrqs(irqMASK mask, IntFn handler, uint32_t frames, bool from_vb
 
 static void Irqs(void) {
     static const char *const VBLANK = "the V-Blank interrupt comes once a frame, on line 160";
-    static const char *const HBLANK = "the H-Blank interrupt comes once in each drawn line, 0 to 159";
+    static const char *const HBLANK =
+        "the H-Blank interrupt comes once in each drawn line, 0 to 159";
     static const char *const MATCH =
         "the V-Counter interrupt comes once a frame, on the line DISPSTAT names";
     static const char *const NEVER = "the frames to count over never came";
