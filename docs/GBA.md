@@ -12,9 +12,9 @@
 ## The GBA ROM
 
 `gba/` is Amberlith's GBA frontend ([Frontends](Frontends.md)): one ROM whose program holds the engine's report, the
-judge's selfcheck and the libc suite, the same C the NRO runs (`source/portable.txt`). The GBA is an ARM7TDMI with no
-operating system, no threads, no file system and no network, so the run is the report alone, with its mode compiled
-in (`quick libc`), and its lines go to an emulator's log and the cartridge's SRAM. Every machine that runs it writes the
+judge's selfcheck and the libc suite, the same C the NRO runs (`source/portable.txt`), and gbavideo, the GBA's own suite
+of its video. The GBA is an ARM7TDMI with no operating system, no threads, no file system and no network, so the run
+is the report alone, with its mode compiled in (`quick libc graphics`), and its lines go to an emulator's log and the cartridge's SRAM. Every machine that runs it writes the
 same lines, so a case that passes on the console and fails in an emulator names something the emulator does
 differently.
 
@@ -46,24 +46,26 @@ nowhere to return to.
 
 ### What it runs
 
-The judge's selfcheck, then its references for the libc family (`RunReferenceLibc`), then the libc suite: the C
-library alone (devkitARM's newlib), its floats in software, so libm's cases take longer than elsewhere
-([libc](families/Libc.md)). No system suite (no threads, no clock to ask) and no socket suite (no network, and no
-`<sys/socket.h>` in the GBA's C library, which the socket suite's code is built without). The GBA's own suites come
-after these as they are written.
+The judge's selfcheck, then its references for the suites the GBA runs (`RunReferenceLibc` and
+`RunReferenceGbaVideo`), then the libc suite, the C library alone (devkitARM's newlib), its floats in software, so
+libm's cases take longer than elsewhere ([libc](families/Libc.md)). No system suite (no threads, no clock to ask) and
+no socket suite (no network, and no `<sys/socket.h>` in the GBA's C library, which the socket suite's code is built
+without). Then gbavideo, the GBA's video: its line counter, status flags and interrupts, a frame's length, and how its
+video memory takes stores in each display mode ([gbavideo](families/Graphics.md#gbavideo)).
 
 ### What fits in its memory
 
-The code and its constants run from the cartridge's ROM: 199 KB, 153 KB of it code. The data has 256 KiB of EWRAM and
+The code and its constants run from the cartridge's ROM: 212 KB, 161 KB of it code. The data has 256 KiB of EWRAM and
 32 KiB of IWRAM, which also holds the stack, so the frontend differs from the others in three ways:
 
 - **The judge's support step and the other references stay out.** The support step's journal checks keep up to 296
   KiB in one frame (`t_journal.c`'s `CheckReading`), and the references of the other families hold their tables in
-  megabytes; the GBA's reference step runs `RunReferenceLibc`, and the link leaves the rest out.
+  megabytes; the GBA's reference step runs `RunReferenceLibc` and `RunReferenceGbaVideo`, and the link leaves the
+  rest out.
 - **The baseline keeps 16 timed cases**, 8 KiB, where the others keep 2048 in 1 MiB (`BASELINE_CASES_MAX`): the GBA
   writes no baseline file, and its steps time nothing.
 - **Zeroed data goes to EWRAM.** devkitARM's cartridge layout puts `.bss` in IWRAM and `.sbss` in EWRAM, so `gba.mk`
-  renames each object's `.bss` sections: 173 KB of EWRAM, which leaves the heap 88 KB. IWRAM holds 7 KB of data and
+  renames each object's `.bss` sections: 188 KB of EWRAM, which leaves the heap 74 KB. IWRAM holds 7 KB of data and
   the stack the other 25 KB.
 
 The layout checks neither part against its end, so `gba.mk` does after the link: the heap and the stack each get at

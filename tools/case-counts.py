@@ -81,7 +81,7 @@ COLUMNS = (
 )
 
 # Suites ui.c's FAMILIES has no row for: the Switch 2 build's own family, Android's two and its C library's
-# suite, the mod's own, whose cases bring the game's NVN driver up, and the Vita's GPU suite.
+# suite, the mod's own, whose cases bring the game's NVN driver up, the Vita's GPU suite and the GBA's video suite.
 EXTRA_FAMILIES = {
     "nvn2": "nvn2",
     "jni": "jni",
@@ -89,6 +89,7 @@ EXTRA_FAMILIES = {
     "bionic": "libc",
     "mod": "nvn",
     "gxm": "graphics",
+    "gbavideo": "graphics",
 }
 # What a family is called in a table, and its page under docs/families/.
 FAMILY_PAGES = collections.OrderedDict(

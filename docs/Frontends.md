@@ -68,7 +68,7 @@ The rest is the frontend's own code, around the runner's calls (`runner.h`):
 | The Vita (VPK) | `vita/frontend.c`, `vita/platform_vita.c`, `vita/gxm.c` | `ux0:data/amberlith` | judge always; libc and graphics (the `gxm` suite) when no word names one ([On the Vita](Vita.md)) |
 | The 3DS (3DSX) | `3ds/frontend.c`, `3ds/platform_3ds.c` | `sdmc:/amberlith` | judge always; libc (the libc, system and socket suites) when no word names one ([On the 3DS](3DS.md)) |
 | The DS (NDS) | `nds/frontend.c`, `nds/platform_nds.c` | `/amberlith` on the card's FAT | judge always, with the libc family's references alone; libc (the libc and system suites) when no word names one ([On the DS](DS.md)) |
-| The GBA (ROM) | `gba/frontend.c`, `gba/platform_gba.c` | none: the report on mGBA's log and in the cartridge's SRAM | the report alone, its mode `quick libc` compiled in: the judge's selfcheck and libc references, then the libc suite ([On the GBA](GBA.md)) |
+| The GBA (ROM) | `gba/frontend.c`, `gba/platform_gba.c` | none: the report on mGBA's log and in the cartridge's SRAM | the report alone, its mode `quick libc graphics` compiled in: the judge's selfcheck and the references of its suites, then the libc suite and graphics' gbavideo suite ([On the GBA](GBA.md)) |
 | Host | `source/host_main.c`, `source/platform_host.c` | none: `amberlith-host-report.jsonl` where it runs | the judge and the libc family, every time ([Build](Build.md#the-host-build)) |
 
 The console runs the libc family only when a word names it, so a run that names no family reports what it did
