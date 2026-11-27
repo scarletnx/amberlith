@@ -40,8 +40,11 @@ extern "C" {
 #define BASELINE_FLOOR_US 100u
 /// The most samples of one case a comparison holds it to: past it, the newest, and a note.
 #define BASELINE_SAMPLES_MAX 64u
-/// The most timed cases one run keeps for a baseline. Past it a case is counted, not kept.
+/// The most timed cases one run keeps for a baseline. Past it a case is counted, not kept. 512
+/// bytes each, 1 MiB in all: a frontend whose memory cannot hold that sets fewer (gba.mk).
+#ifndef BASELINE_CASES_MAX
 #define BASELINE_CASES_MAX 2048u
+#endif
 /// The longest suite and case names kept, as a file's line carries them (escaped for a JSON
 /// string), with the terminator. A longer name is cut, the same way when kept and read back.
 #define BASELINE_SUITE_MAX 32u
