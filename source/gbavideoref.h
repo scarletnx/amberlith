@@ -63,9 +63,10 @@ typedef struct {
     uint32_t lyc;
 } GbaVideoPoll;
 
-/// Adds one read of DISPSTAT (the low half) and VCOUNT (the high half) to @p poll, @p previous the
-/// VCOUNT the read before saw, or a value past 255 for the first read.
-void GbaVideoPollAdd(GbaVideoPoll *poll, uint32_t status, uint32_t previous);
+/// Adds @p reads reads in a row of DISPSTAT (the low half) and VCOUNT (the high half) that all
+/// gave @p status to @p poll, @p previous the VCOUNT the read before them saw, or a value past
+/// 0xFFFF for the first.
+void GbaVideoPollAdd(GbaVideoPoll *poll, uint32_t status, uint32_t previous, uint32_t reads);
 
 /// VCOUNT takes every value from 0 to 227, one up each change, 227 followed by 0, and nothing past.
 bool GbaVideoJudgeCount(const GbaVideoPoll *poll, char *out, size_t out_size);
