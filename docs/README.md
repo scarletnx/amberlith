@@ -15,6 +15,7 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
 
 - **[Design](./Design.md)** - the tiers a case judges by, and where its answer comes from
 - **[Roadmap](./Roadmap.md)** - the suites in the order they run, and what a failure in each points at
+- **[Adding a case](./AddingACase.md)** - the files a new case touches, in order, its judge and its reference check
 - Running it:
   - **[Build](./Build.md)** - the NRO, the host build and the commit hook
   - **[Releases](./Releases.md)** - the nightly, the versions and the CI
