@@ -2507,4 +2507,5 @@ void RunReference(void) {
     RunReferenceCpuFp();
     RunReferencePace();
     RunReferenceLibc();
+    RunReferenceGbaVideo();
 }

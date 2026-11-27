@@ -76,6 +76,7 @@ source/svcref.c
 source/pacecoderef.c
 source/paceref.c
 source/libcref.c
+source/gbavideoref.c
 source/tests/t_selfcheck.c
 source/tests/t_support.c
 source/tests/t_screens.c
@@ -123,4 +124,5 @@ source/tests/t_svcref.c
 source/tests/t_cpufpref.c
 source/tests/t_paceref.c
 source/tests/t_libcref.c
+source/tests/t_gbavideoref.c
 source/tests/t_libc.c
