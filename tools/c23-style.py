@@ -13,7 +13,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # the frontends that build as C23 (docs/CodeStyle.md, "Which code"); a folder not made yet is skipped
-C23_DIRS = ("vita", "3ds", "nds")
+C23_DIRS = ("vita", "3ds", "nds", "gba")
 RULES = (
     (re.compile(r"\bNULL\b"), "NULL: nullptr"),
     (re.compile(r"\b__attribute__\b"), "__attribute__: a [[...]] attribute, or alignas(N)"),

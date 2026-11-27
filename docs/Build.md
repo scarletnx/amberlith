@@ -9,6 +9,7 @@
 * [The Vita's VPK](#the-vitas-vpk)
 * [The 3DS's 3DSX](#the-3dss-3dsx)
 * [The DS's NDS](#the-dss-nds)
+* [The GBA ROM](#the-gba-rom)
 * [The host build](#the-host-build)
 * [Commit messages](#commit-messages)
 
@@ -92,6 +93,15 @@ DEVKITPRO=/opt/devkitpro make -f nds.mk
 
 `build-nds/amberlith.nds`, with devkitARM, libnds and calico in `DEVKITPRO`; what it needs, what fits in its memory
 and how it runs are in [On the DS](DS.md#build-it).
+
+## The GBA ROM
+
+```sh
+DEVKITPRO=/opt/devkitpro make -f gba.mk
+```
+
+`build-gba/amberlith.gba`, with devkitARM and libgba in `DEVKITPRO`; what it needs, what fits in its memory, how it
+runs and how its report is read back are in [On the GBA](GBA.md#build-it).
 
 ## The host build
 

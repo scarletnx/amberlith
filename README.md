@@ -24,6 +24,8 @@ The newest version is on [its release](https://github.com/scarletnx/amberlith/re
   engine with the libc family whole.
 - On a DS, from a card's menu, or in a DS emulator: the NDS, `nds/` ([On the DS](docs/DS.md)), the same engine with
   the libc family's suites its memory holds.
+- On a GBA, from a flash cartridge, or in mGBA: the GBA ROM, `gba/` ([On the GBA](docs/GBA.md)), the report alone with
+  the libc suite, read back from mGBA's log or the cartridge's save.
 
 Without a mode file the start screen asks what to run, and its L and R open the browser, where a person runs a suite,
 a single case or a demo at a time ([The browser](docs/UI.md)); `sdmc:/amberlith/mode` chooses instead
@@ -44,6 +46,7 @@ gradle -p android assembleDebug       # the APK, with ANDROID_HOME and a JDK 17 
 make -f vita.mk                       # the VPK, with VITASDK set (docs/Vita.md)
 make -f 3ds.mk                        # the 3DSX, with DEVKITPRO set and devkitARM in it (docs/3DS.md)
 make -f nds.mk                        # the NDS, the same way (docs/DS.md)
+make -f gba.mk                        # the GBA ROM, the same way (docs/GBA.md)
 make run EMULATOR=/path/to/emulator   # a quick run, started again after a crash
 ```
 
