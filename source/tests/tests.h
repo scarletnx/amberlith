@@ -583,6 +583,10 @@ void RunReferenceSvc(void);
 /// suite.
 void RunReferenceCpuFp(void);
 
+/// The libc family's judges: the tied sort case's records and its verdict on a library's order of
+/// the ties, against answers worked out by hand: part of the reference suite.
+void RunReferenceLibc(void);
+
 /// The pace family's arithmetic: its samples' summary, its line's number and sentence, and what
 /// its loops and its memory walk leave, held to tools/pace-expect.py: part of the reference suite.
 void RunReferencePace(void);

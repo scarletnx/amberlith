@@ -2506,4 +2506,5 @@ void RunReference(void) {
     RunReferenceSvc();
     RunReferenceCpuFp();
     RunReferencePace();
+    RunReferenceLibc();
 }

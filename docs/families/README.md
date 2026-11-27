@@ -32,11 +32,11 @@ judge no machine, so the last line leaves them out.
 | System and services | [Display](Display.md) | 1 | 4 | 3 | 0 | 0 | 0 | 3 | 0 | 1 | 0 |
 | System and services | [Service](Service.md) | 40 | 125 | 109 | 0 | 0 | 0 | 108 | 1 | 14 | 2 |
 | System and services | [Net](Net.md) | 6 | 53 | 18 | 0 | 0 | 0 | 0 | 18 | 5 | 30 |
-| System and services | [libc](Libc.md) | 3 | 14 | 14 | 0 | 0 | 0 | 0 | 14 | 0 | 0 |
+| System and services | [libc](Libc.md) | 3 | 15 | 15 | 0 | 0 | 0 | 0 | 15 | 0 | 0 |
 | Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 35 |
 | Speed | [Pace](Pace.md) | 6 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 |
-| The judge and the tools | [The judge](Judge.md) | 3 | 821 | - | - | - | - | - | - | - | - |
-| **On a machine** | | **118** | **1673** | **1328** | **0** | **16** | **210** | **117** | **985** | **270** | **75** |
+| The judge and the tools | [The judge](Judge.md) | 3 | 823 | - | - | - | - | - | - | - | - |
+| **On a machine** | | **118** | **1674** | **1329** | **0** | **16** | **210** | **117** | **986** | **270** | **75** |
 <!-- /counts -->
 
 - **[The judge](./Judge.md)** - selfcheck, support and reference, no hardware involved

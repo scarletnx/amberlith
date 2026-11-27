@@ -87,7 +87,7 @@ _3 families, 4 suites, 51 cases: 49 with a judge (exact 37, level 12; expected f
 ### System and services
 
 <!-- counts: category system -->
-_5 families, 51 suites, 211 cases: 157 with a judge (exact 155, ulp 1, position 1; expected from an emulator 111, the specification 46), 22 without one, 32 not yet seen judged._
+_5 families, 51 suites, 212 cases: 158 with a judge (exact 156, ulp 1, position 1; expected from an emulator 111, the specification 47), 22 without one, 32 not yet seen judged._
 <!-- /counts -->
 
 - **[fs](./families/Fs.md)** - reads through the file system service
@@ -118,7 +118,7 @@ _1 family, 6 suites, 36 cases: 0 with a judge, 36 without one._
 ### The judge and the tools
 
 <!-- counts: category tools -->
-_3 suites, 821 cases: the probe's own code held to its references, before every run._
+_3 suites, 823 cases: the probe's own code held to its references, before every run._
 <!-- /counts -->
 
 - **[The judge](./families/Judge.md)** - selfcheck, support and reference: the probe's own code held to its

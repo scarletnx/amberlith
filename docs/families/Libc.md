@@ -10,17 +10,19 @@ on Android in every run that names no family, and the host build runs it every t
 <!-- counts: family libc -->
 | Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| libc | 9 | 9 | 0 | 0 | 0 | 0 | 9 | 0 | 0 |
+| libc | 10 | 10 | 0 | 0 | 0 | 0 | 10 | 0 | 0 |
 | system | 2 | 2 | 0 | 0 | 0 | 0 | 2 | 0 | 0 |
 | socket | 3 | 3 | 0 | 0 | 0 | 0 | 3 | 0 | 0 |
-| **All** | **14** | **14** | **0** | **0** | **0** | **0** | **14** | **0** | **0** |
+| **All** | **15** | **15** | **0** | **0** | **0** | **0** | **15** | **0** | **0** |
 <!-- /counts -->
 
 Three suites, by what each needs from the machine; a frontend runs the ones its machine has:
 
 - **libc**, the library alone: `snprintf` of integers with widths, precisions and flags, and of floats
   rounded to their precision with infinities and NaNs as C words them; `sscanf`; `strtod` and `strtol` on hex floats,
-  overflow with `ERANGE` and base 0's prefixes; the string functions; `qsort` and `bsearch`; `setjmp` and `longjmp`
+  overflow with `ERANGE` and base 0's prefixes; the string functions; `qsort` and `bsearch`; `qsort` of sixteen
+  three-byte records, four to a key, held to every record whole and kept once with the keys in order and the ties in
+  any order the library chose (the judge is `source/libcref.c`); `setjmp` and `longjmp`
   (1 for 0); `gmtime_r` and `strftime` of a fixed time in the C locale, which a program starts in whatever its
   environment says; and libm, each function within 1 ulp of its correctly rounded result (tier ulp; the table is
   `source/libcmath.h`, which `tools/libc-math.py` computes in decimal at 100 digits).
