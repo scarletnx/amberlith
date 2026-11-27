@@ -88,7 +88,7 @@ A machine's timing baselines are Amberlith's own `baseline=` and `compare=` word
   ([Versions](docs/Versions.md)).
 - The bump is the last commit of the pull request that releases it, never a pull request of its own. After the merge,
   once `main`'s Build passed, tag that commit `v<version>` (annotated).
-- ScarletNX takes the release in one pull request: the pin in `.github/workflows/build.yml` (`EDENPROBE_VERSION`, the
+- ScarletNX takes the release in one pull request: the pin in `.github/workflows/build.yml` (`AMBERLITH_VERSION`, the
   NRO's or the APK's name and SHA-256), and the baseline in scarletnx/test-references written again from that pin's
   runs.
 
