@@ -51,7 +51,7 @@ VPK = exefs(
 # a 3DSX as 3dsxtool writes it: its header's magic, then the program
 THREEDSX = b"3DSX" + b"\0" * 28 + b"a program"
 # an NDS as nds.mk makes it: its header's title, then the rest of the card image
-NDS = b"AMBERLITH\0\0\0AMBR00" + b"\0" * 16 + b"a card image"
+NDS = b"AMBERLITH\0\0\0####00" + b"\0" * 16 + b"a card image"
 
 
 def named(stem):

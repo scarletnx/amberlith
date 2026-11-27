@@ -53,10 +53,11 @@ $(BUILD)/%.o: %.c nds.mk
 $(BUILD)/amberlith.elf: $(OBJECTS)
 	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# The header names the program (AMBERLITH, code AMBR), which the release checks it by; the banner
-# gives a menu its icon and three lines
+# The header's title names the program, AMBERLITH, which the release checks it by; its code is
+# homebrew's, ####, by which an emulator gives a program whose ARM9 starts at 0x4000 its DLDI card;
+# the banner gives a menu its icon and three lines
 $(TARGET): $(BUILD)/amberlith.elf nds/icon.bmp VERSION
-	$(TOOLS)/ndstool -c $@ -9 $< -7 $(CALICO)/bin/ds7_maine.elf -g AMBR 00 AMBERLITH \
+	$(TOOLS)/ndstool -c $@ -9 $< -7 $(CALICO)/bin/ds7_maine.elf -g '####' 00 AMBERLITH \
 		-b nds/icon.bmp "$(APP_TITLE);$(APP_DESC) ($(APP_VERSION));$(APP_AUTHOR)"
 
 clean:

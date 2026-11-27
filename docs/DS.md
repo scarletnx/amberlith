@@ -29,8 +29,9 @@ CI builds in, pinned by tag and digest (`20260610`: devkitARM r68 with GCC 16.1.
 inline assembly with the `asm` keyword, which strict C23 does not have; this program's own code holds to
 [Code style](CodeStyle.md) all the same. The headers are taken as the system's (`-isystem`). The code is Thumb, each
 function and object in a section of its own, so the link keeps only what the DS's steps reach. The header names the
-program (`AMBERLITH`, code `AMBR`); a menu shows `nds/icon.bmp`, the cover drawn at 32 by 32 in 16 colours by `make
-icon`.
+program (`AMBERLITH`) and carries homebrew's code, `####`, by which an emulator (melonDS) gives a program whose ARM9
+starts at `0x4000`, as calico's layout puts it, its DLDI card; a menu shows `nds/icon.bmp`, the cover drawn at 32 by
+32 in 16 colours by `make icon`.
 
 The build names itself from `VERSION` and git as the NRO's does ([Versions](Versions.md)), so a report's folder is the
 commit's.
