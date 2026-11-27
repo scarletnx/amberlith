@@ -829,6 +829,10 @@ reference	pace: the vector loop leaves the sums worked out apart	judge	none	-	nr
 reference	pace: the memory walk reads every slot once before it is back at its start	judge	none	-	nro,ounce,host
 reference	libc: the tied sort hands over ids 0 to 15, four to a key, marks from 0xa0	judge	none	-	nro,host
 reference	libc: the tied sort judge takes the ties in any order and refuses a torn, lost or unsorted record	judge	none	-	nro,host
+reference	gbavideo: the line and flag judges pass the GBA's frames and refuse five wrong ones, each with its sentence	judge	none	-	host
+reference	gbavideo: the frame judge takes 280896 cycles within 128 and refuses lines of 1228 cycles	judge	none	-	host
+reference	gbavideo: the interrupt judges take one a line and one a frame on its line, and refuse one late, one more and one lost	judge	none	-	host
+reference	gbavideo: the memory judges take the GBA's byte rule and mirrors, and refuse a lone byte, OAM taking one and a lost store	judge	none	-	host
 reference	tex8k's many textures each fill a cell, every texel apart from the others'	judge	none	-	nro,host
 reference	pace-code: the four integer chains kernel leaves the answers worked out apart	judge	none	-	host
 reference	pace-code: the umulh and madd kernel leaves the answers worked out apart	judge	none	-	host
