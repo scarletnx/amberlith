@@ -135,6 +135,13 @@ family reports can be believed without them.
     its judge on a stable order and on one with the ties reversed, which both pass, and on a
     record torn between two, an id that is none of them, one lost to its neighbour copied twice
     and the records left as they came, each refused with its sentence;
+  - four on the GBA's video suite, `source/gbavideoref.c`, against a frame, interrupts and stores worked out
+    by hand from GBATEK: two frames polled as the GBA shows them, and a V-Blank flag kept through line
+    227, an H-Blank flag only in the drawn lines, a skipped line, a 229th and a late V-Counter flag;
+    frames of 280896 cycles within 128, and lines of 1228 cycles; one interrupt a frame on its line
+    and one in each drawn line, and one a line late, one more and one lost; and the byte store rule
+    in each mode, the 128 KiB repeat, a byte stored alone, a byte stored into OAM and a lost store,
+    each refused with its sentence;
   - thirty six on the astc suite's answers: the ASTC reference decoder, `source/astcref.c`, held
     block by block to hashes of what ARM's decoder (astcenc) makes of the same twenty six blocks,
     three of them to texels worked out by hand as well, its

@@ -590,6 +590,10 @@ void RunReferenceCpuFp(void);
 /// the ties, against answers worked out by hand: part of the reference suite.
 void RunReferenceLibc(void);
 
+/// The GBA video suite's judges (source/gbavideoref.c) against a frame, interrupts and stores worked
+/// out by hand from GBATEK, and against what a machine that breaks one of its rules would show.
+void RunReferenceGbaVideo(void);
+
 /// The pace family's arithmetic: its samples' summary, its line's number and sentence, and what
 /// its loops and its memory walk leave, held to tools/pace-expect.py: part of the reference suite.
 void RunReferencePace(void);
