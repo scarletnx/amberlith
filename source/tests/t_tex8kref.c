@@ -361,6 +361,64 @@ static uint32_t Covered(const BcnArray *a, uint32_t level, uint32_t from, uint32
     return count;
 }
 
+/// The many textures' frame: every pixel fetches a texel inside its texture, each texture fills one
+/// cell of its own, and every fetched texel differs from the same texel of each other texture, from
+/// nought and from its cell's neighbours, so a texture another one's memory replaced, a texture
+/// read as nothing and a fetch one texel off each fail the judge.
+static void Many(void) {
+    static const Tex8kFormat RGBA8 = { TEX8K_RGBA8, 1, 1, 4, NULL };
+    static const uint8_t ZERO[4] = { 0, 0, 0, 0 };
+    uint32_t problems = 0;
+    uint32_t pixels[TEX8K_MANY];
+    memset(pixels, 0, sizeof(pixels));
+    char detail[160] = "";
+    for (uint32_t y = 0; y < TEX8K_TARGET; ++y) {
+        for (uint32_t x = 0; x < TEX8K_TARGET; ++x) {
+            uint32_t tx = 0;
+            uint32_t ty = 0;
+            const uint32_t i = Tex8kManyTexel(x, y, &tx, &ty);
+            if (i >= TEX8K_MANY || tx >= TEX8K_MANY_SIZE || ty >= TEX8K_MANY_SIZE) {
+                ++problems;
+                snprintf(detail, sizeof(detail), "pixel %u,%u fetches texture %u's %u,%u",
+                         (unsigned)x, (unsigned)y, (unsigned)i, (unsigned)tx, (unsigned)ty);
+                continue;
+            }
+            ++pixels[i];
+            uint8_t answers[3][4];
+            Tex8kTexel(&RGBA8, tx, ty, TEX8K_MANY_SALT + i, answers);
+            bool apart = !Tex8kMatches(ZERO, answers);
+            for (uint32_t j = 0; j < TEX8K_MANY; ++j) {
+                uint8_t other[3][4];
+                Tex8kTexel(&RGBA8, tx, ty, TEX8K_MANY_SALT + j, other);
+                apart = apart && (j == i || !Tex8kMatches(other[0], answers));
+            }
+            for (uint32_t d = 0; d < 4u; ++d) {
+                const uint32_t nx = d == 0u ? tx + 1u : d == 1u ? tx - 1u : tx;
+                const uint32_t ny = d == 2u ? ty + 1u : d == 3u ? ty - 1u : ty;
+                uint8_t next[3][4];
+                Tex8kTexel(&RGBA8, nx, ny, TEX8K_MANY_SALT + i, next);
+                apart = apart && !Tex8kMatches(next[0], answers);
+            }
+            if (!apart) {
+                ++problems;
+                snprintf(detail, sizeof(detail),
+                         "pixel %u,%u: texture %u's texel %u,%u matches nought, another texture's "
+                         "or a neighbour's",
+                         (unsigned)x, (unsigned)y, (unsigned)i, (unsigned)tx, (unsigned)ty);
+            }
+        }
+    }
+    for (uint32_t i = 0; i < TEX8K_MANY; ++i) {
+        if (pixels[i] != TEX8K_MANY_CELL * TEX8K_MANY_CELL) {
+            ++problems;
+            snprintf(detail, sizeof(detail), "texture %u fills %u pixels", (unsigned)i,
+                     (unsigned)pixels[i]);
+        }
+    }
+    CHECK_TRUE(SUITE, "tex8k's many textures each fill a cell, every texel apart from the others'",
+               CHECK_NONE, problems == 0u, "%u problems; the last: %s", (unsigned)problems, detail);
+}
+
 static void Raw(void) {
     // The BC7 texture as deko3d lays out its fourteen levels (dk_image.cpp calcLevelOffset).
     BcnArray a;
@@ -488,6 +546,7 @@ void RunReferenceTex8k(void) {
     Rgba8();
     Astc();
     Places();
+    Many();
     Raw();
     Numbers();
 }

@@ -49,6 +49,10 @@
 // sampled where it was written); the fetch of that block's sixteen texels must give the block's
 // colours, where a host that takes so large a volume for no texture reads zeros.
 //
+// Last, sixteen 4096x4096 RGBA8 textures of eight levels, 1.3 GiB together, level 0 of each sampled
+// in one frame (ManyTextures): a host with less memory for textures than the frame samples has to
+// move or convert them as it draws.
+//
 // A host that samples no ASTC may keep an ASTC texture as BC7, which moves texels: such a texel
 // passes when it is within BC7's loss measured on the same texels (TEX8K_BC7_BOUND), and the line
 // then says bound instead of exact, with how far it moved in each region of the picture.
@@ -1658,6 +1662,294 @@ static void BigVolume(void) {
     GpuClose(&gpu);
 }
 
+// Many textures in one frame. Sixteen 4096x4096 RGBA8 block linear textures of eight levels, as a
+// game's are, 85 MiB each and 1.3 GiB together; the copy engine uploads level 0 of each, one after
+// another from one staging buffer, each with a salt of its own. Then one frame draws sixteen 16x16
+// cells of the target in one submission, cell i fetching level 0 of texture i every 256th texel. A
+// host whose memory for textures is smaller than what the frame samples (a phone, or a budget set
+// under 1.3 GiB) has to move, convert again or let go of its copies while the frame is drawn, and
+// one that keeps a texture's coarser levels in place of its finer ones reads level 0 wrong: every
+// fetched texel must still be the one the upload wrote, and the program goes on, eight frames more
+// of the same draws, the last one judged too. The texels' values are their places' (tex8kref.c's
+// Tex8kTexel with each texture's salt).
+#define MANY_FRAMES 8u
+#define MANY_LEVELS 8u
+
+typedef struct {
+    GpuContext gpu;
+    DkShader shaders[2];
+    DkImage images[TEX8K_MANY];
+    DkImageLayout layouts[TEX8K_MANY];
+    DkGpuAddr image_set;
+    DkGpuAddr sampler_set;
+    uint8_t *staging;
+    DkGpuAddr staging_addr;
+} Many;
+
+static Many g_many;
+
+static const Tex8kFormat MANY_FORMAT = { TEX8K_RGBA8, 1, 1, 4, NULL };
+
+/// Records the frame's sixteen draws, cell i fetching texture i, into the open pass.
+static bool ManyDraws(Many *m) {
+    GpuContext *const gpu = &m->gpu;
+    dkCmdBufBindImageDescriptorSet(gpu->cmdbuf, m->image_set, TEX8K_MANY);
+    dkCmdBufBindSamplerDescriptorSet(gpu->cmdbuf, m->sampler_set, 1);
+    const uint32_t across = TEX8K_TARGET / TEX8K_MANY_CELL;
+    for (uint32_t i = 0; i < TEX8K_MANY; ++i) {
+        const uint32_t x0 = (i % across) * TEX8K_MANY_CELL;
+        const uint32_t y0 = (i / across) * TEX8K_MANY_CELL;
+        DkGpuAddr address = 0;
+        uint8_t *const uniform =
+            (uint8_t *)GpuAllocData(gpu, UNIFORM_SIZE, DK_UNIFORM_BUF_ALIGNMENT, &address);
+        if (uniform == NULL) {
+            snprintf(gpu->failure, sizeof(gpu->failure), "no scratch left for a draw's uniforms");
+            return false;
+        }
+        // The shader fetches pixel * step + offset, from the target's corner, not the cell's.
+        const FetchLod s = { { (int32_t)TEX8K_MANY_SIZE, (int32_t)TEX8K_MANY_SIZE,
+                               (int32_t)TEX8K_MANY_STEP, (int32_t)TEX8K_MANY_STEP },
+                             { (int32_t)TEX8K_SPREAD_X - (int32_t)(x0 * TEX8K_MANY_STEP),
+                               (int32_t)TEX8K_SPREAD_Y - (int32_t)(y0 * TEX8K_MANY_STEP), 0, 0 } };
+        memset(uniform, 0, UNIFORM_SIZE);
+        memcpy(uniform, &s, sizeof(s));
+        dkCmdBufBindTexture(gpu->cmdbuf, DkStage_Fragment, 0, dkMakeTextureHandle(i, 0));
+        dkCmdBufBindUniformBuffer(gpu->cmdbuf, DkStage_Fragment, 0, address, UNIFORM_SIZE);
+        const float left = (float)x0 / TEX8K_TARGET * 2.0f - 1.0f;
+        const float right = (float)(x0 + TEX8K_MANY_CELL) / TEX8K_TARGET * 2.0f - 1.0f;
+        const float top = 1.0f - (float)y0 / TEX8K_TARGET * 2.0f;
+        const float bottom = 1.0f - (float)(y0 + TEX8K_MANY_CELL) / TEX8K_TARGET * 2.0f;
+        const GpuVertex quad[6] = {
+            { left, bottom, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+            { right, bottom, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+            { right, top, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+            { left, bottom, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+            { right, top, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+            { left, top, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f },
+        };
+        if (!GpuDrawTriangles(gpu, &m->shaders[0], &m->shaders[1], quad, 6)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// Judges the frame's target: every pixel the texel its cell's texture holds there. The first wrong
+/// one, and how many, into @p detail.
+static bool ManyJudge(const uint8_t *pixels, char *detail, size_t size) {
+    uint32_t wrong = 0;
+    for (uint32_t y = 0; y < TEX8K_TARGET; ++y) {
+        for (uint32_t x = 0; x < TEX8K_TARGET; ++x) {
+            uint32_t tx = 0;
+            uint32_t ty = 0;
+            const uint32_t i = Tex8kManyTexel(x, y, &tx, &ty);
+            uint8_t answers[3][4];
+            memset(answers, 0, sizeof(answers));
+            Tex8kTexel(&MANY_FORMAT, tx, ty, TEX8K_MANY_SALT + i, answers);
+            const uint8_t *const pixel = GpuPixel(pixels, TEX8K_TARGET, x, y);
+            if (Tex8kMatches(pixel, answers)) {
+                continue;
+            }
+            if (wrong++ == 0u) {
+                snprintf(detail, size,
+                         "pixel (%u, %u), texture %u's texel (%u, %u): got %02x %02x "
+                         "%02x %02x, "
+                         "expected %02x %02x %02x %02x",
+                         (unsigned)x, (unsigned)y, (unsigned)i, (unsigned)tx, (unsigned)ty,
+                         pixel[0], pixel[1], pixel[2], pixel[3], answers[0][0], answers[0][1],
+                         answers[0][2], answers[0][3]);
+            }
+        }
+    }
+    if (wrong != 0u) {
+        const size_t at = strlen(detail);
+        snprintf(detail + at, size - at, "; %u of %u pixels wrong", (unsigned)wrong,
+                 (unsigned)(TEX8K_TARGET * TEX8K_TARGET));
+    }
+    return wrong == 0u;
+}
+
+/// The frame's sixteen draws, submitted and read back; NULL with the failure said.
+static const uint8_t *ManyFrame(Many *m) {
+    GpuContext *const gpu = &m->gpu;
+    GpuClear(gpu, 0.0f, 0.0f, 0.0f, 0.0f);
+    GpuBeginPass(gpu);
+    if (!ManyDraws(m)) {
+        return NULL;
+    }
+    GpuSubmit(gpu);
+    return gpu->ready ? Take(g_pixels, GpuReadBack(gpu), sizeof(g_pixels)) : NULL;
+}
+
+static bool ManyOpen(Many *m, const char *name) {
+    if (!Room(name)) {
+        return false;
+    }
+    const uint32_t bytes = TEX8K_MANY_SIZE * TEX8K_MANY_SIZE * 4u;
+    // Each texture's chain, a MiB more for the library's alignment of its levels.
+    uint32_t chain = 0;
+    for (uint32_t level = 0; level < MANY_LEVELS; ++level) {
+        chain += (TEX8K_MANY_SIZE >> level) * (TEX8K_MANY_SIZE >> level) * 4u;
+    }
+    GpuSpec spec;
+    GpuSpecDefaults(&spec, TEX8K_TARGET, TEX8K_TARGET);
+    spec.code_size = 32u * 1024u;
+    spec.image_size = TEX8K_MANY * (chain + MIB) + IMAGE_SLACK;
+    spec.data_size = bytes + SCRATCH_SLACK;
+    const bool opened = GpuOpenSpec(&m->gpu, &spec);
+    if (!opened && m->gpu.out_of_memory) {
+        char why[384];
+        snprintf(why, sizeof(why),
+                 "%s, asking for %u MiB of textures and %u MiB of staging and scratch: the "
+                 "machine refuses the size",
+                 m->gpu.failure, (unsigned)(spec.image_size / MIB),
+                 (unsigned)(spec.data_size / MIB));
+        ReportSkip(SUITE, name, REPORT_REASON_UNAVAILABLE, why);
+        return false;
+    }
+    bool loaded = opened &&
+                  GpuLoadShader(&m->gpu, &m->shaders[0], ShaderData(SHADER_COMMON_VERT),
+                                ShaderSize(SHADER_COMMON_VERT)) &&
+                  GpuLoadShader(&m->gpu, &m->shaders[1], ShaderData(SHADER_FETCH_LOD_FRAG),
+                                ShaderSize(SHADER_FETCH_LOD_FRAG));
+    DkImageDescriptor *images = NULL;
+    DkSamplerDescriptor *samplers = NULL;
+    if (loaded) {
+        images = (DkImageDescriptor *)GpuAllocData(
+            &m->gpu, (uint32_t)(TEX8K_MANY * sizeof(DkImageDescriptor)),
+            DK_IMAGE_DESCRIPTOR_ALIGNMENT, &m->image_set);
+        samplers =
+            (DkSamplerDescriptor *)GpuAllocData(&m->gpu, (uint32_t)sizeof(DkSamplerDescriptor),
+                                                DK_SAMPLER_DESCRIPTOR_ALIGNMENT, &m->sampler_set);
+        m->staging =
+            (uint8_t *)GpuAllocData(&m->gpu, bytes, DK_MEMBLOCK_ALIGNMENT, &m->staging_addr);
+        loaded = images != NULL && samplers != NULL && m->staging != NULL;
+        if (!loaded) {
+            snprintf(m->gpu.failure, sizeof(m->gpu.failure),
+                     "the scratch block has no room for the staging the spec sized it for");
+        }
+    }
+    for (uint32_t i = 0; loaded && i < TEX8K_MANY; ++i) {
+        loaded =
+            GpuCreateMipTexture(&m->gpu, &m->images[i], &m->layouts[i], DkImageFormat_RGBA8_Unorm,
+                                TEX8K_MANY_SIZE, TEX8K_MANY_SIZE, MANY_LEVELS);
+        if (loaded) {
+            DkImageView view;
+            dkImageViewDefaults(&view, &m->images[i]);
+            dkImageDescriptorInitialize(&images[i], &view, false, false);
+        }
+    }
+    if (loaded) {
+        DkSampler sampler;
+        dkSamplerDefaults(&sampler);
+        sampler.minFilter = DkFilter_Nearest;
+        sampler.magFilter = DkFilter_Nearest;
+        sampler.mipFilter = DkMipFilter_Nearest;
+        dkSamplerDescriptorInitialize(&samplers[0], &sampler);
+    }
+    CHECK_TRUE(SUITE, name, CHECK_NONE, loaded, "%s", Why(&m->gpu, "no reason given"));
+    if (opened && !loaded) {
+        GpuClose(&m->gpu);
+    }
+    return loaded;
+}
+
+/// The copy engine uploads the sixteen textures, one after another through the one staging buffer,
+/// each with its salt: false with the failure said in the gpu's failure.
+static bool ManyUpload(Many *m, uint64_t *copies_ns) {
+    GpuContext *const gpu = &m->gpu;
+    const uint32_t pitch = TEX8K_MANY_SIZE * 4u;
+    for (uint32_t i = 0; i < TEX8K_MANY; ++i) {
+        Tex8kFillBlocks(&MANY_FORMAT, m->staging, pitch, 0, 0, TEX8K_MANY_SIZE, TEX8K_MANY_SIZE,
+                        TEX8K_MANY_SALT + i);
+        dkCmdBufClear(gpu->cmdbuf);
+        dkCmdBufBarrier(gpu->cmdbuf, DkBarrier_Full, 0);
+        DkImageView view;
+        dkImageViewDefaults(&view, &m->images[i]);
+        const DkCopyBuf source = { m->staging_addr, pitch, 0 };
+        const DkImageRect rect = { 0, 0, 0, TEX8K_MANY_SIZE, TEX8K_MANY_SIZE, 1 };
+        dkCmdBufCopyBufferToImage(gpu->cmdbuf, &source, &view, &rect, 0);
+        const uint64_t before = PerfCaseWork();
+        GpuSubmit(gpu);
+        *copies_ns += PerfCaseWork() - before;
+        if (!gpu->ready) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void ManyTextures(void) {
+    static const char *const OPEN = "graphics device opens with room for sixteen 4096x4096 RGBA8 "
+                                    "textures of eight levels, 1.3 GiB";
+    static const char *const FRAME = "one frame fetches level 0 of sixteen 4096x4096 RGBA8 textures "
+                                     "of eight levels, each as the copy engine uploaded it";
+    static char again[160];
+    snprintf(again, sizeof(again),
+             "%u frames more over the sixteen textures, the last one fetching each as uploaded",
+             (unsigned)MANY_FRAMES);
+    Many *const m = &g_many;
+    memset(m, 0, sizeof(*m));
+    const char *const rest[] = { FRAME, again };
+    if (!ReportStart(SUITE, OPEN)) {
+        SkipRest(rest, 2, "the case that opens the device did not run");
+        return;
+    }
+    if (!ManyOpen(m, OPEN)) {
+        SkipRest(rest, 2, "the device for the textures did not open, or they have no memory");
+        return;
+    }
+    if (!ReportStart(SUITE, FRAME)) {
+        SkipRest(rest + 1, 1, "the case that uploads and fetches the textures did not run");
+        GpuClose(&m->gpu);
+        return;
+    }
+    uint64_t copies_ns = 0;
+    const bool uploaded = ManyUpload(m, &copies_ns);
+    const uint8_t *pixels = uploaded ? ManyFrame(m) : NULL;
+    uint64_t work = PerfCaseWork();
+    char detail[512] = "";
+    if (pixels == NULL) {
+        End(FRAME, CHECK_NONE, false,
+            Why(&m->gpu, uploaded ? "the frame's draws or the readback did not happen"
+                                  : "the copies did not happen"),
+            work);
+        SkipRest(rest + 1, 1, "the first frame did not draw");
+        GpuClose(&m->gpu);
+        return;
+    }
+    bool passed = ManyJudge(pixels, detail, sizeof(detail));
+    if (timing) {
+        const size_t at = strlen(detail);
+        snprintf(detail + at, sizeof(detail) - at, "%sthe copies %u us, the frame %u us",
+                 at != 0u ? "; " : "", (unsigned)Microseconds(copies_ns),
+                 (unsigned)Microseconds(work - copies_ns));
+    }
+    EndFrom(FRAME, CHECK_EXACT, REPORT_FROM_SPEC, passed, detail, work);
+    if (!ReportStart(SUITE, again)) {
+        GpuClose(&m->gpu);
+        return;
+    }
+    const uint64_t before = PerfCaseWork();
+    pixels = NULL;
+    for (uint32_t f = 0; f < MANY_FRAMES; ++f) {
+        pixels = ManyFrame(m);
+        if (pixels == NULL) {
+            break;
+        }
+    }
+    work = PerfCaseWork() - before;
+    detail[0] = '\0';
+    if (pixels == NULL) {
+        End(again, CHECK_NONE, false,
+            Why(&m->gpu, "a frame's draws or the readback did not happen"), work);
+    } else {
+        passed = ManyJudge(pixels, detail, sizeof(detail));
+        EndFrom(again, CHECK_EXACT, REPORT_FROM_SPEC, passed, detail, work);
+    }
+    GpuClose(&m->gpu);
+}
+
 void RunTex8k(void) {
     for (size_t i = 0; i < ENTRY_COUNT; ++i) {
         OneTexture(&ENTRIES[i]);
@@ -1667,4 +1959,5 @@ void RunTex8k(void) {
         RenderTarget(&RT_TARGETS[i]);
     }
     BigVolume();
+    ManyTextures();
 }

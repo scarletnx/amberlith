@@ -7,9 +7,9 @@ family reports can be believed without them.
 | Suite | Cases | On the NRO | On the Switch 2 build | On the host build |
 |---|--:|--:|--:|--:|
 | selfcheck | 16 | 16 | 16 | 16 |
-| support | 254 | 237 | 237 | 253 |
-| reference | 553 | 547 | 547 | 553 |
-| **All** | **823** | **800** | **800** | **822** |
+| support | 254 | 243 | 237 | 253 |
+| reference | 554 | 550 | 547 | 554 |
+| **All** | **824** | **809** | **800** | **823** |
 <!-- /counts -->
 
 - **selfcheck**, no hardware involved. That two neighbouring floats measure one unit

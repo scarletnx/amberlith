@@ -20,8 +20,8 @@ judge no machine, so the last line leaves them out.
 |---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | CPU and kernel | [The processor](Cpu.md) | 1 | 38 | 36 | 0 | 0 | 25 | 0 | 11 | 0 | 2 |
 | CPU and kernel | [Kernel](Kernel.md) | 2 | 30 | 28 | 0 | 0 | 21 | 0 | 7 | 2 | 0 |
-| GPU and NVN | [Graphics](Graphics.md) | 44 | 866 | 749 | 0 | 0 | 158 | 0 | 591 | 117 | 0 |
-| GPU and NVN | [nvn](Nvn.md) | 1 | 218 | 203 | 0 | 11 | 0 | 0 | 192 | 9 | 6 |
+| GPU and NVN | [Graphics](Graphics.md) | 44 | 869 | 751 | 0 | 0 | 158 | 0 | 593 | 118 | 0 |
+| GPU and NVN | [nvn](Nvn.md) | 1 | 225 | 210 | 0 | 13 | 0 | 0 | 197 | 9 | 6 |
 | GPU and NVN | [nvn2](Nvn2.md) | 1 | 34 | 31 | 0 | 5 | 0 | 0 | 26 | 3 | 0 |
 | GPU and NVN | [Game](Game.md) | 2 | 87 | 34 | 0 | 0 | 0 | 0 | 34 | 53 | 0 |
 | GPU and NVN | [Demo](Demo.md) | 4 | 67 | 41 | 0 | 0 | 0 | 0 | 41 | 26 | 0 |
@@ -31,12 +31,12 @@ judge no machine, so the last line leaves them out.
 | System and services | [fs](Fs.md) | 1 | 15 | 13 | 0 | 0 | 0 | 0 | 13 | 2 | 0 |
 | System and services | [Display](Display.md) | 1 | 4 | 3 | 0 | 0 | 0 | 3 | 0 | 1 | 0 |
 | System and services | [Service](Service.md) | 40 | 125 | 109 | 0 | 0 | 0 | 108 | 1 | 14 | 2 |
-| System and services | [Net](Net.md) | 6 | 53 | 18 | 0 | 0 | 0 | 0 | 18 | 5 | 30 |
+| System and services | [Net](Net.md) | 6 | 53 | 19 | 0 | 0 | 0 | 0 | 19 | 5 | 29 |
 | System and services | [libc](Libc.md) | 3 | 15 | 15 | 0 | 0 | 0 | 0 | 15 | 0 | 0 |
 | Input | [Pad](Pad.md) | 2 | 35 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 35 |
 | Speed | [Pace](Pace.md) | 6 | 36 | 0 | 0 | 0 | 0 | 0 | 0 | 36 | 0 |
-| The judge and the tools | [The judge](Judge.md) | 3 | 823 | - | - | - | - | - | - | - | - |
-| **On a machine** | | **118** | **1674** | **1329** | **0** | **16** | **210** | **117** | **986** | **270** | **75** |
+| The judge and the tools | [The judge](Judge.md) | 3 | 824 | - | - | - | - | - | - | - | - |
+| **On a machine** | | **118** | **1684** | **1339** | **0** | **18** | **210** | **117** | **994** | **271** | **74** |
 <!-- /counts -->
 
 - **[The judge](./Judge.md)** - selfcheck, support and reference, no hardware involved

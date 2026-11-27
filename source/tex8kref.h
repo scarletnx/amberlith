@@ -70,6 +70,15 @@ extern "C" {
 #define TEX8K_TAIL_FROM 1280u
 #define TEX8K_TAIL_TO 1792u
 
+/// The case of many textures in one frame: TEX8K_MANY RGBA8 textures of TEX8K_MANY_SIZE square,
+/// texture i written with salt TEX8K_MANY_SALT + i, and a frame whose 4x4 cells of the target each
+/// fetch one texture, every TEX8K_MANY_STEP-th texel from the spread's corner.
+#define TEX8K_MANY 16u
+#define TEX8K_MANY_SIZE 4096u
+#define TEX8K_MANY_SALT 100u
+#define TEX8K_MANY_CELL (TEX8K_TARGET / 4u)
+#define TEX8K_MANY_STEP (TEX8K_MANY_SIZE / TEX8K_MANY_CELL)
+
 /// The graphics memory, in MiB, a machine wants before the suite's textures are tried on it: an
 /// emulator keeps each texture, its staging and its own copy on the host, and under ScarletNX on
 /// a 12 GiB card the suite's staging alone peaked at 4512 MiB. A host with far less can lose its
@@ -193,6 +202,10 @@ void Tex8kSpreadTexel(uint32_t size, uint32_t x, uint32_t y, uint32_t *tx, uint3
 /// The frame whose cell holds pixel (@p x, @p y) of the target, and the texel of level 0 it
 /// fetches.
 uint32_t Tex8kCellTexel(uint32_t x, uint32_t y, uint32_t *tx, uint32_t *ty);
+
+/// The texture whose cell holds pixel (@p x, @p y) of the many textures' frame, and the texel of
+/// it the pixel fetches.
+uint32_t Tex8kManyTexel(uint32_t x, uint32_t y, uint32_t *tx, uint32_t *ty);
 
 /// Where the copy-out region starts: half inside frame 3's region and half outside, so the
 /// bytes it reads are the frame's on one side and the upload's on the other.

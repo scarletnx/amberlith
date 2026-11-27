@@ -27,8 +27,8 @@
 <!-- counts: family nvn -->
 | Suite | Cases | With a judge | Console | Driver | Reference | Emulator | Spec | Without one | Not yet known |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| nvn | 218 | 203 | 0 | 11 | 0 | 0 | 192 | 9 | 6 |
-| **All** | **218** | **203** | **0** | **11** | **0** | **0** | **192** | **9** | **6** |
+| nvn | 225 | 210 | 0 | 13 | 0 | 0 | 197 | 9 | 6 |
+| **All** | **225** | **210** | **0** | **13** | **0** | **0** | **197** | **9** | **6** |
 <!-- /counts -->
 
 The graphics questions asked through NVN, the API a game draws with, so that a runtime which runs a game's NVN calls
