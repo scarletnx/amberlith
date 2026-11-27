@@ -830,6 +830,22 @@ reference	pace: the memory walk reads every slot once before it is back at its s
 reference	libc: the tied sort hands over ids 0 to 15, four to a key, marks from 0xa0	judge	none	-	nro,host
 reference	libc: the tied sort judge takes the ties in any order and refuses a torn, lost or unsorted record	judge	none	-	nro,host
 reference	tex8k's many textures each fill a cell, every texel apart from the others'	judge	none	-	nro,host
+reference	pace-code: the four integer chains kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the umulh and madd kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the udiv and sdiv kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the calls kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the indirect calls kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the switch kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the branches kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the table kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the fsqrt and fdiv kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the bytes kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the crc32 kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the aes kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the sha256 kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the exclusive kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the core kernel leaves the answers worked out apart	judge	none	-	host
+reference	pace-code: the vector of singles kernel leaves the answers worked out apart	judge	none	-	host
 cpu	clz counts each of sixteen 8-bit lanes	cpu	exact	spec	nro
 cpu	clz counts each of eight 16-bit lanes	cpu	exact	spec	nro
 cpu	clz counts each of four 32-bit lanes	cpu	exact	spec	nro

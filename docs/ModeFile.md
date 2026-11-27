@@ -28,7 +28,7 @@
 | `listen` | the listening sequence before the audio family's cases, and the audio family with it: about 40 seconds of sound meant to be heard; see [The audio family](families/Audio.md) |
 | `pad` | the pad family: a person presses each button the screen names, the sticks and a vibration, then taps targets on the touch screen; only when named; see [pad](families/Pad.md) and [touch](families/Touch.md) |
 | `kernel` | the kernel family: the scheduler's priority inheritance, preemption and migration, and the kernel's answers to waits, events, handles and memory calls; only when named, with no row on the start screen; see [kernel](families/Kernel.md) |
-| `pace` | the pace family: how fast the machine goes, the processor's loops on each core, memory, a thread woken and a mutex passed, the counter and sleeps, the card and the graphics unit, each timed several times over and none judged yet; only when named, and `all` leaves it out, since its numbers want a machine doing nothing else and it takes about two minutes; with `notime` every case of it is a skip that was asked for; no row on the start screen; see [pace](families/Pace.md) |
+| `pace` | the pace family: how fast the machine goes, the processor's loops on each core, sixteen kinds of its code, memory, a thread woken and a mutex passed, the counter and sleeps, the card and the graphics unit, each timed several times over and none judged yet; only when named, and `all` leaves it out, since its numbers want a machine doing nothing else and it takes about two minutes; with `notime` every case of it is a skip that was asked for; no row on the start screen; see [pace](families/Pace.md) |
 | `display` | the display family: the buffer history of a layer of its own (transaction 17); only when named, with no row on the start screen; see [display](families/Display.md) |
 | `video` | the video family: the video image compositor, a job per case, and the decoder on VP9 jobs from libvpx's test vectors, a job per frame; only when named, with no row on the start screen; see [video](families/Video.md) and [nvdec](families/Nvdec.md) |
 | `service` | the service family: commands a game sends to the system's services, each answer held to reden's; only when named, with no row on the start screen; see [service](families/Service.md) |
@@ -72,7 +72,7 @@ for Amberlith's own APK, `files/amberlith/mode` in its external files ([Android]
 | `quick all skip=tex8k` | the same, the tex8k suite's cases each a skip asked for: a handheld's run |
 | `quick nvn` | the judge, cpu and the nvn suite, its window case too, then exit |
 | `quick kernel display` | the judge, cpu, the sched and svc suites and the binder suite, then exit |
-| `quick pace` | the judge, cpu and the pace family's six suites, about two minutes, then exit |
+| `quick pace` | the judge, cpu and the pace family's seven suites, about two minutes, then exit |
 | `quick pace baseline=console` | the same, the run's times added as a sample to the console's baseline: on a console, three times or more |
 | `quick service` | the judge, cpu and the service family's suites, then exit |
 | `quick hooks fs service` | the judge, cpu, the fs suite and the service family, the card, the clocks, the fonts, ngc, nsd, pctl, the audio services and the Opus decoder asked through the SDK's functions, then exit: a recompiler that answers them in a game's code |

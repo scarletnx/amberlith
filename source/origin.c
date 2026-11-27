@@ -81,6 +81,7 @@ static const struct {
     { "svc", REPORT_FROM_REFERENCE },
     // Timed, judging no speed yet: what they check is their own work's checksum.
     { "pace-cpu", REPORT_FROM_SPEC },
+    { "pace-code", REPORT_FROM_SPEC },
     { "pace-mem", REPORT_FROM_SPEC },
     { "pace-thread", REPORT_FROM_SPEC },
     { "pace-timer", REPORT_FROM_SPEC },

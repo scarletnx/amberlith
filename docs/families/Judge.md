@@ -8,8 +8,8 @@ family reports can be believed without them.
 |---|--:|--:|--:|--:|
 | selfcheck | 16 | 16 | 16 | 16 |
 | support | 254 | 243 | 237 | 253 |
-| reference | 554 | 550 | 547 | 554 |
-| **All** | **824** | **809** | **800** | **823** |
+| reference | 570 | 550 | 547 | 570 |
+| **All** | **840** | **809** | **800** | **839** |
 <!-- /counts -->
 
 - **selfcheck**, no hardware involved. That two neighbouring floats measure one unit
@@ -127,6 +127,10 @@ family reports can be believed without them.
     the sentence a line carries, against answers worked out by hand; and what the integer, the
     floating point and the vector loop and the memory walk leave, against `tools/pace-expect.py`,
     which restates them in Python and runs the floating point loop in doubles beside whole numbers;
+  - sixteen on the pace-code suite's kernels, `source/pacecoderef.c`: what each leaves after one, two,
+    a thousand and more iterations, a wrap of its buffer among them, against `tools/pace-code-expect.py`,
+    which restates them in Python and holds its crc, aes and sha kernels to zlib's CRC-32, CRC-32C's
+    check value, FIPS-197's first round and hashlib's SHA-256;
   - two on the libc family's tied sort, `source/libcref.c`: the records the case hands qsort, and
     its judge on a stable order and on one with the ties reversed, which both pass, and on a
     record torn between two, an id that is none of them, one lost to its neighbour copied twice

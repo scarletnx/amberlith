@@ -372,6 +372,104 @@ void RunPaceCpu(void) {
     UnpinMain(&was);
 }
 
+// ---- pace-code: sixteen kinds of the processor's code, on the main thread
+
+static const char *const CODE = "pace-code";
+
+/// Runs of a case's fixed count, each a sample.
+#define CODE_SAMPLES 25u
+
+/// Each kind's case: its line's name and the iterations a run makes, a few milliseconds of a
+/// console's core (docs/families/Pace.md#pace-code).
+static const struct {
+    PaceCodeKind kind;
+    const char *name;
+    uint32_t iterations;
+} CODE_CASES[PACE_CODE_KINDS] = {
+    { PACE_CODE_INT4, "four chains of add, eor and shifts side by side", 1u << 19 },
+    { PACE_CODE_MUL, "a chain of umulh and madd", 1u << 18 },
+    { PACE_CODE_DIV, "a chain of udiv and sdiv", 1u << 15 },
+    { PACE_CODE_CALLS, "calls three deep through bl and ret", 1u << 17 },
+    { PACE_CODE_INDIRECT, "calls through blr to one of eight leaves", 1u << 17 },
+    { PACE_CODE_SWITCH, "a switch through br to one of sixteen cases", 1u << 17 },
+    { PACE_CODE_BRANCHES, "tbz and tbnz on bits a shift register picks", 1u << 17 },
+    { PACE_CODE_TABLE, "a 16 KiB table read and written by byte, halfword and word", 1u << 17 },
+    { PACE_CODE_FDIV, "a chain of fsqrt and fdiv through fcvtzs and scvtf", 1u << 15 },
+    { PACE_CODE_BYTES, "bytes through tbl, cmeq, uaddlv and ext", 1u << 17 },
+    { PACE_CODE_CRC, "crc32x and crc32cx over 64 KiB", 1u << 20 },
+    { PACE_CODE_AES, "aese and aesmc over 64 KiB", 1u << 19 },
+    { PACE_CODE_SHA, "sha256h, sha256h2, sha256su0 and sha256su1 over 64 KiB", 1u << 13 },
+    { PACE_CODE_EXCLUSIVE, "ldaxr and stlxr adding, with no other thread", 1u << 16 },
+    { PACE_CODE_CORE, "a list, a matrix and a state machine, as CoreMark's", 1u << 9 },
+    { PACE_CODE_VECTOR, "four chains of singles through fmla, fmul, fadd, fcvtzs and scvtf",
+      1u << 17 },
+};
+
+static uint64_t code_samples[CODE_SAMPLES];
+
+static void CodeCase(uint32_t which, uint8_t *table, const uint8_t *stream) {
+    const PaceCodeKind kind = CODE_CASES[which].kind;
+    const char *const name = CODE_CASES[which].name;
+    const uint64_t iterations = CODE_CASES[which].iterations;
+    if (!Begin(CODE, name)) {
+        return;
+    }
+    // The answer the C restatement gives, once and untimed; the table kernel starts every run
+    // from the table filled again, as here.
+    PaceCodeFill(table, PACE_CODE_TABLE_BYTES);
+    const uint64_t want = PaceCodeAnswer(kind, iterations, table, stream);
+    uint32_t astray = 0;
+    uint64_t last = want;
+    for (uint32_t s = 0; s < CODE_SAMPLES; ++s) {
+        PaceCodeFill(table, PACE_CODE_TABLE_BYTES);
+        const uint64_t start = armGetSystemTick();
+        const uint64_t got = PaceCodeWork(kind, iterations, table, stream);
+        code_samples[s] = Since(start);
+        if (got != want) {
+            ++astray;
+            last = got;
+        }
+    }
+    char wrong[160] = "";
+    if (astray != 0u) {
+        snprintf(wrong, sizeof(wrong),
+                 "%u of %u runs left 0x%016llx where the C restatement leaves 0x%016llx",
+                 (unsigned)astray, (unsigned)CODE_SAMPLES, (unsigned long long)last,
+                 (unsigned long long)want);
+    }
+    PaceStats stats;
+    PaceStatsOf(code_samples, CODE_SAMPLES, &stats);
+    const uint64_t tenths = PaceMulDiv(stats.median, 10u, iterations);
+    char said[64];
+    snprintf(said, sizeof(said), "%llu.%u ns an iteration", (unsigned long long)(tenths / 10u),
+             (unsigned)(tenths % 10u));
+    char measure[48];
+    snprintf(measure, sizeof(measure), "the time of %llu iterations",
+             (unsigned long long)iterations);
+    End(CODE, name, wrong, said, &stats, "runs", measure, 1u);
+}
+
+void RunPaceCode(void) {
+    uint8_t *const table = timing ? memalign(0x1000, PACE_CODE_TABLE_BYTES) : NULL;
+    uint8_t *const stream = timing ? memalign(0x1000, PACE_CODE_STREAM_BYTES) : NULL;
+    if (table == NULL || stream == NULL) {
+        for (uint32_t i = 0; i < PACE_CODE_KINDS; ++i) {
+            ReportSkip(CODE, CODE_CASES[i].name,
+                       timing ? REPORT_REASON_UNAVAILABLE : REPORT_REASON_ASKED,
+                       timing ? "the heap has no 80 KiB for the suite's table and stream" : NOTIME);
+        }
+        free(table);
+        free(stream);
+        return;
+    }
+    PaceCodeFill(stream, PACE_CODE_STREAM_BYTES);
+    for (uint32_t i = 0; i < PACE_CODE_KINDS; ++i) {
+        CodeCase(i, table, stream);
+    }
+    free(table);
+    free(stream);
+}
+
 // ---- pace-mem: a walk, a fill, a sum and a copy, on the main thread
 
 #define MEM_BYTES (64u * 1024u * 1024u)

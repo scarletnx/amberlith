@@ -73,6 +73,7 @@ source/topologyref.c
 source/copyref.c
 source/vertexref.c
 source/svcref.c
+source/pacecoderef.c
 source/paceref.c
 source/libcref.c
 source/tests/t_selfcheck.c

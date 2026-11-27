@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#include "pacecoderef.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,6 +39,13 @@ void PaceWorkCopy(void *to, const void *from, uint64_t bytes);
 /// smallest step between two reads that was not nought (UINT64_MAX when every step was), the
 /// largest step, and how many reads were under the read before them.
 void PaceWorkCounter(uint64_t reads, uint64_t out[3]);
+
+/// The pace-code suite's kernels (pacecoderef.h), @p iterations of @p kind, one or more: what
+/// PaceCodeAnswer says it leaves. The table kernel works in @p table and the crc, aes and sha
+/// kernels read @p stream, as PaceCodeAnswer's; the core kernel is PaceCodeCore, the compiler's
+/// code, and every other kind is these instructions.
+uint64_t PaceCodeWork(PaceCodeKind kind, uint64_t iterations, uint8_t *table,
+                      const uint8_t *stream);
 
 #endif
 
