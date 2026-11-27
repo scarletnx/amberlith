@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """publish-builds.py against fake_github.py's fake gh and fake Discord: which Build runs are published; a nightly
-prerelease with the NRO, the APK, the VPK, the 3DSX and the two ExeFS zips and their checksums, named after the commit's
+prerelease with the NRO, the APK, the VPK, the 3DSX, the NDS and the two ExeFS zips and their checksums, named after the commit's
 VERSION and the commit, kept to the newest N, never one older than the newest, its files and notes copied to the "nightly" prerelease
 whose tag follows it, and nothing said on Discord; a version tag's release named after its version alone, the latest,
 and its Discord message, or a notice without the webhook; an artifact that is missing, is no NRO, or a zip that holds
@@ -50,23 +50,26 @@ VPK = exefs(
 )
 # a 3DSX as 3dsxtool writes it: its header's magic, then the program
 THREEDSX = b"3DSX" + b"\0" * 28 + b"a program"
+# an NDS as nds.mk makes it: its header's title, then the rest of the card image
+NDS = b"AMBERLITH\0\0\0AMBR00" + b"\0" * 16 + b"a card image"
 
 
 def named(stem):
-    """the six files of a release or a run named after stem (a version, or a version and a commit), as build.yml and
+    """the seven files of a release or a run named after stem (a version, or a version and a commit), as build.yml and
     publish-builds.py name them"""
     return {
         "nro": f"amberlith-{stem}.nro",
         "apk": f"amberlith-{stem}.apk",
         "vpk": f"amberlith-{stem}.vpk",
         "3dsx": f"amberlith-{stem}.3dsx",
+        "nds": f"amberlith-{stem}.nds",
         "ounce": f"amberlith-ounce-{stem}.zip",
         "mod": f"amberlith-mod-{stem}.zip",
     }
 
 
 def files(stem):
-    """every asset of a release named after stem: the six files and their checksums, sorted"""
+    """every asset of a release named after stem: the seven files and their checksums, sorted"""
     return sorted(name + more for name in named(stem).values() for more in ("", ".sha256"))
 
 
@@ -167,8 +170,9 @@ class Publish(unittest.TestCase):
         version="0.2.0",
         vpk=VPK,
         threedsx=THREEDSX,
+        nds=NDS,
     ):
-        """the folder the workflow downloads into: the NRO, the APK, the VPK, the 3DSX and the two zips, named after the version and the
+        """the folder the workflow downloads into: the NRO, the APK, the VPK, the 3DSX, the NDS and the two zips, named after the version and the
         commit, each in a folder named after its artifact, or at its path; a dict for a file is the files a download
         that unpacked it leaves in that folder"""
         artifact = named(f"{version}-{commit[:7]}")
@@ -177,6 +181,7 @@ class Publish(unittest.TestCase):
             (artifact["apk"], apk),
             (artifact["vpk"], vpk),
             (artifact["3dsx"], threedsx),
+            (artifact["nds"], nds),
             (artifact["ounce"], ounce),
             (artifact["mod"], mod),
         ):
@@ -222,8 +227,11 @@ class Publish(unittest.TestCase):
         version="0.2.0",
         vpk=VPK,
         threedsx=THREEDSX,
+        nds=NDS,
     ):
-        folder = self.artifacts(f"artifacts-{run}", commit, data, as_file, apk, ounce, mod, version, vpk, threedsx)
+        folder = self.artifacts(
+            f"artifacts-{run}", commit, data, as_file, apk, ounce, mod, version, vpk, threedsx, nds
+        )
         args = [
             "--kind",
             kind,
@@ -303,6 +311,7 @@ class Publish(unittest.TestCase):
             ("apk", APK),
             ("vpk", VPK),
             ("3dsx", THREEDSX),
+            ("nds", NDS),
             ("ounce", OUNCE),
             ("mod", MOD),
         ):
@@ -312,7 +321,7 @@ class Publish(unittest.TestCase):
             self.assertIn(f"| [{name[kind]}]({where}/{name[kind]}) | 0.0 MB | `{built_digest}` |", body)
         self.assertIn(
             f"`sha256sum -c {name['nro']}.sha256 {name['apk']}.sha256 {name['vpk']}.sha256 {name['3dsx']}.sha256 "
-            f"{name['ounce']}.sha256 {name['mod']}.sha256`",
+            f"{name['nds']}.sha256 {name['ounce']}.sha256 {name['mod']}.sha256`",
             body,
         )
         self.assertIn(f"- \\[ci\\] its title ([#5](https://github.com/{REPO}/pull/5))", body)
@@ -386,6 +395,12 @@ class Publish(unittest.TestCase):
         done = self.publish("nightly", self.sha, threedsx=b"\x7fELF an ELF")
         self.assertNotEqual(done.returncode, 0)
         self.assertIn(f"amberlith-{self.stem}.3dsx of run 41 is no 3DSX: no 3DSX at byte 0", done.stderr)
+        self.assertIsNone(self.find(self.tag))
+
+    def test_a_file_that_is_no_nds_stops(self):
+        done = self.publish("nightly", self.sha, nds=b"HOMEBREW\0\0\0\0####")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn(f"amberlith-{self.stem}.nds of run 41 is no NDS: no AMBERLITH at byte 0", done.stderr)
         self.assertIsNone(self.find(self.tag))
 
     def test_a_vpk_without_the_vitas_program_stops(self):
@@ -537,15 +552,17 @@ class Publish(unittest.TestCase):
         message = posts[0]["body"]["embeds"][0]
         self.assertEqual(message["title"], "Amberlith v0.2.0")
         self.assertEqual(
-            [f["name"] for f in message["fields"]], ["NRO", "APK", "VPK", "3DS", "Switch 2", "Mod", "Source", "Since"]
+            [f["name"] for f in message["fields"]],
+            ["NRO", "APK", "VPK", "3DS", "DS", "Switch 2", "Mod", "Source", "Since"],
         )
         self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.nro", message["fields"][0]["value"])
         self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.apk", message["fields"][1]["value"])
         self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.vpk", message["fields"][2]["value"])
         self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.3dsx", message["fields"][3]["value"])
-        self.assertIn("/releases/download/v0.2.0/amberlith-ounce-0.2.0.zip", message["fields"][4]["value"])
-        self.assertIn("/releases/download/v0.2.0/amberlith-mod-0.2.0.zip", message["fields"][5]["value"])
-        self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][7]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-0.2.0.nds", message["fields"][4]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-ounce-0.2.0.zip", message["fields"][5]["value"])
+        self.assertIn("/releases/download/v0.2.0/amberlith-mod-0.2.0.zip", message["fields"][6]["value"])
+        self.assertIn("/compare/v0.1.0...v0.2.0", message["fields"][8]["value"])
         self.assertIn(hashlib.sha256(NRO).hexdigest(), message["description"])
         self.assertEqual(posts[0]["body"]["allowed_mentions"], {"parse": []})
         # its build again: the files replaced, nothing said twice
@@ -600,8 +617,8 @@ class Workflows(unittest.TestCase):
         downloads = [
             step for step in steps((WORKFLOWS / "publish.yml").read_text()) if "actions/download-artifact@" in step
         ]
-        # the six files of a release (publish-builds.py's FILES)
-        self.assertEqual((len(uploads), len(downloads)), (6, 6))
+        # the seven files of a release (publish-builds.py's FILES)
+        self.assertEqual((len(uploads), len(downloads)), (7, 7))
         for step in uploads:
             self.assertRegex(step, r"(?m)^\s+archive: false$", "build.yml uploads each file itself")
         for step in downloads:

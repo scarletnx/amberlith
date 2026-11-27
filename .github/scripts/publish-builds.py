@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Publish a Build run's NRO, APK, VPK, 3DSX and ExeFS folders as a release, and say so on Discord.
+"""Publish a Build run's NRO, APK, VPK, 3DSX, NDS and ExeFS folders as a release, and say so on Discord.
 
     .github/scripts/publish-builds.py plan --repo OWNER/REPO
     .github/scripts/publish-builds.py publish --repo OWNER/REPO --kind nightly|release --run ID --sha SHA [--tag TAG]
@@ -14,13 +14,13 @@ the run whose files publish takes (kind, run, sha, short, tag, stem), when there
 - a push to main that built becomes the prerelease nightly-<date>-<commit>, never the latest, only the newest N
   nightlies staying; the prerelease "nightly" takes its files and notes, its tag moved to that commit.
 A pull request's run is not published: its files are the run's artifacts, which build.yml links from the pull request.
-Nothing is built: the NRO, the APK, the VPK, the 3DSX and the two ExeFS folders are the run's artifacts
-amberlith-<stem>.nro, amberlith-<stem>.apk, amberlith-<stem>.vpk, amberlith-<stem>.3dsx, amberlith-ounce-<stem>.zip (the
-probe as a Switch 2 program) and amberlith-mod-<stem>.zip (the probe as a mod of a game), <stem> the commit's VERSION and
+Nothing is built: the NRO, the APK, the VPK, the 3DSX, the NDS and the two ExeFS folders are the run's artifacts
+amberlith-<stem>.nro, amberlith-<stem>.apk, amberlith-<stem>.vpk, amberlith-<stem>.3dsx, amberlith-<stem>.nds,
+amberlith-ounce-<stem>.zip (the probe as a Switch 2 program) and amberlith-mod-<stem>.zip (the probe as a mod of a game), <stem> the commit's VERSION and
 its first 7 digits (0.18.0-0123abc), which the workflow downloads into DIR between the two. A nightly holds them under those names, a version's release as amberlith-0.18.0.nro
 and so on, each with its .sha256 beside it, which sha256sum -c reads. A zip holds its ExeFS folder, exefs/, with
-exactly the files that program's loader reads, the VPK the Vita's program and its param.sfo, and the 3DSX starts with
-its header.
+exactly the files that program's loader reads, the VPK the Vita's program and its param.sfo; the 3DSX starts with its
+header, and the NDS's header names Amberlith.
 
 Discord: a version's release gets a message on DISCORD_WEBHOOK_RELEASES's channel, the NRO linked with its size, and
 the changes since the version before; without the webhook nothing is posted, and the run says so. gh reads and writes
@@ -63,12 +63,13 @@ RELEASE = re.compile(r"\d[0-9A-Za-z.+-]*")
 ROLLING = "nightly"
 # Where every NRO says what it is: the header's magic, after the first 16 bytes; an APK and a VPK, zips, at their start;
 # a module an NSO's, a descriptor an NPDM's, the Vita's program a SELF's and its title's details an SFO's; a 3DSX its
-# header's, at its start
+# header's, at its start; an NDS the title nds.mk gives its header, at its start
 MAGIC, AT = b"NRO0", 16
 ZIP = b"PK\x03\x04"
 NSO, NPDM = b"NSO0", b"META"
 SELF, SFO = b"SCE\x00", b"\x00PSF"
 THREEDSX = b"3DSX"
+NDS_TITLE = b"AMBERLITH"
 # A run's files in the order a release lists them: the kind (notes.KINDS), what an error and a Discord message call it,
 # its magic and where, and for a zip every file its ExeFS folder holds with that file's magic
 FILES = (
@@ -76,6 +77,7 @@ FILES = (
     ("apk", "APK", "APK", ZIP, 0, None),
     ("vpk", "VPK", "VPK", ZIP, 0, {"eboot.bin": SELF, "sce_sys/param.sfo": SFO}),
     ("3dsx", "3DSX", "3DS", THREEDSX, 0, None),
+    ("nds", "NDS", "DS", NDS_TITLE, 0, None),
     ("ounce", "Switch 2 program", "Switch 2", ZIP, 0, {"exefs/main": NSO, "exefs/main.npdm": NPDM}),
     ("mod", "mod of a game", "Mod", ZIP, 0, {"exefs/subsdk9": NSO, "exefs/main.npdm": NPDM}),
 )

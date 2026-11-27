@@ -10,6 +10,7 @@ nightly's carry the commit after it, `amberlith-0.18.0-0123abc.nro`. Only the CI
 | `amberlith-0.18.0.apk` | the probe on Android ([On Android](Android.md)) |
 | `amberlith-0.18.0.vpk` | the probe on a Vita, in Vita3K and in ScarletNX's Vita runtime ([On the Vita](Vita.md)) |
 | `amberlith-0.18.0.3dsx` | the probe on a 3DS, from the Homebrew Launcher, and in a 3DS emulator ([On the 3DS](3DS.md)) |
+| `amberlith-0.18.0.nds` | the probe on a DS, from a card's menu, and in a DS emulator ([On the DS](DS.md)) |
 | `amberlith-ounce-0.18.0.zip` | the probe as a Switch 2 program, which ScarletNX runs ([Ounce](Ounce.md)) |
 | `amberlith-mod-0.18.0.zip` | the probe as a mod of a game, the nvn suite on the game's own driver ([Mod](Mod.md)) |
 
@@ -33,7 +34,7 @@ sha256sum -c amberlith-*.nro.sha256
 
 `nightly`'s files are replaced one after the other, so a check that fails while a nightly lands passes when they are
 fetched again; a dated nightly and a version never change. A pull request's builds are its Build run's artifacts,
-named as a nightly's, `amberlith-<version>-<commit>.nro`, `.apk`, `.vpk`, `.3dsx`, `amberlith-ounce-<version>-<commit>.zip` and
+named as a nightly's, `amberlith-<version>-<commit>.nro`, `.apk`, `.vpk`, `.3dsx`, `.nds`, `amberlith-ounce-<version>-<commit>.zip` and
 `amberlith-mod-<version>-<commit>.zip`, linked from a comment on the pull request (a fork's on the run's page).
 
 ## The CI
@@ -45,7 +46,8 @@ named as a nightly's, `amberlith-<version>-<commit>.nro`, `.apk`, `.vpk`, `.3dsx
   commit, and uploaded the same way; the VPK with VitaSDK's build of 2026-10-15, held to its hash, its program checked
   to name the same commit, and uploaded the same way ([On the Vita](Vita.md)); the 3DSX in devkitPro's devkitARM
   container, pinned by tag and digest, its program checked to name the same commit, and uploaded the same way
-  ([On the 3DS](3DS.md)); then `make -f host.mk host-run`. Each
+  ([On the 3DS](3DS.md)); the NDS in the same container, its link held to the ARM9's 3.5 MiB, its program checked
+  to name the same commit, and uploaded the same way ([On the DS](DS.md)); then `make -f host.mk host-run`. Each
   artifact is named after `VERSION` and the commit, and a `VERSION` that is no version stops the build. A tag must be
   `v` and `VERSION`, or the build stops. A newer push to a pull request cancels its older build.
 - **`publish.yml`**, after a Build run of a push passes: for `main`, the prerelease `nightly-<date>-<commit>` (never
@@ -53,8 +55,8 @@ named as a nightly's, `amberlith-<version>-<commit>.nro`, `.apk`, `.vpk`, `.3dsx
   artifacts; for a tag, its release, the latest (a tag with a `-` is a prerelease), its files named after the version
   alone. Each zip is checked to hold exactly its folder's files (`exefs/main` or
   `exefs/subsdk9`, and `exefs/main.npdm`), each starting as an NSO or an NPDM does, and the VPK to hold its
-  `eboot.bin`, a SELF, and `sce_sys/param.sfo`, an SFO, and the 3DSX to start with a 3DSX header. Each release lists
-  the changes since the one before.
+  `eboot.bin`, a SELF, and `sce_sys/param.sfo`, an SFO, the 3DSX to start with a 3DSX header, and the NDS's header
+  to name Amberlith. Each release lists the changes since the one before.
 - A version's release also gets a message on Discord, on the channel of the secret `DISCORD_WEBHOOK_RELEASES`;
   without it, nothing is posted there and the run says so.
 
