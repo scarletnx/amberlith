@@ -31,20 +31,23 @@ here can be tried with nothing but a C compiler.
    run, [the families](families/README.md) what each holds): a function in `source/tests/t_<suite>.c`, called from
    the suite's `Run<Suite>` function at the bottom of that file. A new file in `source/tests/` builds in the NRO by
    itself (the `Makefile` compiles every source there); a file every frontend runs also goes in
-   `source/portable.txt`.
+   `source/portable.txt`, which the host build, Android, the Vita, the ExeFS and the mod read. The mod leaves the libc
+   family's file out of that list (`filter-out` in `mod.mk`), since it runs none of its suites: a new file of that
+   family goes in the same `filter-out`.
 2. **Its judge**, when the rule is more than one comparison: a function in `source/<name>ref.c`, declared in
-   `source/<name>ref.h`, and listed in `source/portable.txt` so the host build and Android compile it.
+   `source/<name>ref.h`, and listed in `source/portable.txt` so every frontend's build compiles it.
 3. **The judge's reference check**: a `RunReference<Name>` function in `source/tests/t_<name>ref.c`, declared in
    `source/tests/tests.h`, called from `RunReference` at the end of `source/tests/t_reference.c`, and listed in
    `source/portable.txt`.
 4. **A new suite** only: see [A new suite](#a-new-suite).
 5. **The family page**, `docs/families/<Family>.md`: the case in the prose that lists the suite's cases. A reference
-   check also gets its line in the reference list of [the judge's page](families/Judge.md).
+   check also gets its line in the reference list of [the judge's page](families/Judge.md), where each line's count
+   of checks ("two on the libc family's tied sort") is written by hand.
 6. **The catalogue and the counts**: `docs/cases.tsv` and every count block in `docs/`, written by
    `tools/case-counts.py` ([Running it](#running-it)).
 7. **The ban list**, `source/bans.txt`, only when a run showed a machine end or hang on the case
    ([When a machine ends on it](#when-a-machine-ends-on-it)).
-8. **`VERSION`**, the last commit of the pull request ([The version](#the-version)).
+8. **`VERSION`**, one line, the last commit of the pull request ([The version](#the-version)).
 
 ## The case
 
@@ -73,12 +76,12 @@ static void Ties(void) {
 - **The name** is a sentence that says what the console does, unique in its suite: it is the case's key in the
   report, the catalogue, the ban list and every baseline. Renaming a case makes it a new one there. No game's name,
   title ID or nickname, here or anywhere ([CLAUDE.md](../CLAUDE.md#never)).
-- **`ReportStart(suite, name)`** comes before any of the case's work, in every family that asks the machine
-  something. It writes on the journal that the case started, so a launch after the program ended inside it skips
-  that case alone ([When the program ends in the middle](Crashes.md)), and it says false when the case must not run:
-  on the crash list, stopped at a launch's time limit, banned on this machine, in the hang table, or in a suite
-  `skip=` leaves out. Its skip line is then written already; return and report nothing. The judge's own suites (selfcheck, support, reference) ask the
-  machine nothing and do not call it.
+- **`ReportStart(suite, name)`** comes before any of the case's work, in every family that asks the machine something.
+  It writes on the journal that the case started, so a launch after the program ended inside it skips that case alone
+  ([When the program ends in the middle](Crashes.md)), and it says false when the case must not run: on the crash list,
+  stopped at a launch's time limit, banned on this machine, in the hang table, or in a suite `skip=` leaves out. Its
+  skip line is then written already; return and report nothing. The judge's own suites (selfcheck, support, reference)
+  ask the machine nothing and do not call it.
 - **The question** is the one call the machine answers (here `qsort`); everything around it, the input and the
   verdict, is this program's own code, the same on every machine.
 - **The verdict** is one line, through a check macro ([The line](#the-line)). Its detail, written only on a
@@ -156,7 +159,9 @@ machine, the judge takes every answer the definition allows: C leaves the order 
 this judge passes a stable sort and one that reverses the ties, and holds only what C defines (every record whole,
 each once, the keys in order). A judge that wants more than the definition fails a correct machine. What a case
 gathers for its judge can be a struct of every answer the machine gave (`ServiceAudinList` and
-`ServiceJudgeAudinList` in `source/serviceref.h`).
+`ServiceJudgeAudinList` in `source/serviceref.h`). It takes values, never the machine's pointers: the case works out
+an index or an offset from a pointer it got (a `bsearch` result, say), with a value of its own for NULL, so the judge
+never compares pointers into memory the reference check does not have.
 
 **The reference check** feeds the judge answers worked out by hand and holds its verdict and its sentence to them:
 
@@ -178,7 +183,11 @@ sort judge takes the ties in any order and refuses a torn, lost or unsorted reco
 
 Before the push, break the judge on purpose and see the reference suite fail: drop one of its conditions (the mark
 here), make it demand a stable order, make it miss a lost record. A mutant the suite stays green under is a wrong
-answer the check does not hold yet.
+answer the check does not hold yet. Each mutant takes seconds, with the file put back after it:
+
+```sh
+make -f host.mk build-host/amberlith-host && ./build-host/amberlith-host reference   # reference: passed=N failed=1
+```
 
 ## Timed cases
 
@@ -210,15 +219,26 @@ that never returns on a machine that gets it wrong goes in the hang table, `sour
 A suite is one `Run<Suite>` function with no arguments; its lines carry the suite's name. A new one touches:
 
 - `source/tests/tests.h`: its declaration, with a comment that says what it asks and where it runs;
-- each frontend that runs it, in its `STEPS` table, in the place its dependencies put it (the order is the roadmap's):
-  `source/main.c` (the NRO), `ounce/frontend.c`, `mod/frontend.c`, `android/src/main/cpp/frontend.c`,
-  `vita/frontend.c`; and `source/host_main.c` for a suite the host build runs. A step is `{ name, Run<Suite>, family,
-  timed, asks }` (`RunnerStep` in `source/runner.h`); `asks` is true when its cases ask the machine something;
+- each frontend that runs its family, in its `STEPS` table, in the place its dependencies put it (the order is the
+  roadmap's): `source/main.c` (the NRO), `ounce/frontend.c`, `mod/frontend.c`, `android/src/main/cpp/frontend.c`,
+  `vita/frontend.c`; and `source/host_main.c` for a suite the host build runs. The frontends that run a family are
+  the ones whose tables list its suites already: `git grep -n RunLibc` finds the libc family's in the NRO, Android,
+  the Vita and the host build, and none in the ExeFS or the mod. A step is `{ name, Run<Suite>, family, timed, asks }`
+  (`RunnerStep` in `source/runner.h`); `asks` is true when its cases ask the machine something;
 - `source/origin.c`: the suite's row, where its answers come from;
 - `source/ui.c`, `FAMILIES`, and `source/tests/t_screens.c`, `SUITES`: the same row in both, its family on the
-  screens; `tools/test_ui_families.py` fails host-run when a step has no row there;
-- `docs/Roadmap.md`: its row, with its tier and what a failure points at, in the order it runs;
-- its family page: a section for the suite, and the `<!-- counts: suite NAME -->` block if the page has one a suite.
+  screens; `tools/test_ui_families.py` fails host-run when a step has no row there. Under `SUITES`, the case "every
+  suite a run reports is shown under its own family" holds the table to a count (`count == 120u`): raise it by one.
+  The screens' index holds `UI_MAX_GROUPS` suites (`source/ui.h`, 128);
+- `docs/Roadmap.md`: its row, with its tier and what a failure points at, in the order it runs. The libc family and
+  Android's have no rows there yet, so their suites take none;
+- its family page: a section for the suite in the prose. `tools/case-counts.py write` adds the suite's row to the
+  family's counts table by itself, and writes a `<!-- counts: suite NAME -->` block only where the page has one;
+- every other page that lists the family's suites in prose: `git grep -n -i <family> docs/` finds them (for libc,
+  [On the Vita](Vita.md), [On Android](Android.md) and the family page's own count of its suites).
+
+A new suite of an existing family needs no new word in [the mode file](ModeFile.md), since the family's word runs all
+its suites, and no line in [Frontends](Frontends.md), which names families.
 
 A new family is rarer: it takes a word in the mode file and a family on the screens. Search for an existing one,
 `git grep -n MODE_FAMILY_LIBC` and `git grep -n UI_FAMILY_LIBC`, and add the new one at each place it shows
@@ -230,16 +250,21 @@ A new family is rarer: it takes a word in the mode file and a family on the scre
 
 ```sh
 make -f host.mk host-run                    # the judge, the libc family, the tools' tests: before each push
-./build-host/amberlith-host reference       # the reference suite alone, once host-run has built it
+make -f host.mk build-host/amberlith-host && ./build-host/amberlith-host reference   # the reference suite alone
 grep 'tied sort\|three-byte' amberlith-host-report.jsonl
+grep '"result":"fail"' amberlith-host-report.jsonl                                  # what failed, if anything
 ```
 
-The host build writes `amberlith-host-report.jsonl` where it runs; a case's line is found by its name. No word runs a
-single case: the narrowest is a family's word, with `skip=<suite>` for the suites left out
+`host-run` takes about two minutes; on a machine others build on too, run it under the machine's build lock. Its
+output is long: a case that failed is a `"result":"fail"` line of the report, and a tool's test that failed a `FAIL:`
+line of the output. The host build writes `amberlith-host-report.jsonl` where it runs; a case's line is found by its
+name. No word runs a single case: the narrowest is a family's word, with `skip=<suite>` for the suites left out
 ([The mode file](ModeFile.md)), or the browser on a machine, which runs a family, a suite or one case
 ([The browser](UI.md)).
 
-`host-run` fails until the catalogue has every case the host build ran. Write it from that run, then the counts:
+The first `host-run` after a case is added fails, as it should, in `tools/test_case_counts.py` ("cases the host ran
+that docs/cases.tsv does not give it"): the catalogue has to have every case the host build ran. Write it from that
+run, then the counts, and run `host-run` again:
 
 ```sh
 python3 tools/case-counts.py catalogue host=amberlith-host-report.jsonl
@@ -250,16 +275,17 @@ and commit `docs/cases.tsv` with the blocks. A case only a machine runs reaches 
 report (`nro=<report.jsonl>`), and every case is counted again on the commit to be released
 ([Counting the cases](Releases.md#counting-the-cases)).
 
-On a machine: `make` builds the NRO; `make run EMULATOR=<path> MODE="quick libc"` runs it under an emulator
-([Under an emulator](Emulator.md)). In ScarletNX: `scripts/edenprobe.py run --runtime <build>/scarletnx --nro
-amberlith.nro --out <folder> --mode "quick libc machine=scarletnx"`, headless. The pull request's CI builds the NRO,
-the ExeFS and the mod, the APK and the VPK, and runs `host-run` ([Releases](Releases.md#the-ci)).
+On a machine: `make` builds the NRO; `make run EMULATOR=<path> MODE="quick libc"` runs it under an emulator ([Under an
+emulator](Emulator.md)). In ScarletNX: `scripts/amberlith.py run --runtime <build>/scarletnx --nro amberlith.nro --out
+<folder> --mode "quick libc"`, headless; it adds the `machine=` word itself. The pull request's CI builds the NRO, the
+ExeFS and the mod, the APK and the VPK, and runs `host-run` ([Releases](Releases.md#the-ci)).
 
 ## The version
 
-`VERSION` is semantic: a new case or suite is a minor version, a changed verdict of an existing case at least that
-([Versions](Versions.md)). The bump is the last commit of the pull request that brings the case, never a pull request
-of its own; once `main`'s build has passed after the merge, that commit is tagged `v<version>`, annotated. Each
-commit's message is `amberlith: what changed` with one to three lines of why ([Build](Build.md#commit-messages)).
+`VERSION` holds one line, the version, which is semantic: a new case or suite is a minor version (1.0.4 to 1.1.0), a
+changed verdict of an existing case at least that ([Versions](Versions.md)). A pull request bumps it once, however many
+cases it brings. The bump is its last commit, never a pull request of its own; once `main`'s build has passed after the
+merge, that commit is tagged `v<version>`, annotated. Each commit's message is `amberlith: what changed` with one to
+three lines of why ([Build](Build.md#commit-messages)).
 
 The case binds ScarletNX once ScarletNX pins a release that has it ([CLAUDE.md](../CLAUDE.md#versions-and-the-pin)).
