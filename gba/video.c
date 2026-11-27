@@ -166,15 +166,9 @@ static void Lines(void) {
         GbaVideoJudgeHblankFlag,
         GbaVideoJudgeMatchFlag,
     };
-    bool started[4] = {};
-    bool any = false;
-    for (uint32_t i = 0; i < 4u; ++i) {
-        started[i] = ReportStart(SUITE, NAMES[i]);
-        any = any || started[i];
-    }
-    if (!any) {
-        return;
-    }
+    // The poll is the four cases' common work, done under the first one's start; each of the
+    // others starts as its verdict is judged from it, one case open at a time
+    const bool first = ReportStart(SUITE, NAMES[0]);
     const uint16_t ime = REG_IME;
     const uint16_t dispstat = *GBA_DISPSTAT;
     REG_IME = 0;
@@ -209,7 +203,7 @@ static void Lines(void) {
         previous = g_video.run_status[i] >> 16;
     }
     for (uint32_t i = 0; i < 4u; ++i) {
-        if (!started[i]) {
+        if (i == 0u ? !first : !ReportStart(SUITE, NAMES[i])) {
             continue;
         }
         char said[160];
