@@ -148,6 +148,9 @@ static const struct {
     // The Vita's GPU (vita/gxm.c): pixels this program drew where every correct rasteriser and sampler
     // puts them, from sceGxm's documented behaviour.
     { "gxm", REPORT_FROM_SPEC },
+    // The GBA's video (gba/video.c): its line counter, status flags, interrupts and video memory as
+    // GBATEK documents them.
+    { "gbavideo", REPORT_FROM_SPEC },
     // What the C standard and POSIX define; libm's table is worked out at 100 digits.
     { "libc", REPORT_FROM_SPEC },
     { "system", REPORT_FROM_SPEC },

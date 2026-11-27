@@ -119,7 +119,8 @@ Android and `tools/vklayer`. Do not move the rest of the repo to C23 until that 
 
 ## Not covered yet (TODO)
 
-- The 3DS's, the DS's and the GBA's frontends run the judge and the libc family, none of their own suites yet: a
-  ScarletNX change to their drivers gets a case there only when the engine's suites can ask it. The DS and the GBA run
-  the judge's libc references alone ([On the DS](docs/DS.md#what-fits-in-its-memory),
+- The 3DS's and the DS's frontends run the judge and the libc family, none of their own suites yet, and the GBA's
+  adds its video suite alone (gbavideo): a ScarletNX change to the 3DS's or the DS's driver gets a case there only when
+  the engine's suites can ask it, one to the GBA's video a gbavideo case. The DS and the GBA run the references of
+  their own suites alone ([On the DS](docs/DS.md#what-fits-in-its-memory),
   [On the GBA](docs/GBA.md#what-fits-in-its-memory)).

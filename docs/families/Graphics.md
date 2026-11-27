@@ -47,6 +47,7 @@
 * [copy](#copy)
 * [tex8k](#tex8k)
 * [gxm](#gxm)
+* [gbavideo](#gbavideo)
 * [What a console run settles](#what-a-console-run-settles)
 * [Where reden falls short](#where-reden-falls-short)
 
@@ -1619,6 +1620,39 @@ machine draws inside (ScarletNX's `resolution`): tier exact, from this program's
   texture, nearest, on a quad its size at the top left of a 960 by 544 buffer cleared to black.
 - **The display's buffer shown reads back the copy and its black around it**: the buffer given to
   `sceDisplaySetFrameBuf`, a second of vblanks, and read back.
+
+## gbavideo
+
+The GBA's video, the GBA frontend's own suite ([On the GBA](../GBA.md)): `gba/video.c`. What the display shows cannot
+be read back, so its cases read what a program can, judged by `source/gbavideoref.c` from GBATEK's timings and memory
+rules (`spec`): a frame of 228 lines of 1232 cycles, the first 160 drawn; DISPSTAT's flags; the interrupts; and how
+VRAM, palette RAM and OAM take stores. The registers that place a rotated background (`BG2PA` to `BG3Y`) are write
+only, and the BIOS's sine table behind `BgAffineSet` is not documented to the bit, so neither has a case: either answer
+would come from an emulator.
+
+- **VCOUNT counts every line from 0 to 227, one up at a time, and 227 is followed by 0**: DISPSTAT and VCOUNT read
+  together, in one 32-bit load, from the start of a frame through two of them.
+- **The V-Blank flag is set on lines 160 to 226 and on no other line**: from the same reads, every one of them; line
+  227 is V-Blank but its flag is clear.
+- **The H-Blank flag goes both clear and set within every line, 0 to 227**, V-Blank's lines among them.
+- **The V-Counter flag is set on the line DISPSTAT names and on no other line**: line 100 named.
+- **A frame lasts 280896 cycles, from one V-Blank to the next**: three frames on two chained timers, each within 128
+  cycles of 280896 (tier bound), the polling loop's turn at each end; a line four cycles short takes 912 from a frame.
+- **The V-Blank interrupt comes once a frame, on line 160**, over four frames.
+- **The H-Blank interrupt comes once in each drawn line, 0 to 159**, over one frame. GBATEK says both that the H-Blank
+  condition comes in V-Blank's lines too and that no H-Blank interrupt comes there, so those lines are counted in the
+  sentence and not judged.
+- **The V-Counter interrupt comes once a frame, on the line DISPSTAT names**: line 80, over four frames.
+- **Mode 0 to mode 5: halfwords stored to VRAM, palette RAM and OAM while drawing, in H-Blank and in V-Blank read back
+  as stored**: one case a display mode, a halfword each to BG VRAM, OBJ VRAM, the OBJ palette and OAM in each of the
+  three; the processor waits a cycle when the display reads the memory at once, and nothing is lost.
+- **Mode 0 to mode 5: a byte stored to BG VRAM or palette RAM fills both halves of its halfword, one to OBJ VRAM or OAM
+  is ignored**: one case a display mode; BG VRAM is the first 64 KiB in modes 0 to 2 and the first 80 KiB in the
+  bitmap modes 3 to 5, so the byte at `0x6012001` is ignored in the first and fills its halfword in the second.
+- **VRAM's 96 KiB repeat every 128 KiB, the last 32 KiB of each a second OBJ 32 KiB**: halfwords stored through
+  `0x6016000` read at `0x601E000`, through `0x601E002` at `0x6016002`, and through `0x600E000` at `0x602E000`.
+
+Each case puts back what it stored, and the display mode it found.
 
 ## What a console run settles
 

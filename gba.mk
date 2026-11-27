@@ -27,7 +27,7 @@ APP_HASH    := $(strip $(shell git describe --always --dirty --abbrev=7 --exclud
 
 # The GBA's ARM7TDMI, in Thumb: the code runs from the cartridge's ROM
 ARCH    := -mcpu=arm7tdmi -mtune=arm7tdmi -mthumb -mthumb-interwork
-SOURCES := $(shell grep -v '^\#' source/portable.txt) gba/platform_gba.c gba/frontend.c
+SOURCES := $(shell grep -v '^\#' source/portable.txt) gba/platform_gba.c gba/frontend.c gba/video.c
 OBJECTS := $(patsubst %.c,$(BUILD)/%.o,$(SOURCES))
 # libgba's headers as the system's: C23 holds this program's code, not theirs. Each function and
 # object in a section of its own, so the link keeps only what the GBA's steps reach. The baseline
