@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # android/tests/test-run-adb.sh: android/tools/run-adb.sh on a fake device (fake-adb): a whole run, a launch that dies,
 # one that hangs (said in the journal as a timeout, on a line of its own after a cut record too), a run that never
-# ends whole, and a device that already has the package. Each leaves the device as it was: the package uninstalled,
-# or never installed; and no logcat reader running.
+# ends whole, a device that already has the package, and the adb on PATH when ADB is not set. Each leaves the device
+# as it was: the package uninstalled, or never installed; and no logcat reader running.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
@@ -47,6 +47,16 @@ cmp -s "$tmp/whole/out/report.jsonl" "$here/fixtures/report.jsonl" && ok "whole:
 grep -q "AMBERLITH DONE passed=1 failed=1" "$tmp/whole/log" && ok "whole: says the engine's counts" || bad "whole: $(cat "$tmp/whole/log")"
 grep -q "meminfo of" "$tmp/whole/out/meminfo.txt" && ok "whole: meminfo saved" || bad "whole: no meminfo"
 
+# ADB unset: the adb on PATH, as the usage says, and not the script's own function of that name
+mkdir -p "$tmp/path-bin" "$tmp/onpath/dev"
+ln -s "$here/fake-adb" "$tmp/path-bin/adb"
+FAKE_ADB=$tmp/onpath/dev FAKE_SCENARIO=ok FAKE_REPORT=$here/fixtures/report.jsonl PATH=$tmp/path-bin:$PATH \
+    timeout 120 env -u ADB "$here/../tools/run-adb.sh" --serial fake --apk "$tmp/app.apk" --out "$tmp/onpath/out" \
+    > "$tmp/onpath/log" 2>&1
+rc=$?
+[ $rc = 0 ] && cmp -s "$tmp/onpath/out/report.jsonl" "$here/fixtures/report.jsonl" &&
+    ok "onpath: with ADB unset the adb on PATH runs it whole" || bad "onpath: exit $rc: $(tail -2 "$tmp/onpath/log")"
+[ -s "$tmp/onpath/dev/logcat.pid" ] && kill "$(cat "$tmp/onpath/dev/logcat.pid")" 2> /dev/null
 scenario dies die-once
 [ $rc = 0 ] && [ "$(cat "$tmp/dies/dev/launches")" = 2 ] && ok "dies: launched again, exit 0" || bad "dies: exit $rc, launches $(cat "$tmp/dies/dev/launches")"
 [ -s "$tmp/dies/out/exit-info-1.txt" ] && ok "dies: exit-info of launch 1 saved" || bad "dies: no exit-info-1.txt"
