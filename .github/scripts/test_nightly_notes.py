@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
 """nightly-notes.py on a history of its own: merged pull requests, direct commits, a branch never merged; the files'
-names after the version, the NRO, the APK, the VPK, the 3DSX, the NDS and the ExeFS zips with their sizes and SHA-256, and text
+names after the version, the NRO, the APK, the VPK, the 3DSX, the NDS, the GBA ROM and the ExeFS zips with their sizes and SHA-256, and text
 that would be markdown shown as it is."""
 
 import importlib.util
@@ -93,6 +93,7 @@ class NightlyNotes(unittest.TestCase):
                 "vpk": "amberlith-0.18.0.vpk",
                 "3dsx": "amberlith-0.18.0.3dsx",
                 "nds": "amberlith-0.18.0.nds",
+                "gba": "amberlith-0.18.0.gba",
                 "ounce": "amberlith-ounce-0.18.0.zip",
                 "mod": "amberlith-mod-0.18.0.zip",
             },
@@ -105,6 +106,7 @@ class NightlyNotes(unittest.TestCase):
                 "vpk": "amberlith-0.18.0-0123abc.vpk",
                 "3dsx": "amberlith-0.18.0-0123abc.3dsx",
                 "nds": "amberlith-0.18.0-0123abc.nds",
+                "gba": "amberlith-0.18.0-0123abc.gba",
                 "ounce": "amberlith-ounce-0.18.0-0123abc.zip",
                 "mod": "amberlith-mod-0.18.0-0123abc.zip",
             },
@@ -116,13 +118,14 @@ class NightlyNotes(unittest.TestCase):
         self.assertIn(f"`sha256sum -c {NRO}.sha256` beside it checks it", self.text)
         self.assertIn(f"{URL}/blob/{self.sha}/docs/Releases.md", self.text)
 
-    def test_the_apk_the_vpk_the_3dsx_the_nds_and_the_exefs_zips(self):
+    def test_the_apk_the_vpk_the_3dsx_the_nds_the_gba_rom_and_the_exefs_zips(self):
         built = [
             nightly.Built("nro", NRO, 1, DIGEST),
             nightly.Built("apk", NAMES["apk"], 9_000_000, "01" * 32),
             nightly.Built("vpk", NAMES["vpk"], 2_400_000, "ab" * 32),
             nightly.Built("3dsx", NAMES["3dsx"], 2_200_000, "12" * 32),
             nightly.Built("nds", NAMES["nds"], 750_000, "34" * 32),
+            nightly.Built("gba", NAMES["gba"], 400_000, "56" * 32),
             nightly.Built("ounce", NAMES["ounce"], 650_000, "cd" * 32),
             nightly.Built("mod", NAMES["mod"], 210_000, "ef" * 32),
         ]
@@ -132,10 +135,12 @@ class NightlyNotes(unittest.TestCase):
         self.assertIn(f"| [{mod}]({WHERE}/{mod}) | 0.2 MB | `{'ef' * 32}` |", text)
         # every file's row in the order the release lists them, the NRO first
         rows = [line.split("]")[0][3:] for line in text.splitlines() if line.startswith("| [")]
-        self.assertEqual(rows, [NRO, NAMES["apk"], NAMES["vpk"], NAMES["3dsx"], NAMES["nds"], ounce, mod])
+        self.assertEqual(
+            rows, [NRO, NAMES["apk"], NAMES["vpk"], NAMES["3dsx"], NAMES["nds"], NAMES["gba"], ounce, mod]
+        )
         self.assertIn(
             f"`sha256sum -c {NRO}.sha256 {NAMES['apk']}.sha256 {NAMES['vpk']}.sha256 {NAMES['3dsx']}.sha256 "
-            f"{NAMES['nds']}.sha256 {ounce}.sha256 {mod}.sha256` beside them checks them all.",
+            f"{NAMES['nds']}.sha256 {NAMES['gba']}.sha256 {ounce}.sha256 {mod}.sha256` beside them checks them all.",
             text,
         )
         self.assertIn(f"| [{NAMES['vpk']}]({WHERE}/{NAMES['vpk']}) | 2.4 MB | `{'ab' * 32}` |", text)
@@ -150,6 +155,10 @@ class NightlyNotes(unittest.TestCase):
         self.assertIn(f"{NAMES['nds']} {nightly.RUNS['nds']}", text)
         self.assertIn(f"[DS.md]({URL}/blob/{self.sha}/docs/DS.md)", text)
         self.assertIn("- The NDS was built in the same devkitARM container, and links libnds (zlib) and calico", text)
+        self.assertIn(f"| [{NAMES['gba']}]({WHERE}/{NAMES['gba']}) | 0.4 MB | `{'56' * 32}` |", text)
+        self.assertIn(f"{NAMES['gba']} {nightly.RUNS['gba']}", text)
+        self.assertIn(f"[GBA.md]({URL}/blob/{self.sha}/docs/GBA.md)", text)
+        self.assertIn("- The GBA ROM was built in the same devkitARM container, and links libgba (LGPL", text)
         self.assertIn(f"{mod} {nightly.RUNS['mod']}", text)
         self.assertIn(f"[Mod.md]({URL}/blob/{self.sha}/docs/Mod.md)", text)
         self.assertIn(f"[Ounce.md]({URL}/blob/{self.sha}/docs/Ounce.md)", text)
@@ -162,6 +171,8 @@ class NightlyNotes(unittest.TestCase):
         self.assertNotIn("libctru", self.text)
         self.assertNotIn("DS.md", self.text)
         self.assertNotIn("calico", self.text)
+        self.assertNotIn("GBA.md", self.text)
+        self.assertNotIn("libgba", self.text)
         self.assertNotIn("amberlith-mod", self.text)
 
     def test_changes_counted_and_linked(self):

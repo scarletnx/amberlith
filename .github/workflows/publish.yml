@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 name: Publish builds
 
-# The NRO, the APK, the VPK, the 3DSX, the NDS and the two ExeFS zips as a release (.github/scripts/publish-builds.py,
+# The NRO, the APK, the VPK, the 3DSX, the NDS, the GBA ROM and the two ExeFS zips as a release (.github/scripts/publish-builds.py,
 # docs/Releases.md): a push to main whose Build run passed becomes the prerelease nightly-<date>-<commit>, the newest
 # 30 kept, and the prerelease "nightly" takes its files and notes; a version tag (v...) whose run passed becomes that
 # version's release, the latest. Each file is named after the version, a nightly's after the commit too. A pull
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish the NRO, the APK, the VPK, the 3DSX, the NDS and the ExeFS zips
+    name: Publish the NRO, the APK, the VPK, the 3DSX, the NDS, the GBA ROM and the ExeFS zips
     # a pull request's run has nothing for it
     if: github.event.workflow_run.event == 'push'
     # One at a time for main's nightlies and each version: the nightlies are counted. A group holds one waiting job,
@@ -87,6 +87,15 @@ jobs:
         with:
           name: amberlith-${{ steps.plan.outputs.stem }}.nds
           path: artifacts/amberlith-${{ steps.plan.outputs.stem }}.nds
+          run-id: ${{ steps.plan.outputs.run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          skip-decompress: true
+      - name: Download the GBA ROM
+        if: steps.plan.outputs.run
+        uses: actions/download-artifact@v8
+        with:
+          name: amberlith-${{ steps.plan.outputs.stem }}.gba
+          path: artifacts/amberlith-${{ steps.plan.outputs.stem }}.gba
           run-id: ${{ steps.plan.outputs.run }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           skip-decompress: true
