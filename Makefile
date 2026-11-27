@@ -251,14 +251,17 @@ validate: $(TARGET).nro
 	python3 tools/validate.py run $(EMULATOR) $(CURDIR)/$(BUILD)/validate.log
 .PHONY: validate
 
-# The cover from Wimsy as Amberlith, 256 by 256 baseline JPEG as the loader wants it, and the
-# picture of her the start screen draws. Only when the drawing changes: the cover, the JPEG and
-# the picture's source are committed so a build needs none of the tools.
+# The cover from Wimsy as Amberlith, 256 by 256 baseline JPEG as the loader wants it, at 48 by 48
+# as the 3DS's launcher wants it, and the picture of her the start screen draws. Only when the
+# drawing changes: the cover, the JPEG, the PNG and the picture's source are committed so a build
+# needs none of the tools.
 icon: static/wimsy-amberlith.svg tools/cover.py
 	python3 tools/cover.py
 	@mkdir -p $(BUILD)
 	rsvg-convert -w 256 -h 256 static/icon.svg -o $(BUILD)/icon.png
 	magick $(BUILD)/icon.png -background '#1b1b1f' -alpha remove -alpha off -interlace none -sampling-factor 1x1 -quality 92 icon.jpg
+	rsvg-convert -w 48 -h 48 static/icon.svg -o $(BUILD)/icon-3ds.png
+	magick $(BUILD)/icon-3ds.png -background '#1b1b1f' -alpha remove -alpha off -strip 3ds/icon.png
 wimsy-picture: static/wimsy-amberlith.svg tools/wimsy-picture.py
 	python3 tools/wimsy-picture.py
 .PHONY: icon wimsy-picture

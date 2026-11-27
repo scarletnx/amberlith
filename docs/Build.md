@@ -7,6 +7,7 @@
 * [The mod of a game](#the-mod-of-a-game)
 * [The APK](#the-apk)
 * [The Vita's VPK](#the-vitas-vpk)
+* [The 3DS's 3DSX](#the-3dss-3dsx)
 * [The host build](#the-host-build)
 * [Commit messages](#commit-messages)
 
@@ -72,6 +73,15 @@ VITASDK=$HOME/vitasdk make -f vita.mk
 
 `build-vita/amberlith.vpk`; what it needs, the shader programs it fetches and how it runs are in
 [On the Vita](Vita.md#build-it).
+
+## The 3DS's 3DSX
+
+```sh
+DEVKITPRO=/opt/devkitpro make -f 3ds.mk
+```
+
+`build-3ds/amberlith.3dsx`, with devkitARM and libctru in `DEVKITPRO`; what it needs and how it runs are in
+[On the 3DS](3DS.md#build-it).
 
 ## The host build
 

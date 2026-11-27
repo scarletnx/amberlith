@@ -7,11 +7,10 @@
 * [The frontends there are](#the-frontends-there-are)
 * [A new frontend](#a-new-frontend)
 * [The ones to come](#the-ones-to-come)
-  * [3DS](#3ds)
   * [GBA](#gba)
 
 One program, built for each machine it asks: the NRO for the console, an ExeFS for the Switch 2, the APK for
-Android, the VPK for the Vita, the host build for a PC. Each build is a frontend around one engine, and every frontend writes the same report, so a report from a
+Android, the VPK for the Vita, the 3DSX for the 3DS, the host build for a PC. Each build is a frontend around one engine, and every frontend writes the same report, so a report from a
 machine and one from its emulator compare line by line ([The report](Report.md)).
 
 ## What the engine is
@@ -37,12 +36,12 @@ for its screens. It writes files with stdio; a machine with no file system gets 
 
 `source/platform.h` is all the engine asks of a machine beyond its C library:
 
-| What | Required | Console | Android | Vita | Host |
-|---|---|---|---|---|---|
-| `PlatformLog`, the machine's log | yes | the debug string service | logcat, tag `amberlith` | the kernel's `sceClibPrintf` | standard output |
-| `PlatformLogIsStandardOutput`, whether a case can read the log back | yes | no | no | no | yes |
-| `PlatformSocketsOpen`, for the socket suite | when it runs that suite | bsd (`socketInitializeDefault`) | nothing to bring up | no: not among its steps | nothing to bring up |
-| `PlatformSurface*`, a surface to draw into and read back | when it runs a drawing suite of the engine's | no: its graphics family is deko3d's own | not yet | no: its gxm suite is its own | no |
+| What | Required | Console | Android | Vita | 3DS | Host |
+|---|---|---|---|---|---|---|
+| `PlatformLog`, the machine's log | yes | the debug string service | logcat, tag `amberlith` | the kernel's `sceClibPrintf` | the kernel's debug string, `svcOutputDebugString` | standard output |
+| `PlatformLogIsStandardOutput`, whether a case can read the log back | yes | no | no | no | no | yes |
+| `PlatformSocketsOpen`, for the socket suite | when it runs that suite | bsd (`socketInitializeDefault`) | nothing to bring up | no: not among its steps | soc:U (`socInit`, with a buffer of its own) | nothing to bring up |
+| `PlatformSurface*`, a surface to draw into and read back | when it runs a drawing suite of the engine's | no: its graphics family is deko3d's own | not yet | no: its gxm suite is its own | no | no |
 
 Files, time and threads come from the C library itself: stdio, `clock_gettime` and pthreads, which newlib on the
 consoles, bionic and glibc all have. A suite that needs one of them is a step only a frontend whose machine has it
@@ -69,6 +68,7 @@ The rest is the frontend's own code, around the runner's calls (`runner.h`):
 | The Switch 2 (ExeFS) | `ounce/frontend.c`, `source/platform_switch.c` | `sdmc:/amberlith` | judge always; nvn (the `nvn` and `nvn2` suites) when no word names one ([The probe as a Switch 2 program](Ounce.md)) |
 | A mod of a game (`subsdk9`) | `mod/frontend.c`, `mod/start.c`, `mod/platform.c`, `mod/screen.c` | `sdmc:/amberlith` | the judge's selfcheck and support always; nvn (the `mod` suite and the `nvn` suite's looked up way, on the game's own driver) when no word names one; game and demo when named: the fractal zooms through the game's NVN, the other demos listed as skipped ([The probe as a mod of a game](Mod.md)) |
 | The Vita (VPK) | `vita/frontend.c`, `vita/platform_vita.c`, `vita/gxm.c` | `ux0:data/amberlith` | judge always; libc and graphics (the `gxm` suite) when no word names one ([On the Vita](Vita.md)) |
+| The 3DS (3DSX) | `3ds/frontend.c`, `3ds/platform_3ds.c` | `sdmc:/amberlith` | judge always; libc (the libc, system and socket suites) when no word names one ([On the 3DS](3DS.md)) |
 | Host | `source/host_main.c`, `source/platform_host.c` | none: `amberlith-host-report.jsonl` where it runs | the judge and the libc family, every time ([Build](Build.md#the-host-build)) |
 
 The console runs the libc family only when a word names it, so a run that names no family reports what it did
@@ -77,7 +77,8 @@ before the family existed.
 ## A new frontend
 
 1. A build that compiles `source/portable.txt` with its compiler, `-std=c11 -Wall -Wextra -Werror` or a later
-   standard (the Vita's `vita.mk` takes `-std=c23`, the engine unchanged under it, [On the Vita](Vita.md)), and its own
+   standard (the Vita's `vita.mk` and the 3DS's `3ds.mk` take `-std=c23`, the engine unchanged under it, [On the
+   Vita](Vita.md)), and its own
    sources beside them, and names its build as the Makefile does (`AMBERLITH_VERSION`, `AMBERLITH_BUILD`,
    `AMBERLITH_HASH`, [Versions](Versions.md)).
 2. `platform_<name>.c` with `PlatformLog`, `PlatformError`, and the sockets and the surface for the suites it runs.
@@ -90,23 +91,11 @@ before the family existed.
 
 ## The ones to come
 
-The 3DS and the GBA run under ScarletNX too, and each would be a frontend of its own. Neither is built yet;
-what each needs:
-
-### 3DS
-
-- **Toolchain:** devkitARM with libctru and citro3d, from devkitPro's pacman (`dkp-pacman -S 3ds-dev`), or the
-  `devkitpro/devkitarm` container as the NRO's job uses `devkitpro/devkita64`. This machine has devkitA64 and libnx
-  only; devkitPro's installer writes `/opt/devkitpro`, which takes root.
-- **Platform:** `PlatformLog` through `svcOutputDebugString`, which Citra and its forks log; sockets through
-  `socInit` with a buffer of its own; files on the SD card through libctru's sdmc, so the root is `sdmc:/amberlith`
-  as on the Switch.
-- **Shared cases:** libc whole (newlib, as the Switch's); system (libctru's pthreads and `clock_gettime`); socket
-  over `soc:U` on loopback.
+The GBA runs under ScarletNX too, and would be a frontend of its own. It is not built yet; what it needs:
 
 ### GBA
 
-- **Toolchain:** devkitARM with libgba or libtonc (`dkp-pacman -S gba-dev`), the same devkitARM the 3DS needs.
+- **Toolchain:** devkitARM with libgba or libtonc (`dkp-pacman -S gba-dev`), the same devkitARM the 3DS builds with.
 - **What it is:** an ARM7TDMI with no operating system, 256 KiB of work RAM, no threads, no file system and no
   network. The runner's journal and crash list need files, so a GBA frontend calls the report alone, with its mode
   compiled in: `ReportOpen` of a path its C library cannot open, which leaves the whole run on the log as on a

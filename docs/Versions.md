@@ -7,7 +7,8 @@ changes were built), and goes in a folder named after that commit
 agrees, or when the difference between the builds is what is measured. A new suite or case is a minor version; a
 changed verdict of an existing case at least that.
 
-The cover a loader shows is `icon.jpg`, made by `make icon` and committed, so a build needs neither drawing tool:
+The cover a loader shows is `icon.jpg`, and the 3DS's launcher `3ds/icon.png`, both made by `make icon` and
+committed, so a build needs neither drawing tool:
 Wimsy as Amberlith (`static/wimsy-amberlith.svg`), in amber with a test probe, over a dark amber sun cut by bands,
 with the program's name. `tools/cover.py` writes the cover's drawing, `static/icon.svg`, from hers, and `make
 wimsy-picture` the picture of her the start screen draws under its rows (`source/wimsypicture.c`, also committed).

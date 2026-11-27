@@ -13,8 +13,8 @@ runs a pinned release of it on every pull request, so a case here is a rule Scar
   the judges and their CPU references; `source/origin.c` says where each suite's answers come from; `source/bans.txt`
   is the list of cases a machine is known to end on.
 - Frontends ([Frontends](docs/Frontends.md)): the NRO (`source/main.c`, `Makefile`), the Switch 2 ExeFS (`ounce/`,
-  `ounce.mk`), a mod of a game (`mod/`, `mod.mk`), Android (`android/`), the Vita (`vita/`, `vita.mk`), and the host
-  build (`host.mk`).
+  `ounce.mk`), a mod of a game (`mod/`, `mod.mk`), Android (`android/`), the Vita (`vita/`, `vita.mk`), the 3DS
+  (`3ds/`, `3ds.mk`), and the host build (`host.mk`).
 - `docs/families/`: one page a family, its suites and cases. `docs/cases.tsv`: the catalogue of every case.
 - `tools/`: the scripts and their tests. `.github/`: the CI and the release scripts. `hooks/`: the commit hook.
 
@@ -60,13 +60,14 @@ the ScarletNX pull request's body. The case binds ScarletNX's CI once a release 
 | NRO | `make` | devkitPro in `/opt/devkitpro`; `make run EMULATOR=...` for a quick run under an emulator |
 | APK | `gradle -p android assembleDebug` | `ANDROID_HOME` and a JDK 17 or newer |
 | VPK | `make -f vita.mk` | `VITASDK` set ([On the Vita](docs/Vita.md)) |
+| 3DSX | `make -f 3ds.mk` | `DEVKITPRO` set, with devkitARM and libctru in it ([On the 3DS](docs/3DS.md)) |
 
 The mode file chooses what runs ([Mode file](docs/ModeFile.md)); `quick all` runs every family that needs nobody.
 In ScarletNX: `scripts/amberlith.py run --runtime <build>/scarletnx --nro amberlith-<version>.nro --out <folder>
 --mode "<words>"`, headless, in its own folders.
 
-The CI (`.github/workflows/build.yml`) builds the NRO, the ExeFS and the mod, the APK and the VPK, runs the host build,
-and links each build from the pull request. `publish.yml` makes a push to `main` a nightly and a `v<version>` tag a
+The CI (`.github/workflows/build.yml`) builds the NRO, the ExeFS and the mod, the APK, the VPK and the 3DSX, runs the
+host build, and links each build from the pull request. `publish.yml` makes a push to `main` a nightly and a `v<version>` tag a
 release ([Releases](docs/Releases.md)). A pull request merges on green, by rebase.
 
 ## Baselines
@@ -116,4 +117,6 @@ the rest of the repo to C23 until that is asked.
 
 ## Not covered yet (TODO)
 
-- The 3DS and the DS have no frontend: a ScarletNX change to their drivers has no Amberlith case to add yet.
+- The DS has no frontend: a ScarletNX change to its driver has no Amberlith case to add yet. The 3DS's frontend runs
+  the judge and the libc family, none of its own suites yet: a ScarletNX change to the 3DS driver gets a case there
+  only when the engine's suites can ask it.
