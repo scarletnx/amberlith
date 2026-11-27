@@ -53,17 +53,17 @@ static struct {
 } g_gxm;
 
 /// A block of the GPU's memory, mapped for it with @p attribs, or for the USSE (vertex or
-/// fragment, @p usse 1 or 2) at the offset it writes. NULL, with why, when the system gives none.
+/// fragment, @p usse 1 or 2) at the offset it writes. nullptr, with why, when the system gives none.
 static void *GpuAlloc(SceKernelMemBlockType type, uint32_t size, int usse, SceGxmMemoryAttribFlags attribs,
                       unsigned *offset) {
     const uint32_t align = type == SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW ? 256u * 1024u : 4096u;
     size = (size + align - 1u) & ~(align - 1u);
-    const SceUID uid = sceKernelAllocMemBlock("amberlith gxm", type, size, NULL);
-    void *base = NULL;
+    const SceUID uid = sceKernelAllocMemBlock("amberlith gxm", type, size, nullptr);
+    void *base = nullptr;
     if (uid < 0 || sceKernelGetMemBlockBase(uid, &base) < 0) {
         snprintf(g_gxm.why, sizeof(g_gxm.why), "sceKernelAllocMemBlock gave no %u bytes (0x%08x)",
                  (unsigned)size, (unsigned)uid);
-        return NULL;
+        return nullptr;
     }
     int r = usse == 1 ? sceGxmMapVertexUsseMemory(base, size, offset)
             : usse == 2 ? sceGxmMapFragmentUsseMemory(base, size, offset)
@@ -71,22 +71,18 @@ static void *GpuAlloc(SceKernelMemBlockType type, uint32_t size, int usse, SceGx
     if (r < 0) {
         snprintf(g_gxm.why, sizeof(g_gxm.why), "sceGxm refused to map %u bytes (0x%08x)", (unsigned)size,
                  (unsigned)r);
-        return NULL;
+        return nullptr;
     }
     return base;
 }
 
-static void *PatcherAlloc(void *user, SceSize size) {
-    (void)user;
+static void *PatcherAlloc([[maybe_unused]] void *user, SceSize size) {
     return malloc(size);
 }
-static void PatcherFree(void *user, void *memory) {
-    (void)user;
+static void PatcherFree([[maybe_unused]] void *user, void *memory) {
     free(memory);
 }
-static void DisplayQueue(const void *data) {
-    (void)data;
-}
+static void DisplayQueue([[maybe_unused]] const void *data) {}
 
 /// One step of the bring-up: true when @p result is not an error, else the call's name and code
 /// are why every case of the suite stops.
@@ -101,8 +97,8 @@ static bool Ok(int result, const char *call) {
 static bool Surface(SceGxmColorSurface *surface, SceGxmRenderTarget **target, uint32_t **pixels,
                     uint32_t width, uint32_t height, uint32_t stride) {
     *pixels = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_CDRAM_RW, stride * height * 4u, 0,
-                       SCE_GXM_MEMORY_ATTRIB_RW, NULL);
-    if (*pixels == NULL) {
+                       SCE_GXM_MEMORY_ATTRIB_RW, nullptr);
+    if (*pixels == nullptr) {
         return false;
     }
     SceGxmRenderTargetParams params;
@@ -141,23 +137,23 @@ static bool BringUp(void) {
     context.hostMem = malloc(SCE_GXM_MINIMUM_CONTEXT_HOST_MEM_SIZE);
     context.hostMemSize = SCE_GXM_MINIMUM_CONTEXT_HOST_MEM_SIZE;
     context.vdmRingBufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE,
-                                        SCE_GXM_DEFAULT_VDM_RING_BUFFER_SIZE, 0, SCE_GXM_MEMORY_ATTRIB_READ, NULL);
+                                        SCE_GXM_DEFAULT_VDM_RING_BUFFER_SIZE, 0, SCE_GXM_MEMORY_ATTRIB_READ, nullptr);
     context.vdmRingBufferMemSize = SCE_GXM_DEFAULT_VDM_RING_BUFFER_SIZE;
     context.vertexRingBufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE,
                                            SCE_GXM_DEFAULT_VERTEX_RING_BUFFER_SIZE, 0,
-                                           SCE_GXM_MEMORY_ATTRIB_READ, NULL);
+                                           SCE_GXM_MEMORY_ATTRIB_READ, nullptr);
     context.vertexRingBufferMemSize = SCE_GXM_DEFAULT_VERTEX_RING_BUFFER_SIZE;
     context.fragmentRingBufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE,
                                              SCE_GXM_DEFAULT_FRAGMENT_RING_BUFFER_SIZE, 0,
-                                             SCE_GXM_MEMORY_ATTRIB_READ, NULL);
+                                             SCE_GXM_MEMORY_ATTRIB_READ, nullptr);
     context.fragmentRingBufferMemSize = SCE_GXM_DEFAULT_FRAGMENT_RING_BUFFER_SIZE;
     context.fragmentUsseRingBufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE,
                                                  SCE_GXM_DEFAULT_FRAGMENT_USSE_RING_BUFFER_SIZE, 2, 0,
                                                  &fragment_usse_offset);
     context.fragmentUsseRingBufferMemSize = SCE_GXM_DEFAULT_FRAGMENT_USSE_RING_BUFFER_SIZE;
     context.fragmentUsseRingBufferOffset = fragment_usse_offset;
-    if (context.hostMem == NULL || context.vdmRingBufferMem == NULL || context.vertexRingBufferMem == NULL ||
-        context.fragmentRingBufferMem == NULL || context.fragmentUsseRingBufferMem == NULL ||
+    if (context.hostMem == nullptr || context.vdmRingBufferMem == nullptr || context.vertexRingBufferMem == nullptr ||
+        context.fragmentRingBufferMem == nullptr || context.fragmentUsseRingBufferMem == nullptr ||
         !Ok(sceGxmCreateContext(&context, &g_gxm.context), "sceGxmCreateContext")) {
         return false;
     }
@@ -170,7 +166,7 @@ static bool BringUp(void) {
     patcher.hostAllocCallback = PatcherAlloc;
     patcher.hostFreeCallback = PatcherFree;
     patcher.bufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, PATCHER_BUFFER, 0,
-                                 SCE_GXM_MEMORY_ATTRIB_RW, NULL);
+                                 SCE_GXM_MEMORY_ATTRIB_RW, nullptr);
     patcher.bufferMemSize = PATCHER_BUFFER;
     patcher.vertexUsseMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, PATCHER_USSE, 1, 0,
                                      &vertex_usse_offset);
@@ -180,7 +176,7 @@ static bool BringUp(void) {
                                        &fragment_patcher_offset);
     patcher.fragmentUsseMemSize = PATCHER_USSE;
     patcher.fragmentUsseOffset = fragment_patcher_offset;
-    if (patcher.bufferMem == NULL || patcher.vertexUsseMem == NULL || patcher.fragmentUsseMem == NULL ||
+    if (patcher.bufferMem == nullptr || patcher.vertexUsseMem == nullptr || patcher.fragmentUsseMem == nullptr ||
         !Ok(sceGxmShaderPatcherCreate(&patcher, &g_gxm.patcher), "sceGxmShaderPatcherCreate") ||
         !Program(&clear_v_gxp_start, &g_gxm.clear_v) || !Program(&clear_f_gxp_start, &g_gxm.clear_f) ||
         !Program(&texture_v_gxp_start, &g_gxm.texture_v) || !Program(&texture_f_gxp_start, &g_gxm.texture_f)) {
@@ -193,8 +189,8 @@ static bool BringUp(void) {
     const SceGxmProgramParameter *texcoord = sceGxmProgramFindParameterByName(&texture_v_gxp_start, "aTexcoord");
     g_gxm.clear_colour = sceGxmProgramFindParameterByName(&clear_f_gxp_start, "uClearColor");
     g_gxm.wvp = sceGxmProgramFindParameterByName(&texture_v_gxp_start, "wvp");
-    if (position == NULL || texture_position == NULL || texcoord == NULL || g_gxm.clear_colour == NULL ||
-        g_gxm.wvp == NULL) {
+    if (position == nullptr || texture_position == nullptr || texcoord == nullptr || g_gxm.clear_colour == nullptr ||
+        g_gxm.wvp == nullptr) {
         snprintf(g_gxm.why, sizeof(g_gxm.why), "a vita2d program lacks a parameter this suite sets");
         return false;
     }
@@ -212,7 +208,7 @@ static bool BringUp(void) {
             "sceGxmShaderPatcherCreateVertexProgram") ||
         !Ok(sceGxmShaderPatcherCreateFragmentProgram(g_gxm.patcher, g_gxm.clear_f,
                                                      SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4,
-                                                     SCE_GXM_MULTISAMPLE_NONE, NULL, &clear_v_gxp_start,
+                                                     SCE_GXM_MULTISAMPLE_NONE, nullptr, &clear_v_gxp_start,
                                                      &g_gxm.clear_fp),
             "sceGxmShaderPatcherCreateFragmentProgram") ||
         !Ok(sceGxmShaderPatcherCreateVertexProgram(g_gxm.patcher, g_gxm.texture_v, texture_attributes, 2,
@@ -220,18 +216,18 @@ static bool BringUp(void) {
             "sceGxmShaderPatcherCreateVertexProgram") ||
         !Ok(sceGxmShaderPatcherCreateFragmentProgram(g_gxm.patcher, g_gxm.texture_f,
                                                      SCE_GXM_OUTPUT_REGISTER_FORMAT_UCHAR4,
-                                                     SCE_GXM_MULTISAMPLE_NONE, NULL, &texture_v_gxp_start,
+                                                     SCE_GXM_MULTISAMPLE_NONE, nullptr, &texture_v_gxp_start,
                                                      &g_gxm.texture_fp),
             "sceGxmShaderPatcherCreateFragmentProgram")) {
         return false;
     }
     // The vertices and indices, in memory the GPU reads
     g_gxm.clear_vertices = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, 4096u, 0, SCE_GXM_MEMORY_ATTRIB_READ,
-                                    NULL);
+                                    nullptr);
     g_gxm.texture_vertices = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, 4096u, 0,
-                                      SCE_GXM_MEMORY_ATTRIB_READ, NULL);
-    g_gxm.indices = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, 4096u, 0, SCE_GXM_MEMORY_ATTRIB_READ, NULL);
-    if (g_gxm.clear_vertices == NULL || g_gxm.texture_vertices == NULL || g_gxm.indices == NULL) {
+                                      SCE_GXM_MEMORY_ATTRIB_READ, nullptr);
+    g_gxm.indices = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, 4096u, 0, SCE_GXM_MEMORY_ATTRIB_READ, nullptr);
+    if (g_gxm.clear_vertices == nullptr || g_gxm.texture_vertices == nullptr || g_gxm.indices == nullptr) {
         return false;
     }
     for (uint16_t i = 0; i < 4u; ++i) {
@@ -258,7 +254,7 @@ static void Rectangle(uint32_t width, uint32_t height, uint32_t x0, uint32_t y0,
                               (float)(abgr >> 16 & 0xffu) / 255.0f, (float)(abgr >> 24) / 255.0f };
     sceGxmSetVertexProgram(g_gxm.context, g_gxm.clear_vp);
     sceGxmSetFragmentProgram(g_gxm.context, g_gxm.clear_fp);
-    void *uniforms = NULL;
+    void *uniforms = nullptr;
     sceGxmReserveFragmentDefaultUniformBuffer(g_gxm.context, &uniforms);
     sceGxmSetUniformDataF(uniforms, g_gxm.clear_colour, 0, 4, colour);
     sceGxmSetVertexStream(g_gxm.context, 0, v);
@@ -282,7 +278,7 @@ static uint32_t Expected(uint32_t x, uint32_t y) {
 
 /// A scene on @p target: clip space over the whole of it, y up, as the SDK's samples set it.
 static void Begin(SceGxmRenderTarget *target, SceGxmColorSurface *surface, uint32_t width, uint32_t height) {
-    sceGxmBeginScene(g_gxm.context, 0, target, NULL, NULL, NULL, surface, NULL);
+    sceGxmBeginScene(g_gxm.context, 0, target, nullptr, nullptr, nullptr, surface, nullptr);
     sceGxmSetViewport(g_gxm.context, (float)width / 2.0f, (float)width / 2.0f, (float)height / 2.0f,
                       -(float)height / 2.0f, 0.5f, 0.5f);
 }
@@ -292,7 +288,7 @@ static void DrawTarget(void) {
     Rectangle(TARGET_SIDE, TARGET_SIDE, 0, 0, TARGET_SIDE, TARGET_SIDE, BACKGROUND, 0);
     Rectangle(TARGET_SIDE, TARGET_SIDE, 16, 16, 48, 40, SQUARE, 1);
     Rectangle(TARGET_SIDE, TARGET_SIDE, 16, 16, 24, 24, CORNER, 2);
-    sceGxmEndScene(g_gxm.context, NULL, NULL);
+    sceGxmEndScene(g_gxm.context, nullptr, nullptr);
     sceGxmFinish(g_gxm.context);
 }
 
@@ -340,13 +336,13 @@ static void DrawDisplay(void) {
     Rectangle(DISPLAY_W, DISPLAY_H, 0, 0, DISPLAY_W, DISPLAY_H, 0xff000000u, 3);
     sceGxmSetVertexProgram(g_gxm.context, g_gxm.texture_vp);
     sceGxmSetFragmentProgram(g_gxm.context, g_gxm.texture_fp);
-    void *uniforms = NULL;
+    void *uniforms = nullptr;
     sceGxmReserveVertexDefaultUniformBuffer(g_gxm.context, &uniforms);
     sceGxmSetUniformDataF(uniforms, g_gxm.wvp, 0, 16, identity);
     sceGxmSetFragmentTexture(g_gxm.context, 0, &texture);
     sceGxmSetVertexStream(g_gxm.context, 0, v);
     sceGxmDraw(g_gxm.context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, g_gxm.indices, 4);
-    sceGxmEndScene(g_gxm.context, NULL, NULL);
+    sceGxmEndScene(g_gxm.context, nullptr, nullptr);
     sceGxmFinish(g_gxm.context);
 }
 

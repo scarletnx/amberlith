@@ -85,7 +85,7 @@ int main(void) {
                    "report is closed, as a quick one does");
     }
     const bool timing = !mode.no_timing;
-    RunnerSteps(&g_runner, families, timing, NULL);
+    RunnerSteps(&g_runner, families, timing, nullptr);
     RunnerFinish(&g_runner, &mode, timing);
     const int failed = (int)ReportFailed();
     sceKernelExitProcess(failed);

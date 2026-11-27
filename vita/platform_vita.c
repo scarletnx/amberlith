@@ -24,7 +24,7 @@ bool PlatformSocketsOpen(void) {
 }
 void PlatformSocketsClose(void) {}
 size_t PlatformNetworkOff(char *out, size_t out_size) {
-    if (out != NULL && out_size > 0u) {
+    if (out != nullptr && out_size > 0u) {
         out[0] = '\0';
     }
     return 0;

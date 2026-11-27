@@ -26,21 +26,21 @@ static_assert(sizeof(size_t) == sizeof(unsigned long), "z is printed as l");
 static_assert(sizeof(long long) == 8 && sizeof(ptrdiff_t) == sizeof(int), "j as ll, t as nothing");
 
 /// @p format with each conversion's z, j and t modifiers as the library takes them, into @p out
-/// (@p size bytes): NULL when it does not fit, and the caller makes room.
+/// (@p size bytes): nullptr when it does not fit, and the caller makes room.
 static const char *Translate(const char *format, char *out, size_t size) {
     size_t used = 0;
     for (const char *p = format; *p != '\0'; ++p) {
         if (used + 3u >= size) {
-            return NULL;
+            return nullptr;
         }
         out[used++] = *p;
         if (*p != '%') {
             continue;
         }
         // flags, width and precision, then the length modifier
-        for (++p; *p != '\0' && strchr("-+ #0123456789.*'", *p) != NULL; ++p) {
+        for (++p; *p != '\0' && strchr("-+ #0123456789.*'", *p) != nullptr; ++p) {
             if (used + 3u >= size) {
-                return NULL;
+                return nullptr;
             }
             out[used++] = *p;
         }
@@ -65,11 +65,11 @@ static const char *Translate(const char *format, char *out, size_t size) {
 #define TRANSLATED(call)                                                                            \
     char small[512];                                                                                \
     const char *said = Translate(format, small, sizeof(small));                                    \
-    char *big = NULL;                                                                               \
-    if (said == NULL) {                                                                             \
+    char *big = nullptr;                                                                               \
+    if (said == nullptr) {                                                                             \
         const size_t need = strlen(format) * 2u + 4u;                                               \
         big = malloc(need);                                                                         \
-        if (big == NULL) {                                                                          \
+        if (big == nullptr) {                                                                          \
             return -1;                                                                              \
         }                                                                                           \
         said = Translate(format, big, need);                                                        \
