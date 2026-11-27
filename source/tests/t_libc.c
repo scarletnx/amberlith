@@ -17,9 +17,15 @@
 #include <time.h>
 #include <unistd.h>
 
+// The socket suite's, which a C library with no network stack lacks: the GBA's newlib
+#if __has_include(<sys/socket.h>)
+#define LIBC_SOCKETS 1
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#else
+#define LIBC_SOCKETS 0
+#endif
 
 #include "../check.h"
 #include "../libcmath.h"
@@ -445,6 +451,11 @@ void RunSystem(void) {
 // ---- socket: the network stack on loopback ----
 
 static const char *const SOCKET = "socket";
+static const char *const SOCKET_TCP = "a TCP socket listens on loopback, connects and echoes";
+static const char *const SOCKET_UDP = "a UDP datagram goes over loopback and comes back";
+static const char *const SOCKET_REFUSED = "a connection to a closed loopback port is refused";
+
+#if LIBC_SOCKETS
 
 /// A socket bound to 127.0.0.1 on a port the stack picks, and that port; -1 when it fails, with
 /// the call that did in @p why.
@@ -470,7 +481,7 @@ static int BindLoopback(int type, struct sockaddr_in *address, char *why, size_t
 }
 
 static void TcpEcho(void) {
-    static const char *const NAME = "a TCP socket listens on loopback, connects and echoes";
+    const char *const NAME = SOCKET_TCP;
     if (!ReportStart(SOCKET, NAME)) {
         return;
     }
@@ -515,7 +526,7 @@ static void TcpEcho(void) {
 }
 
 static void UdpEcho(void) {
-    static const char *const NAME = "a UDP datagram goes over loopback and comes back";
+    const char *const NAME = SOCKET_UDP;
     if (!ReportStart(SOCKET, NAME)) {
         return;
     }
@@ -555,7 +566,7 @@ static void UdpEcho(void) {
 }
 
 static void Refused(void) {
-    static const char *const NAME = "a connection to a closed loopback port is refused";
+    const char *const NAME = SOCKET_REFUSED;
     if (!ReportStart(SOCKET, NAME)) {
         return;
     }
@@ -594,11 +605,8 @@ bool SocketStreamsRefused(char *why, size_t why_size) {
 }
 
 void RunSocket(void) {
-    static const char *const TCP = "a TCP socket listens on loopback, connects and echoes";
-    static const char *const UDP = "a UDP datagram goes over loopback and comes back";
-    static const char *const REFUSED = "a connection to a closed loopback port is refused";
     if (!PlatformSocketsOpen()) {
-        const char *const names[] = { TCP, UDP, REFUSED };
+        const char *const names[] = { SOCKET_TCP, SOCKET_UDP, SOCKET_REFUSED };
         for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
             ReportSkip(SOCKET, names[i], REPORT_REASON_UNAVAILABLE, PlatformError());
         }
@@ -609,15 +617,27 @@ void RunSocket(void) {
     char streams_why[REPORT_KEPT_DETAIL];
     const bool streams_refused = SocketStreamsRefused(streams_why, sizeof(streams_why));
     if (streams_refused) {
-        ReportSkip(SOCKET, TCP, REPORT_REASON_UNAVAILABLE, streams_why);
+        ReportSkip(SOCKET, SOCKET_TCP, REPORT_REASON_UNAVAILABLE, streams_why);
     } else {
         TcpEcho();
     }
     UdpEcho();
     if (streams_refused) {
-        ReportSkip(SOCKET, REFUSED, REPORT_REASON_UNAVAILABLE, streams_why);
+        ReportSkip(SOCKET, SOCKET_REFUSED, REPORT_REASON_UNAVAILABLE, streams_why);
     } else {
         Refused();
     }
     PlatformSocketsClose();
 }
+
+#else
+
+void RunSocket(void) {
+    const char *const names[] = { SOCKET_TCP, SOCKET_UDP, SOCKET_REFUSED };
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
+        ReportSkip(SOCKET, names[i], REPORT_REASON_UNAVAILABLE,
+                   "this machine's C library has no sockets: it lacks <sys/socket.h>");
+    }
+}
+
+#endif
