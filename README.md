@@ -22,6 +22,8 @@ The newest version is on [its release](https://github.com/scarletnx/amberlith/re
   with the Vita's GPU cases beside the ones every machine runs.
 - On a 3DS, from the Homebrew Launcher, or in a 3DS emulator: the 3DSX, `3ds/` ([On the 3DS](docs/3DS.md)), the same
   engine with the libc family whole.
+- On a DS, from a card's menu, or in a DS emulator: the NDS, `nds/` ([On the DS](docs/DS.md)), the same engine with
+  the libc family's suites its memory holds.
 
 Without a mode file the start screen asks what to run, and its L and R open the browser, where a person runs a suite,
 a single case or a demo at a time ([The browser](docs/UI.md)); `sdmc:/amberlith/mode` chooses instead
@@ -41,6 +43,7 @@ make -f host.mk host-run              # the judge and the tools' tests, on this 
 gradle -p android assembleDebug       # the APK, with ANDROID_HOME and a JDK 17 or newer
 make -f vita.mk                       # the VPK, with VITASDK set (docs/Vita.md)
 make -f 3ds.mk                        # the 3DSX, with DEVKITPRO set and devkitARM in it (docs/3DS.md)
+make -f nds.mk                        # the NDS, the same way (docs/DS.md)
 make run EMULATOR=/path/to/emulator   # a quick run, started again after a crash
 ```
 

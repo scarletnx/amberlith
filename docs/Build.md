@@ -8,6 +8,7 @@
 * [The APK](#the-apk)
 * [The Vita's VPK](#the-vitas-vpk)
 * [The 3DS's 3DSX](#the-3dss-3dsx)
+* [The DS's NDS](#the-dss-nds)
 * [The host build](#the-host-build)
 * [Commit messages](#commit-messages)
 
@@ -82,6 +83,15 @@ DEVKITPRO=/opt/devkitpro make -f 3ds.mk
 
 `build-3ds/amberlith.3dsx`, with devkitARM and libctru in `DEVKITPRO`; what it needs and how it runs are in
 [On the 3DS](3DS.md#build-it).
+
+## The DS's NDS
+
+```sh
+DEVKITPRO=/opt/devkitpro make -f nds.mk
+```
+
+`build-nds/amberlith.nds`, with devkitARM, libnds and calico in `DEVKITPRO`; what it needs, what fits in its memory
+and how it runs are in [On the DS](DS.md#build-it).
 
 ## The host build
 
