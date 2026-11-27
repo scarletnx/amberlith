@@ -124,6 +124,7 @@ static const RunnerStep STEPS[] = {
     // its last suite makes a graphics device, which under Eden never finished its first submit
     // once a framebuffer had been closed.
     { "pace-cpu", RunPaceCpu, MODE_FAMILY_PACE, false, true },
+    { "pace-code", RunPaceCode, MODE_FAMILY_PACE, false, true },
     { "pace-mem", RunPaceMem, MODE_FAMILY_PACE, false, true },
     { "pace-thread", RunPaceThread, MODE_FAMILY_PACE, false, true },
     { "pace-timer", RunPaceTimer, MODE_FAMILY_PACE, false, true },

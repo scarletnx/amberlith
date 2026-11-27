@@ -343,6 +343,9 @@ void RunSvc(void);
 /// removed; and quads, an upload and a readback on the graphics unit. Each case times its work
 /// several times over and its line carries the middle time and the spread; none judges a speed.
 void RunPaceCpu(void);
+/// pace-code: sixteen kinds of the processor's code (pacecoderef.h), each timed over runs of a
+/// fixed count and held to the C restatement's answer.
+void RunPaceCode(void);
 void RunPaceMem(void);
 void RunPaceThread(void);
 void RunPaceTimer(void);

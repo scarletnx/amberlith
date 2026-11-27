@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "../check.h"
+#include "../pacecoderef.h"
 #include "../paceref.h"
 #include "../report.h"
 #include "tests.h"
@@ -57,6 +58,77 @@ static const struct {
 static const uint8_t WALK_OF_16[16] = { 15, 2, 9, 4, 3, 6, 13, 8, 7, 10, 1, 12, 11, 14, 5, 0 };
 static const uint64_t WALK_END = 1310720ull;
 // END tools/pace-expect.py --c
+
+// BEGIN tools/pace-code-expect.py --c
+static const struct {
+    PaceCodeKind kind;
+    uint64_t iterations;
+    uint64_t answer;
+} CODE[] = {
+    { PACE_CODE_INT4, 1ull, 0xcd7a44466dd4051bull },
+    { PACE_CODE_INT4, 2ull, 0x90b2180547e021d1ull },
+    { PACE_CODE_INT4, 1000ull, 0x8a5af2cf30ff0e06ull },
+    { PACE_CODE_INT4, 9000ull, 0x3d8b411859256a05ull },
+    { PACE_CODE_MUL, 1ull, 0x192653a4c3f8c403ull },
+    { PACE_CODE_MUL, 2ull, 0x47132e279d40c2dbull },
+    { PACE_CODE_MUL, 1000ull, 0xf40f0104f6dcf7d1ull },
+    { PACE_CODE_MUL, 9000ull, 0xe47432ec9fb8e4f5ull },
+    { PACE_CODE_DIV, 1ull, 0x7a07f08521877708ull },
+    { PACE_CODE_DIV, 2ull, 0xece2da51e89f9f98ull },
+    { PACE_CODE_DIV, 1000ull, 0x0718b3a86fb8d59eull },
+    { PACE_CODE_DIV, 9000ull, 0x3dcae94312c0c61aull },
+    { PACE_CODE_CALLS, 1ull, 0x1132a67e67e679a2ull },
+    { PACE_CODE_CALLS, 2ull, 0x0014308ef9b4b2acull },
+    { PACE_CODE_CALLS, 1000ull, 0xd344a96181a28c1aull },
+    { PACE_CODE_CALLS, 9000ull, 0x7ad5e437136b9c5eull },
+    { PACE_CODE_INDIRECT, 1ull, 0x2e2d1ff10682b118ull },
+    { PACE_CODE_INDIRECT, 2ull, 0xb8d822b6d116b95eull },
+    { PACE_CODE_INDIRECT, 1000ull, 0x3bf29f2f0c6c7b2dull },
+    { PACE_CODE_INDIRECT, 9000ull, 0x8331e191a3570a0dull },
+    { PACE_CODE_SWITCH, 1ull, 0x0000000000000000ull },
+    { PACE_CODE_SWITCH, 2ull, 0xd3656d5cca20cd4dull },
+    { PACE_CODE_SWITCH, 1000ull, 0xded3d474ca3ef07bull },
+    { PACE_CODE_SWITCH, 9000ull, 0x778dcc5d2f66e4c0ull },
+    { PACE_CODE_BRANCHES, 1ull, 0x3f2800d6569e01b4ull },
+    { PACE_CODE_BRANCHES, 2ull, 0x606f949a3cebd0b7ull },
+    { PACE_CODE_BRANCHES, 1000ull, 0x433ff82e6a5eaedbull },
+    { PACE_CODE_BRANCHES, 9000ull, 0x6620bf986cb6c9a2ull },
+    { PACE_CODE_TABLE, 1ull, 0x2ce32d235e21fd51ull },
+    { PACE_CODE_TABLE, 2ull, 0x80177cc4150df705ull },
+    { PACE_CODE_TABLE, 1000ull, 0x6edfbbaab03d1feaull },
+    { PACE_CODE_TABLE, 9000ull, 0xb9ca67bb093ed533ull },
+    { PACE_CODE_FDIV, 1ull, 0x4119e9e4dab6609aull },
+    { PACE_CODE_FDIV, 2ull, 0x4119fbf621278152ull },
+    { PACE_CODE_FDIV, 1000ull, 0x41293c9432d6181bull },
+    { PACE_CODE_FDIV, 9000ull, 0x411d75b1c2d93cfbull },
+    { PACE_CODE_BYTES, 1ull, 0xb1d1453868d8d868ull },
+    { PACE_CODE_BYTES, 2ull, 0xf5ed11b7b3cf28d8ull },
+    { PACE_CODE_BYTES, 1000ull, 0x77d9e72573258bc1ull },
+    { PACE_CODE_BYTES, 9000ull, 0xd799a73533559b91ull },
+    { PACE_CODE_CRC, 1ull, 0x22b54057628b34caull },
+    { PACE_CODE_CRC, 2ull, 0x36653f5a4b3ff74full },
+    { PACE_CODE_CRC, 1000ull, 0xda202d02d8c3ee90ull },
+    { PACE_CODE_CRC, 8195ull, 0x3280fbf174b68e62ull },
+    { PACE_CODE_AES, 1ull, 0x9532221ee4bb5a51ull },
+    { PACE_CODE_AES, 2ull, 0xe03001ceb5813ff7ull },
+    { PACE_CODE_AES, 1000ull, 0x858d5b778a9aec81ull },
+    { PACE_CODE_AES, 4099ull, 0x3985897a8a6d9c90ull },
+    { PACE_CODE_SHA, 1ull, 0x617aca7759ebb024ull },
+    { PACE_CODE_SHA, 2ull, 0x7edcea14f8056232ull },
+    { PACE_CODE_SHA, 1027ull, 0xff16c79983d82f26ull },
+    { PACE_CODE_EXCLUSIVE, 1ull, 0x0000000000000005ull },
+    { PACE_CODE_EXCLUSIVE, 2ull, 0x0000000000000008ull },
+    { PACE_CODE_EXCLUSIVE, 1000ull, 0x41b133a5635ecad5ull },
+    { PACE_CODE_EXCLUSIVE, 9000ull, 0x4fc2b2eef3daa7b5ull },
+    { PACE_CODE_CORE, 1ull, 0x2ce32d2335df4dfeull },
+    { PACE_CODE_CORE, 2ull, 0x99f6443bc1b433c1ull },
+    { PACE_CODE_CORE, 100ull, 0x8a2ea2a378670903ull },
+    { PACE_CODE_VECTOR, 1ull, 0x202353f121df3fd4ull },
+    { PACE_CODE_VECTOR, 2ull, 0xfacabf066afaa0c0ull },
+    { PACE_CODE_VECTOR, 1000ull, 0x62ac7a27f8e76068ull },
+    { PACE_CODE_VECTOR, 9000ull, 0x317ec962d0375b68ull },
+};
+// END tools/pace-code-expect.py --c
 
 static void CheckStats(void) {
     uint64_t odd[5] = { 5, 1, 9, 3, 7 };
@@ -310,10 +382,48 @@ static void CheckWalk(void) {
                (unsigned long long)WALK_END);
 }
 
+/// The pace-code kernels' C restatement against tools/pace-code-expect.py, a line a kernel.
+static void CheckCode(void) {
+    static const char *const KINDS[PACE_CODE_KINDS] = {
+        "four integer chains", "umulh and madd", "udiv and sdiv", "calls", "indirect calls",
+        "switch", "branches", "table", "fsqrt and fdiv", "bytes", "crc32", "aes", "sha256",
+        "exclusive", "core", "vector of singles",
+    };
+    static uint8_t table[PACE_CODE_TABLE_BYTES], stream[PACE_CODE_STREAM_BYTES];
+    PaceCodeFill(stream, sizeof(stream));
+    for (uint32_t kind = 0; kind < PACE_CODE_KINDS; ++kind) {
+        uint32_t rows = 0, wrong = 0;
+        uint64_t first = 0, first_want = 0, first_n = 0;
+        for (uint32_t i = 0; i < sizeof(CODE) / sizeof(CODE[0]); ++i) {
+            if (CODE[i].kind != (PaceCodeKind)kind) {
+                continue;
+            }
+            ++rows;
+            PaceCodeFill(table, sizeof(table));
+            const uint64_t got =
+                PaceCodeAnswer(CODE[i].kind, CODE[i].iterations, table, stream);
+            if (got != CODE[i].answer && wrong++ == 0u) {
+                first = got;
+                first_want = CODE[i].answer;
+                first_n = CODE[i].iterations;
+            }
+        }
+        char name[96];
+        snprintf(name, sizeof(name), "pace-code: the %s kernel leaves the answers worked out apart",
+                 KINDS[kind]);
+        CHECK_TRUE(SUITE, name, CHECK_NONE, rows >= 3u && wrong == 0u,
+                   "%u of %u rows wrong; the first, %llu iterations, gave 0x%016llx where the "
+                   "script gives 0x%016llx",
+                   (unsigned)wrong, (unsigned)rows, (unsigned long long)first_n,
+                   (unsigned long long)first, (unsigned long long)first_want);
+    }
+}
+
 void RunReferencePace(void) {
     CheckStats();
     CheckMulDiv();
     CheckLine();
     CheckLoops();
     CheckWalk();
+    CheckCode();
 }

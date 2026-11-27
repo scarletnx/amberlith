@@ -5,6 +5,7 @@
 * [How a case measures](#how-a-case-measures)
 * [The reference to come](#the-reference-to-come)
 * [pace-cpu](#pace-cpu)
+* [pace-code](#pace-code)
 * [pace-mem](#pace-mem)
 * [pace-thread](#pace-thread)
 * [pace-timer](#pace-timer)
@@ -15,8 +16,8 @@
 
 How fast the machine goes. A console always goes at the same speed, and a game is written against that speed: an
 emulator far slower drops frames, and one far faster reaches code in an order the console never did, which is where
-the races a game never met on hardware show. Six suites, thirty six cases, each a part of the machine timed several
-times over: the processor's loops on each core, memory, a thread woken and a mutex passed, the counter and sleeps,
+the races a game never met on hardware show. Seven suites, fifty two cases, each a part of the machine timed several
+times over: the processor's loops on each core, sixteen kinds of its code, memory, a thread woken and a mutex passed, the counter and sleeps,
 the card, and the graphics unit. Only the word `pace` runs it ([The mode file](../ModeFile.md)), and `all` leaves it
 out: its numbers want a machine doing nothing else, and it takes about two minutes, ninety seconds of them in
 pace-cpu. Console build only.
@@ -106,6 +107,42 @@ takes a dependent chain of those instructions, not how many it could run side by
 
 A counter that has not moved after 64 turns fails the case, which then does not wait for a window that would never
 end.
+
+## pace-code
+
+Sixteen cases, one kind of the processor's code each, on the main thread: what a recompiler or a JIT turns into the
+host's code, which pace-cpu's three loops do not reach. A case runs its kernel 25 times over a fixed count of
+iterations, a few milliseconds of a console's core, and the line's time is the median run's. Every run's answer is held
+to `source/pacecoderef.c`'s, worked out once on the machine before the runs and untimed; the reference suite holds
+`pacecoderef.c` to `tools/pace-code-expect.py`, which restates each kernel in Python and its crc, aes and sha kernels
+against zlib's CRC-32, CRC-32C's check value, FIPS-197's first round and hashlib's SHA-256. The kernels are
+`source/pacework.c`'s instructions, as the other suites' are, but for the core one, which is the compiler's code:
+`PaceCodeCore`, the same function the reference suite holds.
+
+| case | an iteration | a run |
+|---|---|---|
+| four chains of add, eor and shifts side by side | four chains of `add`, `eor` and `sub` with shifted registers, two instructions each, none waiting on another | 524288 |
+| a chain of umulh and madd | `umulh`, then `madd` x = x * A + high, then an `add`: each multiply waits for the one before it | 262144 |
+| a chain of udiv and sdiv | an unsigned divide by a number the last one made, a `madd`, then a signed divide by the low twelve bits plus two | 32768 |
+| calls three deep through bl and ret | `bl` to a function that calls another, which calls a leaf: two frames saved and three `ret` | 131072 |
+| calls through blr to one of eight leaves | a `madd`, then `blr` to the leaf the top three bits pick, through a table of offsets | 131072 |
+| a switch through br to one of sixteen cases | a `madd`, then `br` to the case the top four bits pick, through a table of offsets, as an interpreter dispatches | 131072 |
+| tbz and tbnz on bits a shift register picks | a xorshift step, then three branches on its bits 3, 5 and 11, each taken about half the time | 131072 |
+| a 16 KiB table read and written by byte, halfword and word | `ldrb`, `ldrh` and `ldr` at places the last word picked, each written back changed, and a `madd` | 131072 |
+| a chain of fsqrt and fdiv through fcvtzs and scvtf | `fsqrt`, `fdiv`, `fmul` and `fcvtzs` into a sum, and `scvtf` back: on doubles, each step waiting on the last | 32768 |
+| bytes through tbl, cmeq, uaddlv and ext | sixteen bytes looked up with `tbl`, compared with `cmeq`, the matches added with `uaddlv`, the bytes moved on with `ext` | 131072 |
+| crc32x and crc32cx over 64 KiB | a word loaded with a post-index, into both sums | 1048576 |
+| aese and aesmc over 64 KiB | a round key loaded with a post-index, an `aese` and an `aesmc` | 524288 |
+| sha256h, sha256h2, sha256su0 and sha256su1 over 64 KiB | a 64-byte block through SHA-256's compression: sixteen groups of four rounds | 8192 |
+| ldaxr and stlxr adding, with no other thread | an `ldaxr`, an `add` and an `stlxr`, again while the store fails | 65536 |
+| a list, a matrix and a state machine, as CoreMark's | a list of 32 nodes reversed and walked, an 8 by 8 product of 16-bit integers, 64 characters through a number's states, and a CRC-16 of the three | 512 |
+| four chains of singles through fmla, fmul, fadd, fcvtzs and scvtf | four lanes in four chains: two `fmla`, a `fmul` and `fadd`, an `fadd` and `fmul`, then each chain to integers with `fcvtzs`, cut to 16 bits and back with `scvtf` | 131072 |
+
+The line says the median run as nanoseconds an iteration beside the samples (`12.3 ns an iteration`). Every value the
+floating point kernels hold is a whole number their format keeps exactly, or, for `fsqrt` and `fdiv`, a result IEEE 754
+rounds one way, so the answers are right or wrong, never close. The atomics of ARMv8.1 (`ldadd`, `cas`) are not here:
+the console's Cortex-A57 is ARMv8.0 and has none. A run's answer that is not the restatement's fails the case, with
+the run's word and the one wanted.
 
 ## pace-mem
 
