@@ -103,8 +103,8 @@ tex8k's compressed textures as their formats' suites say; bcn's arrays, which ju
 | dma | 5 | 3 | 0 | 0 | 0 | 0 | 3 | 2 | 0 |
 | blit2d | 5 | 4 | 0 | 0 | 0 | 0 | 4 | 1 | 0 |
 | copy | 19 | 18 | 0 | 0 | 0 | 0 | 18 | 1 | 0 |
-| tex8k | 56 | 46 | 0 | 0 | 24 | 0 | 22 | 10 | 0 |
-| **All** | **866** | **749** | **0** | **0** | **158** | **0** | **591** | **117** | **0** |
+| tex8k | 59 | 48 | 0 | 0 | 24 | 0 | 24 | 11 | 0 |
+| **All** | **869** | **751** | **0** | **0** | **158** | **0** | **593** | **118** | **0** |
 <!-- /counts -->
 
 ## clear
@@ -1476,7 +1476,7 @@ blit (`vk_texture_cache.cpp`, `BlitImage`).
 ## tex8k
 
 <!-- counts: suite tex8k -->
-**56 cases**: 46 with a judge (exact 46; expected from astcenc 10, another reference 14, the specification 22), 10 without one.
+**59 cases**: 48 with a judge (exact 48; expected from astcenc 10, another reference 14, the specification 24), 11 without one.
 <!-- /counts -->
 
 On textures as large as a game's largest: 8192x8192, which the texture unit
@@ -1585,12 +1585,26 @@ at a page or a level's edge, a compressed format decoded or encoded again past B
 handed back and taken again, and how a render target or a 2D engine copy reaches memory past an
 allocation's cap.
 
-The last case is a volume past 512 Mi texels: BC1 1024x1024x513, 257 MiB, in memory the processor
+Then a volume past 512 Mi texels: BC1 1024x1024x513, 257 MiB, in memory the processor
 writes, of which it fills the first block alone, as a game's light volume is made by the graphics
 unit and sampled where it was written. Its sixteen texels fetched must give the block's colours
 (its two endpoints, red and blue, which every decoder gives exactly); a host that
 takes a volume that large for no texture reads zeros (ScarletNX's big volume test). It skips as
 unavailable where `vram=` says the machine is short, as the textures do.
+
+Last, many textures in one frame: sixteen 4096x4096 RGBA8 block linear textures of eight levels, as
+a game's are, 85 MiB each and 1.3 GiB together, on a device of their own. The copy engine uploads
+level 0 of each, one after another from one staging buffer, each with a salt of its own. Then one
+submission draws sixteen 16x16 cells of the target, cell i fetching level 0 of texture i every 256th
+texel, so the frame samples all sixteen; then eight frames more of the same draws, the last one
+judged too. A host whose memory for textures is less than what the frame samples (a handheld, or
+ScarletNX's `vk_budget_mb` set under 1.3 GiB) has to move, convert again or let go of its copies of
+them while the frame is drawn, and one that keeps a texture's coarser levels in place of its finer
+ones reads level 0 wrong: every texel fetched must still be the one the upload wrote, and the
+program goes on. Exact, from the texels' places. Under ScarletNX with `vk_budget_mb=512` each
+texture keeps levels 1 to 7 alone and both judged frames read 00000000, as the fetches of level 0 of
+the 8192x8192 textures with levels do (scarletnx/ScarletNX#3033). It skips as unavailable where
+`vram=` says the machine is short, as the textures do.
 
 ## gxm
 

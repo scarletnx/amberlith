@@ -339,6 +339,12 @@ uint32_t Tex8kCellTexel(uint32_t x, uint32_t y, uint32_t *tx, uint32_t *ty) {
     return frame;
 }
 
+uint32_t Tex8kManyTexel(uint32_t x, uint32_t y, uint32_t *tx, uint32_t *ty) {
+    *tx = TEX8K_SPREAD_X + (x % TEX8K_MANY_CELL) * TEX8K_MANY_STEP;
+    *ty = TEX8K_SPREAD_Y + (y % TEX8K_MANY_CELL) * TEX8K_MANY_STEP;
+    return (y / TEX8K_MANY_CELL) * (TEX8K_TARGET / TEX8K_MANY_CELL) + x / TEX8K_MANY_CELL;
+}
+
 void Tex8kCopyOutOrigin(uint32_t *x, uint32_t *y) {
     Tex8kRegion(3u, x, y);
     *x -= TEX8K_REGION / 2u;

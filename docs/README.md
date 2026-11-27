@@ -63,7 +63,7 @@ _2 families, 3 suites, 68 cases: 64 with a judge (exact 56, position 8; expected
 ### GPU and NVN
 
 <!-- counts: category gpu -->
-_5 families, 52 suites, 1272 cases: 1058 with a judge (exact 966, ulp 56, position 23, level 2, bound 11; expected from the driver 16, astcenc 43, another reference 115, the specification 884), 208 without one, 6 not yet seen judged._
+_5 families, 52 suites, 1282 cases: 1067 with a judge (exact 975, ulp 56, position 23, level 2, bound 11; expected from the driver 18, astcenc 43, another reference 115, the specification 891), 209 without one, 6 not yet seen judged._
 <!-- /counts -->
 
 - **[Graphics](./families/Graphics.md)** - the drawing suites, clear to tex8k, and
@@ -89,7 +89,7 @@ _3 families, 4 suites, 51 cases: 49 with a judge (exact 37, level 12; expected f
 ### System and services
 
 <!-- counts: category system -->
-_5 families, 51 suites, 212 cases: 158 with a judge (exact 156, ulp 1, position 1; expected from an emulator 111, the specification 47), 22 without one, 32 not yet seen judged._
+_5 families, 51 suites, 212 cases: 159 with a judge (exact 157, ulp 1, position 1; expected from an emulator 111, the specification 48), 22 without one, 31 not yet seen judged._
 <!-- /counts -->
 
 - **[fs](./families/Fs.md)** - reads through the file system service
@@ -120,7 +120,7 @@ _1 family, 6 suites, 36 cases: 0 with a judge, 36 without one._
 ### The judge and the tools
 
 <!-- counts: category tools -->
-_3 suites, 823 cases: the probe's own code held to its references, before every run._
+_3 suites, 824 cases: the probe's own code held to its references, before every run._
 <!-- /counts -->
 
 - **[The judge](./families/Judge.md)** - selfcheck, support and reference: the probe's own code held to its
