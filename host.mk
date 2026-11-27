@@ -86,9 +86,14 @@ $(FLUIDTOOL): tools/fluid-envelope.c build-host/demo_fluidref.o
 # scripts in .github/scripts, against a fake GitHub and a fake Discord, and the APK's runners,
 # against a fake adb and a fake ScarletNX driver. The fluid demo's budgets are measured between
 # them, on the early frames and a default run's 600.
+# a TMPDIR as long as an app's cache folder on a desktop (Android's layer of ScarletNX), where the
+# support suite's scratch corner goes past 100 characters
+LONGTMP := /tmp/amberlith-a-tmpdir-as-long-as-an-app-cache-folder-on-a-desktop-runner
+
 host-run: $(HOSTOUT) $(HOSTWORDS) $(FLUIDTOOL) $(LAYERTEST) $(MODTEST)
 	./$(HOSTOUT)
 	cd / && exec $(CURDIR)/$(HOSTOUT)
+	mkdir -p $(LONGTMP) && TMPDIR=$(LONGTMP) ./$(HOSTOUT) support
 	./$(HOSTWORDS) reference
 	./build-host/nvnlayer-test-55
 	./build-host/nvnlayer-test-231

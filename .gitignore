@@ -5,6 +5,7 @@
 /amberlith.nacp
 /amberlith-host-report.jsonl
 /amberlith-host-reference.jsonl
+/amberlith-host-support.jsonl
 /tools/__pycache__/
 /.github/scripts/__pycache__/
 /tools/vklayer/libVkLayer_amberlith_masquerade.so
