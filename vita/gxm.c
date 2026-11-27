@@ -101,8 +101,7 @@ static bool Surface(SceGxmColorSurface *surface, SceGxmRenderTarget **target, ui
     if (*pixels == nullptr) {
         return false;
     }
-    SceGxmRenderTargetParams params;
-    memset(&params, 0, sizeof(params));
+    SceGxmRenderTargetParams params = {};
     params.width = width;
     params.height = height;
     params.scenesPerFrame = 1;
@@ -122,8 +121,7 @@ static bool Program(const SceGxmProgram *program, SceGxmShaderPatcherId *id) {
 }
 
 static bool BringUp(void) {
-    SceGxmInitializeParams init;
-    memset(&init, 0, sizeof(init));
+    SceGxmInitializeParams init = {};
     init.displayQueueMaxPendingCount = 1;
     init.displayQueueCallback = DisplayQueue;
     init.displayQueueCallbackDataSize = 4;
@@ -132,8 +130,7 @@ static bool BringUp(void) {
         return false;
     }
     unsigned fragment_usse_offset = 0;
-    SceGxmContextParams context;
-    memset(&context, 0, sizeof(context));
+    SceGxmContextParams context = {};
     context.hostMem = malloc(SCE_GXM_MINIMUM_CONTEXT_HOST_MEM_SIZE);
     context.hostMemSize = SCE_GXM_MINIMUM_CONTEXT_HOST_MEM_SIZE;
     context.vdmRingBufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE,
@@ -161,8 +158,7 @@ static bool BringUp(void) {
     constexpr uint32_t PATCHER_BUFFER = 64u * 1024u;
     constexpr uint32_t PATCHER_USSE = 64u * 1024u;
     unsigned vertex_usse_offset = 0, fragment_patcher_offset = 0;
-    SceGxmShaderPatcherParams patcher;
-    memset(&patcher, 0, sizeof(patcher));
+    SceGxmShaderPatcherParams patcher = {};
     patcher.hostAllocCallback = PatcherAlloc;
     patcher.hostFreeCallback = PatcherFree;
     patcher.bufferMem = GpuAlloc(SCE_KERNEL_MEMBLOCK_TYPE_USER_RW_UNCACHE, PATCHER_BUFFER, 0,
@@ -384,8 +380,7 @@ void RunGxm(void) {
     }
     detail[0] = '\0';
     if (ReportStart(SUITE, NAMES[2])) {
-        SceDisplayFrameBuf frame;
-        memset(&frame, 0, sizeof(frame));
+        SceDisplayFrameBuf frame = {};
         frame.size = sizeof(frame);
         frame.base = g_gxm.display_pixels;
         frame.pitch = DISPLAY_STRIDE;
