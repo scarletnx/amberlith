@@ -35,6 +35,8 @@ the ScarletNX pull request's body. The case binds ScarletNX's CI once a release 
 
 ## Writing a case
 
+[Adding a case](docs/AddingACase.md) gives the files in order, the check macros, the judge and a model case.
+
 - Put it in the family and suite where its subject is ([Roadmap](docs/Roadmap.md) gives the order suites run in).
   A new suite takes its row in `source/origin.c`, the start screen's row in `source/ui.c`, and its family page.
 - The expected answer comes from the console: a console run, the console's driver, the hardware's documentation, or
