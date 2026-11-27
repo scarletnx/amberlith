@@ -25,8 +25,9 @@ New here? Start with [Build](./Build.md), then [the mode file](./ModeFile.md) an
   - **[On the Vita](./Vita.md)** - Amberlith's VPK, on a console and in an emulator
   - **[On the 3DS](./3DS.md)** - Amberlith's 3DSX, on a console and in an emulator
   - **[On the DS](./DS.md)** - Amberlith's NDS, on a console and in an emulator, and what fits in its memory
-  - **[Frontends](./Frontends.md)** - one engine for the console, Android, the Vita, the 3DS, the DS and a PC, and how
-    another fits
+  - **[On the GBA](./GBA.md)** - Amberlith's GBA ROM, its report read back from mGBA's log or the cartridge's save
+  - **[Frontends](./Frontends.md)** - one engine for the console, Android, the Vita, the 3DS, the DS, the GBA and a
+    PC, and how another fits
   - **[On the console](./Console.md)** - the two modes, the screens and the buttons
   - **[The browser](./UI.md)** - a family, a suite, a case or a demo at a time, and the demos' HUD
   - **[The mode file](./ModeFile.md)** - the words that choose what runs

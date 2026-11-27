@@ -14,8 +14,9 @@ between the probe and the emulator it checks without being rewritten.
 ## Which code
 
 The Vita (`vita/`, `vita.mk`) and the 3DS (`3ds/`, `3ds.mk`) frontends build `-std=c23 -Wall -Wextra -Werror`, the
-DS (`nds/`, `nds.mk`) `-std=gnu23`, since libnds's and calico's headers write inline assembly with GNU's `asm`; all
-three follow this page, the DS's own code with no GNU spelling either. The engine (`source/portable.txt`) compiles
+DS (`nds/`, `nds.mk`) and the GBA (`gba/`, `gba.mk`) `-std=gnu23`, since libnds's, calico's and libgba's headers write
+inline assembly with GNU's `asm`; all four follow this page, the DS's and the GBA's own code with no GNU spelling
+either. The engine (`source/portable.txt`) compiles
 unchanged under them. Everything else stays C11 for now: `host.mk`,
 the NRO, the ExeFS and the mod, Android and `tools/vklayer`; a file of theirs keeps the C11 it has.
 

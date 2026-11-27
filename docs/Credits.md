@@ -16,6 +16,8 @@
   library and the system under it, with calico's ARM7 program the NDS carries (`nds.mk`), as devkitPro's devkitARM
   container holds them. libnds under the zlib licence, in its `libnds_license.txt`; calico under the Zope Public
   License 2.1, in its `COPYING`.
+- **libgba**, https://github.com/devkitPro/libgba: the GBA's library (`gba.mk`), as devkitPro's devkitARM container
+  holds it. LGPL, with its exception that static linking makes no derivative work, in its `libgba_license.txt`.
 - **libnx**, https://github.com/switchbrew/libnx: the library every call to the console's services
   goes through. ISC licence, in its `LICENSE.md` (copyright 2017-2018 libnx Authors).
 - **deko3d**, https://github.com/devkitPro/deko3d: the graphics library the drawing suites use, which

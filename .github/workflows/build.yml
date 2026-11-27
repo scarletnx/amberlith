@@ -360,6 +360,53 @@ jobs:
           archive: false
           if-no-files-found: error
 
+  # The GBA ROM (docs/GBA.md) in the same devkitARM container as the 3DSX: libgba 0.5.4, gbafix from gba-tools 1.2.0.
+  # The link fails when the program's data passes the GBA's work RAM, which is the check of what fits
+  gba:
+    name: GBA (devkitARM)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    container: devkitpro/devkitarm:20260610@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVKITPRO: /opt/devkitpro
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      # The commit itself and its whole history, for the version tags the build describes itself from, as the NRO's
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+      # The container's root reads a checkout the runner's user owns, which git refuses: the build would name itself
+      # "unknown"
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Name the builds
+        id: name
+        run: |
+          version=$(cat VERSION)
+          [[ $version =~ ^[0-9][0-9A-Za-z.+-]*$ ]] || { echo "::error::VERSION holds \"$version\", not a version"; exit 1; }
+          echo "stem=$version-${SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Build the GBA ROM
+        run: make -f gba.mk -j"$(nproc)"
+      # The program names this commit, clean, as the NRO's version.h does: what a report from it opens with
+      - name: Check the GBA ROM names its commit
+        run: |
+          set -euo pipefail
+          hash=$(git describe --always --dirty --abbrev=7 --exclude='*')
+          case $hash in ''|*-dirty) echo "::error::the build names its commit \"$hash\""; exit 1 ;; esac
+          [ "$(tail -c +161 build-gba/amberlith.gba | head -c 9)" = AMBERLITH ] || { echo "::error::amberlith.gba's header does not name it"; exit 1; }
+          grep -aq "$hash" build-gba/amberlith.elf || { echo "::error::amberlith.elf does not name $hash"; exit 1; }
+          cp build-gba/amberlith.gba "amberlith-${{ steps.name.outputs.stem }}.gba"
+      # Not zipped: the artifact is the ROM itself, named after it
+      - uses: actions/upload-artifact@v7
+        with:
+          path: amberlith-${{ steps.name.outputs.stem }}.gba
+          archive: false
+          if-no-files-found: error
+
   # The judge, the screens and the tools' tests on the machine itself (docs/Build.md), and the tests of
   # .github/scripts: a nightly is published only when they pass
   host:
@@ -373,14 +420,14 @@ jobs:
       - name: Run them
         run: make -f host.mk -j"$(nproc)" host-run
 
-  # A pull request's NRO, APK, VPK, 3DSX and NDS, linked from a comment on it that each run rewrites, as soon as they
-  # are built (.github/scripts/pr-builds.sh). A pull request from a fork gets a token that may not write, so it gets none
+  # A pull request's NRO, APK, VPK, 3DSX, NDS and GBA ROM, linked from a comment on it that each run rewrites, as soon
+  # as they are built (.github/scripts/pr-builds.sh). A pull request from a fork gets a token that may not write, so it gets none
   links:
     name: Links to the builds
     if: >-
       !cancelled() && github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
-    needs: [nro, apk, vpk, three-ds, nds]
+    needs: [nro, apk, vpk, three-ds, nds, gba]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:

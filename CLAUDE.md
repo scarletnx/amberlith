@@ -14,7 +14,7 @@ runs a pinned release of it on every pull request, so a case here is a rule Scar
   is the list of cases a machine is known to end on.
 - Frontends ([Frontends](docs/Frontends.md)): the NRO (`source/main.c`, `Makefile`), the Switch 2 ExeFS (`ounce/`,
   `ounce.mk`), a mod of a game (`mod/`, `mod.mk`), Android (`android/`), the Vita (`vita/`, `vita.mk`), the 3DS
-  (`3ds/`, `3ds.mk`), the DS (`nds/`, `nds.mk`), and the host build (`host.mk`).
+  (`3ds/`, `3ds.mk`), the DS (`nds/`, `nds.mk`), the GBA (`gba/`, `gba.mk`), and the host build (`host.mk`).
 - `docs/families/`: one page a family, its suites and cases. `docs/cases.tsv`: the catalogue of every case.
 - `tools/`: the scripts and their tests. `.github/`: the CI and the release scripts. `hooks/`: the commit hook.
 
@@ -62,14 +62,15 @@ the ScarletNX pull request's body. The case binds ScarletNX's CI once a release 
 | VPK | `make -f vita.mk` | `VITASDK` set ([On the Vita](docs/Vita.md)) |
 | 3DSX | `make -f 3ds.mk` | `DEVKITPRO` set, with devkitARM and libctru in it ([On the 3DS](docs/3DS.md)) |
 | NDS | `make -f nds.mk` | `DEVKITPRO` set, with devkitARM, libnds and calico in it ([On the DS](docs/DS.md)) |
+| GBA | `make -f gba.mk` | `DEVKITPRO` set, with devkitARM and libgba in it ([On the GBA](docs/GBA.md)) |
 
 The mode file chooses what runs ([Mode file](docs/ModeFile.md)); `quick all` runs every family that needs nobody.
 In ScarletNX: `scripts/amberlith.py run --runtime <build>/scarletnx --nro amberlith-<version>.nro --out <folder>
 --mode "<words>"`, headless, in its own folders.
 
-The CI (`.github/workflows/build.yml`) builds the NRO, the ExeFS and the mod, the APK, the VPK, the 3DSX and the NDS,
-runs the host build, and links each build from the pull request. `publish.yml` makes a push to `main` a nightly and a
-`v<version>` tag a release ([Releases](docs/Releases.md)). A pull request merges on green, by rebase.
+The CI (`.github/workflows/build.yml`) builds the NRO, the ExeFS and the mod, the APK, the VPK, the 3DSX, the NDS and the
+GBA ROM, runs the host build, and links each build from the pull request. `publish.yml` makes a push to `main` a
+nightly and a `v<version>` tag a release ([Releases](docs/Releases.md)). A pull request merges on green, by rebase.
 
 ## Baselines
 
@@ -103,11 +104,11 @@ change; a fix to a commit already pushed is a commit of its own.
 
 ## C by target
 
-The Vita frontend (`vita/`) and the 3DS and DS frontends are C23 (`-std=c23`; the DS `-std=gnu23` for its library's
-headers), written by [Code style](docs/CodeStyle.md): `static_assert`, `[[...]]`, `alignas`, `nullptr`, `= {0}` over
-`memset`, no undefined or implementation-defined behaviour, one `g_<file>` global a file, no pointer kept in data, one
-allocation an owner. Everything else is C11: `host.mk`, the NRO, the ExeFS and the mod, Android and `tools/vklayer`. Do not move
-the rest of the repo to C23 until that is asked.
+The Vita frontend (`vita/`) and the 3DS, DS and GBA frontends are C23 (`-std=c23`; the DS and the GBA `-std=gnu23` for
+their libraries' headers), written by [Code style](docs/CodeStyle.md): `static_assert`, `[[...]]`, `alignas`,
+`nullptr`, `= {0}` over `memset`, no undefined or implementation-defined behaviour, one `g_<file>` global a file, no
+pointer kept in data, one allocation an owner. Everything else is C11: `host.mk`, the NRO, the ExeFS and the mod,
+Android and `tools/vklayer`. Do not move the rest of the repo to C23 until that is asked.
 
 ## Never
 
@@ -118,6 +119,7 @@ the rest of the repo to C23 until that is asked.
 
 ## Not covered yet (TODO)
 
-- The 3DS's and the DS's frontends run the judge and the libc family, none of their own suites yet: a ScarletNX
-  change to their drivers gets a case there only when the engine's suites can ask it. The DS runs the judge's libc
-  references alone ([On the DS](docs/DS.md#what-fits-in-its-memory)).
+- The 3DS's, the DS's and the GBA's frontends run the judge and the libc family, none of their own suites yet: a
+  ScarletNX change to their drivers gets a case there only when the engine's suites can ask it. The DS and the GBA run
+  the judge's libc references alone ([On the DS](docs/DS.md#what-fits-in-its-memory),
+  [On the GBA](docs/GBA.md#what-fits-in-its-memory)).
