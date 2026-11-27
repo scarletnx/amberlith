@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 Amberlith contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""A release's file names, title and notes: the NRO, the APK, the VPK, the 3DSX, the NDS and the two ExeFS folders, named after the version (and a
+"""A release's file names, title and notes: the NRO, the APK, the VPK, the 3DSX, the NDS, the GBA ROM and the two ExeFS folders, named after the version (and a
 nightly's after its commit too), with their sizes and SHA-256, where to read how to run them, what changed since the
 previous release, and where the source is, which the GPL asks for beside the binary. publish-builds.py beside it takes
 them for each nightly and each version.
@@ -15,8 +15,8 @@ import re
 import subprocess
 
 SERVER = "https://github.com"
-# What a release holds, in this order: the NRO, the APK, the VPK, the 3DSX, the NDS and two ExeFS folders zipped, each
-# with its checksum beside it
+# What a release holds, in this order: the NRO, the APK, the VPK, the 3DSX, the NDS, the GBA ROM and two ExeFS folders
+# zipped, each with its checksum beside it
 # in the form sha256sum -c reads; each kind's name before the version, its ending after it
 KINDS = {
     "nro": ("amberlith", ".nro"),
@@ -24,6 +24,7 @@ KINDS = {
     "vpk": ("amberlith", ".vpk"),
     "3dsx": ("amberlith", ".3dsx"),
     "nds": ("amberlith", ".nds"),
+    "gba": ("amberlith", ".gba"),
     "ounce": ("amberlith-ounce", ".zip"),
     "mod": ("amberlith-mod", ".zip"),
 }
@@ -35,6 +36,7 @@ RUNS = {
     "vpk": "runs on a Vita, in Vita3K and in ScarletNX's Vita runtime",
     "3dsx": "runs on a 3DS from the Homebrew Launcher, and in a 3DS emulator",
     "nds": "runs on a DS from a card's menu, and in a DS emulator",
+    "gba": "runs on a GBA from a flash cartridge, and in mGBA, which logs its report",
     "ounce": "holds an ExeFS folder, the probe as a Switch 2 program, which ScarletNX runs",
     "mod": (
         "holds an ExeFS folder, the probe as a mod of a game, in the game's mods folder on a console with Atmosphere, "
@@ -130,7 +132,14 @@ def download(url, sha, where, built):
         "Android",
         *(
             name
-            for kind, name in (("vpk", "Vita"), ("3dsx", "3DS"), ("nds", "DS"), ("ounce", "Ounce"), ("mod", "Mod"))
+            for kind, name in (
+                ("vpk", "Vita"),
+                ("3dsx", "3DS"),
+                ("nds", "DS"),
+                ("gba", "GBA"),
+                ("ounce", "Ounce"),
+                ("mod", "Mod"),
+            )
             if kind in kinds
         ),
     ]
@@ -195,6 +204,14 @@ def source(tree, built):
                 "from it, with calico's ARM7 program."
             ]
             if "nds" in kinds
+            else []
+        ),
+        *(
+            [
+                "- The GBA ROM was built in the same devkitARM container, and links libgba (LGPL, with its exception "
+                "for static linking) from it."
+            ]
+            if "gba" in kinds
             else []
         ),
         *(
