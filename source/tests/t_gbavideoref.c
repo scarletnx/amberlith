@@ -36,7 +36,7 @@ static void AddLine(GbaVideoPoll *poll, uint32_t line, uint32_t *previous, uint3
         if (line == lyc) {
             status |= 0x4u;
         }
-        GbaVideoPollAdd(poll, status, *previous);
+        GbaVideoPollAdd(poll, status, *previous, 1u);
         *previous = line;
     }
 }
@@ -73,7 +73,8 @@ static void CheckLines(void) {
     // One whose H-Blank flag rises only in the drawn lines
     Poll(&g_poll, GBAVIDEO_VBLANK_FLAG_LAST, false, GBAVIDEO_LINES);
     const bool drawn_only = !GbaVideoJudgeHblankFlag(&g_poll, said, sizeof(said)) &&
-                            StartsWith(said, "line 160 had the H-Blank flag set on 0 and clear on 8");
+                            StartsWith(said,
+                                       "line 160 had the H-Blank flag set on 0 and clear on 8");
     // One whose counter skips a line
     Poll(&g_poll, GBAVIDEO_VBLANK_FLAG_LAST, true, 100u);
     const bool skipped = !GbaVideoJudgeCount(&g_poll, said, sizeof(said)) &&
@@ -83,9 +84,28 @@ static void CheckLines(void) {
     // One whose frame has a 229th line
     Poll(&g_poll, GBAVIDEO_VBLANK_FLAG_LAST, true, GBAVIDEO_LINES);
     uint32_t previous = GBAVIDEO_LINES - 1u;
-    GbaVideoPollAdd(&g_poll, 228u << 16, previous);
+    GbaVideoPollAdd(&g_poll, 228u << 16, previous, 1u);
     const bool past = !GbaVideoJudgeCount(&g_poll, said, sizeof(said)) &&
                       StartsWith(said, "1 of 1825 reads had VCOUNT past 227, the first 228");
+    // The same frames gathered as runs of identical reads, three in a line's drawing and two in its
+    // H-Blank, as the suite gathers them: the same verdicts, the reads counted
+    memset(&g_poll, 0, sizeof(g_poll));
+    g_poll.lyc = 100u;
+    previous = 0x10000u;
+    for (uint32_t frame = 0; frame < 2u; ++frame) {
+        for (uint32_t line = 0; line < GBAVIDEO_LINES; ++line) {
+            const bool vblank = line >= GBAVIDEO_DRAWN && line <= GBAVIDEO_VBLANK_FLAG_LAST;
+            const uint32_t flags = (vblank ? 0x1u : 0u) | (line == 100u ? 0x4u : 0u);
+            GbaVideoPollAdd(&g_poll, (line << 16) | flags, previous, 3u);
+            GbaVideoPollAdd(&g_poll, (line << 16) | flags | 0x2u, line, 2u);
+            previous = line;
+        }
+    }
+    const bool runs = GbaVideoJudgeCount(&g_poll, said, sizeof(said)) &&
+                      strcmp(said, "2280 reads, 455 changes one up, 1 wraps from 227 to 0") == 0 &&
+                      GbaVideoJudgeVblankFlag(&g_poll, said, sizeof(said)) &&
+                      GbaVideoJudgeHblankFlag(&g_poll, said, sizeof(said)) &&
+                      GbaVideoJudgeMatchFlag(&g_poll, said, sizeof(said));
     // One that sets the V-Counter flag a line late
     Poll(&g_poll, GBAVIDEO_VBLANK_FLAG_LAST, true, GBAVIDEO_LINES);
     g_poll.lyc = 99u;
@@ -93,12 +113,13 @@ static void CheckLines(void) {
                             StartsWith(said, "line 99, with line 99 named, had the V-Counter flag "
                                              "set on 0 of its 8 reads");
     CHECK_TRUE(SUITE,
-               "gbavideo: the line and flag judges pass the GBA's frames and refuse five wrong ones, "
-               "each with its sentence",
-               CHECK_NONE, right && late_clear && drawn_only && skipped && past && late_match,
-               "right %d, V-Blank through 227 %d, H-Blank drawn only %d, skipped %d, line 228 %d, "
-               "late match %d",
-               right, late_clear, drawn_only, skipped, past, late_match);
+               "gbavideo: the line and flag judges pass the GBA's frames and refuse five wrong "
+               "ones, each with its sentence",
+               CHECK_NONE,
+               right && runs && late_clear && drawn_only && skipped && past && late_match,
+               "right %d, as runs %d, V-Blank through 227 %d, H-Blank drawn only %d, skipped %d, "
+               "line 228 %d, late match %d",
+               right, runs, late_clear, drawn_only, skipped, past, late_match);
 }
 
 static void CheckFrames(void) {
@@ -211,9 +232,10 @@ static void CheckMemory(void) {
                       strcmp(said, "0x5aa5 stored at 0x0600e000 read back 0x1111 at 0x0602e000 "
                                    "(it held 0x1111 before)") == 0;
     CHECK_TRUE(SUITE,
-               "gbavideo: the memory judges take the GBA's byte rule and mirrors, and refuse a lone "
-               "byte, OAM taking one and a lost store",
-               CHECK_NONE, offsets && rule && right && bitmap && lone_byte && oam && mirrored && lost,
+               "gbavideo: the memory judges take the GBA's byte rule and mirrors, and refuse a "
+               "lone byte, OAM taking one and a lost store",
+               CHECK_NONE,
+               offsets && rule && right && bitmap && lone_byte && oam && mirrored && lost,
                "offsets %d, byte rule %d, right %d, bitmap mode %d, lone byte %d, OAM %d, "
                "mirrors %d, lost %d",
                offsets, rule, right, bitmap, lone_byte, oam, mirrored, lost);

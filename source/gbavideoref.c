@@ -10,9 +10,9 @@
 #define STATUS_HBLANK 0x2u
 #define STATUS_MATCH 0x4u
 
-void GbaVideoPollAdd(GbaVideoPoll *poll, uint32_t status, uint32_t previous) {
+void GbaVideoPollAdd(GbaVideoPoll *poll, uint32_t status, uint32_t previous, uint32_t reads) {
     const uint32_t line = status >> 16;
-    ++poll->samples;
+    poll->samples += reads;
     if (previous <= 0xFFFFu && line != previous) {
         ++poll->steps;
         if (previous == GBAVIDEO_LINES - 1u && line == 0u) {
@@ -23,27 +23,28 @@ void GbaVideoPollAdd(GbaVideoPoll *poll, uint32_t status, uint32_t previous) {
         }
     }
     if (line >= GBAVIDEO_LINES) {
-        if (poll->past++ == 0u) {
+        if (poll->past == 0u) {
             poll->first_past = line;
         }
+        poll->past += reads;
         return;
     }
     GbaVideoLine *const l = &poll->lines[line];
-    ++l->samples;
+    l->samples += reads;
     if (status & STATUS_VBLANK) {
-        ++l->vblank_set;
+        l->vblank_set += reads;
     } else {
-        ++l->vblank_clear;
+        l->vblank_clear += reads;
     }
     if (status & STATUS_HBLANK) {
-        ++l->hblank_set;
+        l->hblank_set += reads;
     } else {
-        ++l->hblank_clear;
+        l->hblank_clear += reads;
     }
     if (status & STATUS_MATCH) {
-        ++l->match_set;
+        l->match_set += reads;
     } else {
-        ++l->match_clear;
+        l->match_clear += reads;
     }
 }
 
