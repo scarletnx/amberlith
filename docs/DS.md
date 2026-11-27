@@ -68,4 +68,5 @@ the 16 KiB of data TCM. So the frontend differs from the others in two ways:
 `/amberlith/` on the card's FAT, laid out as `sdmc:/amberlith/` is on the Switch ([The report](Report.md)): the mode
 file, the crash list and `runs/<commit>/report.jsonl`. Every line also goes to no$gba's debug port (`nocashWrite`, a
 character at a time at `0x04FFFA1C`), which no$gba prints and a console ignores. Without a FAT the C library can
-write, the run's report is on that log alone.
+write, the run's report is on that log alone: the frontend makes a device with no operations the default one, so
+every file call fails with an error, where with no device at all devkitARM's `mkdir` would end the program.
