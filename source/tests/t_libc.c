@@ -378,6 +378,12 @@ static void Threads(void) {
     char failed[96] = "";
     int made = 0;
     int r = pthread_key_create(&shared.key, CountDestructor);
+    if (r == ENOSYS) {
+        // A C library with no thread keys (libctru's, the 3DS's) cannot be asked this question
+        ReportSkip(SYSTEM, NAME, REPORT_REASON_UNAVAILABLE,
+                   "pthread_key_create answered ENOSYS: this C library has no thread keys");
+        return;
+    }
     if (r != 0) {
         snprintf(failed, sizeof(failed), "pthread_key_create returned %d; ", r);
     } else {
