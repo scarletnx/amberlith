@@ -419,6 +419,13 @@ static void Clock(void) {
     struct timespec before, after;
     const struct timespec nap = { 0, 20000000 };
     const int read_before = clock_gettime(CLOCK_MONOTONIC, &before);
+    if (read_before != 0 && errno == ENOSYS) {
+        // A C library with no monotonic clock (devkitARM's on the DS) cannot be asked this question
+        ReportSkip(SYSTEM, NAME, REPORT_REASON_UNAVAILABLE,
+                   "clock_gettime(CLOCK_MONOTONIC) answered ENOSYS: this C library has no "
+                   "monotonic clock");
+        return;
+    }
     const int slept = nanosleep(&nap, NULL);
     const int read_after = clock_gettime(CLOCK_MONOTONIC, &after);
     const long long ns = (long long)(after.tv_sec - before.tv_sec) * 1000000000LL +
