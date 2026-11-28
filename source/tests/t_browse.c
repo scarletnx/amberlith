@@ -22,6 +22,15 @@ static const char *const SUITE = "support";
 #define FRAME_WIDTH 1280u
 #define FRAME_HEIGHT 720u
 
+/// Why a case that needs a frame of the console's size skips on a machine whose memory cannot
+/// hold one (the DS): the frame's size and bytes.
+static const char *NoFrame(void) {
+    static char said[80];
+    snprintf(said, sizeof(said), "no memory for a %u by %u frame, %u bytes", FRAME_WIDTH,
+             FRAME_HEIGHT, FRAME_WIDTH * FRAME_HEIGHT * 4u);
+    return said;
+}
+
 static const uint8_t PAGE[3] = { 0xDA, 0xD6, 0xBE };
 static const uint8_t RUN_PAGE[3] = { 0x14, 0x14, 0x16 };
 
@@ -725,7 +734,7 @@ static void CheckWait(uint8_t *pixels) {
     uint8_t *const without = (uint8_t *)malloc(bytes);
     if (pixels == NULL || without == NULL) {
         free(without);
-        ReportCase(SUITE, NAME, CHECK_NONE, false, "no memory for two frames");
+        ReportSkip(SUITE, NAME, REPORT_REASON_UNAVAILABLE, NoFrame());
         return;
     }
     const UiFrame frame = { pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };
@@ -760,7 +769,7 @@ static void CheckJudgeMargin(uint8_t *pixels) {
     static const char NAME[] = "the judge question clears a margin round its box, so no line under "
                                "it shows cut";
     if (pixels == NULL) {
-        ReportCase(SUITE, NAME, CHECK_NONE, false, "no memory for a frame");
+        ReportSkip(SUITE, NAME, REPORT_REASON_UNAVAILABLE, NoFrame());
         return;
     }
     BrowseCatalog catalog;
@@ -922,7 +931,7 @@ void RunSupportBrowse(void) {
             "motion brings a new screen in from the top, whole at its last step",
         };
         for (size_t i = 0; i < 3u; ++i) {
-            ReportCase(SUITE, NAMES[i], CHECK_NONE, false, "no memory for a frame");
+            ReportSkip(SUITE, NAMES[i], REPORT_REASON_UNAVAILABLE, NoFrame());
         }
         return;
     }
