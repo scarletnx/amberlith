@@ -72,6 +72,15 @@ static const char *Scratch(void) {
 #define FRAME_WIDTH 1280u
 #define FRAME_HEIGHT 720u
 
+/// Why a case that needs a frame of the console's size skips on a machine whose memory cannot
+/// hold one (the DS): the frame's size and bytes.
+static const char *NoFrame(void) {
+    static char said[80];
+    snprintf(said, sizeof(said), "no memory for a %u by %u frame, %u bytes", FRAME_WIDTH,
+             FRAME_HEIGHT, FRAME_WIDTH * FRAME_HEIGHT * 4u);
+    return said;
+}
+
 // Every file this suite writes, so that it can take them away again. A passing suite that left
 // a directory of pictures called "expected" beside the report would read, to anyone who found
 // it, as exactly the stored reference this program does not have.
@@ -2209,8 +2218,9 @@ static void CheckOldRoot(void) {
 static void CheckLayout(void) {
     uint8_t *const pixels = (uint8_t *)malloc((size_t)FRAME_WIDTH * FRAME_HEIGHT * 4u);
     if (pixels == NULL) {
-        ReportCase(SUITE, "a frame has somewhere to be composed", CHECK_NONE, false,
-                   "no memory for a frame");
+        // A machine with too little memory for the console's frame (the DS) cannot compose one
+        ReportSkip(SUITE, "a frame has somewhere to be composed", REPORT_REASON_UNAVAILABLE,
+                   NoFrame());
         return;
     }
     const UiFrame frame = { pixels, FRAME_WIDTH, FRAME_HEIGHT, FRAME_WIDTH * 4u };

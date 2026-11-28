@@ -3066,8 +3066,10 @@ static void CheckTouchScreen(Fixture *f) {
 void RunSupportScreens(void) {
     Fixture *const f = (Fixture *)calloc(1, sizeof(Fixture));
     if (f == NULL) {
-        ReportCase(SUITE, "the screens have a run to show", CHECK_NONE, false,
-                   "no memory for the fixture");
+        char said[96];
+        snprintf(said, sizeof(said), "no memory for the screens' fixture, %zu bytes",
+                 sizeof(Fixture));
+        ReportSkip(SUITE, "the screens have a run to show", REPORT_REASON_UNAVAILABLE, said);
         return;
     }
     CheckIndex();
