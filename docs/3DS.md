@@ -25,13 +25,17 @@ make -f 3ds.mk                        # build-3ds/amberlith.3dsx
 It needs devkitARM and libctru: devkitPro's `3ds-dev` packages, or its `devkitpro/devkitarm` container, which the CI
 builds in, pinned by tag and digest (`20260610`: devkitARM r68 with GCC 16.1.0, libctru 2.7.0, 3dstools 1.3.1). C only,
 in C23 (`-std=c23 -Wall -Wextra -Werror`), the engine's C11 compiling unchanged under it, libctru's headers taken as the
-system's (`-isystem`). The Homebrew Launcher shows `3ds/icon.png`, the cover drawn at 48 by 48 by `make icon`. Two
+system's (`-isystem`). The Homebrew Launcher shows `3ds/icon.png`, the cover drawn at 48 by 48 by `make icon`. Three
 things the 3DS gives a program differently from the other machines, which the frontend sets itself:
 
 - **A larger main thread's stack.** A 3DSX gets 32 KiB when the program names none, and the judge's support cases keep
   larger records on it: `__stacksize__` asks for 4 MiB.
 - **A folder for temporary files.** The support suite writes its checks under `TMPDIR`; the 3DS has no `/tmp`, so the
   frontend makes `sdmc:/amberlith/tmp` and names it there.
+- **IEEE's floats.** libctru starts every thread with the VFP in its fast mode (FPSCR `0x03000000`): denormals flushed
+  to zero and every NaN the default one, under which the judge's own denormal operands read as zero. `main` sets FPSCR
+  to 0, round to nearest with denormals kept, as the other machines run; the system suite's threads, which add
+  integers, keep libctru's.
 
 devkitARM's C library has `int32_t` as a `long`, where every other machine Amberlith builds for has an `int`, so a
 32-bit value goes to `printf` through a cast or a `PRIu32`, never as `%u` alone: the 3DSX's build, with `-Werror`,
@@ -54,7 +58,8 @@ whatever the mode file says, as the Vita's does.
 
 The judge first, always; then the libc family whole: libc, the C library alone (devkitARM's newlib); system, libctru's
 threads and `clock_gettime`; socket, soc:U on loopback, brought up with a buffer of the frontend's own
-([libc](families/Libc.md)). The 3DS's own suites come after these as they are written.
+([libc](families/Libc.md)). libctru's `pthread_key_create` answers `ENOSYS`, so the system suite's case of four threads
+and a key's destructor is a skip there, naming it. The 3DS's own suites come after these as they are written.
 
 ## Where it leaves its report
 

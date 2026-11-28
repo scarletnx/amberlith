@@ -58,11 +58,19 @@ static struct {
 // hold them.
 u32 __stacksize__ = 4u * 1024u * 1024u;
 
+// libctru starts each thread with the VFP in its fast mode, FPSCR 0x03000000: denormals flushed to
+// zero and every NaN the default one. The engine's floats are IEEE's, as on the other machines:
+// round to nearest, denormals kept, so main sets FPSCR to 0 before the judge runs.
+static void UseIeeeFloats(void) {
+    __asm__ volatile("vmsr fpscr, %0" : : "r"(0u));
+}
+
 static void Progress(uint32_t number, const char *name, bool timed) {
     printf("%2lu %s\n", (unsigned long)number, name);
 }
 
 int main(void) {
+    UseIeeeFloats();
     gfxInitDefault();
     consoleInit(GFX_TOP, nullptr);
     printf("Amberlith %s (%s)\n", AMBERLITH_VERSION, AMBERLITH_HASH);
